@@ -245,6 +245,7 @@ interface BattleState {
   enemies: EnemyState[];
   bossId?: string;
   dungeonId?: string;
+  background: AssetKey;
   canRun: boolean;
   phase: BattlePhase;
   turnOrder: InitiativeEntry[];
@@ -298,6 +299,19 @@ const ASSET_PATHS = [
   ["marker_port", "tiles/markers/port.png"],
   ["marker_gate", "tiles/markers/starfall_gate.png"],
   ["marker_final_spire", "tiles/markers/eclipse_spire.png"],
+  ["town_floor", "tiles/town/town_floor.png"],
+  ["town_wall", "tiles/town/town_wall.png"],
+  ["town_exit_gate", "tiles/town/town_exit_gate.png"],
+  ["town_service_inn", "tiles/town/service_inn.png"],
+  ["town_service_items", "tiles/town/service_items.png"],
+  ["town_service_arms", "tiles/town/service_arms.png"],
+  ["town_service_magic", "tiles/town/service_magic.png"],
+  ["town_service_clinic", "tiles/town/service_clinic.png"],
+  ["town_prop_table", "tiles/town/prop_table.png"],
+  ["town_prop_crate", "tiles/town/prop_crate.png"],
+  ["town_prop_barrel", "tiles/town/prop_barrel.png"],
+  ["town_prop_lamp", "tiles/town/prop_lamp.png"],
+  ["town_prop_rug", "tiles/town/prop_rug.png"],
   ["dungeon_floor_moss", "tiles/dungeons/floor_moss.png"],
   ["dungeon_floor_fire", "tiles/dungeons/floor_fire.png"],
   ["dungeon_floor_tide", "tiles/dungeons/floor_tide.png"],
@@ -313,6 +327,8 @@ const ASSET_PATHS = [
   ["switch_floor", "tiles/objects/switch_floor.png"],
   ["boss_relic_seal", "tiles/objects/boss_relic_seal.png"],
   ["char_arlen_map", "characters/arlen_map.png"],
+  ["char_mira_map", "characters/mira_map.png"],
+  ["char_kael_map", "characters/kael_map.png"],
   ["npc_guard", "characters/npc_guard.png"],
   ["npc_merchant", "characters/npc_merchant.png"],
   ["npc_elder", "characters/npc_elder.png"],
@@ -320,9 +336,18 @@ const ASSET_PATHS = [
   ["npc_sage", "characters/npc_sage.png"],
   ["vehicle_boat", "characters/vehicle_boat.png"],
   ["vehicle_skyship", "characters/vehicle_skyship.png"],
+  ["battle_arlen_sprite", "characters/arlen_battle.png"],
+  ["battle_mira_sprite", "characters/mira_battle.png"],
+  ["battle_kael_sprite", "characters/kael_battle.png"],
   ["battle_arlen_portrait", "portraits/battle_arlen.png"],
   ["battle_mira_portrait", "portraits/battle_mira.png"],
   ["battle_kael_portrait", "portraits/battle_kael.png"],
+  ["battle_bg_forest_path", "battle/backgrounds/forest_path.png"],
+  ["battle_bg_plains", "battle/backgrounds/plains.png"],
+  ["battle_bg_moss_cave", "battle/backgrounds/moss_cave.png"],
+  ["battle_bg_ashen_keep", "battle/backgrounds/ashen_keep.png"],
+  ["battle_bg_tide_shrine", "battle/backgrounds/tide_shrine.png"],
+  ["battle_bg_eclipse_spire", "battle/backgrounds/eclipse_spire.png"],
   ["enemy_slimebud", "enemies/slimebud.png"],
   ["enemy_bristle_rat", "enemies/bristle_rat.png"],
   ["enemy_field_imp", "enemies/field_imp.png"],
@@ -351,8 +376,12 @@ const ASSET_PATHS = [
   ["boss_eclipse_crown", "enemies/boss_eclipse_crown.png"],
   ["ui_window_panel", "ui/window_panel_9slice.png"],
   ["ui_cursor_arrow", "ui/cursor_arrow.png"],
+  ["ui_cursor_hand", "ui/cursor_hand.png"],
   ["ui_hp_bar", "ui/bar_hp.png"],
+  ["ui_mp_bar", "ui/mp_bar.png"],
   ["ui_status_bar_empty", "ui/bar_empty.png"],
+  ["ui_button_ok", "ui/button_ok.png"],
+  ["ui_button_back", "ui/button_back.png"],
   ["icon_potion", "icons/items/potion.png"],
   ["icon_antidote", "icons/items/antidote.png"],
   ["icon_phoenix_ash", "icons/items/phoenix_ash.png"],
@@ -392,8 +421,57 @@ const ASSET_MODULES = import.meta.glob("../assets/**/*.png", {
   import: "default"
 }) as Record<string, string>;
 
+const ASSET_V2_MODULES = import.meta.glob(
+  [
+    "../assets_v2/**/*.png",
+    "!../assets_v2/previews/**/*.png",
+    "!../assets_v2/source_sheets/**/*.png",
+    "!../assets_v2/ui/command_window.png",
+    "!../assets_v2/ui/target_window.png",
+    "!../assets_v2/ui/party_status_window.png",
+    "!../assets_v2/ui/message_window.png"
+  ],
+  {
+    eager: true,
+    query: "?url",
+    import: "default"
+  }
+) as Record<string, string>;
+
+const ASSET_V2_PATH_OVERRIDES: Partial<Record<AssetKey, string>> = {
+  tile_water_a: "tiles/world/water_shallow.png",
+  tile_water_b: "tiles/world/water_shallow.png",
+  tile_deep_water_a: "tiles/world/water_deep.png",
+  tile_deep_water_b: "tiles/world/water_deep.png",
+  battle_arlen_portrait: "portraits/arlen.png",
+  battle_mira_portrait: "portraits/mira.png",
+  battle_kael_portrait: "portraits/kael.png",
+  enemy_slimebud: "enemies/common/slimebud.png",
+  enemy_bristle_rat: "enemies/common/bristle_rat.png",
+  enemy_field_imp: "enemies/common/field_imp.png",
+  enemy_thorn_wisp: "enemies/common/thorn_wisp.png",
+  enemy_mossling: "enemies/common/mossling.png",
+  enemy_venom_moth: "enemies/common/venom_moth.png",
+  enemy_pebble_gnawer: "enemies/common/pebble_gnawer.png",
+  enemy_cave_bat: "enemies/common/cave_bat.png",
+  enemy_iron_beetle: "enemies/common/iron_beetle.png",
+  enemy_cinder_pup: "enemies/common/cinder_pup.png",
+  enemy_ash_sprite: "enemies/common/ash_sprite.png",
+  enemy_coal_knight: "enemies/common/coal_knight.png",
+  boss_rootbound_troll: "enemies/bosses/rootbound_troll.png",
+  boss_ember_tyrant: "enemies/bosses/ember_tyrant.png",
+  boss_tide_oracle: "enemies/bosses/tide_oracle.png",
+  boss_gale_chimera: "enemies/bosses/gale_chimera.png",
+  boss_eclipse_crown: "enemies/bosses/eclipse_crown.png",
+  ui_window_panel: "ui/window_panel.png",
+  ui_hp_bar: "ui/hp_bar.png"
+};
+
 const ASSET_URLS = Object.fromEntries(
-  ASSET_PATHS.map(([key, path]) => [key, ASSET_MODULES[`../assets/${path}`]])
+  ASSET_PATHS.map(([key, path]) => [
+    key,
+    ASSET_V2_MODULES[`../assets_v2/${ASSET_V2_PATH_OVERRIDES[key] ?? path}`] ?? ASSET_MODULES[`../assets/${path}`]
+  ])
 ) as Partial<Record<AssetKey, string>>;
 
 const WORLD_TILE_TEXTURES: Record<Terrain, AssetKey> = {
@@ -426,6 +504,28 @@ const LOCATION_TEXTURES: Record<string, AssetKey> = {
   tideShrine: "marker_shrine",
   skyglassTower: "marker_tower",
   eclipseSpire: "marker_final_spire"
+};
+
+const TOWN_SERVICE_TEXTURES: Record<ServiceKind, AssetKey> = {
+  inn: "town_service_inn",
+  item: "town_service_items",
+  arms: "town_service_arms",
+  magic: "town_service_magic",
+  clinic: "town_service_clinic"
+};
+
+const TOWN_PROP_TEXTURES = {
+  table: "town_prop_table",
+  crate: "town_prop_crate",
+  barrel: "town_prop_barrel",
+  lamp: "town_prop_lamp",
+  rug: "town_prop_rug"
+} as const satisfies Record<string, AssetKey>;
+
+const PARTY_BATTLE_TEXTURES: Record<CharacterState["id"], AssetKey> = {
+  arlen: "battle_arlen_sprite",
+  mira: "battle_mira_sprite",
+  kael: "battle_kael_sprite"
 };
 
 const ENEMY_TEXTURES: Record<string, AssetKey> = {
@@ -1836,13 +1936,19 @@ class CrystalOathScene extends Phaser.Scene {
   private interactTown() {
     const town = this.towns()[this.currentTown];
     const p = this.townPos;
+    const facing = { x: p.x + this.lastMoveDir.x, y: p.y + this.lastMoveDir.y };
+    const facedNpc = town.npcs.find((npc) => npc.x === facing.x && npc.y === facing.y);
+    if (facedNpc) {
+      this.say(facedNpc.lines);
+      return;
+    }
     for (const npc of town.npcs) {
       if (Math.abs(npc.x - p.x) + Math.abs(npc.y - p.y) <= 1) {
         this.say(npc.lines);
         return;
       }
     }
-    const service = this.serviceAt(p.x, p.y);
+    const service = this.serviceAt(facing.x, facing.y) ?? this.serviceAt(p.x, p.y);
     if (service === "inn") this.openInn(town);
     else if (service === "clinic") this.openClinic(town);
     else if (service === "item") this.openShop(`${town.name} Item Shop`, town.itemStock.map((id) => ({ id, type: "item" as const })));
@@ -2017,6 +2123,19 @@ class CrystalOathScene extends Phaser.Scene {
     };
   }
 
+  private battleBackgroundFor(dungeonId?: string): AssetKey {
+    if (dungeonId === "mossCave") return "battle_bg_moss_cave";
+    if (dungeonId === "ashenKeep") return "battle_bg_ashen_keep";
+    if (dungeonId === "tideShrine") return "battle_bg_tide_shrine";
+    if (dungeonId === "eclipseSpire") return "battle_bg_eclipse_spire";
+    if (dungeonId === "skyglassTower") return "battle_bg_plains";
+    const terrain = this.world[this.worldPos.y]?.[this.worldPos.x];
+    if (terrain === "forest") return "battle_bg_forest_path";
+    if (terrain === "sand") return "battle_bg_ashen_keep";
+    if (terrain === "water" || terrain === "deepWater") return "battle_bg_tide_shrine";
+    return "battle_bg_plains";
+  }
+
   private beginBattle(kind: BattleState["kind"], enemies: EnemyState[], canRun: boolean, intro: string, dungeonId?: string, bossId?: string) {
     this.clearHeldMovement();
     this.movement = undefined;
@@ -2027,6 +2146,7 @@ class CrystalOathScene extends Phaser.Scene {
       enemies,
       bossId,
       dungeonId,
+      background: this.battleBackgroundFor(dungeonId),
       canRun,
       phase: "resolving",
       turnOrder: [],
@@ -2736,6 +2856,7 @@ class CrystalOathScene extends Phaser.Scene {
         {
           label: "Quit to Title",
           action: () => {
+            this.menu = undefined;
             this.mode = "title";
             this.audio.setMode("title");
           }
@@ -3120,7 +3241,7 @@ Statuses: ${statuses}`;
   private say(lines: string[], done?: () => void) {
     this.clearHeldMovement();
     const returnMode = this.mode;
-    if (returnMode !== "dialogue") this.previousMode = returnMode;
+    if (returnMode !== "dialogue" && returnMode !== "menu") this.previousMode = returnMode;
     this.dialogue = {
       lines,
       index: 0,
@@ -3397,6 +3518,7 @@ Statuses: ${statuses}`;
   }
 
   private drawTownFloorTile(px: number, py: number, x: number, y: number) {
+    if (this.drawTileTexture("town_floor", px, py)) return;
     const base = (x + y) % 2 === 0 ? 0x40506c : 0x384762;
     this.g.fillStyle(base, 1).fillRect(px, py, TILE, TILE);
     this.g.lineStyle(1, 0x263149, 0.55).strokeRect(px, py, TILE, TILE);
@@ -3405,6 +3527,7 @@ Statuses: ${statuses}`;
   }
 
   private drawTownWallTile(px: number, py: number, x: number, y: number) {
+    if (this.drawTileTexture("town_wall", px, py)) return;
     this.g.fillStyle(0x536b94, 1).fillRect(px, py, TILE, TILE);
     this.g.fillStyle(0x344762, 1).fillRect(px, py + TILE - 7, TILE, 7);
     this.g.lineStyle(1, 0x243247, 0.8).strokeRect(px, py, TILE, TILE);
@@ -3414,6 +3537,10 @@ Statuses: ${statuses}`;
   }
 
   private drawTownRug(x: number, y: number, w: number, h: number, color: number) {
+    if (this.hasTexture(TOWN_PROP_TEXTURES.rug)) {
+      this.drawTexture(TOWN_PROP_TEXTURES.rug, x, y, w, h + 8, LAYER_OBJECT_IMAGE);
+      return;
+    }
     this.g.fillStyle(0x172033, 0.4).fillRect(x + 4, y + 5, w, h);
     this.g.fillStyle(color, 1).fillRect(x, y, w, h);
     this.g.fillStyle(0xf4d58f, 0.75).fillRect(x + 8, y + 7, w - 16, 4);
@@ -3422,6 +3549,10 @@ Statuses: ${statuses}`;
   }
 
   private drawTownLamp(x: number, y: number) {
+    if (this.hasTexture(TOWN_PROP_TEXTURES.lamp)) {
+      this.drawTexture(TOWN_PROP_TEXTURES.lamp, x - 2, y - 14, 32, 48, LAYER_OBJECT_IMAGE);
+      return;
+    }
     this.g.fillStyle(0x3b2b24, 1).fillRect(x + 11, y + 14, 6, 18);
     this.g.fillStyle(0xffd56a, 0.32).fillCircle(x + 14, y + 10, 22);
     this.g.fillStyle(0xffdf88, 1).fillRect(x + 7, y + 4, 14, 14);
@@ -3430,6 +3561,10 @@ Statuses: ${statuses}`;
   }
 
   private drawTownCrate(x: number, y: number) {
+    if (this.hasTexture(TOWN_PROP_TEXTURES.crate)) {
+      this.drawTexture(TOWN_PROP_TEXTURES.crate, x - 5, y - 5, 32, 32, LAYER_OBJECT_IMAGE);
+      return;
+    }
     this.g.fillStyle(0x8b6038, 1).fillRect(x, y, 22, 22);
     this.g.lineStyle(2, 0x3a2517, 1).strokeRect(x, y, 22, 22);
     this.g.lineStyle(2, 0xc08b4d, 0.85).lineBetween(x + 4, y + 4, x + 18, y + 18);
@@ -3437,6 +3572,10 @@ Statuses: ${statuses}`;
   }
 
   private drawTownBarrel(x: number, y: number) {
+    if (this.hasTexture(TOWN_PROP_TEXTURES.barrel)) {
+      this.drawTexture(TOWN_PROP_TEXTURES.barrel, x - 4, y - 5, 32, 32, LAYER_OBJECT_IMAGE);
+      return;
+    }
     this.g.fillStyle(0x6f4b2c, 1).fillEllipse(x + 12, y + 12, 22, 24);
     this.g.fillStyle(0x9b6b3b, 1).fillEllipse(x + 12, y + 8, 19, 7);
     this.g.lineStyle(2, 0x2d1c12, 1).strokeEllipse(x + 12, y + 12, 22, 24);
@@ -3444,6 +3583,10 @@ Statuses: ${statuses}`;
   }
 
   private drawTownTable(x: number, y: number) {
+    if (this.hasTexture(TOWN_PROP_TEXTURES.table)) {
+      this.drawTexture(TOWN_PROP_TEXTURES.table, x - 17, y - 22, 96, 64, LAYER_OBJECT_IMAGE);
+      return;
+    }
     this.g.fillStyle(0x3d2a1d, 0.45).fillRect(x + 4, y + 9, 58, 25);
     this.g.fillStyle(0x815637, 1).fillRect(x, y, 62, 24);
     this.g.fillStyle(0xba8150, 1).fillRect(x + 4, y + 4, 54, 5);
@@ -3497,7 +3640,12 @@ Statuses: ${statuses}`;
     this.g.lineStyle(2, 0x172033, 1).strokeRect(kioskX, kioskY, 92, 56);
     this.g.lineStyle(2, 0xfff5c8, 0.75).lineBetween(kioskX + 5, kioskY + 4, kioskX + 87, kioskY + 4);
 
-    this.drawTownServiceIcon(service.kind, cx, kioskY + 24, service.accent);
+    const serviceTexture = TOWN_SERVICE_TEXTURES[service.kind];
+    if (this.hasTexture(serviceTexture)) {
+      this.drawTexture(serviceTexture, cx - 44, kioskY - 23, 88, 72, LAYER_OBJECT_IMAGE);
+    } else {
+      this.drawTownServiceIcon(service.kind, cx, kioskY + 24, service.accent);
+    }
 
     const signW = service.kind === "clinic" ? 104 : 96;
     const signCx = cx + (service.kind === "clinic" ? -22 : 0);
@@ -3524,6 +3672,12 @@ Statuses: ${statuses}`;
   private drawTownExit(ox: number, oy: number) {
     const x = ox + 9 * TILE;
     const y = oy + 14 * TILE;
+    if (this.hasTexture("town_exit_gate")) {
+      this.g.fillStyle(0x07101f, 0.75).fillRect(x - 4, y - 6, TILE * 3 + 8, TILE + 8);
+      this.drawTexture("town_exit_gate", x, y - 50, TILE * 3, 80, LAYER_OBJECT_IMAGE);
+      this.text(x + TILE * 1.5, y - 76, "Exit", 14, "#fff2a8", "center", { wordWrapWidth: 90 });
+      return;
+    }
     this.g.fillStyle(0x07101f, 1).fillRect(x, y - 6, TILE * 3, TILE + 6);
     this.g.fillStyle(0x1d2b44, 1).fillRect(x + 10, y - 2, TILE * 3 - 20, TILE + 2);
     this.g.fillStyle(0xf5d27c, 1).fillRect(x + 4, y - 8, TILE * 3 - 8, 5);
@@ -3590,15 +3744,23 @@ Statuses: ${statuses}`;
     });
     this.party.forEach((member, idx) => {
       const active = this.currentBattleEntry()?.side === "party" && this.currentBattleEntry()?.actorId === member.id && this.battle?.phase !== "resolving";
-      this.drawPartyBattler(member, 728 + idx * 46, 122 + idx * 70, idx, active);
-      this.drawPortrait(member, 860, 76 + idx * 84, 1.4);
+      this.drawPartyBattler(member, 690 + idx * 42, 104 + idx * 72, idx, active);
+      this.drawPortrait(member, 890, 66 + idx * 88, 1.3);
     });
-    this.drawBattleTargetPanel(16, 390, 252, 132);
-    this.drawBattleCommandPanel(278, 390, 218, 132);
-    this.drawBattleStatusPanel(506, 390, 438, 132);
+    this.drawBattleTargetPanel(16, 388, 250, 136);
+    this.drawBattleCommandPanel(276, 388, 222, 136);
+    this.drawBattleStatusPanel(508, 388, 436, 136);
   }
 
   private drawBattleBackdrop() {
+    const background = this.battle?.background;
+    if (background && this.hasTexture(background)) {
+      this.g.fillStyle(0x050812, 1).fillRect(0, 0, WIDTH, HEIGHT);
+      this.drawTexture(background, 0, 0, WIDTH, 390, LAYER_WORLD_IMAGE);
+      this.g.fillStyle(0x000000, 0.14).fillRect(0, 0, WIDTH, 390);
+      this.g.fillStyle(0x06101f, 1).fillRect(0, 390, WIDTH, HEIGHT - 390);
+      return;
+    }
     this.g.fillStyle(0x0a1422, 1).fillRect(0, 0, WIDTH, HEIGHT);
     this.g.fillStyle(0x182b40, 1).fillRect(0, 0, WIDTH, 110);
     this.g.fillStyle(0x233d4b, 1).fillRect(0, 110, WIDTH, 62);
@@ -3624,11 +3786,11 @@ Statuses: ${statuses}`;
   }
 
   private enemyBattleSlot(enemy: EnemyState, idx: number): { x: number; y: number; size: number } {
-    if (enemy.boss) return { x: 132, y: 112, size: 132 };
+    if (enemy.boss) return { x: 116, y: 78, size: 178 };
     const slots = [
-      { x: 86, y: 116, size: 108 },
-      { x: 244, y: 170, size: 108 },
-      { x: 90, y: 250, size: 108 }
+      { x: 74, y: 100, size: 106 },
+      { x: 236, y: 156, size: 106 },
+      { x: 92, y: 220, size: 106 }
     ];
     return slots[idx % slots.length];
   }
@@ -3655,17 +3817,22 @@ Statuses: ${statuses}`;
   }
 
   private drawPartyBattler(member: CharacterState, x: number, y: number, idx: number, active: boolean) {
+    const texture = PARTY_BATTLE_TEXTURES[member.id];
+    const alpha = member.hp <= 0 ? 0.36 : 1;
+    this.drawActorShadow(x + 48, y + 78, 80, 15);
+    if (active) {
+      this.g.fillStyle(0xfff0a8, 0.16).fillEllipse(x + 48, y + 78, 92, 22);
+      this.g.lineStyle(3, 0xfff0a8, 0.9).strokeEllipse(x + 48, y + 78, 92, 22);
+    }
+    if (this.hasTexture(texture)) {
+      this.drawTexture(texture, x, y - 6, 96, 82, LAYER_BATTLE_IMAGE, alpha);
+      return;
+    }
     const palettes = {
       arlen: [0xf0c18d, 0xc9433f, 0xe9edf7, 0x362a4b],
       mira: [0xf1d0aa, 0xf5f2e8, 0x5fac73, 0x314c33],
       kael: [0xe1b284, 0x1c365d, 0xf0b13e, 0x121827]
     }[member.id];
-    const alpha = member.hp <= 0 ? 0.36 : 1;
-    this.drawActorShadow(x + 22, y + 62, 54, 13);
-    if (active) {
-      this.g.fillStyle(0xfff0a8, 0.16).fillEllipse(x + 22, y + 62, 66, 20);
-      this.g.lineStyle(3, 0xfff0a8, 0.9).strokeEllipse(x + 22, y + 62, 66, 20);
-    }
     this.g.fillStyle(0x050812, alpha).fillRect(x + 12, y + 10, 24, 42);
     this.g.fillStyle(palettes[0], alpha).fillRect(x + 14, y, 18, 18);
     this.g.fillStyle(palettes[1], alpha).fillRect(x + 9, y + 18, 28, 31);
@@ -3803,13 +3970,17 @@ Statuses: ${statuses}`;
   }
 
   private drawWorldTile(terrain: Terrain, sx: number, sy: number, x: number, y: number) {
-    if (terrain === "plains") this.drawWorldPlainsTile(sx, sy, x, y);
-    else if (terrain === "forest") this.drawWorldForestTile(sx, sy, x, y);
-    else if (terrain === "hills") this.drawWorldHillsTile(sx, sy, x, y);
-    else if (terrain === "mountain") this.drawWorldMountainTile(sx, sy, x, y);
-    else if (terrain === "water" || terrain === "deepWater") this.drawWorldWaterTile(terrain, sx, sy, x, y);
-    else if (terrain === "sand") this.drawWorldSandTile(sx, sy, x, y);
-    else this.drawWorldRoadTile(sx, sy, x, y);
+    const texture = WORLD_TILE_TEXTURES[terrain];
+    const drewTexture = this.drawTileTexture(texture, sx, sy);
+    if (!drewTexture) {
+      if (terrain === "plains") this.drawWorldPlainsTile(sx, sy, x, y);
+      else if (terrain === "forest") this.drawWorldForestTile(sx, sy, x, y);
+      else if (terrain === "hills") this.drawWorldHillsTile(sx, sy, x, y);
+      else if (terrain === "mountain") this.drawWorldMountainTile(sx, sy, x, y);
+      else if (terrain === "water" || terrain === "deepWater") this.drawWorldWaterTile(terrain, sx, sy, x, y);
+      else if (terrain === "sand") this.drawWorldSandTile(sx, sy, x, y);
+      else this.drawWorldRoadTile(sx, sy, x, y);
+    }
     this.drawWorldCoastEdges(terrain, sx, sy, x, y);
   }
 
@@ -3994,6 +4165,11 @@ Statuses: ${statuses}`;
 
   private drawLocationIcon(loc: LocationDef, sx: number, sy: number) {
     this.drawActorShadow(sx + 16, sy + 28, 34, 9);
+    const locationTexture = LOCATION_TEXTURES[loc.id];
+    if (locationTexture && this.hasTexture(locationTexture)) {
+      this.drawTexture(locationTexture, sx, sy - 2, TILE, TILE, LAYER_OBJECT_IMAGE);
+      return;
+    }
     if (loc.id === "dawnford") {
       this.g.fillStyle(0x39434f, 1).fillRect(sx + 1, sy + 5, 30, 24);
       this.g.fillStyle(0x6d7682, 1).fillRect(sx + 5, sy - 2, 8, 31);
@@ -4062,7 +4238,7 @@ Statuses: ${statuses}`;
     const frame = this.movement ? Math.floor(this.walkAnimElapsed / 85) % 2 : 0;
     this.drawActorShadow(x + 12, y + 30, 34, 10);
     this.g.lineStyle(2, 0xfff0a8, this.mode === "world" ? 0.82 : 0.45).strokeEllipse(x + 12, y + 30, 32, 10);
-    if (this.mode === "world") {
+    if (this.mode === "world" && !this.hasTexture("char_arlen_map")) {
       this.g.fillStyle(0x050812, 1).fillRect(x + 5, y + 3, 22, 29);
       this.g.fillStyle(0x2a213a, 1).fillRect(x + 7, y + 1, 18, 9);
       this.g.fillStyle(0xf0c18d, 1).fillRect(x + 9, y + 5, 14, 12);
@@ -4115,7 +4291,7 @@ Statuses: ${statuses}`;
   private drawPortrait(c: CharacterState, x: number, y: number, scale: number) {
     const portraitTexture = PORTRAIT_TEXTURES[c.id];
     if (this.hasTexture(portraitTexture)) {
-      this.drawTexture(portraitTexture, x, y, 22 * scale, 28 * scale, LAYER_BATTLE_IMAGE, c.hp <= 0 ? 0.35 : 1);
+      this.drawTexture(portraitTexture, x, y, 32 * scale, 40 * scale, LAYER_BATTLE_IMAGE, c.hp <= 0 ? 0.35 : 1);
       return;
     }
     const palettes = {
@@ -4180,6 +4356,23 @@ Statuses: ${statuses}`;
   }
 
   private drawPanel(x: number, y: number, w: number, h: number) {
+    if (this.hasTexture("ui_window_panel")) {
+      const c = 12;
+      const mid = 24;
+      const iw = Math.max(1, w - c * 2);
+      const ih = Math.max(1, h - c * 2);
+      this.ui.fillStyle(0x020714, 0.58).fillRect(x + 4, y + 5, w, h);
+      this.drawCroppedTexture("ui_window_panel", x, y, 0, 0, c, c, c, c, LAYER_UI_IMAGE);
+      this.drawCroppedTexture("ui_window_panel", x + c, y, c, 0, mid, c, iw, c, LAYER_UI_IMAGE);
+      this.drawCroppedTexture("ui_window_panel", x + w - c, y, c + mid, 0, c, c, c, c, LAYER_UI_IMAGE);
+      this.drawCroppedTexture("ui_window_panel", x, y + c, 0, c, c, mid, c, ih, LAYER_UI_IMAGE);
+      this.drawCroppedTexture("ui_window_panel", x + c, y + c, c, c, mid, mid, iw, ih, LAYER_UI_IMAGE);
+      this.drawCroppedTexture("ui_window_panel", x + w - c, y + c, c + mid, c, c, mid, c, ih, LAYER_UI_IMAGE);
+      this.drawCroppedTexture("ui_window_panel", x, y + h - c, 0, c + mid, c, c, c, c, LAYER_UI_IMAGE);
+      this.drawCroppedTexture("ui_window_panel", x + c, y + h - c, c, c + mid, mid, c, iw, c, LAYER_UI_IMAGE);
+      this.drawCroppedTexture("ui_window_panel", x + w - c, y + h - c, c + mid, c + mid, c, c, c, c, LAYER_UI_IMAGE);
+      return;
+    }
     this.ui.fillStyle(0x020714, 0.55).fillRect(x + 4, y + 5, w, h);
     this.ui.fillStyle(0x10275a, 0.98).fillRect(x, y, w, h);
     this.ui.fillStyle(0x0b1733, 0.98).fillRect(x + 7, y + 7, w - 14, h - 14);

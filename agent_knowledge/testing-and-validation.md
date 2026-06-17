@@ -14,6 +14,25 @@ This runs `tsc && vite build`.
 
 Known warning: Vite may warn that the Phaser bundle chunk is large. That is expected unless the bundling strategy changes.
 
+## Asset Import Validation
+
+After changing `tools/art_import/`, crop maps, or files under `assets_v2/`, regenerate previews:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\art_import\generate_asset_previews.ps1
+```
+
+Check:
+
+- `assets_v2/previews/world_tiles_preview.png` has no source-sheet border/grid pixels.
+- `assets_v2/previews/markers_preview.png` has transparent markers without adjacent fragments.
+- `assets_v2/previews/town_props_preview.png` has clean service signs/props.
+- `assets_v2/previews/characters_preview.png`, `portraits_preview.png`, `enemies_preview.png`, and `bosses_preview.png` have transparent backgrounds and no cut-off neighboring sprites.
+- `assets_v2/previews/battle_backgrounds_preview.png` shows opaque 960x390 panels.
+- `assets_v2/previews/QUALITY_REPORT.md` documents rembg/color-key choices.
+
+For rembg-related regeneration, use `D:\tools\rembg\venv_rembg\Scripts\rembg.exe` with `birefnet-general`. The expected AMD/Windows provider path is DirectML (`DmlExecutionProvider`). Do not add NVIDIA-specific checks.
+
 ## Browser Startup Test
 
 ```powershell
@@ -39,6 +58,7 @@ Expected:
 - Intro dialogue appears in Dawnford.
 - Advance dialogue with Enter/Z.
 - Player ends in Dawnford town interior.
+- Dawnford should show v2 stone floors/walls, service signs, lamps, table/rug, crates/barrels, and exit gate.
 
 ## Load/Save Test
 
@@ -67,6 +87,7 @@ Expected:
 - Verify blocked terrain rules when testing boat/skyship flags.
 - Confirm collision does not jitter or leave the player visually/logically between tiles.
 - Confirm the overworld leader remains readable when standing on a town/location marker.
+- Confirm v2 terrain does not show hard source-sheet border lines between every tile.
 
 ## Battle Test
 
@@ -80,6 +101,7 @@ Expected:
 - Confirm dead enemies are skipped and do not act.
 - Verify enemies can damage party on their own turns.
 - Confirm command text, HP bars, target highlight, and next-turn preview do not overlap panel borders.
+- Confirm the third enemy slot stays above the lower battle panels.
 - Verify victory returns to exploration.
 - Verify game over appears if party falls; needs manual setup/debug.
 

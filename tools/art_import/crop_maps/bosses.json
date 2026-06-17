@@ -1,0 +1,74 @@
+{
+  "assets": [
+    {
+      "id": "rootbound_troll",
+      "source": "06_enemies/bosses/boss_roster_master.png",
+      "output": "enemies/bosses/rootbound_troll.png",
+      "crop": { "x": 13, "y": 104, "w": 479, "h": 422 },
+      "transparent": true,
+      "background": "#bab3ab",
+      "fuzzPercent": 7,
+      "trim": true,
+      "resize": { "w": 192, "h": 192, "mode": "fit", "filter": "Point" },
+      "extent": { "w": 192, "h": 192, "background": "none" },
+      "strip": true,
+      "notes": "Source verdant colossus mapped to Rootbound Troll."
+    },
+    {
+      "id": "ember_tyrant",
+      "source": "06_enemies/bosses/boss_roster_master.png",
+      "output": "enemies/bosses/ember_tyrant.png",
+      "crop": { "x": 511, "y": 74, "w": 441, "h": 459 },
+      "transparent": true,
+      "background": "#bab3ab",
+      "fuzzPercent": 7,
+      "trim": true,
+      "resize": { "w": 192, "h": 192, "mode": "fit", "filter": "Point" },
+      "extent": { "w": 192, "h": 192, "background": "none" },
+      "strip": true,
+      "notes": "Source infernal overlord mapped to Ember Tyrant."
+    },
+    {
+      "id": "tide_oracle",
+      "source": "06_enemies/bosses/boss_roster_master.png",
+      "output": "enemies/bosses/tide_oracle.png",
+      "crop": { "x": 974, "y": 85, "w": 415, "h": 454 },
+      "transparent": true,
+      "background": "#bab3ab",
+      "fuzzPercent": 7,
+      "trim": true,
+      "resize": { "w": 192, "h": 192, "mode": "fit", "filter": "Point" },
+      "extent": { "w": 192, "h": 192, "background": "none" },
+      "strip": true,
+      "notes": "Source tide queen mapped to Tide Oracle."
+    },
+    {
+      "id": "gale_chimera",
+      "source": "06_enemies/bosses/boss_roster_master.png",
+      "output": "enemies/bosses/gale_chimera.png",
+      "crop": { "x": 181, "y": 586, "w": 528, "h": 411 },
+      "transparent": true,
+      "background": "#bab3ab",
+      "fuzzPercent": 7,
+      "trim": true,
+      "resize": { "w": 192, "h": 192, "mode": "fit", "filter": "Point" },
+      "extent": { "w": 192, "h": 192, "background": "none" },
+      "strip": true,
+      "notes": "Source storm chimera mapped to Gale Chimera."
+    },
+    {
+      "id": "eclipse_crown",
+      "source": "06_enemies/bosses/boss_roster_master.png",
+      "output": "enemies/bosses/eclipse_crown.png",
+      "crop": { "x": 764, "y": 552, "w": 487, "h": 456 },
+      "transparent": true,
+      "background": "#bab3ab",
+      "fuzzPercent": 7,
+      "trim": true,
+      "resize": { "w": 192, "h": 192, "mode": "fit", "filter": "Point" },
+      "extent": { "w": 192, "h": 192, "background": "none" },
+      "strip": true,
+      "notes": "Source eclipse archmage mapped to Eclipse Crown."
+    }
+  ]
+}

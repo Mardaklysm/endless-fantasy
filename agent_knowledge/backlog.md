@@ -6,23 +6,22 @@ This backlog is practical project memory, not a full design document. Keep it sh
 
 - Keep Batch 001 assets under root `assets/`; do not nest a second `assets/` folder inside it.
 - Consider splitting asset key maps out of `src/main.ts` if future batches add many more files.
-- Add a focused 9-slice/tiled UI panel pass for `ui_window_panel` without reducing menu/battle text space.
+- Consider splitting the v2 asset import scripts into shared helpers if more batches arrive.
+- Improve UI panel skinning further only if it preserves current live text space and readability.
 - Add item/equipment/relic icons to inventory, shops, equipment menus, and HUD when there is a clean layout slot.
 - Add vehicle rendering for boat/skyship on the overworld after deciding whether they replace or accompany Arlen.
 - Add simple effect rendering only after battle timing can show short animations without slowing commands.
-- Replace the generated Dawnford/town interior pass with real town/interior assets after an approved batch exists.
-- Replace the procedural overworld terrain/markers with a future verified real asset batch only if it clearly beats the current readability/presentation.
-- Replace generated battle party battlers with approved original party stance sprites when available.
+- Add v2-quality art for later-region normal enemies not covered by the first twelve common roster crops.
+- Add route/bridge/water transition rendering if future world art supports it cleanly.
 
 ## Asset Manifest Follow-Up
 
 - Mark Batch 001 progress in `ASSET_MANIFEST.md` if the manifest checklist becomes active project tracking.
 - Verify future batches match filename, size, and transparency guidance before wiring.
-- Add the section K town/interior assets from `ASSET_MANIFEST.md`: floor, wall, exit gate, service counters/signs, table, crate, barrel, lamp, and rug.
 - `chest_open.png` is wired for opened chest state; keep testing it during dungeon pass-throughs.
 - `tile_water_b` and `tile_deep_water_b` are loaded but not animated yet.
-- `tile_bridge` is loaded but no bridge/route terrain overlay is implemented yet.
-- Batch 001 world tile and marker PNGs are loaded but currently bypassed because the procedural overworld pass reads better.
+- `tile_bridge` exists in `assets_v2` but no bridge/route terrain overlay is implemented yet.
+- Reference-only UI window crops in `assets_v2/ui` are intentionally not loaded at runtime because they contain sample text.
 
 ## Gameplay Gaps
 
@@ -38,8 +37,8 @@ This backlog is practical project memory, not a full design document. Keep it sh
 - Effect PNG sheets are loaded but not rendered yet.
 - No animated water/torch/chest sparkle polish yet.
 - Battle enemies use PNGs now; future larger boss art still needs overlap checks when progression reaches each boss.
-- Battle backdrop is a single generated forest/plains scene; future regions should get original backdrops after the current layout stabilizes.
-- Town service blocks now use generated counters/signs and readable live labels; dedicated service art is still needed.
+- Battle backdrops now use v2 region panels; later tuning can reduce bundle weight with dynamic loading/code splitting.
+- Town service blocks now use v2 signs/props plus readable live labels.
 - Title logo and four-star decoration render; title background remains generated.
 - Audio is simple oscillator loops; no composed music assets are planned unless approved.
 

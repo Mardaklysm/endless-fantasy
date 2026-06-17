@@ -1,0 +1,123 @@
+{
+  "assets": [
+    {
+      "id": "window_panel",
+      "source": "03_ui/battle_ui_master.png",
+      "output": "ui/window_panel.png",
+      "crop": { "x": 15, "y": 63, "w": 245, "h": 165 },
+      "resize": { "w": 48, "h": 48, "mode": "exact", "filter": "Point" },
+      "strip": true,
+      "notes": "Compressed 9-slice source derived from a clean blank frame; labels excluded."
+    },
+    {
+      "id": "command_window",
+      "source": "03_ui/battle_ui_master.png",
+      "output": "ui/command_window.png",
+      "crop": { "x": 295, "y": 63, "w": 194, "h": 271 },
+      "resize": { "w": 218, "h": 132, "mode": "exact", "filter": "Point" },
+      "strip": true,
+      "notes": "Reference/runtime-optional crop; text from source is not used in-game."
+    },
+    {
+      "id": "target_window",
+      "source": "03_ui/battle_ui_master.png",
+      "output": "ui/target_window.png",
+      "crop": { "x": 525, "y": 63, "w": 368, "h": 149 },
+      "resize": { "w": 252, "h": 132, "mode": "exact", "filter": "Point" },
+      "strip": true,
+      "notes": "Reference/runtime-optional crop; source sample text is not wired."
+    },
+    {
+      "id": "party_status_window",
+      "source": "03_ui/battle_ui_master.png",
+      "output": "ui/party_status_window.png",
+      "crop": { "x": 925, "y": 63, "w": 504, "h": 291 },
+      "resize": { "w": 438, "h": 132, "mode": "exact", "filter": "Point" },
+      "strip": true,
+      "notes": "Reference/runtime-optional crop; source sample text is not wired."
+    },
+    {
+      "id": "message_window",
+      "source": "03_ui/battle_ui_master.png",
+      "output": "ui/message_window.png",
+      "crop": { "x": 15, "y": 978, "w": 1055, "h": 85 },
+      "resize": { "w": 848, "h": 96, "mode": "exact", "filter": "Point" },
+      "strip": true,
+      "notes": "Message frame crop; live text remains separate."
+    },
+    {
+      "id": "cursor_arrow",
+      "source": "03_ui/battle_ui_master.png",
+      "output": "ui/cursor_arrow.png",
+      "crop": { "x": 415, "y": 578, "w": 36, "h": 36 },
+      "transparent": true,
+      "background": "#b8b0a6",
+      "fuzzPercent": 8,
+      "trim": true,
+      "resize": { "w": 16, "h": 16, "mode": "fit", "filter": "Point" },
+      "extent": { "w": 16, "h": 16, "background": "none" },
+      "strip": true
+    },
+    {
+      "id": "cursor_hand",
+      "source": "03_ui/battle_ui_master.png",
+      "output": "ui/cursor_hand.png",
+      "crop": { "x": 479, "y": 576, "w": 52, "h": 40 },
+      "transparent": true,
+      "background": "#b8b0a6",
+      "fuzzPercent": 8,
+      "trim": true,
+      "resize": { "w": 24, "h": 18, "mode": "fit", "filter": "Point" },
+      "extent": { "w": 24, "h": 18, "background": "none" },
+      "strip": true
+    },
+    {
+      "id": "hp_bar",
+      "source": "03_ui/battle_ui_master.png",
+      "output": "ui/hp_bar.png",
+      "crop": { "x": 709, "y": 565, "w": 213, "h": 25 },
+      "resize": { "w": 64, "h": 8, "mode": "exact", "filter": "Point" },
+      "strip": true
+    },
+    {
+      "id": "mp_bar",
+      "source": "03_ui/battle_ui_master.png",
+      "output": "ui/mp_bar.png",
+      "crop": { "x": 709, "y": 598, "w": 213, "h": 25 },
+      "resize": { "w": 64, "h": 8, "mode": "exact", "filter": "Point" },
+      "strip": true
+    },
+    {
+      "id": "bar_empty",
+      "source": "03_ui/battle_ui_master.png",
+      "output": "ui/bar_empty.png",
+      "crop": { "x": 709, "y": 631, "w": 213, "h": 24 },
+      "resize": { "w": 64, "h": 8, "mode": "exact", "filter": "Point" },
+      "strip": true
+    },
+    {
+      "id": "button_back",
+      "source": "03_ui/battle_ui_master.png",
+      "output": "ui/button_back.png",
+      "crop": { "x": 1112, "y": 937, "w": 103, "h": 53 },
+      "transparent": true,
+      "background": "#b8b0a6",
+      "fuzzPercent": 8,
+      "trim": true,
+      "resize": { "w": 64, "h": 32, "mode": "exact", "filter": "Point" },
+      "strip": true
+    },
+    {
+      "id": "button_ok",
+      "source": "03_ui/battle_ui_master.png",
+      "output": "ui/button_ok.png",
+      "crop": { "x": 1294, "y": 937, "w": 102, "h": 53 },
+      "transparent": true,
+      "background": "#b8b0a6",
+      "fuzzPercent": 8,
+      "trim": true,
+      "resize": { "w": 64, "h": 32, "mode": "exact", "filter": "Point" },
+      "strip": true
+    }
+  ]
+}

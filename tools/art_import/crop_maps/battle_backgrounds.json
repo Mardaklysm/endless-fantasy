@@ -1,0 +1,52 @@
+{
+  "assets": [
+    {
+      "id": "forest_path",
+      "source": "07_backgrounds/01_forest_path.png",
+      "output": "battle/backgrounds/forest_path.png",
+      "resize": { "w": 960, "h": 390, "mode": "cover", "filter": "Lanczos" },
+      "extent": { "w": 960, "h": 390, "background": "black" },
+      "strip": true
+    },
+    {
+      "id": "plains",
+      "source": "07_backgrounds/02_sunlit_meadow.png",
+      "output": "battle/backgrounds/plains.png",
+      "resize": { "w": 960, "h": 390, "mode": "cover", "filter": "Lanczos" },
+      "extent": { "w": 960, "h": 390, "background": "black" },
+      "strip": true
+    },
+    {
+      "id": "moss_cave",
+      "source": "07_backgrounds/03_mossy_cave.png",
+      "output": "battle/backgrounds/moss_cave.png",
+      "resize": { "w": 960, "h": 390, "mode": "cover", "filter": "Lanczos" },
+      "extent": { "w": 960, "h": 390, "background": "black" },
+      "strip": true
+    },
+    {
+      "id": "ashen_keep",
+      "source": "07_backgrounds/04_fiery_fortress.png",
+      "output": "battle/backgrounds/ashen_keep.png",
+      "resize": { "w": 960, "h": 390, "mode": "cover", "filter": "Lanczos" },
+      "extent": { "w": 960, "h": 390, "background": "black" },
+      "strip": true
+    },
+    {
+      "id": "tide_shrine",
+      "source": "07_backgrounds/05_water_temple.png",
+      "output": "battle/backgrounds/tide_shrine.png",
+      "resize": { "w": 960, "h": 390, "mode": "cover", "filter": "Lanczos" },
+      "extent": { "w": 960, "h": 390, "background": "black" },
+      "strip": true
+    },
+    {
+      "id": "eclipse_spire",
+      "source": "07_backgrounds/06_eclipse_ruins.png",
+      "output": "battle/backgrounds/eclipse_spire.png",
+      "resize": { "w": 960, "h": 390, "mode": "cover", "filter": "Lanczos" },
+      "extent": { "w": 960, "h": 390, "background": "black" },
+      "strip": true
+    }
+  ]
+}

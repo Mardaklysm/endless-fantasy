@@ -1,0 +1,141 @@
+{
+  "assets": [
+    {
+      "id": "arlen_portrait",
+      "source": "04_characters/warrior/warrior_master_sheet.png",
+      "output": "portraits/arlen.png",
+      "crop": { "x": 735, "y": 83, "w": 501, "h": 509 },
+      "transparent": true,
+      "background": "#bcb4aa",
+      "fuzzPercent": 7,
+      "trim": true,
+      "resize": { "w": 32, "h": 40, "mode": "fit", "filter": "Point" },
+      "extent": { "w": 32, "h": 40, "background": "none" },
+      "strip": true
+    },
+    {
+      "id": "mira_portrait",
+      "source": "04_characters/cleric/cleric_master_sheet.png",
+      "output": "portraits/mira.png",
+      "crop": { "x": 687, "y": 52, "w": 509, "h": 560 },
+      "transparent": true,
+      "background": "#bab2a8",
+      "fuzzPercent": 7,
+      "trim": true,
+      "resize": { "w": 32, "h": 40, "mode": "fit", "filter": "Point" },
+      "extent": { "w": 32, "h": 40, "background": "none" },
+      "strip": true
+    },
+    {
+      "id": "kael_portrait",
+      "source": "04_characters/mage/mage_master_sheet.png",
+      "output": "portraits/kael.png",
+      "crop": { "x": 707, "y": 61, "w": 480, "h": 512 },
+      "transparent": true,
+      "background": "#e8e6e3",
+      "fuzzPercent": 7,
+      "trim": true,
+      "resize": { "w": 32, "h": 40, "mode": "fit", "filter": "Point" },
+      "extent": { "w": 32, "h": 40, "background": "none" },
+      "strip": true
+    },
+    {
+      "id": "arlen_battle",
+      "source": "04_characters/warrior/warrior_master_sheet.png",
+      "output": "characters/arlen_battle.png",
+      "crop": { "x": 580, "y": 720, "w": 660, "h": 470 },
+      "transparent": true,
+      "background": "#bcb4aa",
+      "fuzzPercent": 7,
+      "trim": true,
+      "resize": { "w": 112, "h": 96, "mode": "fit", "filter": "Point" },
+      "extent": { "w": 112, "h": 96, "background": "none" },
+      "strip": true
+    },
+    {
+      "id": "mira_battle",
+      "source": "04_characters/cleric/cleric_master_sheet.png",
+      "output": "characters/mira_battle.png",
+      "crop": { "x": 660, "y": 630, "w": 540, "h": 550 },
+      "transparent": true,
+      "background": "#bab2a8",
+      "fuzzPercent": 7,
+      "trim": true,
+      "resize": { "w": 112, "h": 96, "mode": "fit", "filter": "Point" },
+      "extent": { "w": 112, "h": 96, "background": "none" },
+      "strip": true
+    },
+    {
+      "id": "kael_battle",
+      "source": "04_characters/mage/mage_master_sheet.png",
+      "output": "characters/kael_battle.png",
+      "crop": { "x": 630, "y": 630, "w": 570, "h": 560 },
+      "transparent": true,
+      "background": "#e8e6e3",
+      "fuzzPercent": 7,
+      "trim": true,
+      "resize": { "w": 112, "h": 96, "mode": "fit", "filter": "Point" },
+      "extent": { "w": 112, "h": 96, "background": "none" },
+      "strip": true
+    }
+  ],
+  "sheets": [
+    {
+      "id": "arlen_map",
+      "source": "04_characters/warrior/map_sprite_sheet.png",
+      "output": "characters/arlen_map.png",
+      "background": "#bfb7ae",
+      "fuzzPercent": 7,
+      "frameSize": { "w": 16, "h": 16 },
+      "layout": { "cols": 2, "rows": 4 },
+      "frames": [
+        { "x": 100, "y": 0, "w": 167, "h": 248 },
+        { "x": 319, "y": 0, "w": 146, "h": 247 },
+        { "x": 101, "y": 260, "w": 161, "h": 251 },
+        { "x": 328, "y": 263, "w": 137, "h": 246 },
+        { "x": 84, "y": 531, "w": 151, "h": 244 },
+        { "x": 303, "y": 530, "w": 155, "h": 246 },
+        { "x": 100, "y": 798, "w": 145, "h": 255 },
+        { "x": 315, "y": 798, "w": 150, "h": 255 }
+      ]
+    },
+    {
+      "id": "mira_map",
+      "source": "04_characters/cleric/map_sprite_sheet.png",
+      "output": "characters/mira_map.png",
+      "background": "#beb4ab",
+      "fuzzPercent": 7,
+      "frameSize": { "w": 16, "h": 16 },
+      "layout": { "cols": 2, "rows": 4 },
+      "frames": [
+        { "x": 13, "y": 20, "w": 171, "h": 228 },
+        { "x": 235, "y": 21, "w": 173, "h": 227 },
+        { "x": 44, "y": 281, "w": 151, "h": 223 },
+        { "x": 266, "y": 281, "w": 150, "h": 223 },
+        { "x": 32, "y": 534, "w": 141, "h": 221 },
+        { "x": 255, "y": 533, "w": 140, "h": 222 },
+        { "x": 27, "y": 786, "w": 148, "h": 220 },
+        { "x": 249, "y": 786, "w": 149, "h": 220 }
+      ]
+    },
+    {
+      "id": "kael_map",
+      "source": "04_characters/mage/map_sprite_sheet.png",
+      "output": "characters/kael_map.png",
+      "background": "#ece8e6",
+      "fuzzPercent": 7,
+      "frameSize": { "w": 16, "h": 16 },
+      "layout": { "cols": 2, "rows": 4 },
+      "frames": [
+        { "x": 23, "y": 0, "w": 147, "h": 221 },
+        { "x": 245, "y": 0, "w": 157, "h": 221 },
+        { "x": 27, "y": 242, "w": 160, "h": 263 },
+        { "x": 246, "y": 242, "w": 164, "h": 263 },
+        { "x": 0, "y": 535, "w": 156, "h": 258 },
+        { "x": 221, "y": 535, "w": 164, "h": 258 },
+        { "x": 14, "y": 821, "w": 148, "h": 280 },
+        { "x": 241, "y": 826, "w": 149, "h": 275 }
+      ]
+    }
+  ]
+}

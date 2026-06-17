@@ -8,10 +8,12 @@
 - The tile grid is 32x32 display pixels.
 - The first playable game is intentionally compact, roughly 30-60 minutes when tuned.
 - Asset Batch 001 lives under root `assets/` and is loaded by Phaser from `src/main.ts`.
+- Improved extracted art lives under root `assets_v2/` and is preferred over `assets/` for mapped texture keys.
 - Current art rendering is image-first with generated fallback behavior.
-- Batch 001 world terrain/marker PNGs remain loaded, but the active overworld uses stronger original procedural terrain, coastlines, roads, location markers, and a generated leader sprite until better real assets exist.
-- Dawnford/town interiors currently use generated readable floor, wall, service counter, sign, prop, and exit art until dedicated town assets exist.
-- Battle presentation uses an original generated scenic backdrop, enemies on the left, generated party battlers on the right, and lower target/command/status panels.
+- The active overworld uses cleaned v2 terrain and marker PNGs. Generated terrain/marker drawing remains fallback only.
+- Dawnford/town interiors use cleaned v2 floor, wall, exit, service sign, and prop PNGs with live service text.
+- Battle presentation uses v2 opaque backdrops, v2 enemies/bosses, v2 party battlers/portraits, and lower target/command/status panels.
+- The local rembg environment for this project is `D:\tools\rembg\venv_rembg\Scripts\rembg.exe` with `birefnet-general`; available ONNX Runtime providers were `DmlExecutionProvider` and `CPUExecutionProvider`. Do not add NVIDIA/CUDA assumptions.
 - Audio is generated in code.
 - Save data uses browser `localStorage` under `crystal-oath-save-v1`.
 - Keyboard is the primary input; mouse support is minimal.
@@ -53,7 +55,8 @@ The current generated art fallback is still required for missing textures and fo
 - Do not expand gameplay when the task is documentation/art planning.
 - Do not add dependencies without a clear need and user approval.
 - Do not reintroduce instant visual tile snapping or all-party queued battle rounds.
-- Do not re-enable weak first-pass world terrain/marker PNGs as the primary overworld renderer unless a future batch is visually verified to be better than the procedural pass.
+- Do not re-enable weak first-pass world terrain/marker PNGs as the primary overworld renderer. Keep the v2 pass or a future visually verified replacement.
+- Do not run terrain tiles, opaque battle backgrounds, source sheets, or full collages through rembg.
 
 ## Current Content Rules
 
@@ -71,7 +74,7 @@ The current generated art fallback is still required for missing textures and fo
 
 ## Unknowns / Needs Verification
 
-- No formal commit/push policy exists yet.
+- The user explicitly requested commit/push for the v2 artwork pass, but there is still no general automatic commit/deploy policy for unrelated future tasks.
 - No automated tests exist yet.
 - Save migration requirements are not defined.
 - The first asset loader is implemented in `src/main.ts`; future work may split it into modules if the file grows further.

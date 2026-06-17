@@ -15,6 +15,7 @@
 - Deep water blocks movement until skyship is unlocked.
 - Location tiles enter towns/dungeons/gate automatically after the completed tile step.
 - Town south gates can exit when stepping into the exit tile or pressing south while already standing on the gate tile.
+- Town interactions check the facing tile first, then the nearby forgiving service/NPC fallback.
 - Menus, dialogues, and battles block exploration movement.
 
 ## Random Encounters
@@ -38,7 +39,8 @@
 - Enemies execute AI immediately on their own initiative turns.
 - After every living combatant in the current order has had a turn or been skipped, a new initiative cycle is rolled.
 - The game does not use an all-party action queue round system.
-- Battle presentation now uses a scenic original backdrop, enemies on the left, generated party battlers on the right, and lower panels for target/log, commands, and party status.
+- Battle presentation now uses v2 scene backdrops, enemies on the left, v2 party battlers/portraits on the right, and lower panels for target/log, commands, and party status.
+- Battle backgrounds are selected by dungeon first, then overworld terrain for random encounters.
 - Enemy actions are randomly selected from each enemy's move list.
 - Dead attack targets retarget to a living enemy.
 - Boss battles cannot be fled.
@@ -99,7 +101,7 @@ Bosses:
 
 Enemy data includes HP, attack, defense, speed, XP, gold, element, weaknesses, resistances, moves, palette, sprite base shape, and boss flag.
 
-All current enemy IDs map to Batch 001 PNG textures in `src/main.ts`. Generated enemy shapes remain as fallback if a texture is unavailable.
+The first twelve normal enemy IDs and all five boss IDs map to `assets_v2` PNG textures in `src/main.ts`. Later-region normal enemies still use Batch 001/fallback textures until clean v2 crops exist. Generated enemy shapes remain as fallback if a texture is unavailable.
 
 ## Items
 
@@ -173,7 +175,7 @@ Dungeons are data-driven in `dungeons()`:
 
 Each dungeon has two generated floors, random encounters, chests, a switch/gate puzzle, a boss tile, boss intro text, and reward text.
 
-Dungeon floors, walls, gates, stairs, exits, chests, switches, and boss relic seals render from Batch 001 PNG tiles when available. Opened chest art is wired through `openedChests`.
+Dungeon floors, walls, gates, stairs, exits, chests, switches, and boss relic seals render from Batch 001 PNG tiles when available. Town floors/walls/service props now render from `assets_v2`. Opened chest art is wired through `openedChests`.
 
 Progression flags:
 
@@ -224,6 +226,6 @@ Other QoL:
 - No visual spell/attack animation timing system yet.
 - Mouse menu support is minimal.
 - Item/equipment/relic icons are loaded but not yet displayed in menus/HUD.
-- UI panel 9-slice art is loaded but generated panels remain active pending a focused readability pass.
+- UI panel skin now uses the v2 compact window frame with live Phaser text; reference UI windows with sample text remain source-only.
 - Save schema migration/versioning is not implemented.
 - Balance has only manual smoke-test coverage so far.
