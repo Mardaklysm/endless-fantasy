@@ -1,0 +1,24 @@
+html,
+body,
+#game-shell {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: #050812;
+  color: #f4f7ff;
+  font-family: Consolas, ui-monospace, "Courier New", monospace;
+  overflow: hidden;
+}
+
+#game-shell {
+  display: grid;
+  place-items: center;
+}
+
+#game canvas {
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}

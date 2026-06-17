@@ -1,0 +1,4364 @@
+import Phaser from "phaser";
+import "./style.css";
+
+const WIDTH = 960;
+const HEIGHT = 540;
+const TILE = 32;
+const SAVE_KEY = "crystal-oath-save-v1";
+const WORLD_W = 64;
+const WORLD_H = 40;
+const MOVE_DURATION_MS = 155;
+const FAST_MOVE_DURATION_MS = 95;
+const BATTLE_ACTION_DELAY_MS = 820;
+const BATTLE_TURN_DELAY_MS = 420;
+
+type Mode =
+  | "title"
+  | "world"
+  | "town"
+  | "dungeon"
+  | "dialogue"
+  | "menu"
+  | "battle"
+  | "gameOver"
+  | "ending";
+
+type ExploreMode = "world" | "town" | "dungeon";
+
+type DirectionName = "up" | "down" | "left" | "right";
+
+type Terrain =
+  | "plains"
+  | "forest"
+  | "hills"
+  | "mountain"
+  | "water"
+  | "deepWater"
+  | "sand"
+  | "road";
+
+type ElementType =
+  | "none"
+  | "fire"
+  | "ice"
+  | "lightning"
+  | "earth"
+  | "wind"
+  | "light"
+  | "shadow";
+
+type TargetKind = "enemy" | "ally" | "allEnemies" | "allAllies" | "self";
+
+interface Vec {
+  x: number;
+  y: number;
+}
+
+interface StatusState {
+  poison?: number;
+  sleep?: number;
+  silence?: number;
+  stun?: number;
+  ward?: number;
+  starveil?: number;
+}
+
+interface CharacterState {
+  id: "arlen" | "mira" | "kael";
+  name: string;
+  role: string;
+  level: number;
+  xp: number;
+  nextXp: number;
+  hp: number;
+  maxHp: number;
+  baseAttack: number;
+  baseDefense: number;
+  speed: number;
+  luck: number;
+  weapon: string;
+  armor: string;
+  statuses: StatusState;
+  charges: Record<string, { current: number; max: number }>;
+  spells: string[];
+  defending: boolean;
+}
+
+interface ItemDef {
+  id: string;
+  name: string;
+  price: number;
+  description: string;
+  battle: boolean;
+  field: boolean;
+}
+
+interface SpellDef {
+  id: string;
+  name: string;
+  caster: "mira" | "kael" | "arlen";
+  tier: 1 | 2 | 3;
+  target: TargetKind;
+  element: ElementType;
+  power: number;
+  kind: "heal" | "damage" | "buff" | "revive";
+  price: number;
+  minLevel: number;
+  description: string;
+}
+
+interface GearDef {
+  id: string;
+  name: string;
+  price: number;
+  power: number;
+  kind: "weapon" | "armor";
+  users: CharacterState["id"][];
+  description: string;
+}
+
+interface EnemyMove {
+  name: string;
+  kind: "attack" | "damage" | "status" | "buff";
+  power: number;
+  element?: ElementType;
+  status?: keyof StatusState;
+  target?: "one" | "all";
+}
+
+interface EnemyDef {
+  id: string;
+  name: string;
+  maxHp: number;
+  attack: number;
+  defense: number;
+  speed: number;
+  xp: number;
+  gold: number;
+  element: ElementType;
+  weak: ElementType[];
+  resist: ElementType[];
+  moves: EnemyMove[];
+  palette: string[];
+  sprite: "blob" | "beast" | "wing" | "knight" | "serpent" | "crown";
+  boss?: boolean;
+}
+
+interface EnemyState extends EnemyDef {
+  uid: string;
+  hp: number;
+  statuses: StatusState;
+}
+
+interface LocationDef {
+  id: string;
+  name: string;
+  kind: "town" | "dungeon" | "final" | "gate";
+  x: number;
+  y: number;
+  requires?: () => boolean;
+  lockedText?: string;
+}
+
+interface TownDef {
+  id: string;
+  name: string;
+  palette: string[];
+  npcs: { x: number; y: number; lines: string[] }[];
+  itemStock: string[];
+  weaponStock: string[];
+  armorStock: string[];
+  spellStock: string[];
+  innPrice: number;
+  clinicPrice: number;
+  arrival?: () => void;
+}
+
+interface DungeonDef {
+  id: string;
+  name: string;
+  relic?: "root" | "flame" | "tide" | "gale";
+  boss: string;
+  palette: {
+    floor: number;
+    wall: number;
+    accent: number;
+    chest: number;
+    gate: number;
+  };
+  encounterTable: string[];
+  floors: string[][];
+  chestRewards: { id: string; item?: string; gear?: string; gold?: number }[];
+  puzzleText: string;
+  bossIntro: string[];
+  rewardText: string[];
+}
+
+interface MenuOption {
+  label: string | (() => string);
+  action: () => void;
+  disabled?: () => boolean;
+}
+
+interface ActiveMenu {
+  title: string;
+  options: MenuOption[];
+  selected: number;
+  cancel: () => void;
+  footer?: string | (() => string);
+}
+
+interface Dialogue {
+  lines: string[];
+  index: number;
+  done: () => void;
+}
+
+interface MovementState {
+  mode: ExploreMode;
+  from: Vec;
+  to: Vec;
+  dir: Vec;
+  elapsed: number;
+  duration: number;
+}
+
+interface BattleAction {
+  side: "party" | "enemy";
+  actorId: string;
+  type: "attack" | "spell" | "item" | "defend" | "run" | "skip";
+  targetIndex?: number;
+  spellId?: string;
+  itemId?: string;
+}
+
+type BattlePhase = "command" | "target" | "spell" | "item" | "allyTarget" | "resolving" | "log";
+
+interface InitiativeEntry {
+  side: "party" | "enemy";
+  actorId: string;
+  initiative: number;
+}
+
+interface BattleState {
+  kind: "random" | "boss";
+  enemies: EnemyState[];
+  bossId?: string;
+  dungeonId?: string;
+  canRun: boolean;
+  phase: BattlePhase;
+  turnOrder: InitiativeEntry[];
+  turnIndex: number;
+  current?: InitiativeEntry;
+  actions: BattleAction[];
+  selected: number;
+  pendingAction?: Partial<BattleAction>;
+  log: string[];
+  actionTimer: number;
+  victoryAwarded: boolean;
+}
+
+type ServiceKind = "inn" | "item" | "arms" | "magic" | "clinic";
+
+interface TownServiceDef {
+  kind: ServiceKind;
+  label: string;
+  x: number;
+  y: number;
+  color: number;
+  accent: number;
+}
+
+const TOWN_SERVICES: TownServiceDef[] = [
+  { kind: "inn", label: "Inn", x: 4, y: 4, color: 0xd9eeb8, accent: 0x6f8d5b },
+  { kind: "item", label: "Items", x: 8, y: 4, color: 0xf7d58b, accent: 0xb57435 },
+  { kind: "arms", label: "Arms", x: 12, y: 4, color: 0xd6d9e8, accent: 0x7c8397 },
+  { kind: "magic", label: "Magic", x: 16, y: 4, color: 0xc7a9ff, accent: 0x6f53b8 },
+  { kind: "clinic", label: "Clinic", x: 4, y: 9, color: 0xffc1d3, accent: 0xb64c6b }
+];
+
+const ASSET_PATHS = [
+  ["tile_plains", "tiles/world/plains.png"],
+  ["tile_forest", "tiles/world/forest.png"],
+  ["tile_hills", "tiles/world/hills.png"],
+  ["tile_mountain", "tiles/world/mountain.png"],
+  ["tile_water_a", "tiles/world/water_a.png"],
+  ["tile_water_b", "tiles/world/water_b.png"],
+  ["tile_deep_water_a", "tiles/world/deep_water_a.png"],
+  ["tile_deep_water_b", "tiles/world/deep_water_b.png"],
+  ["tile_sand", "tiles/world/sand.png"],
+  ["tile_road", "tiles/world/road.png"],
+  ["tile_bridge", "tiles/world/bridge.png"],
+  ["marker_town", "tiles/markers/town.png"],
+  ["marker_castle", "tiles/markers/castle.png"],
+  ["marker_cave", "tiles/markers/cave.png"],
+  ["marker_keep", "tiles/markers/keep.png"],
+  ["marker_shrine", "tiles/markers/shrine.png"],
+  ["marker_tower", "tiles/markers/tower.png"],
+  ["marker_port", "tiles/markers/port.png"],
+  ["marker_gate", "tiles/markers/starfall_gate.png"],
+  ["marker_final_spire", "tiles/markers/eclipse_spire.png"],
+  ["dungeon_floor_moss", "tiles/dungeons/floor_moss.png"],
+  ["dungeon_floor_fire", "tiles/dungeons/floor_fire.png"],
+  ["dungeon_floor_tide", "tiles/dungeons/floor_tide.png"],
+  ["dungeon_floor_gale", "tiles/dungeons/floor_gale.png"],
+  ["dungeon_floor_eclipse", "tiles/dungeons/floor_eclipse.png"],
+  ["dungeon_wall_base", "tiles/dungeons/wall_base.png"],
+  ["dungeon_gate_closed", "tiles/dungeons/gate_closed.png"],
+  ["dungeon_gate_open", "tiles/dungeons/gate_open.png"],
+  ["dungeon_stairs", "tiles/dungeons/stairs.png"],
+  ["dungeon_exit", "tiles/dungeons/exit.png"],
+  ["chest_closed", "tiles/objects/chest_closed.png"],
+  ["chest_open", "tiles/objects/chest_open.png"],
+  ["switch_floor", "tiles/objects/switch_floor.png"],
+  ["boss_relic_seal", "tiles/objects/boss_relic_seal.png"],
+  ["char_arlen_map", "characters/arlen_map.png"],
+  ["npc_guard", "characters/npc_guard.png"],
+  ["npc_merchant", "characters/npc_merchant.png"],
+  ["npc_elder", "characters/npc_elder.png"],
+  ["npc_villager", "characters/npc_villager.png"],
+  ["npc_sage", "characters/npc_sage.png"],
+  ["vehicle_boat", "characters/vehicle_boat.png"],
+  ["vehicle_skyship", "characters/vehicle_skyship.png"],
+  ["battle_arlen_portrait", "portraits/battle_arlen.png"],
+  ["battle_mira_portrait", "portraits/battle_mira.png"],
+  ["battle_kael_portrait", "portraits/battle_kael.png"],
+  ["enemy_slimebud", "enemies/slimebud.png"],
+  ["enemy_bristle_rat", "enemies/bristle_rat.png"],
+  ["enemy_field_imp", "enemies/field_imp.png"],
+  ["enemy_thorn_wisp", "enemies/thorn_wisp.png"],
+  ["enemy_mossling", "enemies/mossling.png"],
+  ["enemy_venom_moth", "enemies/venom_moth.png"],
+  ["enemy_pebble_gnawer", "enemies/pebble_gnawer.png"],
+  ["enemy_cave_bat", "enemies/cave_bat.png"],
+  ["enemy_iron_beetle", "enemies/iron_beetle.png"],
+  ["enemy_cinder_pup", "enemies/cinder_pup.png"],
+  ["enemy_ash_sprite", "enemies/ash_sprite.png"],
+  ["enemy_coal_knight", "enemies/coal_knight.png"],
+  ["enemy_reef_fang", "enemies/reef_fang.png"],
+  ["enemy_bubble_eye", "enemies/bubble_eye.png"],
+  ["enemy_drowned_husk", "enemies/drowned_husk.png"],
+  ["enemy_sky_mite", "enemies/sky_mite.png"],
+  ["enemy_gale_harpy", "enemies/gale_harpy.png"],
+  ["enemy_glass_roc", "enemies/glass_roc.png"],
+  ["enemy_eclipse_shade", "enemies/eclipse_shade.png"],
+  ["enemy_crown_guard", "enemies/crown_guard.png"],
+  ["enemy_void_serpent", "enemies/void_serpent.png"],
+  ["boss_rootbound_troll", "enemies/boss_rootbound_troll.png"],
+  ["boss_ember_tyrant", "enemies/boss_ember_tyrant.png"],
+  ["boss_tide_oracle", "enemies/boss_tide_oracle.png"],
+  ["boss_gale_chimera", "enemies/boss_gale_chimera.png"],
+  ["boss_eclipse_crown", "enemies/boss_eclipse_crown.png"],
+  ["ui_window_panel", "ui/window_panel_9slice.png"],
+  ["ui_cursor_arrow", "ui/cursor_arrow.png"],
+  ["ui_hp_bar", "ui/bar_hp.png"],
+  ["ui_status_bar_empty", "ui/bar_empty.png"],
+  ["icon_potion", "icons/items/potion.png"],
+  ["icon_antidote", "icons/items/antidote.png"],
+  ["icon_phoenix_ash", "icons/items/phoenix_ash.png"],
+  ["icon_etherleaf", "icons/items/etherleaf.png"],
+  ["icon_tent", "icons/items/tent.png"],
+  ["icon_smoke_bomb", "icons/items/smoke_bomb.png"],
+  ["icon_weapon_blade", "icons/equipment/weapon_blade.png"],
+  ["icon_weapon_rod", "icons/equipment/weapon_rod.png"],
+  ["icon_armor_mail", "icons/equipment/armor_mail.png"],
+  ["icon_armor_cloak", "icons/equipment/armor_cloak.png"],
+  ["icon_relic_root", "icons/relics/root_relic.png"],
+  ["icon_relic_flame", "icons/relics/flame_relic.png"],
+  ["icon_relic_tide", "icons/relics/tide_relic.png"],
+  ["icon_relic_gale", "icons/relics/gale_relic.png"],
+  ["fx_hit_slash", "effects/hit_slash.png"],
+  ["fx_heal", "effects/heal.png"],
+  ["fx_fire", "effects/fire.png"],
+  ["fx_ice", "effects/ice.png"],
+  ["fx_lightning", "effects/lightning.png"],
+  ["fx_earth", "effects/earth.png"],
+  ["fx_wind", "effects/wind.png"],
+  ["fx_light", "effects/light.png"],
+  ["fx_shadow", "effects/shadow.png"],
+  ["fx_poison", "effects/poison.png"],
+  ["fx_sleep", "effects/sleep.png"],
+  ["fx_ward", "effects/ward.png"],
+  ["fx_relic_restore", "effects/relic_restore.png"],
+  ["title_logo", "title/title_logo.png"],
+  ["title_four_crystals", "title/four_star_relics.png"]
+] as const;
+
+type AssetKey = (typeof ASSET_PATHS)[number][0];
+
+const ASSET_MODULES = import.meta.glob("../assets/**/*.png", {
+  eager: true,
+  query: "?url",
+  import: "default"
+}) as Record<string, string>;
+
+const ASSET_URLS = Object.fromEntries(
+  ASSET_PATHS.map(([key, path]) => [key, ASSET_MODULES[`../assets/${path}`]])
+) as Partial<Record<AssetKey, string>>;
+
+const WORLD_TILE_TEXTURES: Record<Terrain, AssetKey> = {
+  plains: "tile_plains",
+  forest: "tile_forest",
+  hills: "tile_hills",
+  mountain: "tile_mountain",
+  water: "tile_water_a",
+  deepWater: "tile_deep_water_a",
+  sand: "tile_sand",
+  road: "tile_road"
+};
+
+const DUNGEON_FLOOR_TEXTURES: Record<string, AssetKey> = {
+  mossCave: "dungeon_floor_moss",
+  ashenKeep: "dungeon_floor_fire",
+  tideShrine: "dungeon_floor_tide",
+  skyglassTower: "dungeon_floor_gale",
+  eclipseSpire: "dungeon_floor_eclipse"
+};
+
+const LOCATION_TEXTURES: Record<string, AssetKey> = {
+  dawnford: "marker_castle",
+  brinewick: "marker_port",
+  elderleaf: "marker_town",
+  sunbarrow: "marker_town",
+  starfallGate: "marker_gate",
+  mossCave: "marker_cave",
+  ashenKeep: "marker_keep",
+  tideShrine: "marker_shrine",
+  skyglassTower: "marker_tower",
+  eclipseSpire: "marker_final_spire"
+};
+
+const ENEMY_TEXTURES: Record<string, AssetKey> = {
+  slimebud: "enemy_slimebud",
+  bristleRat: "enemy_bristle_rat",
+  fieldImp: "enemy_field_imp",
+  thornWisp: "enemy_thorn_wisp",
+  mossling: "enemy_mossling",
+  venomMoth: "enemy_venom_moth",
+  pebbleGnawer: "enemy_pebble_gnawer",
+  caveBat: "enemy_cave_bat",
+  ironBeetle: "enemy_iron_beetle",
+  cinderPup: "enemy_cinder_pup",
+  ashSprite: "enemy_ash_sprite",
+  coalKnight: "enemy_coal_knight",
+  reefFang: "enemy_reef_fang",
+  bubbleEye: "enemy_bubble_eye",
+  drownedHusk: "enemy_drowned_husk",
+  skyMite: "enemy_sky_mite",
+  galeHarpy: "enemy_gale_harpy",
+  glassRoc: "enemy_glass_roc",
+  eclipseShade: "enemy_eclipse_shade",
+  crownGuard: "enemy_crown_guard",
+  voidSerpent: "enemy_void_serpent",
+  rootboundTroll: "boss_rootbound_troll",
+  emberTyrant: "boss_ember_tyrant",
+  tideOracle: "boss_tide_oracle",
+  galeChimera: "boss_gale_chimera",
+  eclipseCrown: "boss_eclipse_crown"
+};
+
+const PORTRAIT_TEXTURES: Record<CharacterState["id"], AssetKey> = {
+  arlen: "battle_arlen_portrait",
+  mira: "battle_mira_portrait",
+  kael: "battle_kael_portrait"
+};
+
+const NPC_TEXTURES: AssetKey[] = ["npc_guard", "npc_merchant", "npc_elder", "npc_villager", "npc_sage"];
+
+const TILE_FRAME = 16;
+const LAYER_WORLD_IMAGE = 1;
+const LAYER_OBJECT_IMAGE = 2;
+const LAYER_CHARACTER_IMAGE = 3;
+const LAYER_BATTLE_IMAGE = 4;
+const LAYER_UI_GRAPHICS = 10;
+const LAYER_UI_IMAGE = 12;
+const LAYER_TEXT = 20;
+
+const ITEMS: Record<string, ItemDef> = {
+  potion: {
+    id: "potion",
+    name: "Potion",
+    price: 12,
+    description: "Restores 35 HP.",
+    battle: true,
+    field: true
+  },
+  antidote: {
+    id: "antidote",
+    name: "Antidote",
+    price: 10,
+    description: "Cures poison.",
+    battle: true,
+    field: true
+  },
+  phoenixAsh: {
+    id: "phoenixAsh",
+    name: "Phoenix Ash",
+    price: 55,
+    description: "Revives an ally with partial HP.",
+    battle: true,
+    field: true
+  },
+  etherleaf: {
+    id: "etherleaf",
+    name: "Etherleaf",
+    price: 65,
+    description: "Restores one charge to every spell tier.",
+    battle: true,
+    field: true
+  },
+  tent: {
+    id: "tent",
+    name: "Tent",
+    price: 90,
+    description: "Field rest, partial heal, and save.",
+    battle: false,
+    field: true
+  },
+  smokeBomb: {
+    id: "smokeBomb",
+    name: "Smoke Bomb",
+    price: 35,
+    description: "Escapes most battles.",
+    battle: true,
+    field: false
+  }
+};
+
+const SPELLS: Record<string, SpellDef> = {
+  mend: {
+    id: "mend",
+    name: "Mend",
+    caster: "mira",
+    tier: 1,
+    target: "ally",
+    element: "light",
+    power: 34,
+    kind: "heal",
+    price: 45,
+    minLevel: 1,
+    description: "Heal one ally."
+  },
+  ward: {
+    id: "ward",
+    name: "Ward",
+    caster: "mira",
+    tier: 1,
+    target: "ally",
+    element: "light",
+    power: 3,
+    kind: "buff",
+    price: 55,
+    minLevel: 1,
+    description: "Raise defense in battle."
+  },
+  glow: {
+    id: "glow",
+    name: "Glow",
+    caster: "mira",
+    tier: 1,
+    target: "enemy",
+    element: "light",
+    power: 26,
+    kind: "damage",
+    price: 70,
+    minLevel: 2,
+    description: "Light damage to one foe."
+  },
+  mendall: {
+    id: "mendall",
+    name: "Mendall",
+    caster: "mira",
+    tier: 2,
+    target: "allAllies",
+    element: "light",
+    power: 30,
+    kind: "heal",
+    price: 140,
+    minLevel: 4,
+    description: "Heal the whole party."
+  },
+  revive: {
+    id: "revive",
+    name: "Revive",
+    caster: "mira",
+    tier: 2,
+    target: "ally",
+    element: "light",
+    power: 0,
+    kind: "revive",
+    price: 190,
+    minLevel: 5,
+    description: "Revive a fallen ally."
+  },
+  starveil: {
+    id: "starveil",
+    name: "Starveil",
+    caster: "mira",
+    tier: 3,
+    target: "allAllies",
+    element: "light",
+    power: 0,
+    kind: "buff",
+    price: 300,
+    minLevel: 8,
+    description: "Reduce party damage for a few rounds."
+  },
+  spark: {
+    id: "spark",
+    name: "Spark",
+    caster: "kael",
+    tier: 1,
+    target: "enemy",
+    element: "lightning",
+    power: 28,
+    kind: "damage",
+    price: 45,
+    minLevel: 1,
+    description: "Lightning damage to one foe."
+  },
+  ember: {
+    id: "ember",
+    name: "Ember",
+    caster: "kael",
+    tier: 1,
+    target: "enemy",
+    element: "fire",
+    power: 30,
+    kind: "damage",
+    price: 50,
+    minLevel: 1,
+    description: "Fire damage to one foe."
+  },
+  frost: {
+    id: "frost",
+    name: "Frost",
+    caster: "kael",
+    tier: 1,
+    target: "enemy",
+    element: "ice",
+    power: 30,
+    kind: "damage",
+    price: 70,
+    minLevel: 2,
+    description: "Ice damage to one foe."
+  },
+  quakelet: {
+    id: "quakelet",
+    name: "Quakelet",
+    caster: "kael",
+    tier: 2,
+    target: "allEnemies",
+    element: "earth",
+    power: 24,
+    kind: "damage",
+    price: 150,
+    minLevel: 4,
+    description: "Earth damage to all foes."
+  },
+  storm: {
+    id: "storm",
+    name: "Storm",
+    caster: "kael",
+    tier: 2,
+    target: "allEnemies",
+    element: "wind",
+    power: 29,
+    kind: "damage",
+    price: 190,
+    minLevel: 6,
+    description: "Wind damage to all foes."
+  },
+  nova: {
+    id: "nova",
+    name: "Nova",
+    caster: "kael",
+    tier: 3,
+    target: "enemy",
+    element: "none",
+    power: 74,
+    kind: "damage",
+    price: 330,
+    minLevel: 8,
+    description: "Heavy non-elemental damage."
+  },
+  rally: {
+    id: "rally",
+    name: "Rally",
+    caster: "arlen",
+    tier: 2,
+    target: "allAllies",
+    element: "none",
+    power: 0,
+    kind: "buff",
+    price: 0,
+    minLevel: 7,
+    description: "Raise the party's guard."
+  }
+};
+
+const WEAPONS: Record<string, GearDef> = {
+  trainingBlade: {
+    id: "trainingBlade",
+    name: "Training Blade",
+    price: 0,
+    power: 2,
+    kind: "weapon",
+    users: ["arlen"],
+    description: "A plain Dawnford sword."
+  },
+  ironSaber: {
+    id: "ironSaber",
+    name: "Iron Saber",
+    price: 95,
+    power: 6,
+    kind: "weapon",
+    users: ["arlen"],
+    description: "Reliable steel edge."
+  },
+  starbrand: {
+    id: "starbrand",
+    name: "Starbrand",
+    price: 0,
+    power: 13,
+    kind: "weapon",
+    users: ["arlen"],
+    description: "A treasure blade set with pale gems."
+  },
+  willowRod: {
+    id: "willowRod",
+    name: "Willow Rod",
+    price: 0,
+    power: 1,
+    kind: "weapon",
+    users: ["mira", "kael"],
+    description: "A light spell focus."
+  },
+  glassWand: {
+    id: "glassWand",
+    name: "Glass Wand",
+    price: 120,
+    power: 4,
+    kind: "weapon",
+    users: ["mira", "kael"],
+    description: "A bright wand for sages."
+  },
+  emberStaff: {
+    id: "emberStaff",
+    name: "Ember Staff",
+    price: 0,
+    power: 8,
+    kind: "weapon",
+    users: ["kael"],
+    description: "Warm even in rain."
+  }
+};
+
+const ARMORS: Record<string, GearDef> = {
+  travelCloth: {
+    id: "travelCloth",
+    name: "Travel Cloth",
+    price: 0,
+    power: 1,
+    kind: "armor",
+    users: ["arlen", "mira", "kael"],
+    description: "Simple road clothes."
+  },
+  ringMail: {
+    id: "ringMail",
+    name: "Ring Mail",
+    price: 90,
+    power: 4,
+    kind: "armor",
+    users: ["arlen"],
+    description: "Flexible front-line armor."
+  },
+  sageMantle: {
+    id: "sageMantle",
+    name: "Sage Mantle",
+    price: 85,
+    power: 3,
+    kind: "armor",
+    users: ["mira", "kael"],
+    description: "Light, warded cloth."
+  },
+  tidePlate: {
+    id: "tidePlate",
+    name: "Tide Plate",
+    price: 0,
+    power: 8,
+    kind: "armor",
+    users: ["arlen"],
+    description: "Armor with a wave-like sheen."
+  },
+  galeCloak: {
+    id: "galeCloak",
+    name: "Gale Cloak",
+    price: 0,
+    power: 7,
+    kind: "armor",
+    users: ["mira", "kael"],
+    description: "Moves before the wind does."
+  }
+};
+
+const GEAR: Record<string, GearDef> = { ...WEAPONS, ...ARMORS };
+
+const ENEMIES: Record<string, EnemyDef> = {
+  slimebud: enemy("slimebud", "Slimebud", 22, 7, 1, 3, 9, 7, "earth", ["fire"], [], ["#579e54", "#83d078", "#e7ffe2"], "blob"),
+  bristleRat: enemy("bristleRat", "Bristle Rat", 18, 8, 1, 6, 8, 8, "none", ["fire"], [], ["#665044", "#b98f68", "#fff0c9"], "beast"),
+  fieldImp: enemy("fieldImp", "Field Imp", 24, 9, 2, 7, 12, 11, "shadow", ["light"], ["shadow"], ["#5a3c84", "#b16ee4", "#f7df8a"], "beast", [
+    { name: "Drowsy Pinch", kind: "status", power: 4, status: "sleep" }
+  ]),
+  thornWisp: enemy("thornWisp", "Thorn Wisp", 28, 10, 2, 8, 16, 14, "earth", ["fire"], ["earth"], ["#264d38", "#6bad57", "#d1ffc2"], "wing"),
+  mossling: enemy("mossling", "Mossling", 34, 11, 4, 4, 18, 16, "earth", ["fire"], ["earth"], ["#315d35", "#78a95f", "#c9e87a"], "blob"),
+  venomMoth: enemy("venomMoth", "Venom Moth", 25, 9, 2, 10, 20, 18, "wind", ["lightning"], ["earth"], ["#3d3358", "#a5dc65", "#f6ffc0"], "wing", [
+    { name: "Poison Dust", kind: "status", power: 4, status: "poison", target: "all" }
+  ]),
+  pebbleGnawer: enemy("pebbleGnawer", "Pebble Gnawer", 32, 12, 5, 4, 22, 18, "earth", ["ice"], ["earth"], ["#574b3c", "#91806a", "#e1d4c1"], "beast"),
+  caveBat: enemy("caveBat", "Cave Bat", 24, 10, 2, 12, 20, 17, "wind", ["lightning"], ["earth"], ["#24243d", "#766aa8", "#e2d9ff"], "wing"),
+  ironBeetle: enemy("ironBeetle", "Iron Beetle", 38, 13, 7, 3, 25, 22, "earth", ["lightning"], ["earth"], ["#282d35", "#7f8d93", "#d7f3ff"], "knight"),
+  cinderPup: enemy("cinderPup", "Cinder Pup", 42, 15, 5, 8, 34, 30, "fire", ["ice"], ["fire"], ["#4b1e18", "#d95832", "#ffce78"], "beast", [
+    { name: "Cinder Snap", kind: "damage", power: 9, element: "fire" }
+  ]),
+  ashSprite: enemy("ashSprite", "Ash Sprite", 36, 13, 4, 11, 36, 34, "fire", ["ice"], ["fire"], ["#312842", "#d56c5c", "#ffd47d"], "wing", [
+    { name: "Ash Flicker", kind: "damage", power: 12, element: "fire", target: "all" }
+  ]),
+  coalKnight: enemy("coalKnight", "Coal Knight", 52, 17, 8, 5, 44, 42, "fire", ["ice"], ["fire"], ["#18151d", "#74504a", "#ff7c3f"], "knight"),
+  reefFang: enemy("reefFang", "Reef Fang", 48, 16, 6, 8, 42, 39, "ice", ["lightning"], ["ice"], ["#143b5f", "#3488b8", "#b8f8ff"], "beast"),
+  bubbleEye: enemy("bubbleEye", "Bubble Eye", 39, 14, 4, 12, 43, 41, "ice", ["lightning"], ["ice"], ["#123d50", "#5ed2d8", "#f9ffff"], "blob", [
+    { name: "Sleep Glare", kind: "status", power: 5, status: "sleep" }
+  ]),
+  drownedHusk: enemy("drownedHusk", "Drowned Husk", 55, 17, 7, 4, 48, 45, "shadow", ["light", "lightning"], ["ice"], ["#16383d", "#66888a", "#dce9df"], "knight"),
+  skyMite: enemy("skyMite", "Sky Mite", 45, 17, 5, 14, 52, 48, "wind", ["lightning"], ["earth"], ["#273857", "#6ec1d9", "#f6ffff"], "wing"),
+  galeHarpy: enemy("galeHarpy", "Gale Harpy", 56, 18, 6, 16, 60, 55, "wind", ["lightning"], ["earth"], ["#33415f", "#c59bdc", "#fff3b6"], "wing", [
+    { name: "Screech", kind: "status", power: 4, status: "sleep", target: "all" }
+  ]),
+  glassRoc: enemy("glassRoc", "Glass Roc", 70, 20, 8, 10, 72, 64, "wind", ["lightning"], ["wind"], ["#1b3445", "#8de7ff", "#ffffff"], "wing"),
+  eclipseShade: enemy("eclipseShade", "Eclipse Shade", 70, 22, 8, 12, 86, 80, "shadow", ["light"], ["shadow"], ["#161025", "#6d54a8", "#f4e8ff"], "blob", [
+    { name: "Night Pulse", kind: "damage", power: 14, element: "shadow", target: "all" }
+  ]),
+  crownGuard: enemy("crownGuard", "Crown Guard", 88, 24, 12, 8, 94, 88, "shadow", ["light"], ["shadow"], ["#221621", "#8d668d", "#ffd76a"], "knight"),
+  voidSerpent: enemy("voidSerpent", "Void Serpent", 82, 25, 9, 14, 104, 92, "shadow", ["light"], ["shadow"], ["#05070d", "#4e437f", "#c5ffe8"], "serpent", [
+    { name: "Venom Star", kind: "status", power: 7, status: "poison" },
+    { name: "Void Bite", kind: "damage", power: 18, element: "shadow" }
+  ]),
+  rootboundTroll: boss("rootboundTroll", "Rootbound Troll", 150, 17, 8, 5, 130, 90, "earth", ["fire"], ["earth"], ["#263b25", "#6aa753", "#d9ffae"], "beast", [
+    { name: "Root Snare", kind: "status", power: 5, status: "sleep" },
+    { name: "Stone Fist", kind: "damage", power: 15, element: "earth" }
+  ]),
+  emberTyrant: boss("emberTyrant", "Ember Tyrant", 220, 22, 10, 8, 210, 150, "fire", ["ice"], ["fire"], ["#3b1715", "#e45136", "#ffd15d"], "knight", [
+    { name: "Flame Wall", kind: "damage", power: 18, element: "fire", target: "all" },
+    { name: "Scorching Blade", kind: "damage", power: 22, element: "fire" }
+  ]),
+  tideOracle: boss("tideOracle", "Tide Oracle", 240, 21, 11, 10, 240, 165, "ice", ["lightning"], ["ice"], ["#0d3e5c", "#43b9d1", "#dbffff"], "crown", [
+    { name: "Tideglass", kind: "damage", power: 20, element: "ice", target: "all" },
+    { name: "Drowse Tide", kind: "status", power: 5, status: "sleep", target: "all" }
+  ]),
+  galeChimera: boss("galeChimera", "Gale Chimera", 285, 25, 12, 16, 310, 210, "wind", ["lightning"], ["wind"], ["#29334f", "#79e5dc", "#f8f6a9"], "wing", [
+    { name: "Threefold Gale", kind: "damage", power: 21, element: "wind", target: "all" },
+    { name: "Raking Horns", kind: "damage", power: 26, element: "none" }
+  ]),
+  eclipseCrown: boss("eclipseCrown", "Eclipse Crown", 430, 29, 14, 13, 0, 0, "shadow", ["light"], ["shadow"], ["#0a0610", "#543081", "#ffdf6d"], "crown", [
+    { name: "Eclipse Edict", kind: "damage", power: 25, element: "shadow", target: "all" },
+    { name: "Crownbreak", kind: "damage", power: 30, element: "shadow" },
+    { name: "Black Lullaby", kind: "status", power: 6, status: "sleep", target: "all" }
+  ])
+};
+
+function enemy(
+  id: string,
+  name: string,
+  maxHp: number,
+  attack: number,
+  defense: number,
+  speed: number,
+  xp: number,
+  gold: number,
+  element: ElementType,
+  weak: ElementType[],
+  resist: ElementType[],
+  palette: string[],
+  sprite: EnemyDef["sprite"],
+  moves: EnemyMove[] = []
+): EnemyDef {
+  return {
+    id,
+    name,
+    maxHp,
+    attack,
+    defense,
+    speed,
+    xp,
+    gold,
+    element,
+    weak,
+    resist,
+    palette,
+    sprite,
+    moves: [{ name: "Strike", kind: "attack", power: 0 }, ...moves]
+  };
+}
+
+function boss(
+  id: string,
+  name: string,
+  maxHp: number,
+  attack: number,
+  defense: number,
+  speed: number,
+  xp: number,
+  gold: number,
+  element: ElementType,
+  weak: ElementType[],
+  resist: ElementType[],
+  palette: string[],
+  sprite: EnemyDef["sprite"],
+  moves: EnemyMove[]
+): EnemyDef {
+  return { ...enemy(id, name, maxHp, attack, defense, speed, xp, gold, element, weak, resist, palette, sprite, moves), boss: true };
+}
+
+const WORLD_TABLES: Record<string, string[]> = {
+  plains: ["slimebud", "bristleRat", "fieldImp"],
+  forest: ["thornWisp", "mossling", "venomMoth"],
+  hills: ["pebbleGnawer", "caveBat", "ironBeetle"],
+  sand: ["cinderPup", "ashSprite", "coalKnight"],
+  water: ["reefFang", "bubbleEye", "drownedHusk"],
+  final: ["eclipseShade", "crownGuard", "voidSerpent"]
+};
+
+class SynthAudio {
+  private ctx?: AudioContext;
+  private muted = false;
+  private timer?: number;
+  private step = 0;
+  private mode: "title" | "world" | "battle" | "dungeon" | "ending" = "title";
+
+  setMuted(value: boolean) {
+    this.muted = value;
+  }
+
+  start() {
+    if (this.ctx) return;
+    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    this.ctx = new AudioCtx();
+    this.timer = window.setInterval(() => this.tickLoop(), 220);
+  }
+
+  setMode(mode: SynthAudio["mode"]) {
+    this.mode = mode;
+  }
+
+  blip(kind: "confirm" | "cancel" | "hit" | "spell" | "victory" | "error") {
+    if (this.muted) return;
+    this.start();
+    const base = {
+      confirm: 660,
+      cancel: 240,
+      hit: 130,
+      spell: 880,
+      victory: 1040,
+      error: 110
+    }[kind];
+    this.tone(base, kind === "victory" ? 0.16 : 0.07, kind === "hit" ? "square" : "triangle", 0.08);
+  }
+
+  private tickLoop() {
+    if (this.muted || !this.ctx) return;
+    const patterns = {
+      title: [392, 0, 494, 0, 587, 523, 494, 0],
+      world: [262, 330, 392, 330, 440, 392, 330, 294],
+      battle: [196, 247, 294, 349, 294, 247, 220, 247],
+      dungeon: [165, 0, 196, 0, 220, 196, 185, 0],
+      ending: [392, 523, 659, 784, 659, 523, 494, 587]
+    } as const;
+    const note = patterns[this.mode][this.step % 8];
+    this.step += 1;
+    if (note) this.tone(note, 0.12, this.mode === "battle" ? "square" : "sine", 0.025);
+  }
+
+  private tone(freq: number, length: number, type: OscillatorType, gainValue: number) {
+    if (!this.ctx || this.muted) return;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(gainValue, this.ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + length);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start();
+    osc.stop(this.ctx.currentTime + length);
+  }
+}
+
+class CrystalOathScene extends Phaser.Scene {
+  private g!: Phaser.GameObjects.Graphics;
+  private ui!: Phaser.GameObjects.Graphics;
+  private texts: Phaser.GameObjects.Text[] = [];
+  private images: Phaser.GameObjects.Image[] = [];
+  private mode: Mode = "title";
+  private titleOptions = ["New Game", "Load Game", "Controls"];
+  private titleSelected = 0;
+  private menu?: ActiveMenu;
+  private dialogue?: Dialogue;
+  private battle?: BattleState;
+  private audio = new SynthAudio();
+  private world: Terrain[][] = [];
+  private party: CharacterState[] = [];
+  private inventory: Record<string, number> = {};
+  private gearBag: Record<string, number> = {};
+  private gold = 0;
+  private worldPos: Vec = { x: 10, y: 22 };
+  private townPos: Vec = { x: 10, y: 13 };
+  private dungeonPos: Vec = { x: 1, y: 1 };
+  private visualWorldPos: Vec = { x: 10, y: 22 };
+  private visualTownPos: Vec = { x: 10, y: 13 };
+  private visualDungeonPos: Vec = { x: 1, y: 1 };
+  private currentTown = "dawnford";
+  private currentDungeon = "mossCave";
+  private dungeonFloor = 0;
+  private previousMode: Mode = "world";
+  private pendingTownReturn: Vec = { x: 10, y: 22 };
+  private encounterCounter = 10;
+  private flags = {
+    relics: { root: false, flame: false, tide: false, gale: false },
+    boat: false,
+    skyship: false,
+    gateOpen: false,
+    introSeen: false
+  };
+  private openedChests = new Set<string>();
+  private puzzleFlags = new Set<string>();
+  private defeatedBosses = new Set<string>();
+  private settings = {
+    encounters: true,
+    xpMultiplier: 1,
+    fastText: false,
+    muted: false
+  };
+  private dirty = true;
+  private lastStepFrame = 0;
+  private lastMoveDir: Vec = { x: 0, y: 1 };
+  private movement?: MovementState;
+  private heldDirections: DirectionName[] = [];
+  private shiftHeld = false;
+  private blockedMoveCooldown = 0;
+  private walkAnimElapsed = 0;
+
+  constructor() {
+    super("CrystalOathScene");
+  }
+
+  preload() {
+    for (const [key, url] of Object.entries(ASSET_URLS) as [AssetKey, string | undefined][]) {
+      if (url) this.load.image(key, url);
+    }
+  }
+
+  create() {
+    this.g = this.add.graphics();
+    this.g.setDepth(0);
+    this.ui = this.add.graphics();
+    this.ui.setDepth(LAYER_UI_GRAPHICS);
+    this.world = this.makeWorld();
+    this.input.keyboard?.on("keydown", (event: KeyboardEvent) => this.handleKey(event));
+    this.input.keyboard?.on("keyup", (event: KeyboardEvent) => this.handleKeyUp(event));
+    this.input.on("pointerdown", () => {
+      this.audio.start();
+      this.audio.blip("confirm");
+    });
+    this.draw();
+  }
+
+  update(_time: number, delta: number) {
+    const dt = Math.min(delta, 50);
+    this.updateMovement(dt);
+    this.updateBattleFlow(dt);
+    if (this.dirty) this.draw();
+  }
+
+  private handleKey(event: KeyboardEvent) {
+    this.audio.start();
+    if (this.isGameControlKey(event)) event.preventDefault();
+    this.shiftHeld = event.shiftKey || event.code === "ShiftLeft" || event.code === "ShiftRight";
+    const directionName = directionNameForEvent(event);
+    if (directionName && this.isExploreMode(this.mode)) {
+      this.rememberHeldDirection(directionName);
+    }
+    if (event.code === "KeyM") {
+      this.settings.muted = !this.settings.muted;
+      this.audio.setMuted(this.settings.muted);
+      this.markDirty();
+      return;
+    }
+    if (event.code === "KeyF") {
+      if (this.scale.isFullscreen) this.scale.stopFullscreen();
+      else this.scale.startFullscreen();
+      return;
+    }
+    if (event.code === "F9" && this.mode !== "battle") {
+      this.openDebugMenu();
+      return;
+    }
+
+    if (this.mode === "title") this.handleTitle(event);
+    else if (this.mode === "dialogue") this.handleDialogue(event);
+    else if (this.mode === "menu") this.handleMenu(event);
+    else if (this.mode === "battle") this.handleBattle(event);
+    else if (this.mode === "gameOver") this.handleGameOver(event);
+    else if (this.mode === "ending") this.handleEnding(event);
+    else this.handleExplore(event);
+  }
+
+  private handleKeyUp(event: KeyboardEvent) {
+    if (this.isGameControlKey(event)) event.preventDefault();
+    if (event.code === "ShiftLeft" || event.code === "ShiftRight") this.shiftHeld = event.shiftKey;
+    const directionName = directionNameForEvent(event);
+    if (!directionName) return;
+    this.heldDirections = this.heldDirections.filter((dir) => dir !== directionName);
+  }
+
+  private isGameControlKey(event: KeyboardEvent): boolean {
+    return (
+      !!directionNameForEvent(event) ||
+      isConfirm(event) ||
+      isCancel(event) ||
+      event.code === "KeyM" ||
+      event.code === "KeyF" ||
+      event.code === "F9"
+    );
+  }
+
+  private rememberHeldDirection(direction: DirectionName) {
+    this.heldDirections = this.heldDirections.filter((dir) => dir !== direction);
+    this.heldDirections.push(direction);
+  }
+
+  private handleTitle(event: KeyboardEvent) {
+    if (isUp(event)) this.adjustTitle(-1);
+    else if (isDown(event)) this.adjustTitle(1);
+    else if (isConfirm(event)) {
+      const option = this.titleOptions[this.titleSelected];
+      this.audio.blip("confirm");
+      if (option === "New Game") this.newGame();
+      if (option === "Load Game") {
+        if (!this.loadGame()) this.flashMessage("No save found.");
+      }
+      if (option === "Controls") this.showControls("title");
+    }
+    this.markDirty();
+  }
+
+  private handleGameOver(event: KeyboardEvent) {
+    if (isConfirm(event)) {
+      if (!this.loadGame()) {
+        this.mode = "title";
+        this.audio.setMode("title");
+      }
+      this.markDirty();
+    } else if (isCancel(event)) {
+      this.mode = "title";
+      this.audio.setMode("title");
+      this.markDirty();
+    }
+  }
+
+  private handleEnding(event: KeyboardEvent) {
+    if (isConfirm(event) || isCancel(event)) {
+      this.mode = "title";
+      this.audio.setMode("title");
+      this.markDirty();
+    }
+  }
+
+  private handleDialogue(event: KeyboardEvent) {
+    if (!isConfirm(event) && !isCancel(event)) return;
+    if (!this.dialogue) return;
+    this.audio.blip("confirm");
+    if (this.dialogue.index < this.dialogue.lines.length - 1) {
+      this.dialogue.index += 1;
+    } else {
+      const done = this.dialogue.done;
+      this.dialogue = undefined;
+      done();
+    }
+    this.markDirty();
+  }
+
+  private handleMenu(event: KeyboardEvent) {
+    if (!this.menu) return;
+    if (isUp(event)) this.adjustMenu(-1);
+    else if (isDown(event)) this.adjustMenu(1);
+    else if (isCancel(event)) {
+      this.audio.blip("cancel");
+      this.menu.cancel();
+    } else if (isConfirm(event)) {
+      const option = this.menu.options[this.menu.selected];
+      if (!option || option.disabled?.()) {
+        this.audio.blip("error");
+      } else {
+        this.audio.blip("confirm");
+        option.action();
+      }
+    }
+    this.markDirty();
+  }
+
+  private handleExplore(event: KeyboardEvent) {
+    if (this.movement) {
+      if (isCancel(event)) this.clearHeldMovement();
+      return;
+    }
+    if (isCancel(event)) {
+      this.clearHeldMovement();
+      this.openMainMenu();
+      return;
+    }
+    if (isConfirm(event)) {
+      if (this.movement) return;
+      this.interact();
+      return;
+    }
+    const dir = keyDirection(event);
+    if (!dir) return;
+    this.tryStartHeldMovement();
+    this.markDirty();
+  }
+
+  private handleBattle(event: KeyboardEvent) {
+    if (!this.battle) return;
+    if (this.battle.phase === "resolving") return;
+    if (this.battle.phase === "log") {
+      if (isConfirm(event) || isCancel(event)) {
+        this.advanceBattleLog();
+      }
+      this.markDirty();
+      return;
+    }
+    if (isUp(event)) this.adjustBattleSelection(-1);
+    else if (isDown(event)) this.adjustBattleSelection(1);
+    else if (isLeft(event)) this.adjustBattleSelection(-1);
+    else if (isRight(event)) this.adjustBattleSelection(1);
+    else if (isCancel(event)) this.cancelBattleSubmenu();
+    else if (isConfirm(event)) this.confirmBattleSelection();
+    this.markDirty();
+  }
+
+  private newGame() {
+    this.party = [
+      this.makeCharacter("arlen", "Arlen", "Vanguard", 42, 9, 7, 5, 4, "trainingBlade", "travelCloth", []),
+      this.makeCharacter("mira", "Mira", "White Sage", 30, 4, 4, 6, 7, "willowRod", "travelCloth", ["mend", "ward"]),
+      this.makeCharacter("kael", "Kael", "Ember Adept", 26, 3, 3, 7, 5, "willowRod", "travelCloth", ["spark", "ember"])
+    ];
+    this.inventory = { potion: 5, antidote: 2, tent: 1, phoenixAsh: 0, etherleaf: 0, smokeBomb: 0 };
+    this.gearBag = { trainingBlade: 1, willowRod: 2, travelCloth: 3 };
+    this.gold = 80;
+    this.worldPos = { x: 10, y: 22 };
+    this.townPos = { x: 10, y: 13 };
+    this.dungeonPos = { x: 1, y: 1 };
+    this.currentTown = "dawnford";
+    this.currentDungeon = "mossCave";
+    this.dungeonFloor = 0;
+    this.encounterCounter = 10;
+    this.flags = {
+      relics: { root: false, flame: false, tide: false, gale: false },
+      boat: false,
+      skyship: false,
+      gateOpen: false,
+      introSeen: true
+    };
+    this.openedChests = new Set();
+    this.puzzleFlags = new Set();
+    this.defeatedBosses = new Set();
+    this.settings.encounters = true;
+    this.settings.xpMultiplier = 1;
+    this.settings.fastText = false;
+    this.movement = undefined;
+    this.clearHeldMovement();
+    this.mode = "town";
+    this.currentTown = "dawnford";
+    this.syncAllVisualPositions();
+    this.audio.setMode("world");
+    this.dialogue = {
+      lines: [
+        "King Rovan: The Star Relics have dimmed, and every road in Asterra feels colder.",
+        "King Rovan: Arlen, Mira, Kael. Your oath begins beneath Dawnford's old banner.",
+        "Mira: We restore Root, Flame, Tide, and Gale, then face the Eclipse Crown.",
+        "Kael: That sounds impossible. Good. I brought notes.",
+        "Arlen: We leave at dawn. First, the Moss Cave north-east of the castle."
+      ],
+      index: 0,
+      done: () => {
+        this.mode = "town";
+        this.saveGame();
+      }
+    };
+    this.previousMode = "town";
+    this.mode = "dialogue";
+    this.markDirty();
+  }
+
+  private makeCharacter(
+    id: CharacterState["id"],
+    name: string,
+    role: string,
+    maxHp: number,
+    attack: number,
+    defense: number,
+    speed: number,
+    luck: number,
+    weapon: string,
+    armor: string,
+    spells: string[]
+  ): CharacterState {
+    const character: CharacterState = {
+      id,
+      name,
+      role,
+      level: 1,
+      xp: 0,
+      nextXp: 42,
+      hp: maxHp,
+      maxHp,
+      baseAttack: attack,
+      baseDefense: defense,
+      speed,
+      luck,
+      weapon,
+      armor,
+      statuses: {},
+      charges: {
+        "1": { current: id === "arlen" ? 0 : 3, max: id === "arlen" ? 0 : 3 },
+        "2": { current: 0, max: 0 },
+        "3": { current: 0, max: 0 }
+      },
+      spells,
+      defending: false
+    };
+    this.refreshCharges(character, true);
+    return character;
+  }
+
+  private makeWorld(): Terrain[][] {
+    const world: Terrain[][] = [];
+    for (let y = 0; y < WORLD_H; y += 1) {
+      const row: Terrain[] = [];
+      for (let x = 0; x < WORLD_W; x += 1) {
+        let terrain: Terrain = "plains";
+        if (x < 2 || y < 2 || x > WORLD_W - 3 || y > WORLD_H - 3) terrain = "deepWater";
+        if (x >= 28 && x <= 31 && y > 4 && y < WORLD_H - 3) terrain = "water";
+        if (x > 34 && y > 11 && y < 24 && seededNoise(x, y, 8) > 0.48) terrain = "sand";
+        if (x < 23 && y < 14 && seededNoise(x, y, 2) > 0.38) terrain = "forest";
+        if (x > 42 && y < 15 && seededNoise(x, y, 3) > 0.38) terrain = "hills";
+        if ((x > 47 && x < 59 && y < 12 && seededNoise(x, y, 9) > 0.36) || (x > 20 && x < 26 && y > 6 && y < 11)) terrain = "mountain";
+        if (x > 51 && y < 9) terrain = "deepWater";
+        if ((y === 22 && x >= 10 && x <= 25) || (y === 18 && x >= 18 && x <= 28) || (y === 16 && x >= 32 && x <= 44)) terrain = "road";
+        row.push(terrain);
+      }
+      world.push(row);
+    }
+    for (const loc of this.locations()) {
+      world[loc.y][loc.x] = "road";
+    }
+    return world;
+  }
+
+  private locations(): LocationDef[] {
+    return [
+      { id: "dawnford", name: "Dawnford", kind: "town", x: 10, y: 22 },
+      { id: "brinewick", name: "Brinewick", kind: "town", x: 24, y: 27 },
+      { id: "elderleaf", name: "Elderleaf", kind: "town", x: 15, y: 8 },
+      { id: "sunbarrow", name: "Sunbarrow", kind: "town", x: 42, y: 17 },
+      { id: "starfallGate", name: "Starfall Gate", kind: "gate", x: 53, y: 25 },
+      { id: "mossCave", name: "Moss Cave", kind: "dungeon", x: 19, y: 18 },
+      {
+        id: "ashenKeep",
+        name: "Ashen Keep",
+        kind: "dungeon",
+        x: 39,
+        y: 14,
+        requires: () => this.flags.relics.root,
+        lockedText: "A wall of roots bars the keep road. Restore the Root Relic first."
+      },
+      {
+        id: "tideShrine",
+        name: "Tide Shrine",
+        kind: "dungeon",
+        x: 45,
+        y: 29,
+        requires: () => this.flags.boat,
+        lockedText: "The shrine lies past rough water. Brinewick may know an old route."
+      },
+      {
+        id: "skyglassTower",
+        name: "Skyglass Tower",
+        kind: "dungeon",
+        x: 49,
+        y: 9,
+        requires: () => this.flags.relics.flame && this.flags.relics.tide,
+        lockedText: "Hot wind and tide mist twist together here. Flame and Tide must shine first."
+      },
+      {
+        id: "eclipseSpire",
+        name: "Eclipse Spire",
+        kind: "final",
+        x: 56,
+        y: 6,
+        requires: () => this.flags.gateOpen && this.flags.skyship,
+        lockedText: "The spire hangs beyond reach. Open Starfall Gate and ride the sky route."
+      }
+    ];
+  }
+
+  private towns(): Record<string, TownDef> {
+    return {
+      dawnford: {
+        id: "dawnford",
+        name: "Dawnford",
+        palette: ["#23314f", "#4b6a9b", "#d9e6ff"],
+        innPrice: 18,
+        clinicPrice: 35,
+        itemStock: ["potion", "antidote", "tent"],
+        weaponStock: ["ironSaber"],
+        armorStock: ["ringMail", "sageMantle"],
+        spellStock: ["glow", "frost"],
+        npcs: [
+          { x: 5, y: 7, lines: ["Guard: Moss Cave lies north-east. Its troll hates bright flame."] },
+          { x: 14, y: 8, lines: ["Archivist: Chests stay open after you save. Ancient magic, very practical."] },
+          { x: 9, y: 5, lines: ["King Rovan: Bring back the Root Relic, and the old harbor will answer."] }
+        ]
+      },
+      brinewick: {
+        id: "brinewick",
+        name: "Brinewick",
+        palette: ["#183e5b", "#2f9ac0", "#d2fbff"],
+        innPrice: 26,
+        clinicPrice: 45,
+        itemStock: ["potion", "antidote", "phoenixAsh", "smokeBomb"],
+        weaponStock: ["glassWand"],
+        armorStock: ["ringMail", "sageMantle"],
+        spellStock: ["mendall", "quakelet"],
+        arrival: () => {
+          if (this.flags.relics.root && !this.flags.boat) {
+            this.flags.boat = true;
+            this.say(["Harbormaster: Rootlight! The tide-skiff wakes for you. Water routes are open."]);
+          }
+        },
+        npcs: [
+          { x: 6, y: 7, lines: ["Sailor: The Tide Shrine waits south-east, past the blue chop."] },
+          { x: 15, y: 7, lines: ["Fisher: Lightning bites hardest under a wet sky."] },
+          { x: 11, y: 4, lines: ["Harbormaster: With Root restored, the skiff remembers your oath."] }
+        ]
+      },
+      elderleaf: {
+        id: "elderleaf",
+        name: "Elderleaf",
+        palette: ["#14351f", "#4d8b43", "#d7f2a4"],
+        innPrice: 24,
+        clinicPrice: 42,
+        itemStock: ["potion", "antidote", "etherleaf", "tent"],
+        weaponStock: ["glassWand"],
+        armorStock: ["sageMantle"],
+        spellStock: ["revive", "storm"],
+        npcs: [
+          { x: 5, y: 8, lines: ["Druid: Poison lingers after battle. Carry antidotes or rest at an inn."] },
+          { x: 14, y: 6, lines: ["Scout: The Ashen Keep opened when Rootlight returned. Ice cools proud flame."] },
+          { x: 11, y: 10, lines: ["Child: I saw a hidden chest sparkle behind the cave's switch stone."] }
+        ]
+      },
+      sunbarrow: {
+        id: "sunbarrow",
+        name: "Sunbarrow",
+        palette: ["#6c4c22", "#d29a44", "#fff0ae"],
+        innPrice: 32,
+        clinicPrice: 55,
+        itemStock: ["potion", "phoenixAsh", "etherleaf", "smokeBomb", "tent"],
+        weaponStock: ["glassWand"],
+        armorStock: ["ringMail", "sageMantle"],
+        spellStock: ["starveil", "nova"],
+        npcs: [
+          { x: 7, y: 7, lines: ["Miner: Skyglass Tower opens only when Flame and Tide stop quarreling."] },
+          { x: 13, y: 9, lines: ["Trader: Starveil wins long fights. Nova ends short ones."] },
+          { x: 10, y: 5, lines: ["Outrider: Four relics point to Starfall Gate, not the spire itself."] }
+        ]
+      },
+      starfallGate: {
+        id: "starfallGate",
+        name: "Starfall Gate",
+        palette: ["#1b1733", "#7065a8", "#fff4bd"],
+        innPrice: 0,
+        clinicPrice: 0,
+        itemStock: ["potion", "phoenixAsh", "etherleaf", "smokeBomb"],
+        weaponStock: [],
+        armorStock: [],
+        spellStock: [],
+        arrival: () => {
+          if (this.hasAllRelics() && !this.flags.gateOpen) {
+            this.flags.gateOpen = true;
+            this.flags.skyship = true;
+            this.say([
+              "The four Star Relics rise into a single dawn-colored ring.",
+              "A sky-vessel of glass and cedar descends without a sound.",
+              "Starfall Gate opens. The Eclipse Spire can now be reached."
+            ]);
+            this.saveGame();
+          }
+        },
+        npcs: [
+          { x: 10, y: 6, lines: ["Gatekeeper: Root, Flame, Tide, and Gale must sing together."] },
+          { x: 7, y: 9, lines: ["Pilgrim: Past this gate waits the Crown that dimmed the morning."] }
+        ]
+      }
+    };
+  }
+
+  private dungeons(): Record<string, DungeonDef> {
+    return {
+      mossCave: {
+        id: "mossCave",
+        name: "Moss Cave",
+        relic: "root",
+        boss: "rootboundTroll",
+        palette: { floor: 0x31543b, wall: 0x18271e, accent: 0x78a95f, chest: 0xc08a3a, gate: 0x6a4328 },
+        encounterTable: ["pebbleGnawer", "caveBat", "ironBeetle"],
+        floors: makeDungeonFloors(1),
+        chestRewards: [
+          { id: "mossCave-0", item: "etherleaf" },
+          { id: "mossCave-1", gear: "starbrand" },
+          { id: "mossCave-2", gold: 80 }
+        ],
+        puzzleText: "A root switch sinks. Somewhere, old vines release a door.",
+        bossIntro: ["Rootbound Troll: Little oathlings. I drank the cave's green star. Come take the thorns."],
+        rewardText: ["The Root Relic brightens. Roads under leaf and stone breathe again."]
+      },
+      ashenKeep: {
+        id: "ashenKeep",
+        name: "Ashen Keep",
+        relic: "flame",
+        boss: "emberTyrant",
+        palette: { floor: 0x522a22, wall: 0x1e1213, accent: 0xff6a38, chest: 0xd9a445, gate: 0x7b1d13 },
+        encounterTable: ["cinderPup", "ashSprite", "coalKnight"],
+        floors: makeDungeonFloors(2),
+        chestRewards: [
+          { id: "ashenKeep-0", item: "phoenixAsh" },
+          { id: "ashenKeep-1", gear: "emberStaff" },
+          { id: "ashenKeep-2", gold: 130 }
+        ],
+        puzzleText: "The furnace lever clanks. A scorched bridge locks into place.",
+        bossIntro: ["Ember Tyrant: I am the kept flame and the hungry flame. Kneel, or be kindling."],
+        rewardText: ["The Flame Relic burns clear, warming even the shadowed roads."]
+      },
+      tideShrine: {
+        id: "tideShrine",
+        name: "Tide Shrine",
+        relic: "tide",
+        boss: "tideOracle",
+        palette: { floor: 0x1b5770, wall: 0x0b2234, accent: 0x68d5ec, chest: 0xd8bd68, gate: 0x184968 },
+        encounterTable: ["reefFang", "bubbleEye", "drownedHusk"],
+        floors: makeDungeonFloors(3),
+        chestRewards: [
+          { id: "tideShrine-0", item: "etherleaf" },
+          { id: "tideShrine-1", gear: "tidePlate" },
+          { id: "tideShrine-2", gold: 160 }
+        ],
+        puzzleText: "The moon-basin fills. A submerged seal rises into a path.",
+        bossIntro: ["Tide Oracle: Every oath is a cup. Let us see whether yours leaks."],
+        rewardText: ["The Tide Relic clears. The sea no longer speaks in fear."]
+      },
+      skyglassTower: {
+        id: "skyglassTower",
+        name: "Skyglass Tower",
+        relic: "gale",
+        boss: "galeChimera",
+        palette: { floor: 0x485f78, wall: 0x172336, accent: 0xa8f2ff, chest: 0xe2c76f, gate: 0x3a7690 },
+        encounterTable: ["skyMite", "galeHarpy", "glassRoc"],
+        floors: makeDungeonFloors(4),
+        chestRewards: [
+          { id: "skyglassTower-0", item: "phoenixAsh" },
+          { id: "skyglassTower-1", gear: "galeCloak" },
+          { id: "skyglassTower-2", gold: 220 }
+        ],
+        puzzleText: "A lens turns toward the gale. A glass bridge hums into view.",
+        bossIntro: ["Gale Chimera: Three throats, one storm. Show me which voice your oath uses."],
+        rewardText: ["The Gale Relic flashes. High roads descend from cloud and glass."]
+      },
+      eclipseSpire: {
+        id: "eclipseSpire",
+        name: "Eclipse Spire",
+        boss: "eclipseCrown",
+        palette: { floor: 0x221a35, wall: 0x08070e, accent: 0xb09cff, chest: 0xffdc78, gate: 0x4f2f75 },
+        encounterTable: ["eclipseShade", "crownGuard", "voidSerpent"],
+        floors: makeDungeonFloors(5, true),
+        chestRewards: [
+          { id: "eclipseSpire-0", item: "etherleaf" },
+          { id: "eclipseSpire-1", item: "phoenixAsh" },
+          { id: "eclipseSpire-2", gold: 260 }
+        ],
+        puzzleText: "The shadow seal accepts the fourfold light. The last stair appears.",
+        bossIntro: ["Eclipse Crown: Dawn is a brief mistake. I will make the world consistent."],
+        rewardText: ["The Crown cracks. Morning remembers every road in Asterra."]
+      }
+    };
+  }
+
+  private isExploreMode(mode: Mode): mode is ExploreMode {
+    return mode === "world" || mode === "town" || mode === "dungeon";
+  }
+
+  private clearHeldMovement() {
+    this.heldDirections = [];
+  }
+
+  private currentHeldDirection(): Vec | undefined {
+    const direction = this.heldDirections[this.heldDirections.length - 1];
+    if (direction === "up") return { x: 0, y: -1 };
+    if (direction === "down") return { x: 0, y: 1 };
+    if (direction === "left") return { x: -1, y: 0 };
+    if (direction === "right") return { x: 1, y: 0 };
+    return undefined;
+  }
+
+  private updateMovement(delta: number) {
+    this.blockedMoveCooldown = Math.max(0, this.blockedMoveCooldown - delta);
+    if (this.movement) {
+      this.movement.elapsed += delta;
+      this.walkAnimElapsed += delta;
+      this.updateVisualMovementPosition(this.movement);
+      if (this.movement.elapsed >= this.movement.duration) {
+        const completed = this.movement;
+        this.setVisualExplorePos(completed.mode, completed.to);
+        this.movement = undefined;
+        this.walkAnimElapsed = 0;
+        this.movePlayer(completed.dir.x, completed.dir.y);
+        this.syncAllVisualPositions();
+        this.markDirty();
+        if (this.isExploreMode(this.mode)) this.tryStartHeldMovement();
+        return;
+      }
+      this.markDirty();
+      return;
+    }
+    this.walkAnimElapsed = 0;
+    if (this.isExploreMode(this.mode)) this.tryStartHeldMovement();
+  }
+
+  private tryStartHeldMovement(): boolean {
+    if (!this.isExploreMode(this.mode) || this.movement) return false;
+    const dir = this.currentHeldDirection();
+    if (!dir) return false;
+    return this.startMovement(dir.x, dir.y);
+  }
+
+  private startMovement(dx: number, dy: number): boolean {
+    if (!this.isExploreMode(this.mode)) return false;
+    this.lastMoveDir = { x: dx, y: dy };
+    if (!this.canStartMovement(dx, dy)) {
+      if (this.blockedMoveCooldown <= 0) {
+        this.audio.blip("error");
+        this.blockedMoveCooldown = 150;
+      }
+      return false;
+    }
+    const from = this.currentExplorePos(this.mode);
+    this.setVisualExplorePos(this.mode, from);
+    this.movement = {
+      mode: this.mode,
+      from,
+      to: { x: from.x + dx, y: from.y + dy },
+      dir: { x: dx, y: dy },
+      elapsed: 0,
+      duration: this.shiftHeld ? FAST_MOVE_DURATION_MS : MOVE_DURATION_MS
+    };
+    this.walkAnimElapsed = 0;
+    this.markDirty();
+    return true;
+  }
+
+  private canStartMovement(dx: number, dy: number): boolean {
+    if (!this.isExploreMode(this.mode)) return false;
+    const pos = this.currentExplorePos(this.mode);
+    const nx = pos.x + dx;
+    const ny = pos.y + dy;
+    if (this.mode === "world") {
+      if (nx < 0 || ny < 0 || nx >= WORLD_W || ny >= WORLD_H) return false;
+      return this.canEnterTerrain(this.world[ny][nx]) || !!this.locationAt(nx, ny);
+    }
+    if (this.mode === "town") {
+      if (this.townPos.y === 13 && this.townPos.x >= 9 && this.townPos.x <= 11 && dy > 0) return true;
+      return nx >= 1 && nx <= 19 && ny >= 1 && ny <= 13;
+    }
+    const dungeon = this.dungeons()[this.currentDungeon];
+    const floor = dungeon.floors[this.dungeonFloor];
+    const tile = floor[ny]?.[nx] ?? "#";
+    return !(tile === "#" || (tile === "D" && !this.puzzleFlags.has(`${this.currentDungeon}-switch`)));
+  }
+
+  private currentExplorePos(mode: ExploreMode): Vec {
+    if (mode === "world") return { ...this.worldPos };
+    if (mode === "town") return { ...this.townPos };
+    return { ...this.dungeonPos };
+  }
+
+  private updateVisualMovementPosition(movement: MovementState) {
+    const t = Phaser.Math.Clamp(movement.elapsed / movement.duration, 0, 1);
+    this.setVisualExplorePos(movement.mode, {
+      x: Phaser.Math.Linear(movement.from.x, movement.to.x, t),
+      y: Phaser.Math.Linear(movement.from.y, movement.to.y, t)
+    });
+  }
+
+  private setVisualExplorePos(mode: ExploreMode, pos: Vec) {
+    const next = { ...pos };
+    if (mode === "world") this.visualWorldPos = next;
+    else if (mode === "town") this.visualTownPos = next;
+    else this.visualDungeonPos = next;
+  }
+
+  private syncAllVisualPositions() {
+    this.visualWorldPos = { ...this.worldPos };
+    this.visualTownPos = { ...this.townPos };
+    this.visualDungeonPos = { ...this.dungeonPos };
+  }
+
+  private visualExplorePos(mode: ExploreMode): Vec {
+    if (mode === "world") return { ...this.visualWorldPos };
+    if (mode === "town") return { ...this.visualTownPos };
+    return { ...this.visualDungeonPos };
+  }
+
+  private movePlayer(dx: number, dy: number): boolean {
+    this.lastMoveDir = { x: dx, y: dy };
+    this.lastStepFrame += 1;
+    if (this.mode === "world") return this.moveWorld(dx, dy);
+    if (this.mode === "town") return this.moveTown(dx, dy);
+    if (this.mode === "dungeon") return this.moveDungeon(dx, dy);
+    return false;
+  }
+
+  private moveWorld(dx: number, dy: number): boolean {
+    const nx = this.worldPos.x + dx;
+    const ny = this.worldPos.y + dy;
+    if (nx < 0 || ny < 0 || nx >= WORLD_W || ny >= WORLD_H) return false;
+    if (!this.canEnterTerrain(this.world[ny][nx]) && !this.locationAt(nx, ny)) {
+      this.audio.blip("error");
+      return false;
+    }
+    this.worldPos = { x: nx, y: ny };
+    this.applyWalkPoison();
+    const loc = this.locationAt(nx, ny);
+    if (loc && loc.kind !== "gate") {
+      this.enterLocation(loc);
+      return true;
+    }
+    if (loc?.kind === "gate") {
+      this.enterLocation(loc);
+      return true;
+    }
+    this.maybeEncounter();
+    return true;
+  }
+
+  private moveTown(dx: number, dy: number): boolean {
+    if (this.townPos.y === 13 && this.townPos.x >= 9 && this.townPos.x <= 11 && dy > 0) {
+      this.clearHeldMovement();
+      this.mode = "world";
+      this.audio.setMode("world");
+      this.saveGame();
+      return true;
+    }
+    const nx = this.townPos.x + dx;
+    const ny = this.townPos.y + dy;
+    if (nx < 1 || nx > 19 || ny < 1 || ny > 13) return false;
+    if (ny === 13 && nx >= 9 && nx <= 11) {
+      this.clearHeldMovement();
+      this.mode = "world";
+      this.audio.setMode("world");
+      this.saveGame();
+      return true;
+    }
+    this.townPos = { x: nx, y: ny };
+    return true;
+  }
+
+  private moveDungeon(dx: number, dy: number): boolean {
+    const dungeon = this.dungeons()[this.currentDungeon];
+    const floor = dungeon.floors[this.dungeonFloor];
+    const nx = this.dungeonPos.x + dx;
+    const ny = this.dungeonPos.y + dy;
+    const tile = floor[ny]?.[nx] ?? "#";
+    if (tile === "#" || (tile === "D" && !this.puzzleFlags.has(`${this.currentDungeon}-switch`))) {
+      this.audio.blip("error");
+      return false;
+    }
+    this.dungeonPos = { x: nx, y: ny };
+    this.applyWalkPoison();
+    if (tile === "E") {
+      this.clearHeldMovement();
+      this.mode = "world";
+      this.audio.setMode("world");
+      return true;
+    }
+    if (tile === "S") {
+      this.clearHeldMovement();
+      this.dungeonFloor = this.dungeonFloor === 0 ? 1 : 0;
+      this.dungeonPos = this.dungeonFloor === 0 ? { x: 19, y: 12 } : { x: 2, y: 12 };
+      return true;
+    }
+    if (tile === "B") {
+      this.startBossBattle(dungeon);
+      return true;
+    }
+    if (tile === "C" || tile === "K") {
+      this.interact();
+      return true;
+    }
+    this.maybeDungeonEncounter(dungeon);
+    return true;
+  }
+
+  private interact() {
+    if (this.mode === "world") {
+      const loc = this.locationAt(this.worldPos.x, this.worldPos.y);
+      if (loc) this.enterLocation(loc);
+      return;
+    }
+    if (this.mode === "town") {
+      this.interactTown();
+      return;
+    }
+    if (this.mode === "dungeon") {
+      this.interactDungeon();
+    }
+  }
+
+  private interactTown() {
+    const town = this.towns()[this.currentTown];
+    const p = this.townPos;
+    for (const npc of town.npcs) {
+      if (Math.abs(npc.x - p.x) + Math.abs(npc.y - p.y) <= 1) {
+        this.say(npc.lines);
+        return;
+      }
+    }
+    const service = this.serviceAt(p.x, p.y);
+    if (service === "inn") this.openInn(town);
+    else if (service === "clinic") this.openClinic(town);
+    else if (service === "item") this.openShop(`${town.name} Item Shop`, town.itemStock.map((id) => ({ id, type: "item" as const })));
+    else if (service === "arms") {
+      const stock = [
+        ...town.weaponStock.map((id) => ({ id, type: "gear" as const })),
+        ...town.armorStock.map((id) => ({ id, type: "gear" as const }))
+      ];
+      this.openShop(`${town.name} Arms`, stock);
+    } else if (service === "magic") this.openMagicShop(town);
+    else this.say([`${town.name}: The road waits outside the south gate.`]);
+  }
+
+  private interactDungeon() {
+    const dungeon = this.dungeons()[this.currentDungeon];
+    const tile = dungeon.floors[this.dungeonFloor][this.dungeonPos.y]?.[this.dungeonPos.x];
+    if (tile === "K") {
+      this.puzzleFlags.add(`${this.currentDungeon}-switch`);
+      this.say([dungeon.puzzleText]);
+      return;
+    }
+    if (tile === "C") {
+      this.openDungeonChest(dungeon);
+      return;
+    }
+    if (tile === "D" && !this.puzzleFlags.has(`${this.currentDungeon}-switch`)) {
+      this.say(["The sealed door will not move. A switch must feed it power."]);
+      return;
+    }
+    this.say([`${dungeon.name}: The air is heavy with old danger.`]);
+  }
+
+  private enterLocation(loc: LocationDef) {
+    this.clearHeldMovement();
+    if (loc.requires && !loc.requires()) {
+      this.say([loc.lockedText ?? "A strange force blocks the way."]);
+      return;
+    }
+    if (loc.kind === "gate") {
+      this.currentTown = "starfallGate";
+      this.townPos = { x: 10, y: 12 };
+      this.mode = "town";
+      this.syncAllVisualPositions();
+      this.audio.setMode("world");
+      this.towns().starfallGate.arrival?.();
+      this.saveGame();
+      return;
+    }
+    if (loc.kind === "town") {
+      this.currentTown = loc.id;
+      this.townPos = { x: 10, y: 12 };
+      this.mode = "town";
+      this.syncAllVisualPositions();
+      this.audio.setMode("world");
+      this.towns()[loc.id].arrival?.();
+      this.saveGame();
+      return;
+    }
+    this.currentDungeon = loc.id;
+    this.dungeonFloor = 0;
+    this.dungeonPos = { x: 1, y: 1 };
+    this.mode = "dungeon";
+    this.syncAllVisualPositions();
+    this.audio.setMode("dungeon");
+    this.encounterCounter = 7;
+    this.saveGame();
+  }
+
+  private openDungeonChest(dungeon: DungeonDef) {
+    const chestIndex = this.countDungeonChestAtCurrentOrNearest(dungeon);
+    const reward = dungeon.chestRewards[chestIndex % dungeon.chestRewards.length];
+    const chestId = `${dungeon.id}-${this.dungeonFloor}-${this.dungeonPos.x}-${this.dungeonPos.y}-${reward.id}`;
+    if (this.openedChests.has(chestId)) {
+      this.say(["The chest is empty."]);
+      return;
+    }
+    this.openedChests.add(chestId);
+    if (reward.item) {
+      this.inventory[reward.item] = (this.inventory[reward.item] ?? 0) + 1;
+      this.say([`Found ${ITEMS[reward.item].name}!`]);
+    } else if (reward.gear) {
+      this.gearBag[reward.gear] = (this.gearBag[reward.gear] ?? 0) + 1;
+      this.say([`Found ${GEAR[reward.gear].name}!`]);
+    } else if (reward.gold) {
+      this.gold += reward.gold;
+      this.say([`Found ${reward.gold} gold!`]);
+    }
+  }
+
+  private countDungeonChestAtCurrentOrNearest(dungeon: DungeonDef): number {
+    let count = 0;
+    for (let f = 0; f <= this.dungeonFloor; f += 1) {
+      const floor = dungeon.floors[f];
+      for (let y = 0; y < floor.length; y += 1) {
+        for (let x = 0; x < floor[y].length; x += 1) {
+          if (floor[y][x] === "C") {
+            if (f === this.dungeonFloor && x === this.dungeonPos.x && y === this.dungeonPos.y) return count;
+            count += 1;
+          }
+        }
+      }
+    }
+    return count;
+  }
+
+  private locationAt(x: number, y: number): LocationDef | undefined {
+    return this.locations().find((loc) => loc.x === x && loc.y === y);
+  }
+
+  private canEnterTerrain(terrain: Terrain): boolean {
+    if (terrain === "mountain") return this.flags.skyship;
+    if (terrain === "deepWater") return this.flags.skyship;
+    if (terrain === "water") return this.flags.boat || this.flags.skyship;
+    return true;
+  }
+
+  private terrainEncounterKey(terrain: Terrain): keyof typeof WORLD_TABLES | undefined {
+    if (terrain === "forest") return "forest";
+    if (terrain === "hills" || terrain === "mountain") return "hills";
+    if (terrain === "sand") return "sand";
+    if (terrain === "water" || terrain === "deepWater") return "water";
+    if (terrain === "plains") return "plains";
+    return undefined;
+  }
+
+  private maybeEncounter() {
+    if (!this.settings.encounters) return;
+    const terrain = this.world[this.worldPos.y][this.worldPos.x];
+    const tableKey = this.terrainEncounterKey(terrain);
+    if (!tableKey) return;
+    this.encounterCounter -= terrain === "forest" || terrain === "hills" ? 2 : 1;
+    if (this.encounterCounter <= 0) {
+      this.encounterCounter = Phaser.Math.Between(7, 15);
+      this.startRandomBattle(WORLD_TABLES[tableKey]);
+    }
+  }
+
+  private maybeDungeonEncounter(dungeon: DungeonDef) {
+    if (!this.settings.encounters) return;
+    this.encounterCounter -= 1;
+    if (this.encounterCounter <= 0) {
+      this.encounterCounter = Phaser.Math.Between(6, 12);
+      this.startRandomBattle(dungeon.encounterTable, dungeon.id);
+    }
+  }
+
+  private startRandomBattle(table: string[], dungeonId?: string) {
+    const count = Phaser.Math.Between(1, 3);
+    const enemies: EnemyState[] = [];
+    for (let i = 0; i < count; i += 1) enemies.push(this.cloneEnemy(Phaser.Utils.Array.GetRandom(table)));
+    this.beginBattle("random", enemies, true, `${enemies.map((e) => e.name).join(", ")} appeared!`, dungeonId);
+  }
+
+  private startBossBattle(dungeon: DungeonDef) {
+    if (this.defeatedBosses.has(dungeon.boss)) {
+      this.say(["Only quiet remains where the boss once stood."]);
+      return;
+    }
+    this.saveGame();
+    this.say(dungeon.bossIntro, () => {
+      this.beginBattle("boss", [this.cloneEnemy(dungeon.boss)], false, `${ENEMIES[dungeon.boss].name} blocks the relic!`, dungeon.id, dungeon.boss);
+    });
+  }
+
+  private cloneEnemy(id: string): EnemyState {
+    const def = ENEMIES[id];
+    return {
+      ...def,
+      uid: `${id}-${Math.random().toString(36).slice(2)}`,
+      hp: def.maxHp,
+      statuses: {}
+    };
+  }
+
+  private beginBattle(kind: BattleState["kind"], enemies: EnemyState[], canRun: boolean, intro: string, dungeonId?: string, bossId?: string) {
+    this.clearHeldMovement();
+    this.movement = undefined;
+    this.syncAllVisualPositions();
+    this.party.forEach((c) => (c.defending = false));
+    this.battle = {
+      kind,
+      enemies,
+      bossId,
+      dungeonId,
+      canRun,
+      phase: "resolving",
+      turnOrder: [],
+      turnIndex: 0,
+      actions: [],
+      selected: 0,
+      log: [intro],
+      actionTimer: BATTLE_TURN_DELAY_MS,
+      victoryAwarded: false
+    };
+    this.rollInitiativeCycle();
+    this.mode = "battle";
+    this.audio.setMode("battle");
+    this.markDirty();
+  }
+
+  private updateBattleFlow(delta: number) {
+    if (!this.battle || this.mode !== "battle" || this.battle.phase !== "resolving") return;
+    this.battle.actionTimer -= delta;
+    if (this.battle.actionTimer <= 0) this.advanceBattleAfterDelay();
+    this.markDirty();
+  }
+
+  private advanceBattleAfterDelay() {
+    if (!this.battle) return;
+    if (this.checkBattleEnd()) return;
+    this.startNextBattleTurn();
+  }
+
+  private rollInitiativeCycle() {
+    if (!this.battle) return;
+    const entries: InitiativeEntry[] = [
+      ...this.party
+        .filter((member) => member.hp > 0)
+        .map((member) => ({
+          side: "party" as const,
+          actorId: member.id,
+          initiative: member.speed * 10 + Phaser.Math.Between(0, 12) + Math.floor(member.luck / 2)
+        })),
+      ...this.battle.enemies
+        .filter((enemy) => enemy.hp > 0)
+        .map((enemy) => ({
+          side: "enemy" as const,
+          actorId: enemy.uid,
+          initiative: enemy.speed * 10 + Phaser.Math.Between(0, 12)
+        }))
+    ];
+    entries.sort((a, b) => b.initiative - a.initiative);
+    this.battle.turnOrder = entries;
+    this.battle.turnIndex = 0;
+  }
+
+  private startNextBattleTurn() {
+    if (!this.battle) return;
+    if (this.checkBattleEnd()) return;
+    let guard = 0;
+    while (this.battle && guard < 30) {
+      guard += 1;
+      if (this.battle.turnIndex >= this.battle.turnOrder.length) this.rollInitiativeCycle();
+      const entry = this.battle.turnOrder[this.battle.turnIndex];
+      if (!entry) {
+        this.rollInitiativeCycle();
+        continue;
+      }
+      this.battle.turnIndex += 1;
+      const actor = this.actorForEntry(entry);
+      if (!actor || actor.hp <= 0) continue;
+      this.battle.current = entry;
+      this.battle.pendingAction = undefined;
+      this.battle.selected = 0;
+      if (entry.side === "party") {
+        const member = actor as CharacterState;
+        member.defending = false;
+        this.battle.log = [`${member.name}'s turn.`];
+        if (this.applyTurnStartStatuses(member)) {
+          this.finishCurrentTurn(BATTLE_ACTION_DELAY_MS);
+          return;
+        }
+        this.battle.phase = "command";
+        this.markDirty();
+        return;
+      }
+      const enemy = actor as EnemyState;
+      this.battle.log = [`${enemy.name}'s turn.`];
+      if (this.applyTurnStartStatuses(enemy)) {
+        this.finishCurrentTurn(BATTLE_ACTION_DELAY_MS);
+        return;
+      }
+      this.resolveEnemyAction({ side: "enemy", actorId: enemy.uid, type: "attack" });
+      this.finishCurrentTurn(BATTLE_ACTION_DELAY_MS);
+      return;
+    }
+    this.checkBattleEnd();
+  }
+
+  private actorForEntry(entry: InitiativeEntry): CharacterState | EnemyState | undefined {
+    if (entry.side === "party") return this.party.find((member) => member.id === entry.actorId);
+    return this.battle?.enemies.find((enemy) => enemy.uid === entry.actorId);
+  }
+
+  private currentBattleEntry(): InitiativeEntry | undefined {
+    return this.battle?.current;
+  }
+
+  private currentBattleActor(): CharacterState | undefined {
+    const entry = this.currentBattleEntry();
+    if (!entry || entry.side !== "party") return undefined;
+    return this.party.find((member) => member.id === entry.actorId);
+  }
+
+  private currentBattleEnemy(): EnemyState | undefined {
+    const entry = this.currentBattleEntry();
+    if (!entry || entry.side !== "enemy") return undefined;
+    return this.battle?.enemies.find((enemy) => enemy.uid === entry.actorId);
+  }
+
+  private currentBattleActorName(): string {
+    const actor = this.currentBattleActor() ?? this.currentBattleEnemy();
+    return actor?.name ?? "Next actor";
+  }
+
+  private turnPreviewText(): string {
+    if (!this.battle) return "-";
+    const preview = this.battle.turnOrder
+      .slice(this.battle.turnIndex, this.battle.turnIndex + 4)
+      .map((entry) => this.actorForEntry(entry))
+      .filter((actor): actor is CharacterState | EnemyState => !!actor && actor.hp > 0)
+      .map((actor) => actor.name);
+    return preview.length ? preview.join(" > ") : "new initiative";
+  }
+
+  private battleOptions(): string[] {
+    if (!this.battle) return [];
+    if (this.battle.phase === "command") return ["Attack", "Magic", "Item", "Defend", "Run"];
+    if (this.battle.phase === "target") return this.battle.enemies.filter((e) => e.hp > 0).map((e) => `${e.name} ${e.hp}/${e.maxHp}`);
+    if (this.battle.phase === "spell") {
+      const actor = this.currentBattleActor();
+      if (!actor) return [];
+      return actor.spells
+        .filter((id) => actor.level >= SPELLS[id].minLevel)
+        .map((id) => {
+          const spell = SPELLS[id];
+          const charge = actor.charges[String(spell.tier)]?.current ?? 0;
+          return `${spell.name} T${spell.tier} (${charge})`;
+        });
+    }
+    if (this.battle.phase === "item") {
+      return Object.keys(ITEMS)
+        .filter((id) => ITEMS[id].battle && (this.inventory[id] ?? 0) > 0)
+        .map((id) => `${ITEMS[id].name} x${this.inventory[id]}`);
+    }
+    if (this.battle.phase === "allyTarget") return this.party.map((c) => `${c.name} ${c.hp}/${c.maxHp}`);
+    return [];
+  }
+
+  private adjustBattleSelection(delta: number) {
+    if (!this.battle) return;
+    const options = this.battleOptions();
+    if (!options.length) return;
+    this.battle.selected = wrap(this.battle.selected + delta, options.length);
+    this.audio.blip("confirm");
+  }
+
+  private confirmBattleSelection() {
+    if (!this.battle) return;
+    const actor = this.currentBattleActor();
+    if (!actor) return;
+    if (this.battle.phase === "command") {
+      const command = this.battleOptions()[this.battle.selected];
+      if (command === "Attack") {
+        this.battle.pendingAction = { side: "party", actorId: actor.id, type: "attack" };
+        this.battle.phase = "target";
+        this.battle.selected = 0;
+      } else if (command === "Magic") {
+        if (!actor.spells.length || this.statusActive(actor, "silence")) {
+          this.battle.log = [this.statusActive(actor, "silence") ? `${actor.name} is silenced.` : `${actor.name} knows no spells.`];
+        } else {
+          this.battle.phase = "spell";
+          this.battle.selected = 0;
+        }
+      } else if (command === "Item") {
+        if (!Object.keys(ITEMS).some((id) => ITEMS[id].battle && (this.inventory[id] ?? 0) > 0)) {
+          this.battle.log = ["No battle items."];
+        } else {
+          this.battle.phase = "item";
+          this.battle.selected = 0;
+        }
+      } else if (command === "Defend") {
+        this.executePlayerAction({ side: "party", actorId: actor.id, type: "defend" });
+      } else if (command === "Run") {
+        this.executePlayerAction({ side: "party", actorId: actor.id, type: "run" });
+      }
+      return;
+    }
+    if (this.battle.phase === "target") {
+      const living = this.battle.enemies.filter((e) => e.hp > 0);
+      const target = living[this.battle.selected];
+      const targetIndex = this.battle.enemies.indexOf(target);
+      this.executePlayerAction({ ...(this.battle.pendingAction as BattleAction), targetIndex });
+      return;
+    }
+    if (this.battle.phase === "spell") {
+      const spells = actor.spells.filter((id) => actor.level >= SPELLS[id].minLevel);
+      const spellId = spells[this.battle.selected];
+      if (!spellId) return;
+      const spell = SPELLS[spellId];
+      const charge = actor.charges[String(spell.tier)];
+      if (!charge || charge.current <= 0) {
+        this.battle.log = [`No T${spell.tier} charges left.`];
+        return;
+      }
+      this.battle.pendingAction = { side: "party", actorId: actor.id, type: "spell", spellId };
+      if (spell.target === "enemy") {
+        this.battle.phase = "target";
+        this.battle.selected = 0;
+      } else if (spell.target === "ally") {
+        this.battle.phase = "allyTarget";
+        this.battle.selected = 0;
+      } else {
+        this.executePlayerAction(this.battle.pendingAction as BattleAction);
+      }
+      return;
+    }
+    if (this.battle.phase === "item") {
+      const itemIds = Object.keys(ITEMS).filter((id) => ITEMS[id].battle && (this.inventory[id] ?? 0) > 0);
+      const itemId = itemIds[this.battle.selected];
+      if (!itemId) return;
+      this.battle.pendingAction = { side: "party", actorId: actor.id, type: "item", itemId };
+      if (itemId === "smokeBomb" || itemId === "etherleaf") this.executePlayerAction(this.battle.pendingAction as BattleAction);
+      else {
+        this.battle.phase = "allyTarget";
+        this.battle.selected = 0;
+      }
+      return;
+    }
+    if (this.battle.phase === "allyTarget") {
+      this.executePlayerAction({ ...(this.battle.pendingAction as BattleAction), targetIndex: this.battle.selected });
+    }
+  }
+
+  private executePlayerAction(action: BattleAction) {
+    if (!this.battle) return;
+    const spent = this.resolvePartyAction(action);
+    if (!this.battle) return;
+    if (spent) this.finishCurrentTurn(BATTLE_ACTION_DELAY_MS);
+  }
+
+  private cancelBattleSubmenu() {
+    if (!this.battle) return;
+    if (this.battle.phase === "command") {
+      this.audio.blip("cancel");
+      return;
+    }
+    this.battle.phase = "command";
+    this.battle.pendingAction = undefined;
+    this.battle.selected = 0;
+    this.audio.blip("cancel");
+  }
+
+  private finishCurrentTurn(delay: number) {
+    if (!this.battle) return;
+    const actor = this.battle.current ? this.actorForEntry(this.battle.current) : undefined;
+    if (actor && actor.hp > 0) this.tickStatus(actor);
+    if (this.checkBattleEnd()) return;
+    this.battle.pendingAction = undefined;
+    this.battle.selected = 0;
+    this.battle.phase = "resolving";
+    this.battle.actionTimer = delay;
+    this.markDirty();
+  }
+
+  private resolvePartyAction(action: BattleAction): boolean {
+    if (!this.battle) return false;
+    const actor = this.party.find((c) => c.id === action.actorId);
+    if (!actor || actor.hp <= 0) return true;
+    this.battle.log = [];
+    if (action.type === "defend") {
+      actor.defending = true;
+      this.battle.log.push(`${actor.name} defends.`);
+      return true;
+    }
+    if (action.type === "run") {
+      if (!this.battle.canRun) {
+        this.battle.log.push("There is no escape!");
+        return true;
+      }
+      const chance = 42 + this.partyAverage("speed") * 4 + this.partyAverage("luck") * 2 - this.enemyDanger();
+      if (Phaser.Math.Between(1, 100) <= chance) {
+        this.battle.log.push("The party escaped!");
+        this.finishBattle(false);
+      } else this.battle.log.push("Could not escape!");
+      return true;
+    }
+    if (action.type === "attack") {
+      const target = this.getLivingEnemy(action.targetIndex);
+      if (!target) return false;
+      const damage = this.physicalDamage(this.attackPower(actor), target.defense, actor.luck);
+      target.hp = Math.max(0, target.hp - damage.amount);
+      this.battle.log.push(`${actor.name} hits ${target.name} for ${damage.amount}${damage.critical ? " critical" : ""}.`);
+      this.audio.blip("hit");
+      return true;
+    }
+    if (action.type === "spell" && action.spellId) {
+      return this.castSpell(actor, action.spellId, action.targetIndex);
+    }
+    if (action.type === "item" && action.itemId) {
+      return this.useBattleItem(actor, action.itemId, action.targetIndex);
+    }
+    return false;
+  }
+
+  private resolveEnemyAction(action: BattleAction): boolean {
+    if (!this.battle) return false;
+    const enemy = this.battle.enemies.find((e) => e.uid === action.actorId);
+    if (!enemy || enemy.hp <= 0) return true;
+    this.battle.log = [];
+    const move = Phaser.Utils.Array.GetRandom(enemy.moves);
+    if (move.kind === "status") {
+      const targets = move.target === "all" ? this.party.filter((c) => c.hp > 0) : [this.randomLivingPartyMember()].filter(Boolean) as CharacterState[];
+      for (const target of targets) {
+        if (Phaser.Math.Between(1, 100) <= 58) {
+          target.statuses[move.status!] = move.status === "poison" ? 99 : Phaser.Math.Between(1, 3);
+          this.battle.log.push(`${enemy.name}'s ${move.name} inflicts ${move.status} on ${target.name}.`);
+        } else this.battle.log.push(`${target.name} resists ${move.name}.`);
+      }
+      return true;
+    }
+    const targets = move.target === "all" ? this.party.filter((c) => c.hp > 0) : [this.randomLivingPartyMember()].filter(Boolean) as CharacterState[];
+    for (const target of targets) {
+      const raw = enemy.attack + move.power + Phaser.Math.Between(0, 4);
+      let damage = Math.max(1, raw - this.defensePower(target));
+      if (target.defending) damage = Math.ceil(damage * 0.45);
+      if (target.statuses.starveil) damage = Math.ceil(damage * 0.65);
+      target.hp = Math.max(0, target.hp - damage);
+      this.battle.log.push(`${enemy.name}'s ${move.name} hits ${target.name} for ${damage}.`);
+      this.audio.blip("hit");
+    }
+    return true;
+  }
+
+  private castSpell(actor: CharacterState, spellId: string, targetIndex?: number): boolean {
+    if (!this.battle) return false;
+    const spell = SPELLS[spellId];
+    const charge = actor.charges[String(spell.tier)];
+    if (!charge || charge.current <= 0) {
+      this.battle.log.push(`${actor.name} lacks a T${spell.tier} charge.`);
+      return false;
+    }
+    if (spell.kind === "heal") {
+      const targets = spell.target === "allAllies" ? this.party.filter((c) => c.hp > 0) : [this.party[targetIndex ?? 0]].filter(Boolean);
+      if (!targets.some((target) => target.hp > 0)) {
+        this.battle.log.push(`${spell.name} needs a standing ally.`);
+        return false;
+      }
+      charge.current -= 1;
+      this.audio.blip("spell");
+      for (const target of targets) {
+        if (target.hp <= 0) continue;
+        const amount = spell.power + actor.level * 4 + Phaser.Math.Between(0, 8);
+        target.hp = Math.min(target.maxHp, target.hp + amount);
+        this.battle.log.push(`${actor.name} casts ${spell.name}. ${target.name} recovers ${amount}.`);
+      }
+      return true;
+    }
+    if (spell.kind === "revive") {
+      const target = this.party[targetIndex ?? 0];
+      if (!target || target.hp > 0) {
+        this.battle.log.push(`${spell.name} finds no fallen ally.`);
+        return false;
+      }
+      charge.current -= 1;
+      this.audio.blip("spell");
+      target.hp = Math.max(1, Math.floor(target.maxHp * 0.35));
+      target.statuses = {};
+      this.battle.log.push(`${target.name} rises with ${target.hp} HP.`);
+      return true;
+    }
+    if (spell.kind === "buff") {
+      const targets = spell.target === "allAllies" ? this.party.filter((c) => c.hp > 0) : [this.party[targetIndex ?? 0]].filter(Boolean);
+      if (!targets.some((target) => target.hp > 0)) {
+        this.battle.log.push(`${spell.name} needs a standing ally.`);
+        return false;
+      }
+      charge.current -= 1;
+      this.audio.blip("spell");
+      for (const target of targets) {
+        if (spell.id === "starveil") target.statuses.starveil = 4;
+        else target.statuses.ward = 4;
+      }
+      this.battle.log.push(`${actor.name} casts ${spell.name}. A guard of starlight rises.`);
+      return true;
+    }
+    const targets = spell.target === "allEnemies" ? this.battle.enemies.filter((e) => e.hp > 0) : [this.getLivingEnemy(targetIndex)].filter(Boolean) as EnemyState[];
+    if (!targets.length) return false;
+    charge.current -= 1;
+    this.audio.blip("spell");
+    for (const target of targets) {
+      let amount = spell.power + actor.level * 5 + Phaser.Math.Between(0, 8) - Math.floor(target.defense / 2);
+      if (target.weak.includes(spell.element)) amount = Math.floor(amount * 1.45);
+      if (target.resist.includes(spell.element)) amount = Math.floor(amount * 0.55);
+      amount = Math.max(2, amount);
+      target.hp = Math.max(0, target.hp - amount);
+      this.battle.log.push(`${actor.name} casts ${spell.name}. ${target.name} takes ${amount}.`);
+    }
+    return true;
+  }
+
+  private useBattleItem(actor: CharacterState, itemId: string, targetIndex?: number): boolean {
+    if (!this.battle) return false;
+    if ((this.inventory[itemId] ?? 0) <= 0) {
+      this.battle.log.push(`No ${ITEMS[itemId]?.name ?? "item"} left.`);
+      return false;
+    }
+    if (itemId === "smokeBomb") {
+      if (!this.battle.canRun) {
+        this.battle.log.push("Smoke curls, but the boss will not let you flee.");
+        return false;
+      } else {
+        this.inventory[itemId] -= 1;
+        this.battle.log.push(`${actor.name} throws a Smoke Bomb. The party escapes.`);
+        this.finishBattle(false);
+      }
+      return true;
+    }
+    if (itemId === "etherleaf") {
+      this.inventory[itemId] -= 1;
+      for (const member of this.party) {
+        for (const tier of ["1", "2", "3"]) {
+          const charge = member.charges[tier];
+          if (charge) charge.current = Math.min(charge.max, charge.current + 1);
+        }
+      }
+      this.battle.log.push(`${actor.name} crushes Etherleaf. Spell charges return.`);
+      return true;
+    }
+    const target = this.party[targetIndex ?? 0];
+    if (!target) return false;
+    if (itemId === "potion") {
+      if (target.hp <= 0) {
+        this.battle.log.push("Potion needs a standing ally.");
+        return false;
+      }
+      this.inventory[itemId] -= 1;
+      const amount = 35;
+      target.hp = Math.min(target.maxHp, target.hp + amount);
+      this.battle.log.push(`${actor.name} uses Potion. ${target.name} recovers ${amount}.`);
+      return true;
+    } else if (itemId === "antidote") {
+      if (!target.statuses.poison) {
+        this.battle.log.push(`${target.name} is not poisoned.`);
+        return false;
+      }
+      this.inventory[itemId] -= 1;
+      delete target.statuses.poison;
+      this.battle.log.push(`${target.name}'s poison fades.`);
+      return true;
+    } else if (itemId === "phoenixAsh") {
+      if (target.hp > 0) {
+        this.battle.log.push(`${target.name} is already standing.`);
+        return false;
+      }
+      this.inventory[itemId] -= 1;
+      target.hp = Math.floor(target.maxHp * 0.35);
+      target.statuses = {};
+      this.battle.log.push(`${target.name} rises from Phoenix Ash.`);
+      return true;
+    }
+    return false;
+  }
+
+  private getLivingEnemy(index?: number): EnemyState | undefined {
+    if (!this.battle) return undefined;
+    let target = typeof index === "number" ? this.battle.enemies[index] : undefined;
+    if (!target || target.hp <= 0) {
+      target = Phaser.Utils.Array.GetRandom(this.battle.enemies.filter((e) => e.hp > 0));
+    }
+    return target;
+  }
+
+  private allEnemiesDefeated(): boolean {
+    return !!this.battle && this.battle.enemies.every((e) => e.hp <= 0);
+  }
+
+  private allPartyDefeated(): boolean {
+    return this.party.every((c) => c.hp <= 0);
+  }
+
+  private randomLivingPartyMember(): CharacterState | undefined {
+    return Phaser.Utils.Array.GetRandom(this.party.filter((c) => c.hp > 0));
+  }
+
+  private consumeSkipStatus(actor: CharacterState | EnemyState): boolean {
+    if (actor.statuses.stun) {
+      delete actor.statuses.stun;
+      return true;
+    }
+    if (actor.statuses.sleep) {
+      if (Phaser.Math.Between(1, 100) <= 45) delete actor.statuses.sleep;
+      else {
+        actor.statuses.sleep -= 1;
+        if (actor.statuses.sleep <= 0) delete actor.statuses.sleep;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private applyTurnStartStatuses(actor: CharacterState | EnemyState): boolean {
+    if (!this.battle) return false;
+    if (actor.hp > 0 && actor.statuses.poison) {
+      const damage = Math.max(1, Math.floor(actor.maxHp * 0.05));
+      actor.hp = Math.max(0, actor.hp - damage);
+      this.battle.log.push(`${actor.name} suffers ${damage} poison damage.`);
+      if (actor.hp <= 0) return true;
+    }
+    if (this.consumeSkipStatus(actor)) {
+      this.battle.log.push(`${actor.name} cannot act.`);
+      return true;
+    }
+    return false;
+  }
+
+  private checkBattleEnd(): boolean {
+    if (!this.battle) return true;
+    if (this.allEnemiesDefeated()) {
+      this.awardVictory();
+      return true;
+    }
+    if (this.allPartyDefeated()) {
+      this.battle.log = ["The party falls beneath the dimming stars..."];
+      this.mode = "gameOver";
+      this.audio.setMode("title");
+      return true;
+    }
+    return false;
+  }
+
+  private tickStatus(actor: CharacterState | EnemyState) {
+    for (const key of ["ward", "starveil", "silence"] as (keyof StatusState)[]) {
+      if (actor.statuses[key]) {
+        actor.statuses[key]! -= 1;
+        if (actor.statuses[key]! <= 0) delete actor.statuses[key];
+      }
+    }
+  }
+
+  private statusActive(actor: CharacterState | EnemyState, status: keyof StatusState): boolean {
+    return !!actor.statuses[status];
+  }
+
+  private awardVictory() {
+    if (!this.battle || this.battle.victoryAwarded) return;
+    const xp = this.battle.enemies.reduce((sum, e) => sum + e.xp, 0) * this.settings.xpMultiplier;
+    const gold = this.battle.enemies.reduce((sum, e) => sum + e.gold, 0);
+    this.gold += gold;
+    this.battle.log.push(`Victory! Gained ${xp} XP and ${gold} gold.`);
+    for (const member of this.party) {
+      member.xp += xp;
+      while (member.level < 12 && member.xp >= member.nextXp) {
+        member.xp -= member.nextXp;
+        member.level += 1;
+        member.nextXp = Math.floor(42 + member.level * member.level * 26);
+        member.maxHp += member.id === "arlen" ? 9 : member.id === "mira" ? 6 : 5;
+        member.hp = member.maxHp;
+        member.baseAttack += member.id === "arlen" ? 2 : 1;
+        member.baseDefense += member.id === "arlen" ? 2 : 1;
+        if (member.level % 2 === 0) member.speed += 1;
+        if (member.level % 3 === 0) member.luck += 1;
+        if (member.id === "arlen" && member.level >= 7 && !member.spells.includes("rally")) member.spells.push("rally");
+        this.refreshCharges(member, true);
+        this.battle.log.push(`${member.name} reached level ${member.level}!`);
+      }
+    }
+    if (Phaser.Math.Between(1, 100) <= 22 && this.battle.kind === "random") {
+      this.inventory.potion = (this.inventory.potion ?? 0) + 1;
+      this.battle.log.push("Found a Potion.");
+    }
+    this.battle.victoryAwarded = true;
+    this.battle.phase = "log";
+    this.audio.blip("victory");
+  }
+
+  private advanceBattleLog() {
+    if (!this.battle) return;
+    if (this.allEnemiesDefeated() && this.battle.victoryAwarded) {
+      this.finishBattle(true);
+      return;
+    }
+    if (this.allPartyDefeated()) {
+      this.mode = "gameOver";
+      this.audio.setMode("title");
+      return;
+    }
+    this.battle.phase = "resolving";
+    this.battle.selected = 0;
+    this.battle.actionTimer = BATTLE_TURN_DELAY_MS;
+  }
+
+  private finishBattle(won: boolean) {
+    if (!this.battle) return;
+    const wasBoss = this.battle.kind === "boss";
+    const dungeonId = this.battle.dungeonId;
+    const bossId = this.battle.bossId;
+    this.battle = undefined;
+    if (!won) {
+      this.mode = dungeonId ? "dungeon" : "world";
+      this.syncAllVisualPositions();
+      this.audio.setMode(this.mode === "dungeon" ? "dungeon" : "world");
+      return;
+    }
+    if (wasBoss && dungeonId && bossId) {
+      const dungeon = this.dungeons()[dungeonId];
+      this.defeatedBosses.add(bossId);
+      if (dungeon.relic) this.flags.relics[dungeon.relic] = true;
+      this.mode = "dungeon";
+      this.syncAllVisualPositions();
+      this.audio.setMode("dungeon");
+      const extra: string[] = [];
+      if (dungeon.relic === "root") extra.push("Brinewick's tide-skiff may now wake at the harbor.");
+      if (dungeon.relic === "gale") {
+        this.flags.skyship = true;
+        extra.push("The Gale Relic reveals a high road. Visit Starfall Gate with all four relics.");
+      }
+      if (bossId === "eclipseCrown") {
+        this.mode = "ending";
+        this.audio.setMode("ending");
+        this.saveGame();
+        return;
+      }
+      this.saveGame();
+      this.say([...dungeon.rewardText, ...extra], () => {
+        this.mode = "dungeon";
+        this.audio.setMode("dungeon");
+      });
+    } else {
+      this.mode = dungeonId ? "dungeon" : "world";
+      this.syncAllVisualPositions();
+      this.audio.setMode(this.mode === "dungeon" ? "dungeon" : "world");
+    }
+  }
+
+  private physicalDamage(power: number, defense: number, luck: number) {
+    const critical = Phaser.Math.Between(1, 100) <= Phaser.Math.Clamp(5 + luck, 5, 15);
+    const amount = Math.max(1, power + Phaser.Math.Between(0, 4) - defense);
+    return { amount: critical ? Math.floor(amount * 1.75) : amount, critical };
+  }
+
+  private attackPower(actor: CharacterState): number {
+    return actor.baseAttack + (WEAPONS[actor.weapon]?.power ?? 0);
+  }
+
+  private defensePower(actor: CharacterState): number {
+    return actor.baseDefense + (ARMORS[actor.armor]?.power ?? 0) + (actor.statuses.ward ? 4 : 0);
+  }
+
+  private enemyDanger(): number {
+    if (!this.battle) return 0;
+    return Math.max(...this.battle.enemies.filter((e) => e.hp > 0).map((e) => e.speed + e.attack / 3), 0);
+  }
+
+  private partyAverage(stat: "speed" | "luck"): number {
+    const living = this.party.filter((c) => c.hp > 0);
+    return living.reduce((sum, c) => sum + c[stat], 0) / Math.max(1, living.length);
+  }
+
+  private refreshCharges(member: CharacterState, fill: boolean) {
+    const tier1 = member.id === "arlen" ? (member.level >= 7 ? 1 : 0) : 2 + Math.floor(member.level / 2);
+    const tier2 = member.level >= 4 ? 1 + Math.floor((member.level - 4) / 3) : 0;
+    const tier3 = member.level >= 8 ? 1 + Math.floor((member.level - 8) / 4) : 0;
+    const maxes = { "1": tier1, "2": member.id === "arlen" ? (member.level >= 7 ? 1 : 0) : tier2, "3": member.id === "arlen" ? 0 : tier3 };
+    for (const tier of ["1", "2", "3"]) {
+      const current = member.charges[tier]?.current ?? 0;
+      member.charges[tier] = { max: maxes[tier], current: fill ? maxes[tier] : Math.min(current, maxes[tier]) };
+    }
+  }
+
+  private applyWalkPoison() {
+    if (this.lastStepFrame % 4 !== 0) return;
+    for (const member of this.party) {
+      if (member.hp > 1 && member.statuses.poison) member.hp -= 1;
+    }
+  }
+
+  private hasAllRelics(): boolean {
+    return this.flags.relics.root && this.flags.relics.flame && this.flags.relics.tide && this.flags.relics.gale;
+  }
+
+  private openMainMenu() {
+    this.previousMode = this.mode;
+    this.openMenu(
+      "Menu",
+      [
+        { label: "Status", action: () => this.openStatusMenu() },
+        { label: "Items", action: () => this.openItemsMenu() },
+        { label: "Magic", action: () => this.openFieldMagicMenu() },
+        { label: "Equipment", action: () => this.openEquipmentMenu() },
+        {
+          label: "Save",
+          action: () => {
+            this.saveGame();
+            this.flashMessage("Game saved.");
+          },
+          disabled: () => this.previousMode === "dungeon"
+        },
+        { label: "Settings", action: () => this.openSettingsMenu() },
+        { label: "Controls", action: () => this.showControls("menu") },
+        {
+          label: "Quit to Title",
+          action: () => {
+            this.mode = "title";
+            this.audio.setMode("title");
+          }
+        },
+        { label: "Close", action: () => this.closeMenu() }
+      ],
+      () => this.closeMenu(),
+      () => `Gold ${this.gold} | Relics ${this.relicCount()}/4 | Encounters ${this.settings.encounters ? "ON" : "OFF"}`
+    );
+  }
+
+  private openStatusMenu() {
+    this.openMenu(
+      "Status",
+      (this.party.map((c) => ({
+        label: () => `${c.name} Lv${c.level} HP ${c.hp}/${c.maxHp} XP ${c.xp}/${c.nextXp}`,
+        action: () => this.say([this.characterSheet(c)], () => this.openStatusMenu())
+      })) as MenuOption[]).concat([{ label: "Back", action: () => this.openMainMenu() }]),
+      () => this.openMainMenu(),
+      "All characters receive XP by default, a forgiving modern convenience."
+    );
+  }
+
+  private characterSheet(c: CharacterState): string {
+    const statuses = Object.keys(c.statuses).length ? Object.keys(c.statuses).join(", ") : "none";
+    return `${c.name}, ${c.role}
+Level ${c.level}
+HP ${c.hp}/${c.maxHp}
+Attack ${this.attackPower(c)}  Defense ${this.defensePower(c)}
+Speed ${c.speed}  Luck ${c.luck}
+Weapon ${WEAPONS[c.weapon].name}
+Armor ${ARMORS[c.armor].name}
+Statuses: ${statuses}`;
+  }
+
+  private openItemsMenu() {
+    const options: MenuOption[] = Object.keys(ITEMS)
+      .filter((id) => (this.inventory[id] ?? 0) > 0)
+      .map((id) => ({
+        label: () => `${ITEMS[id].name} x${this.inventory[id]} - ${ITEMS[id].description}`,
+        action: () => this.openFieldItemTargets(id)
+      }));
+    options.push({ label: "Back", action: () => this.openMainMenu() });
+    this.openMenu("Items", options, () => this.openMainMenu(), "Potions, antidotes, ash, etherleaf, and tents can be used outside battle.");
+  }
+
+  private openFieldItemTargets(itemId: string) {
+    const item = ITEMS[itemId];
+    if (!item.field) {
+      this.flashMessage("That item is for battle.");
+      return;
+    }
+    if (itemId === "tent") {
+      if (this.previousMode === "town") {
+        this.flashMessage("Use tents on the road or in safe dungeon rooms.");
+        return;
+      }
+      this.inventory.tent -= 1;
+      for (const c of this.party) {
+        if (c.hp > 0) c.hp = Math.min(c.maxHp, c.hp + Math.floor(c.maxHp * 0.55));
+      }
+      this.saveGame();
+      this.say(["The party rests under a small canvas roof. HP partly restored and game saved."], () => this.openItemsMenu());
+      return;
+    }
+    if (itemId === "etherleaf") {
+      this.inventory.etherleaf -= 1;
+      for (const c of this.party) {
+        for (const tier of ["1", "2", "3"]) c.charges[tier].current = Math.min(c.charges[tier].max, c.charges[tier].current + 1);
+      }
+      this.say(["Etherleaf restores one charge in every spell tier."], () => this.openItemsMenu());
+      return;
+    }
+    this.openMenu(
+      `Use ${item.name}`,
+      this.party.map((c, idx) => ({
+        label: `${c.name} HP ${c.hp}/${c.maxHp}`,
+        action: () => {
+          if ((this.inventory[itemId] ?? 0) <= 0) return;
+          this.inventory[itemId] -= 1;
+          if (itemId === "potion") c.hp = Math.min(c.maxHp, c.hp + 35);
+          if (itemId === "antidote") delete c.statuses.poison;
+          if (itemId === "phoenixAsh" && c.hp <= 0) {
+            c.hp = Math.floor(c.maxHp * 0.35);
+            c.statuses = {};
+          }
+          if (itemId === "phoenixAsh" && c.hp > 0 && idx >= 0) this.flashMessage("Phoenix Ash needs a fallen ally.");
+          this.openItemsMenu();
+        }
+      })).concat([{ label: "Back", action: () => this.openItemsMenu() }]),
+      () => this.openItemsMenu()
+    );
+  }
+
+  private openFieldMagicMenu() {
+    const casters = this.party.filter((c) => c.spells.length > 0);
+    this.openMenu(
+      "Magic",
+      casters.map((c) => ({
+        label: `${c.name} (${Object.values(c.charges).map((v, i) => `T${i + 1} ${v.current}/${v.max}`).join(" ")})`,
+        action: () => this.openFieldSpells(c)
+      })).concat([{ label: "Back", action: () => this.openMainMenu() }]),
+      () => this.openMainMenu()
+    );
+  }
+
+  private openFieldSpells(caster: CharacterState) {
+    const spells = caster.spells.filter((id) => ["heal", "revive", "buff"].includes(SPELLS[id].kind) && caster.level >= SPELLS[id].minLevel);
+    this.openMenu(
+      `${caster.name} Magic`,
+      (spells.map((id) => ({
+        label: () => `${SPELLS[id].name} T${SPELLS[id].tier} (${caster.charges[String(SPELLS[id].tier)].current}) - ${SPELLS[id].description}`,
+        action: () => this.openFieldSpellTargets(caster, id),
+        disabled: () => caster.charges[String(SPELLS[id].tier)].current <= 0
+      })) as MenuOption[]).concat([{ label: "Back", action: () => this.openFieldMagicMenu() }]),
+      () => this.openFieldMagicMenu()
+    );
+  }
+
+  private openFieldSpellTargets(caster: CharacterState, spellId: string) {
+    const spell = SPELLS[spellId];
+    const charge = caster.charges[String(spell.tier)];
+    if (charge.current <= 0) return;
+    if (spell.target === "allAllies") {
+      charge.current -= 1;
+      for (const c of this.party.filter((p) => p.hp > 0)) {
+        if (spell.kind === "heal") c.hp = Math.min(c.maxHp, c.hp + spell.power + caster.level * 4);
+        if (spell.id === "starveil") c.statuses.starveil = 4;
+      }
+      this.say([`${caster.name} casts ${spell.name}.`], () => this.openFieldMagicMenu());
+      return;
+    }
+    this.openMenu(
+      spell.name,
+      this.party.map((target) => ({
+        label: `${target.name} HP ${target.hp}/${target.maxHp}`,
+        action: () => {
+          charge.current -= 1;
+          if (spell.kind === "heal" && target.hp > 0) target.hp = Math.min(target.maxHp, target.hp + spell.power + caster.level * 4);
+          if (spell.kind === "revive" && target.hp <= 0) {
+            target.hp = Math.floor(target.maxHp * 0.35);
+            target.statuses = {};
+          }
+          if (spell.kind === "buff") target.statuses.ward = 4;
+          this.openFieldMagicMenu();
+        }
+      })).concat([{ label: "Back", action: () => this.openFieldSpells(caster) }]),
+      () => this.openFieldSpells(caster)
+    );
+  }
+
+  private openEquipmentMenu() {
+    const options: MenuOption[] = [];
+    for (const c of this.party) {
+      options.push({ label: `${c.name} weapon: ${WEAPONS[c.weapon].name}`, action: () => this.openEquipList(c, "weapon") });
+      options.push({ label: `${c.name} armor: ${ARMORS[c.armor].name}`, action: () => this.openEquipList(c, "armor") });
+    }
+    options.push({ label: "Back", action: () => this.openMainMenu() });
+    this.openMenu("Equipment", options, () => this.openMainMenu(), "Bought and treasure gear is kept in the party pack.");
+  }
+
+  private openEquipList(member: CharacterState, kind: GearDef["kind"]) {
+    const pool = Object.keys(this.gearBag).filter((id) => this.gearBag[id] > 0 && GEAR[id].kind === kind && GEAR[id].users.includes(member.id));
+    this.openMenu(
+      `${member.name} ${kind}`,
+      pool.map((id) => ({
+        label: `${GEAR[id].name} +${GEAR[id].power} (${this.gearBag[id]})`,
+        action: () => {
+          member[kind] = id;
+          this.openEquipmentMenu();
+        }
+      })).concat([{ label: "Back", action: () => this.openEquipmentMenu() }]),
+      () => this.openEquipmentMenu()
+    );
+  }
+
+  private openSettingsMenu() {
+    this.openMenu(
+      "Settings",
+      [
+        {
+          label: () => `Random Encounters: ${this.settings.encounters ? "ON" : "OFF"}`,
+          action: () => {
+            this.settings.encounters = !this.settings.encounters;
+            this.openSettingsMenu();
+          }
+        },
+        {
+          label: () => `XP Multiplier: ${this.settings.xpMultiplier}x`,
+          action: () => {
+            this.settings.xpMultiplier = this.settings.xpMultiplier === 1 ? 2 : this.settings.xpMultiplier === 2 ? 4 : 1;
+            this.openSettingsMenu();
+          }
+        },
+        {
+          label: () => `Fast Text: ${this.settings.fastText ? "ON" : "OFF"}`,
+          action: () => {
+            this.settings.fastText = !this.settings.fastText;
+            this.openSettingsMenu();
+          }
+        },
+        {
+          label: () => `Mute: ${this.settings.muted ? "ON" : "OFF"}`,
+          action: () => {
+            this.settings.muted = !this.settings.muted;
+            this.audio.setMuted(this.settings.muted);
+            this.openSettingsMenu();
+          }
+        },
+        { label: "Back", action: () => this.openMainMenu() }
+      ],
+      () => this.openMainMenu()
+    );
+  }
+
+  private openDebugMenu() {
+    this.previousMode = this.mode;
+    this.openMenu(
+      "Debug",
+      [
+        {
+          label: "Give 500 gold",
+          action: () => {
+            this.gold += 500;
+            this.openDebugMenu();
+          }
+        },
+        {
+          label: "Heal party",
+          action: () => {
+            this.restoreParty(true);
+            this.openDebugMenu();
+          }
+        },
+        {
+          label: "Start encounter",
+          action: () => this.startRandomBattle(WORLD_TABLES.plains)
+        },
+        {
+          label: "Toggle relics",
+          action: () => {
+            const all = this.hasAllRelics();
+            this.flags.relics = { root: !all, flame: !all, tide: !all, gale: !all };
+            this.flags.boat = !all;
+            this.flags.skyship = !all;
+            this.flags.gateOpen = !all;
+            this.openDebugMenu();
+          }
+        },
+        { label: "Back", action: () => this.closeMenu() }
+      ],
+      () => this.closeMenu(),
+      "Hidden F9 menu for testing."
+    );
+  }
+
+  private openInn(town: TownDef) {
+    this.openMenu(
+      `${town.name} Inn`,
+      [
+        {
+          label: `Rest and save (${town.innPrice} gold)`,
+          action: () => {
+            if (this.gold < town.innPrice) {
+              this.flashMessage("Not enough gold.");
+              return;
+            }
+            this.gold -= town.innPrice;
+            this.restoreParty(true);
+            this.saveGame();
+            this.say(["The party rests. HP and spell charges restored. Game saved."], () => {
+              this.mode = "town";
+            });
+          }
+        },
+        { label: "Leave", action: () => (this.mode = "town") }
+      ],
+      () => (this.mode = "town")
+    );
+  }
+
+  private openClinic(town: TownDef) {
+    this.openMenu(
+      `${town.name} Clinic`,
+      this.party.map((c) => ({
+        label: `${c.name} ${c.hp > 0 ? "standing" : "fallen"} (${town.clinicPrice} gold)`,
+        action: () => {
+          if (c.hp > 0) {
+            this.flashMessage("They are already standing.");
+            return;
+          }
+          if (this.gold < town.clinicPrice) {
+            this.flashMessage("Not enough gold.");
+            return;
+          }
+          this.gold -= town.clinicPrice;
+          c.hp = Math.floor(c.maxHp * 0.5);
+          c.statuses = {};
+          this.openClinic(town);
+        }
+      })).concat([{ label: "Leave", action: () => (this.mode = "town") }]),
+      () => (this.mode = "town")
+    );
+  }
+
+  private openShop(title: string, stock: { id: string; type: "item" | "gear" }[]) {
+    this.openMenu(
+      title,
+      (stock.map((entry) => ({
+        label: () => {
+          if (entry.type === "item") return `${ITEMS[entry.id].name} ${ITEMS[entry.id].price}g - ${ITEMS[entry.id].description}`;
+          return `${GEAR[entry.id].name} ${GEAR[entry.id].price}g - ${GEAR[entry.id].description}`;
+        },
+        action: () => {
+          const price = entry.type === "item" ? ITEMS[entry.id].price : GEAR[entry.id].price;
+          if (this.gold < price) {
+            this.flashMessage("Not enough gold.");
+            return;
+          }
+          this.gold -= price;
+          if (entry.type === "item") this.inventory[entry.id] = (this.inventory[entry.id] ?? 0) + 1;
+          else this.gearBag[entry.id] = (this.gearBag[entry.id] ?? 0) + 1;
+          this.openShop(title, stock);
+        }
+      })) as MenuOption[]).concat([{ label: "Leave", action: () => (this.mode = "town") }]),
+      () => (this.mode = "town"),
+      () => `Gold ${this.gold}`
+    );
+  }
+
+  private openMagicShop(town: TownDef) {
+    this.openMenu(
+      `${town.name} Magic`,
+      (town.spellStock.map((id) => ({
+        label: () => `${SPELLS[id].name} ${SPELLS[id].price}g - ${SPELLS[id].description}`,
+        action: () => {
+          const spell = SPELLS[id];
+          const learner = this.party.find((c) => c.id === spell.caster);
+          if (!learner) return;
+          if (learner.spells.includes(id)) {
+            this.flashMessage("Already learned.");
+            return;
+          }
+          if (this.gold < spell.price) {
+            this.flashMessage("Not enough gold.");
+            return;
+          }
+          this.gold -= spell.price;
+          learner.spells.push(id);
+          this.openMagicShop(town);
+        }
+      })) as MenuOption[]).concat([{ label: "Leave", action: () => (this.mode = "town") }]),
+      () => (this.mode = "town"),
+      () => `Gold ${this.gold}`
+    );
+  }
+
+  private showControls(returnTo: "title" | "menu") {
+    const done = () => {
+      if (returnTo === "title") this.mode = "title";
+      else this.openMainMenu();
+    };
+    this.say(
+      [
+        "Controls: Arrow keys or WASD move and select. Enter, Space, or Z confirms.",
+        "Escape or X cancels and opens the menu. Shift moves faster while exploring.",
+        "M toggles mute. F toggles fullscreen. F9 opens a hidden debug menu."
+      ],
+      done
+    );
+  }
+
+  private restoreParty(fullCharges: boolean) {
+    for (const c of this.party) {
+      c.hp = c.maxHp;
+      delete c.statuses.poison;
+      delete c.statuses.sleep;
+      if (fullCharges) this.refreshCharges(c, true);
+    }
+  }
+
+  private say(lines: string[], done?: () => void) {
+    this.clearHeldMovement();
+    const returnMode = this.mode;
+    if (returnMode !== "dialogue") this.previousMode = returnMode;
+    this.dialogue = {
+      lines,
+      index: 0,
+      done: done ?? (() => {
+        this.mode = returnMode === "dialogue" ? this.previousMode : returnMode;
+      })
+    };
+    this.mode = "dialogue";
+    this.markDirty();
+  }
+
+  private flashMessage(message: string) {
+    const returnMode = this.mode;
+    this.say([message], () => {
+      this.mode = returnMode;
+    });
+  }
+
+  private openMenu(title: string, options: MenuOption[], cancel: () => void, footer?: string | (() => string)) {
+    this.clearHeldMovement();
+    this.menu = { title, options, selected: 0, cancel, footer };
+    this.mode = "menu";
+    this.markDirty();
+  }
+
+  private closeMenu() {
+    this.mode = this.previousMode;
+    this.menu = undefined;
+    this.markDirty();
+  }
+
+  private adjustMenu(delta: number) {
+    if (!this.menu) return;
+    const total = this.menu.options.length;
+    this.menu.selected = wrap(this.menu.selected + delta, total);
+    this.audio.blip("confirm");
+  }
+
+  private adjustTitle(delta: number) {
+    this.titleSelected = wrap(this.titleSelected + delta, this.titleOptions.length);
+    this.audio.blip("confirm");
+  }
+
+  private serviceAt(x: number, y: number): ServiceKind | undefined {
+    return TOWN_SERVICES.find((z) => Math.abs(z.x - x) + Math.abs(z.y - y) <= 1)?.kind;
+  }
+
+  private relicCount(): number {
+    return Object.values(this.flags.relics).filter(Boolean).length;
+  }
+
+  private saveGame() {
+    const payload = {
+      party: this.party,
+      inventory: this.inventory,
+      gearBag: this.gearBag,
+      gold: this.gold,
+      worldPos: this.worldPos,
+      townPos: this.townPos,
+      dungeonPos: this.dungeonPos,
+      currentTown: this.currentTown,
+      currentDungeon: this.currentDungeon,
+      dungeonFloor: this.dungeonFloor,
+      flags: this.flags,
+      openedChests: [...this.openedChests],
+      puzzleFlags: [...this.puzzleFlags],
+      defeatedBosses: [...this.defeatedBosses],
+      settings: this.settings,
+      encounterCounter: this.encounterCounter
+    };
+    localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
+  }
+
+  private loadGame(): boolean {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return false;
+    try {
+      const data = JSON.parse(raw);
+      this.party = data.party;
+      this.inventory = data.inventory;
+      this.gearBag = data.gearBag;
+      this.gold = data.gold;
+      this.worldPos = data.worldPos;
+      this.townPos = data.townPos ?? { x: 10, y: 12 };
+      this.dungeonPos = data.dungeonPos ?? { x: 1, y: 1 };
+      this.currentTown = data.currentTown ?? "dawnford";
+      this.currentDungeon = data.currentDungeon ?? "mossCave";
+      this.dungeonFloor = data.dungeonFloor ?? 0;
+      this.flags = data.flags;
+      this.openedChests = new Set(data.openedChests ?? []);
+      this.puzzleFlags = new Set(data.puzzleFlags ?? []);
+      this.defeatedBosses = new Set(data.defeatedBosses ?? []);
+      this.settings = { ...this.settings, ...data.settings };
+      this.audio.setMuted(this.settings.muted);
+      this.encounterCounter = data.encounterCounter ?? 10;
+      this.mode = "world";
+      this.movement = undefined;
+      this.clearHeldMovement();
+      this.syncAllVisualPositions();
+      this.audio.setMode("world");
+      this.markDirty();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private draw() {
+    this.dirty = false;
+    this.clearImages();
+    this.g.clear();
+    this.ui.clear();
+    this.clearText();
+    if (this.mode === "title") this.drawTitle();
+    else if (this.mode === "world") this.drawWorld();
+    else if (this.mode === "town") this.drawTown();
+    else if (this.mode === "dungeon") this.drawDungeon();
+    else if (this.mode === "dialogue") this.drawDialogue();
+    else if (this.mode === "menu") this.drawMenuScreen();
+    else if (this.mode === "battle") this.drawBattle();
+    else if (this.mode === "gameOver") this.drawGameOver();
+    else if (this.mode === "ending") this.drawEnding();
+  }
+
+  private clearText() {
+    for (const text of this.texts) text.destroy();
+    this.texts = [];
+  }
+
+  private clearImages() {
+    for (const image of this.images) image.destroy();
+    this.images = [];
+  }
+
+  private text(
+    x: number,
+    y: number,
+    value: string,
+    size = 18,
+    color = "#ffffff",
+    align: "left" | "center" = "left",
+    options: { stroke?: string; strokeThickness?: number; wordWrapWidth?: number; fontStyle?: string } = {}
+  ) {
+    const strokeThickness = options.strokeThickness ?? (size >= 14 ? 2 : 1);
+    const t = this.add.text(x, y, value, {
+      fontFamily: 'Consolas, ui-monospace, "Courier New", monospace',
+      fontSize: `${size}px`,
+      fontStyle: options.fontStyle ?? "bold",
+      color,
+      align,
+      lineSpacing: Math.max(2, Math.floor(size * 0.22)),
+      stroke: options.stroke ?? "#050812",
+      strokeThickness,
+      wordWrap: { width: options.wordWrapWidth ?? (align === "center" ? WIDTH - 120 : WIDTH - x - 24) }
+    });
+    t.setResolution(2);
+    t.setDepth(LAYER_TEXT);
+    t.setPadding(1, 0, 1, 1);
+    if (align === "center") t.setOrigin(0.5, 0);
+    this.texts.push(t);
+    return t;
+  }
+
+  private hasTexture(key: AssetKey): boolean {
+    return this.textures.exists(key);
+  }
+
+  private drawTexture(
+    key: AssetKey,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    depth = LAYER_WORLD_IMAGE,
+    alpha = 1,
+    tint?: number
+  ) {
+    const image = this.add.image(x, y, key);
+    image.setOrigin(0, 0);
+    image.setDisplaySize(width, height);
+    image.setDepth(depth);
+    image.setAlpha(alpha);
+    image.setScrollFactor(0);
+    if (tint !== undefined) image.setTint(tint);
+    this.images.push(image);
+    return image;
+  }
+
+  private drawCroppedTexture(
+    key: AssetKey,
+    x: number,
+    y: number,
+    cropX: number,
+    cropY: number,
+    cropWidth: number,
+    cropHeight: number,
+    displayWidth: number,
+    displayHeight: number,
+    depth = LAYER_WORLD_IMAGE,
+    alpha = 1,
+    tint?: number
+  ) {
+    const image = this.add.image(x, y, key);
+    image.setOrigin(0, 0);
+    image.setCrop(cropX, cropY, cropWidth, cropHeight);
+    image.setDisplaySize(displayWidth, displayHeight);
+    image.setDepth(depth);
+    image.setAlpha(alpha);
+    image.setScrollFactor(0);
+    if (tint !== undefined) image.setTint(tint);
+    this.images.push(image);
+    return image;
+  }
+
+  private drawTileTexture(key: AssetKey | undefined, x: number, y: number, depth = LAYER_WORLD_IMAGE): boolean {
+    if (!key || !this.hasTexture(key)) return false;
+    this.drawTexture(key, x, y, TILE, TILE, depth);
+    return true;
+  }
+
+  private drawCursor(x: number, y: number): boolean {
+    if (!this.hasTexture("ui_cursor_arrow")) return false;
+    this.drawTexture("ui_cursor_arrow", x, y, 16, 16, LAYER_UI_IMAGE);
+    return true;
+  }
+
+  private drawTitle() {
+    this.g.fillStyle(0x050812, 1).fillRect(0, 0, WIDTH, HEIGHT);
+    for (let i = 0; i < 120; i += 1) {
+      const x = (i * 73) % WIDTH;
+      const y = (i * 41) % HEIGHT;
+      const c = i % 3 === 0 ? 0xfff0a8 : i % 3 === 1 ? 0x83d6ff : 0xffffff;
+      this.g.fillStyle(c, i % 5 === 0 ? 0.42 : 0.28).fillRect(x, y, i % 5 === 0 ? 3 : 2, i % 5 === 0 ? 3 : 2);
+    }
+    if (this.hasTexture("title_four_crystals")) this.drawTexture("title_four_crystals", WIDTH / 2 - 96, 48, 192, 64, LAYER_WORLD_IMAGE);
+    else this.drawPixelCrystal(WIDTH / 2 - 24, 48, 2.4);
+    const hasTitleLogo = this.hasTexture("title_logo");
+    if (hasTitleLogo) this.drawTexture("title_logo", WIDTH / 2 - 210, 128, 420, 96, LAYER_WORLD_IMAGE);
+    else {
+      this.text(WIDTH / 2, 178, "CRYSTAL OATH", 44, "#fff2a8", "center");
+      this.text(WIDTH / 2, 226, "Dawn of the Four Stars", 24, "#a8ddff", "center");
+    }
+    this.text(WIDTH / 2, hasTitleLogo ? 268 : 276, "An original turn-based Asterra adventure", 16, "#cbd6ff", "center");
+    const hasSave = !!localStorage.getItem(SAVE_KEY);
+    this.titleOptions.forEach((option, idx) => {
+      const disabled = option === "Load Game" && !hasSave;
+      const prefix = idx === this.titleSelected ? ">" : " ";
+      this.text(WIDTH / 2, 332 + idx * 34, `${prefix} ${option}`, 22, disabled ? "#657087" : "#ffffff", "center");
+    });
+    this.text(WIDTH / 2, 474, "Enter/Z confirms. M toggles mute.", 15, "#aab3c8", "center");
+  }
+
+  private drawWorld() {
+    this.g.fillStyle(0x050812, 1).fillRect(0, 0, WIDTH, HEIGHT);
+    const leaderPos = this.visualExplorePos("world");
+    const cam = this.cameraFor(leaderPos, WORLD_W, WORLD_H);
+    const startX = Math.max(0, Math.floor(cam.x / TILE) - 1);
+    const endX = Math.min(WORLD_W - 1, Math.ceil((cam.x + WIDTH) / TILE));
+    const startY = Math.max(0, Math.floor(cam.y / TILE) - 1);
+    const endY = Math.min(WORLD_H - 1, Math.ceil((cam.y + HEIGHT) / TILE));
+    for (let y = startY; y <= endY; y += 1) {
+      for (let x = startX; x <= endX; x += 1) {
+        this.drawWorldTile(this.world[y][x], x * TILE - cam.x, y * TILE - cam.y, x, y);
+      }
+    }
+    for (const loc of this.locations()) {
+      if (loc.x < startX || loc.x > endX || loc.y < startY || loc.y > endY) continue;
+      this.drawLocationIcon(loc, loc.x * TILE - cam.x, loc.y * TILE - cam.y);
+    }
+    this.drawLeader(leaderPos.x * TILE - cam.x + 4, leaderPos.y * TILE - cam.y + 3);
+    this.drawHud("World");
+    const loc = this.locationAt(this.worldPos.x, this.worldPos.y);
+    if (loc) this.drawPrompt(`Enter ${loc.name}`);
+  }
+
+  private drawTownFloorTile(px: number, py: number, x: number, y: number) {
+    const base = (x + y) % 2 === 0 ? 0x40506c : 0x384762;
+    this.g.fillStyle(base, 1).fillRect(px, py, TILE, TILE);
+    this.g.lineStyle(1, 0x263149, 0.55).strokeRect(px, py, TILE, TILE);
+    if ((x * 3 + y * 5) % 4 === 0) this.g.fillStyle(0x6f7f9f, 0.18).fillRect(px + 5, py + 6, 5, 4);
+    if ((x + y * 2) % 5 === 0) this.g.fillStyle(0x1f2a3e, 0.22).fillRect(px + 22, py + 19, 4, 5);
+  }
+
+  private drawTownWallTile(px: number, py: number, x: number, y: number) {
+    this.g.fillStyle(0x536b94, 1).fillRect(px, py, TILE, TILE);
+    this.g.fillStyle(0x344762, 1).fillRect(px, py + TILE - 7, TILE, 7);
+    this.g.lineStyle(1, 0x243247, 0.8).strokeRect(px, py, TILE, TILE);
+    const brickOffset = (x + y) % 2 === 0 ? 0 : 9;
+    this.g.fillStyle(0x6f86ae, 0.32).fillRect(px + 4 + brickOffset, py + 7, 13, 4);
+    this.g.fillStyle(0x293850, 0.45).fillRect(px + 2, py + 22, TILE - 4, 2);
+  }
+
+  private drawTownRug(x: number, y: number, w: number, h: number, color: number) {
+    this.g.fillStyle(0x172033, 0.4).fillRect(x + 4, y + 5, w, h);
+    this.g.fillStyle(color, 1).fillRect(x, y, w, h);
+    this.g.fillStyle(0xf4d58f, 0.75).fillRect(x + 8, y + 7, w - 16, 4);
+    this.g.fillStyle(0x14213a, 0.28).fillRect(x + 10, y + 15, w - 20, h - 30);
+    this.g.lineStyle(2, 0xffefbd, 0.8).strokeRect(x + 4, y + 4, w - 8, h - 8);
+  }
+
+  private drawTownLamp(x: number, y: number) {
+    this.g.fillStyle(0x3b2b24, 1).fillRect(x + 11, y + 14, 6, 18);
+    this.g.fillStyle(0xffd56a, 0.32).fillCircle(x + 14, y + 10, 22);
+    this.g.fillStyle(0xffdf88, 1).fillRect(x + 7, y + 4, 14, 14);
+    this.g.fillStyle(0xffffff, 0.45).fillRect(x + 10, y + 6, 4, 5);
+    this.g.lineStyle(2, 0x402a1d, 1).strokeRect(x + 7, y + 4, 14, 14);
+  }
+
+  private drawTownCrate(x: number, y: number) {
+    this.g.fillStyle(0x8b6038, 1).fillRect(x, y, 22, 22);
+    this.g.lineStyle(2, 0x3a2517, 1).strokeRect(x, y, 22, 22);
+    this.g.lineStyle(2, 0xc08b4d, 0.85).lineBetween(x + 4, y + 4, x + 18, y + 18);
+    this.g.lineStyle(2, 0x4a2f1e, 0.8).lineBetween(x + 18, y + 4, x + 4, y + 18);
+  }
+
+  private drawTownBarrel(x: number, y: number) {
+    this.g.fillStyle(0x6f4b2c, 1).fillEllipse(x + 12, y + 12, 22, 24);
+    this.g.fillStyle(0x9b6b3b, 1).fillEllipse(x + 12, y + 8, 19, 7);
+    this.g.lineStyle(2, 0x2d1c12, 1).strokeEllipse(x + 12, y + 12, 22, 24);
+    this.g.lineStyle(2, 0xc29352, 0.85).lineBetween(x + 3, y + 12, x + 21, y + 12);
+  }
+
+  private drawTownTable(x: number, y: number) {
+    this.g.fillStyle(0x3d2a1d, 0.45).fillRect(x + 4, y + 9, 58, 25);
+    this.g.fillStyle(0x815637, 1).fillRect(x, y, 62, 24);
+    this.g.fillStyle(0xba8150, 1).fillRect(x + 4, y + 4, 54, 5);
+    this.g.lineStyle(2, 0x2e1d13, 1).strokeRect(x, y, 62, 24);
+    this.g.fillStyle(0x5b3924, 1).fillRect(x + 8, y + 23, 7, 12);
+    this.g.fillRect(x + 47, y + 23, 7, 12);
+  }
+
+  private drawTownServiceIcon(kind: ServiceKind, cx: number, cy: number, color: number) {
+    if (kind === "item" && this.hasTexture("icon_potion")) {
+      this.drawTexture("icon_potion", cx - 12, cy - 12, 24, 24, LAYER_OBJECT_IMAGE);
+      return;
+    }
+    if (kind === "arms" && this.hasTexture("icon_weapon_blade")) {
+      this.drawTexture("icon_weapon_blade", cx - 12, cy - 12, 24, 24, LAYER_OBJECT_IMAGE);
+      return;
+    }
+    if (kind === "magic" && this.hasTexture("icon_relic_gale")) {
+      this.drawTexture("icon_relic_gale", cx - 12, cy - 12, 24, 24, LAYER_OBJECT_IMAGE);
+      return;
+    }
+    this.g.fillStyle(0x101827, 1).fillRect(cx - 14, cy - 14, 28, 28);
+    this.g.lineStyle(2, 0xffffff, 0.55).strokeRect(cx - 14, cy - 14, 28, 28);
+    this.g.fillStyle(color, 1);
+    if (kind === "inn") {
+      this.g.fillRect(cx - 11, cy + 1, 22, 8);
+      this.g.fillStyle(0xffffff, 1).fillRect(cx - 10, cy - 6, 8, 7);
+      this.g.fillStyle(0xfff1a2, 1).fillCircle(cx + 7, cy - 7, 5);
+      this.g.fillStyle(0x101827, 1).fillCircle(cx + 10, cy - 9, 5);
+    } else if (kind === "clinic") {
+      this.g.fillRect(cx - 4, cy - 12, 8, 24);
+      this.g.fillRect(cx - 12, cy - 4, 24, 8);
+    } else {
+      this.g.fillRect(cx - 10, cy - 10, 20, 20);
+    }
+  }
+
+  private drawTownService(service: TownServiceDef, ox: number, oy: number) {
+    const cx = ox + service.x * TILE + TILE / 2;
+    const zoneX = ox + (service.x - 1) * TILE;
+    const zoneY = oy + (service.y - 1) * TILE;
+    this.g.fillStyle(0xfff0b8, 0.12).fillRect(zoneX, zoneY, TILE * 3, TILE * 3);
+    this.g.lineStyle(1, service.color, 0.35).strokeRect(zoneX + 2, zoneY + 2, TILE * 3 - 4, TILE * 3 - 4);
+
+    const kioskX = cx - 46;
+    const kioskY = oy + service.y * TILE - 34;
+    this.g.fillStyle(0x172033, 0.55).fillRect(kioskX + 5, kioskY + 8, 92, 62);
+    this.g.fillStyle(service.color, 1).fillRect(kioskX, kioskY, 92, 48);
+    this.g.fillStyle(service.accent, 1).fillRect(kioskX, kioskY + 34, 92, 22);
+    this.g.fillStyle(0x111827, 0.3).fillRect(kioskX + 8, kioskY + 8, 76, 12);
+    this.g.lineStyle(2, 0x172033, 1).strokeRect(kioskX, kioskY, 92, 56);
+    this.g.lineStyle(2, 0xfff5c8, 0.75).lineBetween(kioskX + 5, kioskY + 4, kioskX + 87, kioskY + 4);
+
+    this.drawTownServiceIcon(service.kind, cx, kioskY + 24, service.accent);
+
+    const signW = service.kind === "clinic" ? 104 : 96;
+    const signCx = cx + (service.kind === "clinic" ? -22 : 0);
+    const signX = signCx - signW / 2;
+    const signY = kioskY - 26;
+    this.g.fillStyle(0x111827, 1).fillRect(signX, signY, signW, 24);
+    this.g.fillStyle(0xfff1bb, 1).fillRect(signX + 3, signY + 3, signW - 6, 18);
+    this.g.lineStyle(2, 0x412b1c, 1).strokeRect(signX, signY, signW, 24);
+    this.text(signCx, signY + 3, service.label, 15, "#172033", "center", { strokeThickness: 0, wordWrapWidth: signW });
+  }
+
+  private drawTownDecor(ox: number, oy: number) {
+    this.drawTownRug(ox + 7 * TILE, oy + 7 * TILE + 4, TILE * 7, TILE * 2, 0x7f3142);
+    this.drawTownTable(ox + 10 * TILE - 16, oy + 10 * TILE - 8);
+    this.drawTownCrate(ox + 17 * TILE + 5, oy + 10 * TILE + 2);
+    this.drawTownBarrel(ox + 18 * TILE + 5, oy + 11 * TILE);
+    this.drawTownCrate(ox + 2 * TILE + 5, oy + 11 * TILE + 2);
+    this.drawTownLamp(ox + 2 * TILE + 2, oy + 2 * TILE);
+    this.drawTownLamp(ox + 18 * TILE + 2, oy + 2 * TILE);
+    this.drawTownLamp(ox + 2 * TILE + 2, oy + 12 * TILE - 4);
+    this.drawTownLamp(ox + 18 * TILE + 2, oy + 12 * TILE - 4);
+  }
+
+  private drawTownExit(ox: number, oy: number) {
+    const x = ox + 9 * TILE;
+    const y = oy + 14 * TILE;
+    this.g.fillStyle(0x07101f, 1).fillRect(x, y - 6, TILE * 3, TILE + 6);
+    this.g.fillStyle(0x1d2b44, 1).fillRect(x + 10, y - 2, TILE * 3 - 20, TILE + 2);
+    this.g.fillStyle(0xf5d27c, 1).fillRect(x + 4, y - 8, TILE * 3 - 8, 5);
+    this.g.lineStyle(2, 0x0b1324, 1).strokeRect(x, y - 6, TILE * 3, TILE + 6);
+    this.text(x + TILE * 1.5, y - 28, "Exit", 14, "#fff2a8", "center", { wordWrapWidth: 90 });
+  }
+
+  private drawTown() {
+    const town = this.towns()[this.currentTown];
+    const ox = 144;
+    const oy = 40;
+    const roomW = 21 * TILE;
+    const roomH = 15 * TILE;
+
+    this.g.fillStyle(0x14223b, 1).fillRect(0, 0, WIDTH, HEIGHT);
+    this.g.fillStyle(0x0a1020, 0.45).fillRect(ox - 18, oy - 18, roomW + 36, roomH + 36);
+    for (let y = 0; y < 15; y += 1) {
+      for (let x = 0; x < 21; x += 1) {
+        const px = ox + x * TILE;
+        const py = oy + y * TILE;
+        const wall = x === 0 || y === 0 || x === 20 || y === 14;
+        if (wall) this.drawTownWallTile(px, py, x, y);
+        else this.drawTownFloorTile(px, py, x, y);
+      }
+    }
+    this.g.fillStyle(parseInt(town.palette[2].slice(1), 16), 0.18).fillRect(ox + TILE, oy + TILE, roomW - TILE * 2, 5);
+    this.drawTownExit(ox, oy);
+    this.drawTownDecor(ox, oy);
+    TOWN_SERVICES.forEach((service) => this.drawTownService(service, ox, oy));
+    town.npcs.forEach((npc, idx) => this.drawNpc(ox + npc.x * TILE + 6, oy + npc.y * TILE + 5, idx));
+    const leaderPos = this.visualExplorePos("town");
+    this.drawLeader(ox + leaderPos.x * TILE + 4, oy + leaderPos.y * TILE + 3);
+    this.drawHud(town.name);
+    this.drawPrompt("Interact / south gate exits");
+  }
+
+  private drawDungeon() {
+    const dungeon = this.dungeons()[this.currentDungeon];
+    this.g.fillStyle(0x050812, 1).fillRect(0, 0, WIDTH, HEIGHT);
+    const floor = dungeon.floors[this.dungeonFloor];
+    const leaderPos = this.visualExplorePos("dungeon");
+    const cam = this.cameraFor(leaderPos, floor[0].length, floor.length);
+    for (let y = 0; y < floor.length; y += 1) {
+      for (let x = 0; x < floor[y].length; x += 1) {
+        const sx = x * TILE - cam.x;
+        const sy = y * TILE - cam.y;
+        if (sx < -TILE || sy < -TILE || sx > WIDTH || sy > HEIGHT) continue;
+        this.drawDungeonTile(floor[y][x], sx, sy, dungeon, x, y);
+      }
+    }
+    this.drawLeader(leaderPos.x * TILE - cam.x + 4, leaderPos.y * TILE - cam.y + 3);
+    this.drawHud(`${dungeon.name} F${this.dungeonFloor + 1}`);
+    this.drawPrompt("Explore / interact");
+  }
+
+  private drawBattle() {
+    if (!this.battle) return;
+    this.drawBattleBackdrop();
+    const selectedEnemy = this.selectedBattleEnemy();
+    this.battle.enemies.forEach((enemy, idx) => {
+      const slot = this.enemyBattleSlot(enemy, idx);
+      const targeted = selectedEnemy?.uid === enemy.uid;
+      this.drawBattleEnemy(enemy, slot.x, slot.y, slot.size, targeted);
+    });
+    this.party.forEach((member, idx) => {
+      const active = this.currentBattleEntry()?.side === "party" && this.currentBattleEntry()?.actorId === member.id && this.battle?.phase !== "resolving";
+      this.drawPartyBattler(member, 728 + idx * 46, 122 + idx * 70, idx, active);
+      this.drawPortrait(member, 860, 76 + idx * 84, 1.4);
+    });
+    this.drawBattleTargetPanel(16, 390, 252, 132);
+    this.drawBattleCommandPanel(278, 390, 218, 132);
+    this.drawBattleStatusPanel(506, 390, 438, 132);
+  }
+
+  private drawBattleBackdrop() {
+    this.g.fillStyle(0x0a1422, 1).fillRect(0, 0, WIDTH, HEIGHT);
+    this.g.fillStyle(0x182b40, 1).fillRect(0, 0, WIDTH, 110);
+    this.g.fillStyle(0x233d4b, 1).fillRect(0, 110, WIDTH, 62);
+    this.g.fillStyle(0x10251d, 1).fillRect(0, 155, WIDTH, 82);
+    for (let i = 0; i < 18; i += 1) {
+      const x = (i * 61) % WIDTH;
+      const h = 48 + (i % 5) * 17;
+      this.g.fillStyle(0x152319, 1).fillRect(x, 105 - (i % 3) * 10, 13, h);
+      this.g.fillStyle(i % 2 ? 0x183a25 : 0x214b2e, 1).fillCircle(x + 8, 94 - (i % 3) * 10, 34 + (i % 4) * 5);
+      this.g.fillStyle(0x0c1c14, 0.55).fillCircle(x + 24, 118, 24);
+    }
+    this.g.fillStyle(0x3a5734, 1).fillRect(0, 218, WIDTH, 172);
+    this.g.fillStyle(0x667448, 1).fillEllipse(430, 328, 840, 128);
+    this.g.fillStyle(0x856f4c, 1).fillEllipse(426, 330, 790, 92);
+    this.g.fillStyle(0x4d653c, 0.8).fillRect(0, 356, WIDTH, 34);
+    for (let i = 0; i < 72; i += 1) {
+      const x = (i * 37) % WIDTH;
+      const y = 226 + ((i * 19) % 142);
+      const color = i % 3 === 0 ? 0x6c9a55 : i % 3 === 1 ? 0x2d552f : 0xa98b5a;
+      this.g.fillStyle(color, 0.55).fillRect(x, y, i % 2 ? 9 : 5, 2);
+    }
+    this.g.fillStyle(0x000000, 0.28).fillRect(0, 0, WIDTH, HEIGHT);
+  }
+
+  private enemyBattleSlot(enemy: EnemyState, idx: number): { x: number; y: number; size: number } {
+    if (enemy.boss) return { x: 132, y: 112, size: 132 };
+    const slots = [
+      { x: 86, y: 116, size: 108 },
+      { x: 244, y: 170, size: 108 },
+      { x: 90, y: 250, size: 108 }
+    ];
+    return slots[idx % slots.length];
+  }
+
+  private selectedBattleEnemy(): EnemyState | undefined {
+    if (!this.battle || this.battle.phase !== "target") return undefined;
+    return this.battle.enemies.filter((enemy) => enemy.hp > 0)[this.battle.selected];
+  }
+
+  private drawBattleEnemy(enemy: EnemyState, x: number, y: number, size: number, targeted: boolean) {
+    this.drawActorShadow(x + size / 2, y + size - 4, size * 0.82, 15);
+    if (targeted) {
+      this.g.fillStyle(0xfff0a8, 0.16).fillRect(x - 10, y - 10, size + 20, size + 36);
+      this.g.lineStyle(3, 0xfff0a8, 1).strokeRect(x - 10, y - 10, size + 20, size + 36);
+    }
+    this.drawEnemySprite(enemy, x, y, enemy.boss ? 5 : 4, size);
+    this.g.fillStyle(0x07101d, 0.82).fillRect(x - 6, y + size + 2, size + 12, 36);
+    this.g.lineStyle(1, 0xffffff, enemy.hp <= 0 ? 0.2 : 0.55).strokeRect(x - 6, y + size + 2, size + 12, 36);
+    this.text(x, y + size + 5, enemy.name, 13, enemy.hp <= 0 ? "#7a8190" : "#ffffff", "left", {
+      strokeThickness: 2,
+      wordWrapWidth: size + 4
+    });
+    this.drawBar(x, y + size + 25, size, 8, enemy.hp, enemy.maxHp, 0xd95252);
+  }
+
+  private drawPartyBattler(member: CharacterState, x: number, y: number, idx: number, active: boolean) {
+    const palettes = {
+      arlen: [0xf0c18d, 0xc9433f, 0xe9edf7, 0x362a4b],
+      mira: [0xf1d0aa, 0xf5f2e8, 0x5fac73, 0x314c33],
+      kael: [0xe1b284, 0x1c365d, 0xf0b13e, 0x121827]
+    }[member.id];
+    const alpha = member.hp <= 0 ? 0.36 : 1;
+    this.drawActorShadow(x + 22, y + 62, 54, 13);
+    if (active) {
+      this.g.fillStyle(0xfff0a8, 0.16).fillEllipse(x + 22, y + 62, 66, 20);
+      this.g.lineStyle(3, 0xfff0a8, 0.9).strokeEllipse(x + 22, y + 62, 66, 20);
+    }
+    this.g.fillStyle(0x050812, alpha).fillRect(x + 12, y + 10, 24, 42);
+    this.g.fillStyle(palettes[0], alpha).fillRect(x + 14, y, 18, 18);
+    this.g.fillStyle(palettes[1], alpha).fillRect(x + 9, y + 18, 28, 31);
+    this.g.fillStyle(palettes[2], alpha).fillRect(x + 16, y + 24, 10, 25);
+    this.g.fillStyle(palettes[3], alpha).fillRect(x + 9, y + 49, 9, 12 + (idx % 2));
+    this.g.fillRect(x + 28, y + 49, 9, 12 + ((idx + 1) % 2));
+    if (member.id === "mira") {
+      this.g.lineStyle(3, 0xeaf7ff, alpha).lineBetween(x + 38, y + 14, x + 48, y + 49);
+      this.g.fillStyle(0x8ee8ff, alpha).fillCircle(x + 39, y + 13, 5);
+    } else if (member.id === "kael") {
+      this.g.fillStyle(0xf8d45a, alpha).fillTriangle(x + 34, y + 14, x + 48, y + 20, x + 36, y + 26);
+    } else {
+      this.g.fillStyle(0xdfe7ee, alpha).fillRect(x + 31, y + 22, 20, 6);
+      this.g.fillStyle(0x657081, alpha).fillRect(x + 48, y + 20, 4, 10);
+    }
+  }
+
+  private drawBattleTargetPanel(x: number, y: number, w: number, h: number) {
+    if (!this.battle) return;
+    this.drawPanel(x, y, w, h);
+    const target = this.selectedBattleEnemy();
+    this.text(x + 16, y + 14, target ? "Target" : "Battle", 18, "#fff2a8");
+    if (target) {
+      this.text(x + 16, y + 42, target.name, 18, "#ffffff");
+      this.text(x + 16, y + 70, `HP ${target.hp}/${target.maxHp}`, 15, "#dce9ff");
+      this.drawBar(x + 16, y + 94, w - 32, 12, target.hp, target.maxHp, 0xd95252);
+    } else {
+      this.battle!.log.slice(-4).forEach((line, idx) =>
+        this.text(x + 16, y + 42 + idx * 20, line, 14, "#ffffff", "left", { wordWrapWidth: w - 32 })
+      );
+    }
+  }
+
+  private drawBattleCommandPanel(x: number, y: number, w: number, h: number) {
+    if (!this.battle) return;
+    this.drawPanel(x, y, w, h);
+    const actor = this.currentBattleActor();
+    if (["command", "target", "spell", "item", "allyTarget"].includes(this.battle.phase) && actor) {
+      const prompt =
+        this.battle.phase === "command"
+          ? `${actor.name}'s turn`
+          : this.battle.phase === "target"
+            ? `${actor.name}: choose target`
+            : this.battle.phase === "spell"
+              ? `${actor.name}: choose magic`
+            : this.battle.phase === "item"
+              ? `${actor.name}: choose item`
+              : `${actor.name}: choose ally`;
+      this.text(x + 16, y + 14, prompt, 16, "#fff2a8", "left", { wordWrapWidth: w - 32 });
+      this.battleOptions().forEach((option, idx) => {
+        const selected = idx === this.battle!.selected;
+        if (selected) this.drawCursor(x + 13, y + 43 + idx * 17);
+        const prefix = selected && !this.hasTexture("ui_cursor_arrow") ? ">" : " ";
+        this.text(x + 34, y + 39 + idx * 17, `${prefix} ${option}`, 13, "#ffffff", "left", { wordWrapWidth: w - 44 });
+      });
+    } else {
+      this.text(x + 16, y + 14, this.battle.phase === "resolving" ? this.currentBattleActorName() : "Continue", 17, "#fff2a8");
+      this.text(x + 16, y + 48, this.battle.phase === "log" ? "Enter continues" : "Resolving...", 16, "#ffffff");
+    }
+  }
+
+  private drawBattleStatusPanel(x: number, y: number, w: number, h: number) {
+    if (!this.battle) return;
+    this.drawPanel(x, y, w, h);
+    this.text(x + 16, y + 14, `Now: ${this.currentBattleActorName()}`, 17, "#fff2a8");
+    this.party.forEach((c, idx) => {
+      const rowY = y + 42 + idx * 24;
+      const active = this.currentBattleEntry()?.side === "party" && this.currentBattleEntry()?.actorId === c.id && this.battle?.phase !== "resolving";
+      const statuses = Object.keys(c.statuses).filter((s) => c.statuses[s as keyof StatusState]).join(" ") || "ok";
+      if (active) this.ui.fillStyle(0xfff0a8, 0.12).fillRect(x + 10, rowY - 3, w - 20, 22);
+      this.text(x + 16, rowY, c.name, 14, c.hp <= 0 ? "#858b98" : "#ffffff", "left", { wordWrapWidth: 92 });
+      this.text(x + 104, rowY, `${c.hp}/${c.maxHp}`, 14, "#dce9ff");
+      this.drawBar(x + 178, rowY + 5, 104, 8, c.hp, c.maxHp, 0x54bb77);
+      this.text(x + 294, rowY, `T ${c.charges["1"].current}/${c.charges["2"].current}/${c.charges["3"].current} ${statuses}`, 13, "#c5d2f2", "left", {
+        wordWrapWidth: 126
+      });
+    });
+    this.text(x + 16, y + h - 24, `Next: ${this.turnPreviewText()}`, 13, "#cbd6ff", "left", { wordWrapWidth: w - 32 });
+  }
+
+  private drawMenuScreen() {
+    if (this.previousMode === "world") this.drawWorld();
+    else if (this.previousMode === "town") this.drawTown();
+    else if (this.previousMode === "dungeon") this.drawDungeon();
+    else this.g.fillStyle(0x050812, 1).fillRect(0, 0, WIDTH, HEIGHT);
+    if (!this.menu) return;
+    this.clearText();
+    this.ui.fillStyle(0x02040a, 0.72).fillRect(0, 0, WIDTH, HEIGHT);
+    this.drawPanel(155, 58, 650, 430);
+    this.text(184, 96, this.menu.title, 24, "#fff2a8");
+    const startY = 144;
+    this.menu.options.forEach((option, idx) => {
+      const disabled = option.disabled?.() ?? false;
+      const label = typeof option.label === "function" ? option.label() : option.label;
+      const selected = idx === this.menu!.selected;
+      if (selected) this.drawCursor(176, startY + idx * 28 + 4);
+      const prefix = selected && !this.hasTexture("ui_cursor_arrow") ? ">" : " ";
+      this.text(194, startY + idx * 28, `${prefix} ${label}`, 18, disabled ? "#6f7486" : "#ffffff");
+    });
+    if (this.menu.footer) {
+      const footer = typeof this.menu.footer === "function" ? this.menu.footer() : this.menu.footer;
+      this.text(184, 454, footer, 14, "#b8c4e0");
+    }
+  }
+
+  private drawDialogue() {
+    if (this.previousMode === "dungeon") this.drawDungeon();
+    else if (this.previousMode === "town") this.drawTown();
+    else if (this.previousMode === "title") this.drawTitle();
+    else this.drawWorld();
+    if (!this.dialogue) return;
+    this.clearText();
+    this.ui.fillStyle(0x02040a, 0.38).fillRect(0, 0, WIDTH, HEIGHT);
+    this.drawPanel(56, 324, WIDTH - 112, 184);
+    this.text(84, 356, this.dialogue.lines[this.dialogue.index], 20, "#ffffff");
+    this.text(WIDTH - 256, 474, "Enter / Z", 14, "#aab3c8");
+  }
+
+  private drawGameOver() {
+    this.g.fillStyle(0x050407, 1).fillRect(0, 0, WIDTH, HEIGHT);
+    this.text(WIDTH / 2, 190, "GAME OVER", 46, "#f07178", "center");
+    this.text(WIDTH / 2, 270, "Enter loads your last save. Escape returns to title.", 20, "#ffffff", "center");
+  }
+
+  private drawEnding() {
+    this.g.fillStyle(0x07111a, 1).fillRect(0, 0, WIDTH, HEIGHT);
+    for (let i = 0; i < 80; i += 1) {
+      this.g.fillStyle(i % 2 ? 0xffeaa8 : 0x95e7ff, 0.55).fillRect((i * 97) % WIDTH, (i * 53) % HEIGHT, 3, 3);
+    }
+    this.drawPixelCrystal(WIDTH / 2 - 28, 72, 3);
+    this.text(WIDTH / 2, 170, "Asterra Wakes", 40, "#fff2a8", "center");
+    this.text(WIDTH / 2, 240, "The Root drinks, the Flame warms, the Tide sings, and the Gale carries dawn.", 20, "#ffffff", "center");
+    this.text(WIDTH / 2, 310, "Arlen, Mira, and Kael return their oath to the road, where new stories wait.", 20, "#dce9ff", "center");
+    this.text(WIDTH / 2, 430, "Enter returns to title.", 16, "#aab3c8", "center");
+  }
+
+  private drawWorldTile(terrain: Terrain, sx: number, sy: number, x: number, y: number) {
+    if (terrain === "plains") this.drawWorldPlainsTile(sx, sy, x, y);
+    else if (terrain === "forest") this.drawWorldForestTile(sx, sy, x, y);
+    else if (terrain === "hills") this.drawWorldHillsTile(sx, sy, x, y);
+    else if (terrain === "mountain") this.drawWorldMountainTile(sx, sy, x, y);
+    else if (terrain === "water" || terrain === "deepWater") this.drawWorldWaterTile(terrain, sx, sy, x, y);
+    else if (terrain === "sand") this.drawWorldSandTile(sx, sy, x, y);
+    else this.drawWorldRoadTile(sx, sy, x, y);
+    this.drawWorldCoastEdges(terrain, sx, sy, x, y);
+  }
+
+  private worldTerrainAt(x: number, y: number): Terrain | undefined {
+    return this.world[y]?.[x];
+  }
+
+  private isWaterTerrain(terrain?: Terrain): boolean {
+    return terrain === "water" || terrain === "deepWater";
+  }
+
+  private isLandTerrain(terrain?: Terrain): boolean {
+    return !!terrain && !this.isWaterTerrain(terrain);
+  }
+
+  private drawWorldPlainsTile(sx: number, sy: number, x: number, y: number) {
+    const n = seededNoise(x, y, 11);
+    this.g.fillStyle(n > 0.55 ? 0x58b347 : 0x4fab43, 1).fillRect(sx, sy, TILE, TILE);
+    this.g.fillStyle(0x78cf5b, 0.5).fillRect(sx + 2, sy + 2, TILE - 4, 3);
+    this.g.fillStyle(0x2f7b34, 0.4).fillRect(sx + 1, sy + TILE - 5, TILE - 2, 4);
+    for (let i = 0; i < 4; i += 1) {
+      const gx = sx + 3 + Math.floor(seededNoise(x + i, y, 21) * 24);
+      const gy = sy + 6 + Math.floor(seededNoise(x, y + i, 22) * 18);
+      this.g.fillStyle(i % 2 ? 0x84db67 : 0x347e36, 0.72).fillRect(gx, gy, i % 2 ? 8 : 5, 2);
+    }
+  }
+
+  private drawWorldForestTile(sx: number, sy: number, x: number, y: number) {
+    this.g.fillStyle(0x235c32, 1).fillRect(sx, sy, TILE, TILE);
+    this.g.fillStyle(0x153b24, 1).fillRect(sx, sy + 23, TILE, 9);
+    for (let i = 0; i < 5; i += 1) {
+      const tx = sx + 2 + Math.floor(seededNoise(x + i, y, 31) * 22);
+      const ty = sy + 2 + Math.floor(seededNoise(x, y + i, 32) * 17);
+      this.g.fillStyle(0x12351f, 1).fillRect(tx + 2, ty + 10, 5, 12);
+      this.g.fillStyle(i % 2 ? 0x2f8a3e : 0x1f6f34, 1).fillCircle(tx + 6, ty + 7, 9);
+      this.g.fillStyle(0x62b84e, 0.7).fillRect(tx + 4, ty + 2, 6, 3);
+    }
+    this.g.fillStyle(0x0e2419, 0.45).fillRect(sx, sy + 27, TILE, 5);
+  }
+
+  private drawWorldHillsTile(sx: number, sy: number, x: number, y: number) {
+    this.g.fillStyle(0x77a44f, 1).fillRect(sx, sy, TILE, TILE);
+    this.g.fillStyle(0x947848, 1).fillEllipse(sx + 12, sy + 20, 28, 16);
+    this.g.fillStyle(0xb79a5a, 1).fillEllipse(sx + 20, sy + 16, 22, 13);
+    this.g.fillStyle(0x4f6d34, 0.5).fillRect(sx + 1, sy + 25, TILE - 2, 5);
+    if (seededNoise(x, y, 41) > 0.45) {
+      this.g.lineStyle(2, 0xe6cc80, 0.72).lineBetween(sx + 7, sy + 15, sx + 19, sy + 10);
+    }
+  }
+
+  private drawWorldMountainTile(sx: number, sy: number, x: number, y: number) {
+    this.g.fillStyle(0x5d674f, 1).fillRect(sx, sy, TILE, TILE);
+    this.g.fillStyle(0x3f3c37, 1).fillTriangle(sx + 1, sy + 29, sx + 12, sy + 5, sx + 24, sy + 29);
+    this.g.fillStyle(0x5d584e, 1).fillTriangle(sx + 9, sy + 30, sx + 22, sy + 2, sx + 32, sy + 30);
+    this.g.fillStyle(0xcfcfbf, 1).fillTriangle(sx + 9, sy + 11, sx + 12, sy + 5, sx + 16, sy + 12);
+    this.g.fillStyle(0xf2f2db, 1).fillTriangle(sx + 19, sy + 9, sx + 22, sy + 2, sx + 26, sy + 10);
+    this.g.fillStyle(0x2c2b2a, 0.38).fillRect(sx + 2, sy + 27, TILE - 4, 4);
+    if (seededNoise(x, y, 44) > 0.62) this.g.fillStyle(0x806f4d, 0.55).fillRect(sx + 5, sy + 24, 7, 3);
+  }
+
+  private drawWorldWaterTile(terrain: Terrain, sx: number, sy: number, x: number, y: number) {
+    const deep = terrain === "deepWater";
+    this.g.fillStyle(deep ? 0x174a9c : 0x237cc5, 1).fillRect(sx, sy, TILE, TILE);
+    this.g.fillStyle(deep ? 0x0d2d68 : 0x155da1, 0.45).fillRect(sx, sy + 23, TILE, 9);
+    for (let i = 0; i < 3; i += 1) {
+      const wx = sx + 3 + Math.floor(seededNoise(x + i, y, 51) * 20);
+      const wy = sy + 5 + i * 8 + Math.floor(seededNoise(x, y + i, 52) * 3);
+      this.g.lineStyle(2, deep ? 0x5f8dea : 0x8ee8ff, 0.75).lineBetween(wx, wy, wx + 9, wy - 2);
+      this.g.lineStyle(1, deep ? 0x0b244d : 0x0e4f88, 0.45).lineBetween(wx + 3, wy + 4, wx + 14, wy + 3);
+    }
+  }
+
+  private drawWorldSandTile(sx: number, sy: number, x: number, y: number) {
+    const n = seededNoise(x, y, 61);
+    this.g.fillStyle(n > 0.5 ? 0xe8cd69 : 0xe1bf59, 1).fillRect(sx, sy, TILE, TILE);
+    this.g.fillStyle(0xffe98a, 0.52).fillRect(sx + 2, sy + 2, TILE - 4, 3);
+    this.g.lineStyle(2, 0xb89043, 0.45).lineBetween(sx + 4, sy + 13, sx + 16, sy + 10);
+    this.g.lineStyle(2, 0xf7df7a, 0.5).lineBetween(sx + 13, sy + 22, sx + 28, sy + 18);
+    if (n > 0.68) this.g.fillStyle(0xb4883d, 0.4).fillRect(sx + 6, sy + 25, 6, 2);
+  }
+
+  private drawWorldRoadTile(sx: number, sy: number, x: number, y: number) {
+    this.g.fillStyle(0x70a64b, 1).fillRect(sx, sy, TILE, TILE);
+    this.g.fillStyle(0xb69863, 1).fillRect(sx, sy + 9, TILE, 15);
+    this.g.fillStyle(0xd2bb82, 0.78).fillRect(sx, sy + 10, TILE, 3);
+    this.g.fillStyle(0x7d643f, 0.42).fillRect(sx, sy + 21, TILE, 3);
+    if (seededNoise(x, y, 71) > 0.5) this.g.fillStyle(0x5b4a35, 0.5).fillRect(sx + 18, sy + 17, 4, 3);
+  }
+
+  private drawWorldCoastEdges(terrain: Terrain, sx: number, sy: number, x: number, y: number) {
+    const edges = [
+      { dx: -1, dy: 0, side: "left" },
+      { dx: 1, dy: 0, side: "right" },
+      { dx: 0, dy: -1, side: "top" },
+      { dx: 0, dy: 1, side: "bottom" }
+    ] as const;
+    for (const edge of edges) {
+      const neighbor = this.worldTerrainAt(x + edge.dx, y + edge.dy);
+      if (this.isLandTerrain(terrain) && this.isWaterTerrain(neighbor)) {
+        this.g.fillStyle(0xe8c36b, 1);
+        if (edge.side === "left") this.g.fillRect(sx, sy, 4, TILE);
+        if (edge.side === "right") this.g.fillRect(sx + TILE - 4, sy, 4, TILE);
+        if (edge.side === "top") this.g.fillRect(sx, sy, TILE, 4);
+        if (edge.side === "bottom") this.g.fillRect(sx, sy + TILE - 4, TILE, 4);
+      }
+      if (this.isWaterTerrain(terrain) && this.isLandTerrain(neighbor)) {
+        this.g.fillStyle(0x9cf3ff, 0.72);
+        if (edge.side === "left") this.g.fillRect(sx, sy, 3, TILE);
+        if (edge.side === "right") this.g.fillRect(sx + TILE - 3, sy, 3, TILE);
+        if (edge.side === "top") this.g.fillRect(sx, sy, TILE, 3);
+        if (edge.side === "bottom") this.g.fillRect(sx, sy + TILE - 3, TILE, 3);
+      }
+    }
+  }
+
+  private dungeonObjectTexture(tile: string, dungeon: DungeonDef, tileX: number, tileY: number): AssetKey | undefined {
+    if (tile === "C") return this.isDungeonChestOpen(dungeon, this.dungeonFloor, tileX, tileY) ? "chest_open" : "chest_closed";
+    if (tile === "K") return "switch_floor";
+    if (tile === "D") return this.puzzleFlags.has(`${this.currentDungeon}-switch`) ? "dungeon_gate_open" : "dungeon_gate_closed";
+    if (tile === "S") return "dungeon_stairs";
+    if (tile === "E") return "dungeon_exit";
+    if (tile === "B") return "boss_relic_seal";
+    return undefined;
+  }
+
+  private isDungeonChestOpen(dungeon: DungeonDef, floorIndex: number, tileX: number, tileY: number): boolean {
+    let count = 0;
+    for (let f = 0; f <= floorIndex; f += 1) {
+      const floor = dungeon.floors[f];
+      for (let y = 0; y < floor.length; y += 1) {
+        for (let x = 0; x < floor[y].length; x += 1) {
+          if (floor[y][x] !== "C") continue;
+          if (f === floorIndex && x === tileX && y === tileY) {
+            const reward = dungeon.chestRewards[count % dungeon.chestRewards.length];
+            return this.openedChests.has(`${dungeon.id}-${floorIndex}-${tileX}-${tileY}-${reward.id}`);
+          }
+          count += 1;
+        }
+      }
+    }
+    return false;
+  }
+
+  private drawDungeonTile(tile: string, sx: number, sy: number, dungeon: DungeonDef, tileX: number, tileY: number) {
+    if (tile === "#") {
+      if (this.drawTileTexture("dungeon_wall_base", sx, sy)) return;
+      this.g.fillStyle(dungeon.palette.wall, 1).fillRect(sx, sy, TILE, TILE);
+      this.g.fillStyle(dungeon.palette.accent, 0.25).fillRect(sx + 4, sy + 4, 7, 7);
+      return;
+    }
+    const drewFloor = this.drawTileTexture(DUNGEON_FLOOR_TEXTURES[dungeon.id] ?? "dungeon_floor_moss", sx, sy);
+    if (!drewFloor) {
+      this.g.fillStyle(dungeon.palette.floor, 1).fillRect(sx, sy, TILE, TILE);
+      this.g.fillStyle(0xffffff, 0.05).fillRect(sx + 4, sy + 4, TILE - 8, TILE - 8);
+    }
+    const objectKey = this.dungeonObjectTexture(tile, dungeon, tileX, tileY);
+    if (this.drawTileTexture(objectKey, sx, sy, LAYER_OBJECT_IMAGE)) return;
+    if (tile === "C") {
+      this.g.fillStyle(dungeon.palette.chest, 1).fillRect(sx + 7, sy + 10, 18, 14);
+      this.g.fillStyle(0x3a2111, 1).fillRect(sx + 7, sy + 17, 18, 3);
+    }
+    if (tile === "K") {
+      this.g.fillStyle(dungeon.palette.accent, 1).fillRect(sx + 10, sy + 9, 12, 16);
+      this.g.fillStyle(0xffffff, 0.55).fillRect(sx + 14, sy + 6, 4, 7);
+    }
+    if (tile === "D") {
+      const open = this.puzzleFlags.has(`${this.currentDungeon}-switch`);
+      this.g.fillStyle(open ? dungeon.palette.floor : dungeon.palette.gate, 1).fillRect(sx + 3, sy + 3, TILE - 6, TILE - 6);
+      if (!open) this.g.fillStyle(0x000000, 0.35).fillRect(sx + 14, sy + 3, 4, TILE - 6);
+    }
+    if (tile === "S") {
+      this.g.fillStyle(dungeon.palette.accent, 1).fillRect(sx + 8, sy + 8, 16, 16);
+      this.g.fillStyle(0x050812, 0.5).fillRect(sx + 12, sy + 12, 8, 8);
+    }
+    if (tile === "E") {
+      this.g.fillStyle(0x050812, 0.7).fillRect(sx + 5, sy + 3, 22, 26);
+    }
+    if (tile === "B") {
+      this.g.fillStyle(0xf5e17d, 0.7).fillRect(sx + 9, sy + 7, 14, 18);
+    }
+  }
+
+  private drawLocationIcon(loc: LocationDef, sx: number, sy: number) {
+    this.drawActorShadow(sx + 16, sy + 28, 34, 9);
+    if (loc.id === "dawnford") {
+      this.g.fillStyle(0x39434f, 1).fillRect(sx + 1, sy + 5, 30, 24);
+      this.g.fillStyle(0x6d7682, 1).fillRect(sx + 5, sy - 2, 8, 31);
+      this.g.fillRect(sx + 19, sy - 2, 8, 31);
+      this.g.fillStyle(0xbec5c8, 1).fillRect(sx + 8, sy + 3, 16, 8);
+      this.g.fillStyle(0xdf6132, 1).fillTriangle(sx + 5, sy - 2, sx + 9, sy - 11, sx + 13, sy - 2);
+      this.g.fillTriangle(sx + 19, sy - 2, sx + 23, sy - 11, sx + 27, sy - 2);
+      this.g.fillStyle(0x121820, 1).fillRect(sx + 12, sy + 16, 8, 13);
+      this.g.fillStyle(0xe9edf0, 1).fillRect(sx + 4, sy + 24, 24, 3);
+      return;
+    }
+    if (loc.kind === "town") {
+      const roof = loc.id === "brinewick" ? 0x4c9fc7 : loc.id === "sunbarrow" ? 0xf08a2e : 0xd9542e;
+      for (let i = 0; i < 3; i += 1) {
+        const hx = sx + 3 + i * 9;
+        const hy = sy + 10 + (i % 2) * 6;
+        this.g.fillStyle(0xf2eee0, 1).fillRect(hx, hy + 6, 9, 10);
+        this.g.fillStyle(roof, 1).fillTriangle(hx - 1, hy + 7, hx + 4, hy, hx + 10, hy + 7);
+        this.g.fillStyle(0x263044, 0.8).fillRect(hx + 3, hy + 11, 3, 5);
+      }
+      return;
+    }
+    if (loc.kind === "gate") {
+      this.g.fillStyle(0x4b467a, 1).fillRect(sx + 4, sy + 7, 8, 22);
+      this.g.fillRect(sx + 20, sy + 7, 8, 22);
+      this.g.fillStyle(0xffdf76, 1).fillCircle(sx + 16, sy + 8, 6);
+      this.g.lineStyle(3, 0xd5c8ff, 1).lineBetween(sx + 8, sy + 9, sx + 24, sy + 9);
+      return;
+    }
+    if (loc.id === "mossCave") {
+      this.g.fillStyle(0x4a5744, 1).fillTriangle(sx + 1, sy + 29, sx + 16, sy + 4, sx + 31, sy + 29);
+      this.g.fillStyle(0x142018, 1).fillRect(sx + 9, sy + 15, 14, 14);
+      this.g.fillStyle(0x4aa44d, 1).fillRect(sx + 5, sy + 23, 6, 5);
+      return;
+    }
+    if (loc.id === "ashenKeep") {
+      this.g.fillStyle(0x454044, 1).fillRect(sx + 3, sy + 7, 26, 22);
+      this.g.fillStyle(0xdf5a2e, 1).fillRect(sx + 8, sy + 3, 5, 9);
+      this.g.fillRect(sx + 20, sy + 3, 5, 9);
+      this.g.fillStyle(0x111018, 1).fillRect(sx + 13, sy + 17, 7, 12);
+      return;
+    }
+    if (loc.id === "tideShrine") {
+      this.g.fillStyle(0xdfe8ef, 1).fillRect(sx + 5, sy + 10, 22, 17);
+      this.g.fillStyle(0x4ab3d1, 1).fillTriangle(sx + 3, sy + 10, sx + 16, sy + 2, sx + 29, sy + 10);
+      this.g.fillStyle(0x1a5e80, 1).fillRect(sx + 9, sy + 17, 4, 10);
+      this.g.fillRect(sx + 20, sy + 17, 4, 10);
+      return;
+    }
+    if (loc.id === "skyglassTower") {
+      this.g.fillStyle(0x647081, 1).fillRect(sx + 11, sy + 2, 11, 27);
+      this.g.fillStyle(0x98edf7, 1).fillTriangle(sx + 8, sy + 8, sx + 16, sy - 3, sx + 24, sy + 8);
+      this.g.fillStyle(0x273548, 1).fillRect(sx + 14, sy + 18, 5, 11);
+      return;
+    }
+    this.g.fillStyle(0x2a1d3d, 1).fillTriangle(sx + 4, sy + 29, sx + 16, sy + 2, sx + 28, sy + 29);
+    this.g.fillStyle(0xb388ff, 1).fillRect(sx + 13, sy + 8, 6, 18);
+    this.g.fillStyle(0xffdf78, 1).fillRect(sx + 11, sy + 4, 10, 4);
+  }
+
+  private drawActorShadow(x: number, y: number, width = 26, height = 8) {
+    this.g.fillStyle(0x050812, 0.34).fillEllipse(x, y, width, height);
+  }
+
+  private drawLeader(x: number, y: number) {
+    const frame = this.movement ? Math.floor(this.walkAnimElapsed / 85) % 2 : 0;
+    this.drawActorShadow(x + 12, y + 30, 34, 10);
+    this.g.lineStyle(2, 0xfff0a8, this.mode === "world" ? 0.82 : 0.45).strokeEllipse(x + 12, y + 30, 32, 10);
+    if (this.mode === "world") {
+      this.g.fillStyle(0x050812, 1).fillRect(x + 5, y + 3, 22, 29);
+      this.g.fillStyle(0x2a213a, 1).fillRect(x + 7, y + 1, 18, 9);
+      this.g.fillStyle(0xf0c18d, 1).fillRect(x + 9, y + 5, 14, 12);
+      this.g.fillStyle(0xb93434, 1).fillRect(x + 6, y + 17, 22, 13);
+      this.g.fillStyle(0xf2e9dd, 1).fillRect(x + 15, y + 17, 7, 16);
+      this.g.fillStyle(0x1c2238, 1).fillRect(x + 7, y + 30, 8, 7 + frame);
+      this.g.fillRect(x + 20, y + 30, 8, 7 + (1 - frame));
+      this.g.fillStyle(0xffffff, 1).fillRect(x + 11, y + 10, 3, 3);
+      this.g.fillRect(x + 19, y + 10, 3, 3);
+      return;
+    }
+    if (this.hasTexture("char_arlen_map")) {
+      const row = this.lastMoveDir.x < 0 ? 1 : this.lastMoveDir.x > 0 ? 2 : this.lastMoveDir.y < 0 ? 3 : 0;
+      this.drawCroppedTexture(
+        "char_arlen_map",
+        x - 8,
+        y - 10,
+        frame * TILE_FRAME,
+        row * TILE_FRAME,
+        TILE_FRAME,
+        TILE_FRAME,
+        40,
+        40,
+        LAYER_CHARACTER_IMAGE
+      );
+      return;
+    }
+    this.g.fillStyle(0x1c2440, 1).fillRect(x + 8, y + 6, 10, 7);
+    this.g.fillStyle(0xf1c897, 1).fillRect(x + 9, y + 2, 9, 8);
+    this.g.fillStyle(0xb73b36, 1).fillRect(x + 6, y + 12, 14, 12);
+    this.g.fillStyle(0xe9edf7, 1).fillRect(x + 13, y + 13, 5, 13);
+    this.g.fillStyle(0x3a3155, 1).fillRect(x + 6, y + 24, 5, 5 + frame);
+    this.g.fillStyle(0x3a3155, 1).fillRect(x + 17, y + 24, 5, 5 + (1 - frame));
+  }
+
+  private drawNpc(x: number, y: number, idx: number) {
+    const npcTexture = NPC_TEXTURES[idx % NPC_TEXTURES.length];
+    this.drawActorShadow(x + 10, y + 27, 24, 8);
+    if (this.hasTexture(npcTexture)) {
+      this.drawCroppedTexture(npcTexture, x - 8, y - 7, 0, 0, TILE_FRAME, TILE_FRAME, 34, 34, LAYER_CHARACTER_IMAGE);
+      return;
+    }
+    const colors = [0xffd37d, 0x90e6b0, 0xbda2ff];
+    this.g.fillStyle(0xf2bd8f, 1).fillRect(x + 7, y, 10, 9);
+    this.g.fillStyle(colors[idx % colors.length], 1).fillRect(x + 5, y + 9, 14, 15);
+    this.g.fillStyle(0x2d344f, 1).fillRect(x + 6, y + 24, 5, 5);
+    this.g.fillStyle(0x2d344f, 1).fillRect(x + 15, y + 24, 5, 5);
+  }
+
+  private drawPortrait(c: CharacterState, x: number, y: number, scale: number) {
+    const portraitTexture = PORTRAIT_TEXTURES[c.id];
+    if (this.hasTexture(portraitTexture)) {
+      this.drawTexture(portraitTexture, x, y, 22 * scale, 28 * scale, LAYER_BATTLE_IMAGE, c.hp <= 0 ? 0.35 : 1);
+      return;
+    }
+    const palettes = {
+      arlen: [0xf1c897, 0xb73b36, 0xe9edf7],
+      mira: [0xf0d0b0, 0x5ca46f, 0xffffff],
+      kael: [0xe1b284, 0xa33c36, 0xffd66b]
+    }[c.id];
+    this.g.fillStyle(0x0b1020, 1).fillRect(x, y, 22 * scale, 28 * scale);
+    this.g.lineStyle(2, 0xffffff, 0.8).strokeRect(x, y, 22 * scale, 28 * scale);
+    this.g.fillStyle(palettes[0], 1).fillRect(x + 7 * scale, y + 3 * scale, 8 * scale, 8 * scale);
+    this.g.fillStyle(palettes[1], 1).fillRect(x + 5 * scale, y + 11 * scale, 12 * scale, 11 * scale);
+    this.g.fillStyle(palettes[2], 1).fillRect(x + 10 * scale, y + 12 * scale, 4 * scale, 11 * scale);
+  }
+
+  private drawEnemySprite(enemy: EnemyState, x: number, y: number, s: number, displaySize = 96) {
+    const texture = ENEMY_TEXTURES[enemy.id];
+    if (texture && this.hasTexture(texture)) {
+      this.drawTexture(texture, x, y, displaySize, displaySize, LAYER_BATTLE_IMAGE, enemy.hp <= 0 ? 0.28 : 1);
+      return;
+    }
+    const p = enemy.palette.map((c) => parseInt(c.slice(1), 16));
+    const dead = enemy.hp <= 0 ? 0.28 : 1;
+    this.g.fillStyle(p[0], dead);
+    if (enemy.sprite === "blob") {
+      this.g.fillRect(x, y + 34, 20 * s, 10 * s);
+      this.g.fillRect(x + 4 * s, y + 18, 12 * s, 16 * s);
+      this.g.fillStyle(p[1], dead).fillRect(x + 8 * s, y + 12, 8 * s, 8 * s);
+    } else if (enemy.sprite === "wing") {
+      this.g.fillTriangle(x, y + 32, x + 10 * s, y + 8, x + 16 * s, y + 36);
+      this.g.fillTriangle(x + 20 * s, y + 32, x + 10 * s, y + 8, x + 4 * s, y + 36);
+      this.g.fillStyle(p[1], dead).fillRect(x + 8 * s, y + 14, 8 * s, 18 * s);
+    } else if (enemy.sprite === "knight") {
+      this.g.fillRect(x + 5 * s, y + 8, 12 * s, 26 * s);
+      this.g.fillStyle(p[1], dead).fillRect(x + 3 * s, y + 18, 16 * s, 18 * s);
+      this.g.fillStyle(p[2], dead).fillRect(x + 8 * s, y + 11, 8 * s, 4 * s);
+    } else if (enemy.sprite === "serpent") {
+      for (let i = 0; i < 5; i += 1) {
+        this.g.fillStyle(p[i % 2], dead).fillRect(x + i * 6 * s, y + (i % 2) * 5 * s + 18, 8 * s, 8 * s);
+      }
+      this.g.fillStyle(p[2], dead).fillRect(x + 30 * s, y + 12, 10 * s, 10 * s);
+    } else if (enemy.sprite === "crown") {
+      this.g.fillRect(x + 4 * s, y + 20, 18 * s, 16 * s);
+      this.g.fillStyle(p[2], dead);
+      this.g.fillTriangle(x + 4 * s, y + 20, x + 8 * s, y + 4, x + 12 * s, y + 20);
+      this.g.fillTriangle(x + 11 * s, y + 20, x + 15 * s, y + 2, x + 19 * s, y + 20);
+    } else {
+      this.g.fillRect(x + 4 * s, y + 12, 16 * s, 22 * s);
+      this.g.fillStyle(p[1], dead).fillRect(x, y + 25, 24 * s, 10 * s);
+    }
+    this.g.fillStyle(0xffffff, dead).fillRect(x + 8 * s, y + 20, 2 * s, 2 * s);
+    this.g.fillRect(x + 14 * s, y + 20, 2 * s, 2 * s);
+  }
+
+  private drawPixelCrystal(x: number, y: number, scale: number) {
+    const colors = [0x87e6ff, 0xfff0a6, 0xa98bff, 0xff9b78];
+    colors.forEach((color, i) => {
+      const ox = (i - 1.5) * 20 * scale;
+      this.g.fillStyle(color, 1);
+      this.g.fillTriangle(x + ox + 10 * scale, y, x + ox + 20 * scale, y + 20 * scale, x + ox, y + 20 * scale);
+      this.g.fillTriangle(x + ox, y + 20 * scale, x + ox + 20 * scale, y + 20 * scale, x + ox + 10 * scale, y + 42 * scale);
+    });
+  }
+
+  private drawPanel(x: number, y: number, w: number, h: number) {
+    this.ui.fillStyle(0x020714, 0.55).fillRect(x + 4, y + 5, w, h);
+    this.ui.fillStyle(0x10275a, 0.98).fillRect(x, y, w, h);
+    this.ui.fillStyle(0x0b1733, 0.98).fillRect(x + 7, y + 7, w - 14, h - 14);
+    this.ui.fillStyle(0x1f56ac, 0.34).fillRect(x + 8, y + 8, w - 16, Math.min(18, h - 16));
+    this.ui.lineStyle(3, 0xe8f2ff, 1).strokeRect(x, y, w, h);
+    this.ui.lineStyle(1, 0x77a5ff, 0.9).strokeRect(x + 7, y + 7, w - 14, h - 14);
+    this.ui.lineStyle(1, 0x031026, 0.85).strokeRect(x + 3, y + 3, w - 6, h - 6);
+  }
+
+  private drawBar(x: number, y: number, w: number, h: number, value: number, max: number, color: number) {
+    const pct = Phaser.Math.Clamp(value / Math.max(1, max), 0, 1);
+    if (this.hasTexture("ui_status_bar_empty") && this.hasTexture("ui_hp_bar")) {
+      this.drawTexture("ui_status_bar_empty", x, y, w, h, LAYER_UI_IMAGE);
+      const filledWidth = Math.floor(w * pct);
+      if (filledWidth > 0) {
+        this.drawCroppedTexture("ui_hp_bar", x, y, 0, 0, Math.max(1, Math.floor(64 * pct)), 8, filledWidth, h, LAYER_UI_IMAGE + 1, 1, color);
+      }
+      this.ui.lineStyle(1, 0xffffff, 0.55).strokeRect(x, y, w, h);
+      return;
+    }
+    this.ui.fillStyle(0x0a0d14, 1).fillRect(x, y, w, h);
+    this.ui.fillStyle(color, 1).fillRect(x, y, Math.floor(w * pct), h);
+    this.ui.lineStyle(1, 0xffffff, 0.55).strokeRect(x, y, w, h);
+  }
+
+  private drawHud(place: string) {
+    this.drawPanel(18, 16, 356, 74);
+    this.text(36, 27, place, 21, "#fff2a8");
+    this.text(36, 58, `Gold ${this.gold}   Relics ${this.relicCount()}/4   ${this.flags.skyship ? "Skyship" : this.flags.boat ? "Boat" : "On Foot"}`, 15, "#e7efff");
+    this.drawPanel(710, 16, 232, 74);
+    this.text(728, 29, `Enc ${this.settings.encounters ? "ON" : "OFF"}   XP ${this.settings.xpMultiplier}x`, 16, "#e7efff");
+    this.text(728, 57, `${this.settings.muted ? "Muted" : "Audio"} | Esc Menu`, 15, "#c5d2f2");
+  }
+
+  private drawPrompt(text: string) {
+    const w = 326;
+    const h = 42;
+    const x = WIDTH - w - 24;
+    const y = HEIGHT - h - 18;
+    this.drawPanel(x, y, w, h);
+    this.text(x + 18, y + 12, text, 16, "#ffffff", "left", { wordWrapWidth: w - 36 });
+  }
+
+  private cameraFor(pos: Vec, mapW: number, mapH: number): Vec {
+    return {
+      x: Phaser.Math.Clamp(pos.x * TILE - WIDTH / 2 + TILE / 2, 0, Math.max(0, mapW * TILE - WIDTH)),
+      y: Phaser.Math.Clamp(pos.y * TILE - HEIGHT / 2 + TILE / 2, 0, Math.max(0, mapH * TILE - HEIGHT))
+    };
+  }
+
+  private markDirty() {
+    this.dirty = true;
+  }
+}
+
+function makeDungeonFloors(variant: number, final = false): string[][] {
+  const width = 22;
+  const height = 14;
+  const floor0 = blankDungeon(width, height);
+  carveRect(floor0, 1, 1, 8, 5);
+  carveRect(floor0, 11, 1, 9, 5);
+  carveRect(floor0, 4, 8, 16, 5);
+  carveLine(floor0, 8, 3, 11, 3);
+  carveLine(floor0, 6, 5, 6, 10);
+  setTile(floor0, 1, 1, "E");
+  setTile(floor0, 16, 2, "C");
+  setTile(floor0, 3 + (variant % 3), 10, "K");
+  setTile(floor0, 19, 12, "S");
+
+  const floor1 = blankDungeon(width, height);
+  carveRect(floor1, 1, 8, 8, 5);
+  carveRect(floor1, 11, 8, 9, 5);
+  carveRect(floor1, 6, 1, 14, 5);
+  carveLine(floor1, 8, 10, 11, 10);
+  carveLine(floor1, 12, 5, 12, 10);
+  setTile(floor1, 2, 12, "S");
+  setTile(floor1, 7, 9, "C");
+  setTile(floor1, 12, 7, "D");
+  setTile(floor1, 18, 2, "C");
+  setTile(floor1, 19, 3, "B");
+  if (final) {
+    setTile(floor1, 12, 7, "D");
+    setTile(floor1, 10, 3, "K");
+  }
+  return [floorToStrings(floor0), floorToStrings(floor1)];
+}
+
+function blankDungeon(width: number, height: number): string[][] {
+  return Array.from({ length: height }, () => Array.from({ length: width }, () => "#"));
+}
+
+function carveRect(map: string[][], x: number, y: number, w: number, h: number) {
+  for (let yy = y; yy < y + h; yy += 1) {
+    for (let xx = x; xx < x + w; xx += 1) setTile(map, xx, yy, ".");
+  }
+}
+
+function carveLine(map: string[][], x1: number, y1: number, x2: number, y2: number) {
+  const dx = Math.sign(x2 - x1);
+  const dy = Math.sign(y2 - y1);
+  let x = x1;
+  let y = y1;
+  setTile(map, x, y, ".");
+  while (x !== x2 || y !== y2) {
+    if (x !== x2) x += dx;
+    if (y !== y2) y += dy;
+    setTile(map, x, y, ".");
+  }
+}
+
+function setTile(map: string[][], x: number, y: number, value: string) {
+  if (map[y]?.[x] !== undefined) map[y][x] = value;
+}
+
+function floorToStrings(map: string[][]): string[] {
+  return map.map((row) => row.join(""));
+}
+
+function isUp(event: KeyboardEvent) {
+  return event.code === "ArrowUp" || event.code === "KeyW" || event.key === "ArrowUp" || event.key.toLowerCase() === "w";
+}
+
+function isDown(event: KeyboardEvent) {
+  return event.code === "ArrowDown" || event.code === "KeyS" || event.key === "ArrowDown" || event.key.toLowerCase() === "s";
+}
+
+function isLeft(event: KeyboardEvent) {
+  return event.code === "ArrowLeft" || event.code === "KeyA" || event.key === "ArrowLeft" || event.key.toLowerCase() === "a";
+}
+
+function isRight(event: KeyboardEvent) {
+  return event.code === "ArrowRight" || event.code === "KeyD" || event.key === "ArrowRight" || event.key.toLowerCase() === "d";
+}
+
+function isConfirm(event: KeyboardEvent) {
+  return event.code === "Enter" || event.code === "Space" || event.code === "KeyZ" || event.key === "Enter" || event.key === " " || event.key.toLowerCase() === "z";
+}
+
+function isCancel(event: KeyboardEvent) {
+  return event.code === "Escape" || event.code === "KeyX" || event.key === "Escape" || event.key.toLowerCase() === "x";
+}
+
+function directionNameForEvent(event: KeyboardEvent): DirectionName | undefined {
+  if (isUp(event)) return "up";
+  if (isDown(event)) return "down";
+  if (isLeft(event)) return "left";
+  if (isRight(event)) return "right";
+  return undefined;
+}
+
+function keyDirection(event: KeyboardEvent): Vec | undefined {
+  if (isUp(event)) return { x: 0, y: -1 };
+  if (isDown(event)) return { x: 0, y: 1 };
+  if (isLeft(event)) return { x: -1, y: 0 };
+  if (isRight(event)) return { x: 1, y: 0 };
+  return undefined;
+}
+
+function wrap(value: number, length: number) {
+  return ((value % length) + length) % length;
+}
+
+function seededNoise(x: number, y: number, seed: number) {
+  const value = Math.sin(x * 12.9898 + y * 78.233 + seed * 37.719) * 43758.5453;
+  return value - Math.floor(value);
+}
+
+const config: Phaser.Types.Core.GameConfig = {
+  type: Phaser.AUTO,
+  parent: "game",
+  width: WIDTH,
+  height: HEIGHT,
+  backgroundColor: "#050812",
+  pixelArt: true,
+  scale: {
+    mode: Phaser.Scale.FIT,
+    autoCenter: Phaser.Scale.CENTER_BOTH
+  },
+  scene: [CrystalOathScene]
+};
+
+new Phaser.Game(config);
