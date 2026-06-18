@@ -12,7 +12,7 @@ This backlog is practical project memory, not a full design document. Keep it sh
 - Add vehicle rendering for boat/skyship on the overworld after deciding whether they replace or accompany Arlen.
 - Add simple effect rendering only after battle timing can show short animations without slowing commands.
 - Add v2-quality art for later-region normal enemies not covered by the first twelve common roster crops.
-- Add route/bridge/water transition rendering if future world art supports it cleanly.
+- Route, river, bridge, and reachability generation is implemented for the overworld. Future work can polish biome transition edges or add animated water without changing the core generator.
 - Consider dynamic loading/code splitting for large JPEG battle backgrounds and large normalized class sheets if bundle size becomes painful.
 
 ## Asset Manifest Follow-Up

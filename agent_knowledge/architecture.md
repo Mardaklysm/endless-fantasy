@@ -27,6 +27,9 @@ D:\Projects\Endless Fantasy\
   src/
     data/
       characterSprites.ts
+      worldTiles.ts
+    world/
+      worldGenerator.ts
     main.ts
     style.css
     vite-env.d.ts
@@ -61,6 +64,8 @@ Ignored/generated folders:
 - Asset texture key/path maps and renderer lookup maps for terrain, locations, dungeons, enemies, portraits, and NPCs.
 - Data tables: `ITEMS`, `SPELLS`, `WEAPONS`, `ARMORS`, `ENEMIES`, `WORLD_TABLES`.
 - Imported class sprite manifest from `src/data/characterSprites.ts` for fighter/priest/wizard frame rectangles, anchors, and source metadata.
+- Imported world tile manifest from `src/data/worldTiles.ts` for the normalized overworld atlas grid, tile IDs, walkability, movement cost, encounter family, and tags.
+- `src/world/worldGenerator.ts`: seeded deterministic overworld generation, biome fields, river/bridge/road/POI placement, reachability validation, and debug-report formatting.
 - `SynthAudio`: WebAudio helper for generated music loops and sound effects.
 - `CrystalOathScene`: main Phaser scene containing game state, input handling, map movement, battles, menus, save/load, and rendering.
 - Dungeon generation helpers: `makeDungeonFloors`, `blankDungeon`, `carveRect`, `carveLine`, `setTile`, `floorToStrings`.
@@ -114,7 +119,9 @@ The scene keeps generated fallback drawing for missing textures. It also tracks 
 
 Fighter/priest/wizard class sprites are normalized 5x2 transparent sheets in `assets_v2/characters/classes/`. Runtime rendering selects fixed manifest cells and positions each crop by manifest `bodyCenterX` and `feetBaselineY`, so walk and attack frames share a stable body anchor. The old Arlen/Mira/Kael tiny map/battle PNGs are excluded from the runtime asset glob.
 
-Overworld rendering now uses procedural terrain functions for plains, forest, hills, mountains, water/deep water, sand, roads, coast edges, location markers, and a clear world-map leader sprite. This was chosen because Batch 001 world art did not meet readability targets. Keep the loaded PNG keys available for future replacement batches, but do not re-enable weak world PNGs without visual verification.
+Overworld rendering uses `assets_v2/world/world_atlas_normalized.png`, a normalized 10x8 atlas with 206x206 cells. `drawWorldTile` crops atlas cells using `WORLD_TILES` metadata and draws them at the existing 32px display tile size. Procedural terrain drawing remains fallback only if the atlas texture is unavailable.
+
+New games call the seeded world generator. The generated world includes the tile grid, POI coordinates, roads, rivers, bridges, start position, entry triggers, and validation result. `CrystalOathScene.locations()` adapts generated POIs back into the existing town/dungeon/gate/final entry behavior and keeps progression locks in code.
 
 Battle rendering is split into helper sections:
 
@@ -147,9 +154,9 @@ Mouse support is minimal and mainly starts audio/click blips.
 
 ## Save/Load Approach
 
-`saveGame()` serializes party, inventory, gear, gold, positions, current town/dungeon, story flags, opened chests, puzzle flags, defeated bosses, settings, and encounter counter to `localStorage`.
+`saveGame()` serializes party, inventory, gear, gold, world seed, positions, current town/dungeon, story flags, opened chests, puzzle flags, defeated bosses, settings, and encounter counter to `localStorage`.
 
-`loadGame()` reads `crystal-oath-save-v1`, restores state, returns to `world`, and marks the scene dirty. Save schema migration is not implemented yet.
+`loadGame()` reads `crystal-oath-save-v1`, rebuilds the generated overworld from the saved `worldSeed`, restores state, returns to `world`, and marks the scene dirty. Save schema migration is not implemented yet; older saves without `worldSeed` receive a new generated world.
 
 ## Audio Approach
 

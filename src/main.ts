@@ -1,5 +1,14 @@
 import Phaser from "phaser";
 import { CHARACTER_SPRITES, type CharacterSpriteClass, type CharacterSpriteFrameName } from "./data/characterSprites";
+import {
+  WORLD_ATLAS,
+  WORLD_TILES,
+  isWorldTileWalkable,
+  worldTileEncounterFamily,
+  worldTileHasTag,
+  type WorldTileId
+} from "./data/worldTiles.ts";
+import { createWorldSeed, generateWorld, type GeneratedWorld } from "./world/worldGenerator.ts";
 import "./style.css";
 
 const WIDTH = 960;
@@ -32,15 +41,7 @@ type ExploreMode = "world" | "town" | "dungeon";
 
 type DirectionName = "up" | "down" | "left" | "right";
 
-type Terrain =
-  | "plains"
-  | "forest"
-  | "hills"
-  | "mountain"
-  | "water"
-  | "deepWater"
-  | "sand"
-  | "road";
+type Terrain = WorldTileId;
 
 type ElementType =
   | "none"
@@ -288,6 +289,7 @@ const TOWN_SERVICES: TownServiceDef[] = [
 ];
 
 const ASSET_PATHS = [
+  ["world_atlas", "world/world_atlas_normalized.png"],
   ["tile_plains", "tiles/world/plains.png"],
   ["tile_forest", "tiles/world/forest.png"],
   ["tile_hills", "tiles/world/hills.png"],
@@ -485,17 +487,6 @@ const ASSET_URLS = Object.fromEntries(
     ASSET_V2_MODULES[`../assets_v2/${ASSET_V2_PATH_OVERRIDES[key] ?? path}`] ?? ASSET_MODULES[`../assets/${path}`]
   ])
 ) as Partial<Record<AssetKey, string>>;
-
-const WORLD_TILE_TEXTURES: Record<Terrain, AssetKey> = {
-  plains: "tile_plains",
-  forest: "tile_forest",
-  hills: "tile_hills",
-  mountain: "tile_mountain",
-  water: "tile_water_a",
-  deepWater: "tile_deep_water_a",
-  sand: "tile_sand",
-  road: "tile_road"
-};
 
 const DUNGEON_FLOOR_TEXTURES: Record<string, AssetKey> = {
   mossCave: "dungeon_floor_moss",
@@ -1123,6 +1114,8 @@ class CrystalOathScene extends Phaser.Scene {
   private dialogue?: Dialogue;
   private battle?: BattleState;
   private audio = new SynthAudio();
+  private generatedWorld?: GeneratedWorld;
+  private worldSeed = "title-preview";
   private world: Terrain[][] = [];
   private party: CharacterState[] = [];
   private inventory: Record<string, number> = {};
@@ -1180,7 +1173,7 @@ class CrystalOathScene extends Phaser.Scene {
     this.g.setDepth(0);
     this.ui = this.add.graphics();
     this.ui.setDepth(LAYER_UI_GRAPHICS);
-    this.world = this.makeWorld();
+    this.buildWorldFromSeed(this.worldSeed);
     this.configureTextureFiltering();
     this.input.keyboard?.on("keydown", (event: KeyboardEvent) => this.handleKey(event));
     this.input.keyboard?.on("keyup", (event: KeyboardEvent) => this.handleKeyUp(event));
@@ -1361,6 +1354,13 @@ class CrystalOathScene extends Phaser.Scene {
     this.markDirty();
   }
 
+  private buildWorldFromSeed(seed: string) {
+    this.generatedWorld = generateWorld({ seed, width: WORLD_W, height: WORLD_H });
+    this.worldSeed = this.generatedWorld.seed;
+    this.world = this.generatedWorld.tiles;
+    console.info(`Crystal Oath world seed: ${this.worldSeed}`);
+  }
+
   private newGame() {
     this.party = [
       this.makeCharacter("arlen", "Arlen", "Vanguard", 42, 9, 7, 5, 4, "trainingBlade", "travelCloth", []),
@@ -1370,7 +1370,8 @@ class CrystalOathScene extends Phaser.Scene {
     this.inventory = { potion: 5, antidote: 2, tent: 1, phoenixAsh: 0, etherleaf: 0, smokeBomb: 0 };
     this.gearBag = { trainingBlade: 1, willowRod: 2, travelCloth: 3 };
     this.gold = 80;
-    this.worldPos = { x: 10, y: 22 };
+    this.buildWorldFromSeed(createWorldSeed());
+    this.worldPos = { ...(this.generatedWorld?.startPosition ?? { x: 10, y: 22 }) };
     this.townPos = { x: 10, y: 12 };
     this.dungeonPos = { x: 1, y: 1 };
     this.currentTown = "dawnford";
@@ -1455,80 +1456,44 @@ class CrystalOathScene extends Phaser.Scene {
     return character;
   }
 
-  private makeWorld(): Terrain[][] {
-    const world: Terrain[][] = [];
-    for (let y = 0; y < WORLD_H; y += 1) {
-      const row: Terrain[] = [];
-      for (let x = 0; x < WORLD_W; x += 1) {
-        let terrain: Terrain = "plains";
-        if (x < 2 || y < 2 || x > WORLD_W - 3 || y > WORLD_H - 3) terrain = "deepWater";
-        if (x >= 28 && x <= 31 && y > 4 && y < WORLD_H - 3) terrain = "water";
-        if (x > 34 && y > 11 && y < 24 && seededNoise(x, y, 8) > 0.48) terrain = "sand";
-        if (x < 23 && y < 14 && seededNoise(x, y, 2) > 0.38) terrain = "forest";
-        if (x > 42 && y < 15 && seededNoise(x, y, 3) > 0.38) terrain = "hills";
-        if ((x > 47 && x < 59 && y < 12 && seededNoise(x, y, 9) > 0.36) || (x > 20 && x < 26 && y > 6 && y < 11)) terrain = "mountain";
-        if (x > 51 && y < 9) terrain = "deepWater";
-        if ((y === 22 && x >= 10 && x <= 25) || (y === 18 && x >= 18 && x <= 28) || (y === 16 && x >= 32 && x <= 44)) terrain = "road";
-        row.push(terrain);
-      }
-      world.push(row);
-    }
-    for (const loc of this.locations()) {
-      const radius = Math.floor(this.locationFootprint(loc) / 2);
-      for (let y = loc.y - radius; y <= loc.y + radius; y += 1) {
-        for (let x = loc.x - radius; x <= loc.x + radius; x += 1) {
-          if (world[y]?.[x] !== undefined) world[y][x] = "road";
-        }
-      }
-    }
-    return world;
+  private locations(): LocationDef[] {
+    return (this.generatedWorld?.pois ?? []).map((poi) => ({
+      id: poi.id,
+      name: poi.name,
+      kind: poi.kind,
+      x: poi.x,
+      y: poi.y,
+      footprint: poi.footprint,
+      ...this.locationProgressionRules(poi.id)
+    }));
   }
 
-  private locations(): LocationDef[] {
-    return [
-      { id: "dawnford", name: "Dawnford", kind: "town", x: 10, y: 22 },
-      { id: "brinewick", name: "Brinewick", kind: "town", x: 24, y: 27 },
-      { id: "elderleaf", name: "Elderleaf", kind: "town", x: 15, y: 8 },
-      { id: "sunbarrow", name: "Sunbarrow", kind: "town", x: 42, y: 17 },
-      { id: "starfallGate", name: "Starfall Gate", kind: "gate", x: 53, y: 25 },
-      { id: "mossCave", name: "Moss Cave", kind: "dungeon", x: 19, y: 18 },
-      {
-        id: "ashenKeep",
-        name: "Ashen Keep",
-        kind: "dungeon",
-        x: 39,
-        y: 14,
+  private locationProgressionRules(id: string): Partial<LocationDef> {
+    if (id === "ashenKeep") {
+      return {
         requires: () => this.flags.relics.root,
         lockedText: "A wall of roots bars the keep road. Restore the Root Relic first."
-      },
-      {
-        id: "tideShrine",
-        name: "Tide Shrine",
-        kind: "dungeon",
-        x: 45,
-        y: 29,
+      };
+    }
+    if (id === "tideShrine") {
+      return {
         requires: () => this.flags.boat,
         lockedText: "The shrine lies past rough water. Brinewick may know an old route."
-      },
-      {
-        id: "skyglassTower",
-        name: "Skyglass Tower",
-        kind: "dungeon",
-        x: 49,
-        y: 9,
+      };
+    }
+    if (id === "skyglassTower") {
+      return {
         requires: () => this.flags.relics.flame && this.flags.relics.tide,
         lockedText: "Hot wind and tide mist twist together here. Flame and Tide must shine first."
-      },
-      {
-        id: "eclipseSpire",
-        name: "Eclipse Spire",
-        kind: "final",
-        x: 56,
-        y: 6,
+      };
+    }
+    if (id === "eclipseSpire") {
+      return {
         requires: () => this.flags.gateOpen && this.flags.skyship,
         lockedText: "The spire hangs beyond reach. Open Starfall Gate and ride the sky route."
-      }
-    ];
+      };
+    }
+    return {};
   }
 
   private towns(): Record<string, TownDef> {
@@ -1911,9 +1876,7 @@ class CrystalOathScene extends Phaser.Scene {
     this.clearHeldMovement();
     const loc = this.locations().find((candidate) => candidate.id === this.currentTown);
     if (loc) {
-      const radius = Math.floor(this.locationFootprint(loc) / 2);
-      const y = Phaser.Math.Clamp(loc.y + radius + 1, 0, WORLD_H - 1);
-      this.worldPos = { x: loc.x, y };
+      this.worldPos = this.worldReturnTileForLocation(loc);
     }
     this.mode = "world";
     this.syncAllVisualPositions();
@@ -1935,6 +1898,30 @@ class CrystalOathScene extends Phaser.Scene {
     if (this.mode === "dungeon") {
       this.interactDungeon();
     }
+  }
+
+  private worldReturnTileForLocation(loc: LocationDef): Vec {
+    const radius = Math.floor(this.locationFootprint(loc) / 2);
+    const candidates: Vec[] = [
+      { x: loc.x, y: loc.y + radius + 1 },
+      { x: loc.x - 1, y: loc.y + radius + 1 },
+      { x: loc.x + 1, y: loc.y + radius + 1 },
+      { x: loc.x - radius - 1, y: loc.y },
+      { x: loc.x + radius + 1, y: loc.y },
+      { x: loc.x, y: loc.y - radius - 1 }
+    ];
+    for (const candidate of candidates) {
+      if (this.canOccupyExploreTile("world", candidate.x, candidate.y)) return candidate;
+    }
+    for (let searchRadius = radius + 1; searchRadius <= radius + 5; searchRadius += 1) {
+      for (let y = loc.y - searchRadius; y <= loc.y + searchRadius; y += 1) {
+        for (let x = loc.x - searchRadius; x <= loc.x + searchRadius; x += 1) {
+          if (Math.abs(x - loc.x) !== searchRadius && Math.abs(y - loc.y) !== searchRadius) continue;
+          if (this.canOccupyExploreTile("world", x, y)) return { x, y };
+        }
+      }
+    }
+    return { x: loc.x, y: loc.y };
   }
 
   private interactTown() {
@@ -2072,19 +2059,12 @@ class CrystalOathScene extends Phaser.Scene {
   }
 
   private canEnterTerrain(terrain: Terrain): boolean {
-    if (terrain === "mountain") return this.flags.skyship;
-    if (terrain === "deepWater") return this.flags.skyship;
-    if (terrain === "water") return this.flags.boat || this.flags.skyship;
-    return true;
+    return isWorldTileWalkable(terrain);
   }
 
   private terrainEncounterKey(terrain: Terrain): keyof typeof WORLD_TABLES | undefined {
-    if (terrain === "forest") return "forest";
-    if (terrain === "hills" || terrain === "mountain") return "hills";
-    if (terrain === "sand") return "sand";
-    if (terrain === "water" || terrain === "deepWater") return "water";
-    if (terrain === "plains") return "plains";
-    return undefined;
+    if (worldTileHasTag(terrain, "road") || worldTileHasTag(terrain, "bridge")) return undefined;
+    return worldTileEncounterFamily(terrain) as keyof typeof WORLD_TABLES | undefined;
   }
 
   private maybeEncounter() {
@@ -2092,7 +2072,7 @@ class CrystalOathScene extends Phaser.Scene {
     const terrain = this.world[this.worldPos.y][this.worldPos.x];
     const tableKey = this.terrainEncounterKey(terrain);
     if (!tableKey) return;
-    this.encounterCounter -= terrain === "forest" || terrain === "hills" ? 2 : 1;
+    this.encounterCounter -= tableKey === "forest" || tableKey === "hills" || tableKey === "final" ? 2 : 1;
     if (this.encounterCounter <= 0) {
       this.encounterCounter = Phaser.Math.Between(7, 15);
       this.startRandomBattle(WORLD_TABLES[tableKey]);
@@ -2143,9 +2123,11 @@ class CrystalOathScene extends Phaser.Scene {
     if (dungeonId === "eclipseSpire") return "battle_bg_eclipse_spire";
     if (dungeonId === "skyglassTower") return "battle_bg_plains";
     const terrain = this.world[this.worldPos.y]?.[this.worldPos.x];
-    if (terrain === "forest") return "battle_bg_forest_path";
-    if (terrain === "sand") return "battle_bg_ashen_keep";
-    if (terrain === "water" || terrain === "deepWater") return "battle_bg_tide_shrine";
+    const family = terrain ? worldTileEncounterFamily(terrain) : undefined;
+    if (family === "forest") return "battle_bg_forest_path";
+    if (family === "sand") return "battle_bg_ashen_keep";
+    if (family === "water") return "battle_bg_tide_shrine";
+    if (family === "final") return "battle_bg_eclipse_spire";
     return "battle_bg_plains";
   }
 
@@ -3379,6 +3361,7 @@ Statuses: ${statuses}`;
       inventory: this.inventory,
       gearBag: this.gearBag,
       gold: this.gold,
+      worldSeed: this.worldSeed,
       worldPos: this.worldPos,
       townPos: this.townPos,
       dungeonPos: this.dungeonPos,
@@ -3400,11 +3383,12 @@ Statuses: ${statuses}`;
     if (!raw) return false;
     try {
       const data = JSON.parse(raw);
+      this.buildWorldFromSeed(data.worldSeed ?? createWorldSeed());
       this.party = data.party;
       this.inventory = data.inventory;
       this.gearBag = data.gearBag;
       this.gold = data.gold;
-      this.worldPos = data.worldPos;
+      this.worldPos = data.worldPos ?? this.generatedWorld?.startPosition ?? { x: 10, y: 22 };
       this.townPos = data.townPos ?? { x: 10, y: 12 };
       this.dungeonPos = data.dungeonPos ?? { x: 1, y: 1 };
       this.currentTown = data.currentTown ?? "dawnford";
@@ -3417,6 +3401,9 @@ Statuses: ${statuses}`;
       this.settings = { ...this.settings, ...data.settings };
       this.audio.setMuted(this.settings.muted);
       this.encounterCounter = data.encounterCounter ?? 10;
+      if (!this.canOccupyExploreTile("world", this.worldPos.x, this.worldPos.y)) {
+        this.worldPos = { ...(this.generatedWorld?.startPosition ?? { x: 10, y: 22 }) };
+      }
       this.mode = "world";
       this.clearHeldMovement();
       this.syncAllVisualPositions();
@@ -4174,17 +4161,30 @@ Statuses: ${statuses}`;
   }
 
   private drawWorldTile(terrain: Terrain, sx: number, sy: number, x: number, y: number) {
-    const texture = WORLD_TILE_TEXTURES[terrain];
-    const drewTexture = this.drawTileTexture(texture, sx, sy);
-    if (!drewTexture) {
-      if (terrain === "plains") this.drawWorldPlainsTile(sx, sy, x, y);
-      else if (terrain === "forest") this.drawWorldForestTile(sx, sy, x, y);
-      else if (terrain === "hills") this.drawWorldHillsTile(sx, sy, x, y);
-      else if (terrain === "mountain") this.drawWorldMountainTile(sx, sy, x, y);
-      else if (terrain === "water" || terrain === "deepWater") this.drawWorldWaterTile(terrain, sx, sy, x, y);
-      else if (terrain === "sand") this.drawWorldSandTile(sx, sy, x, y);
-      else this.drawWorldRoadTile(sx, sy, x, y);
+    const tile = WORLD_TILES[terrain];
+    if (tile && this.hasTexture("world_atlas")) {
+      this.drawCroppedTexture(
+        "world_atlas",
+        sx,
+        sy,
+        tile.col * WORLD_ATLAS.tileWidth,
+        tile.row * WORLD_ATLAS.tileHeight,
+        WORLD_ATLAS.tileWidth,
+        WORLD_ATLAS.tileHeight,
+        TILE,
+        TILE,
+        LAYER_WORLD_IMAGE
+      );
+      return;
     }
+    if (tile?.biome === "grassland") this.drawWorldPlainsTile(sx, sy, x, y);
+    else if (tile?.biome === "forest" || tile?.biome === "darkland") this.drawWorldForestTile(sx, sy, x, y);
+    else if (tile?.biome === "mountain") {
+      if (worldTileHasTag(terrain, "blocked") || worldTileHasTag(terrain, "cliff")) this.drawWorldMountainTile(sx, sy, x, y);
+      else this.drawWorldHillsTile(sx, sy, x, y);
+    } else if (tile?.biome === "water") this.drawWorldWaterTile(terrain === "deep_ocean_water", sx, sy, x, y);
+    else if (tile?.biome === "desert") this.drawWorldSandTile(sx, sy, x, y);
+    else this.drawWorldRoadTile(sx, sy, x, y);
     this.drawWorldCoastEdges(terrain, sx, sy, x, y);
   }
 
@@ -4193,7 +4193,7 @@ Statuses: ${statuses}`;
   }
 
   private isWaterTerrain(terrain?: Terrain): boolean {
-    return terrain === "water" || terrain === "deepWater";
+    return worldTileHasTag(terrain, "water");
   }
 
   private isLandTerrain(terrain?: Terrain): boolean {
@@ -4245,8 +4245,7 @@ Statuses: ${statuses}`;
     if (seededNoise(x, y, 44) > 0.62) this.g.fillStyle(0x806f4d, 0.55).fillRect(sx + 5, sy + 24, 7, 3);
   }
 
-  private drawWorldWaterTile(terrain: Terrain, sx: number, sy: number, x: number, y: number) {
-    const deep = terrain === "deepWater";
+  private drawWorldWaterTile(deep: boolean, sx: number, sy: number, x: number, y: number) {
     this.g.fillStyle(deep ? 0x174a9c : 0x237cc5, 1).fillRect(sx, sy, TILE, TILE);
     this.g.fillStyle(deep ? 0x0d2d68 : 0x155da1, 0.45).fillRect(sx, sy + 23, TILE, 9);
     for (let i = 0; i < 3; i += 1) {

@@ -36,6 +36,12 @@ Create a production build:
 npm run build
 ```
 
+Run the world-generation validation:
+
+```bash
+npm test
+```
+
 ## Controls
 
 - Arrow keys or WASD: move and menu selection
@@ -53,7 +59,7 @@ The game saves to `localStorage`. You can save from the menu on the overworld or
 ## Gameplay Summary
 
 - Three-character party: Arlen, Mira, and Kael
-- Tile-based overworld with towns, terrain, water travel, sky travel, and random encounters
+- Seeded procedural overworld with atlas terrain, towns, dungeons, roads, rivers, bridges, and random encounters
 - Five dungeons: Moss Cave, Ashen Keep, Tide Shrine, Skyglass Tower, and Eclipse Spire
 - Turn-based battles with Attack, Magic, Item, Defend, and Run commands
 - Individual initiative turns, status effects, elemental weaknesses, boss fights, XP/gold, level-ups, equipment, shops, inns, clinics, and magic shops
@@ -82,4 +88,4 @@ All code, art, and audio are procedurally generated or created inside this proje
 - Shops can buy items, gear, and spells.
 - Dungeons contain chests, a switch gate, stairs, random encounters, and bosses.
 - Boss victory sets relic flags and unlocks later travel/progression.
-- Save/load restores party, inventory, position, settings, flags, and opened chests.
+- Save/load restores party, inventory, generated world seed, position, settings, flags, and opened chests.

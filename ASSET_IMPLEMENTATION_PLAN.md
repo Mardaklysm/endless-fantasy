@@ -39,6 +39,8 @@ Keep all paths lowercase snake_case. Use PNG for most raster art. Battle/backgro
 
 ## Loading Strategy
 
+Current note: the Phaser scene already has a `preload()` image loader. The active overworld terrain uses the single `world_atlas` texture from `assets_v2/world/world_atlas_normalized.png` plus `src/data/worldTiles.ts`; individual root `assets/tiles/world/*` files are fallback/legacy references.
+
 The current Phaser scene does not use `preload()` or image assets. Add a small asset loader later:
 
 1. Add a `preload()` method to `CrystalOathScene`.
@@ -80,7 +82,7 @@ This lets the game remain playable after every partial art import.
 
 | Code Area | Current Function | Future Asset Hook | Risk |
 |---|---|---|---|
-| World terrain | `drawWorldTile` | `assets/tiles/world/*` | Low if tile size stays 16x16 source / 32 display |
+| World terrain | `drawWorldTile` | `assets_v2/world/world_atlas_normalized.png` + `src/data/worldTiles.ts` | Active path; atlas cells render into 32px display tiles |
 | Location markers | `drawLocationIcon` | `assets/tiles/markers/*` | Low, but needs location-id variant mapping |
 | Town floor/services | `drawTown` and service blocks | Town floor/service marker assets | Medium, because service text is currently drawn directly |
 | Dungeon tiles | `drawDungeonTile` | `assets/tiles/dungeons/*`, `assets/tiles/objects/*` | Low for base tiles, medium for opened chest state |
@@ -137,7 +139,7 @@ This lets the game remain playable after every partial art import.
 ## Safe Incremental Replacement Order
 
 1. Add folder structure and loader keys for Phase 1 assets.
-2. Replace `drawWorldTile` with image-first fallback per terrain.
+2. Replace `drawWorldTile` with atlas/manifest-backed rendering. Done for `world_atlas`; generated terrain drawing remains fallback.
 3. Replace or extend class sprite rendering through `src/data/characterSprites.ts` and `drawCharacterSpriteFrame`.
 4. Replace `drawPanel` and menu cursor with UI assets.
 5. Replace normal enemy rendering by adding an enemy-id-to-texture map. Keep generated shapes if missing.

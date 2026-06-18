@@ -8,6 +8,7 @@ This manifest covers the art needed by the current playable implementation. It i
 - Tile grid is 32x32 display pixels (`TILE = 32`).
 - Recommended source tiles are 16x16 PNG displayed at 2x.
 - Overworld map is 64x40 tiles.
+- Active overworld terrain now uses `assets_v2/world/world_atlas_normalized.png`, a 10x8 atlas with 206x206 source cells rendered into 32x32 map tiles via `src/data/worldTiles.ts`.
 - Dungeon floors are 22x14 tiles.
 - Current drawing functions to refine later: `drawWorldTile`, `drawDungeonTile`, `drawLocationIcon`, `drawTown`, `drawLeader`, `drawCharacterSpriteFrame`, `drawNpc`, `drawPortrait`, `drawEnemySprite`, `drawPixelCrystal`, `drawPanel`, and `drawBar` in `src/main.ts`.
 - Phaser preloads the current PNG/JPEG assets in `src/main.ts`. All generated placeholders should remain as fallback paths for missing textures and unfinished asset families.
@@ -16,6 +17,12 @@ This manifest covers the art needed by the current playable implementation. It i
 Priority scale: P1 readability-critical, P2 core gameplay polish, P3 boss/story identity, P4 optional polish.
 
 ## A. Core Tiles
+
+Note: the individual `assets/tiles/world/*` entries below remain fallback/legacy targets. The active generated overworld renders from the normalized atlas:
+
+| Asset ID | Filename | Category | Size | Req | Priority | Used In | Tint/Recolor | Artist Notes | Replacement Target |
+|---|---|---:|---:|---|---|---|---|---|---|
+| world_atlas | assets_v2/world/world_atlas_normalized.png | World terrain atlas | 10x8 grid, 206x206 cells | Required | P1 | Generated overworld terrain, roads, bridges, water, mountains, special terrain | No | Imported from the square JPEG source with separator rows removed; metadata lives in `src/data/worldTiles.ts`. | `drawWorldTile(tileId)` |
 
 | Asset ID | Filename | Category | Size | Req | Priority | Used In | Tint/Recolor | Artist Notes | Replacement Target |
 |---|---|---:|---:|---|---|---|---|---|---|

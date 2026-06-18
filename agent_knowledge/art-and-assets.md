@@ -20,6 +20,7 @@ Reusable scripts live in `tools/art_import/`:
 - `apply_rembg_candidates.ps1`: compares color-key and rembg outputs, promoting only approved rembg results.
 - `generate_asset_previews.ps1`: creates contact sheets and `assets_v2/previews/QUALITY_REPORT.md`.
 - `import_character_sprites.mjs`: imports `D:\Tools\rembg\bg_output\fighter.png`, `priest.png`, and `wizard.png` without running rembg, splits them as 5x2 alpha PNG sheets, normalizes fixed cells/anchors, writes `src/data/characterSprites.ts`, and creates debug previews/reports in `docs/debug/sprite-import/`.
+- `import_world_atlas.mjs`: imports `C:\Users\Marku\Downloads\redo_this_please_2K_202606182233.jpeg`, copies the JPEG source to `assets_v2/source_sheets/world_atlas/`, selects the canonical 10x8 runtime rows from the 10x10 square source atlas, removes separator lines, writes `assets_v2/world/world_atlas_normalized.png`, writes `src/data/worldTiles.ts`, and creates debug output in `docs/debug/world-atlas/`.
 
 Manual crop maps live in `tools/art_import/crop_maps/`. The world tile crop map includes `postResizeCrop` cleanup to remove source-sheet border pixels after resizing. Keep this when regenerating terrain, or the overworld will look grid/debug-like.
 
@@ -43,7 +44,7 @@ In the current pass, 73 rembg candidates were generated. rembg was promoted only
 
 Rendered now from `assets_v2`:
 
-- Overworld terrain: plains, forest, hills, mountain, shallow/deep water, sand, road.
+- Overworld terrain: generated worlds render from `assets_v2/world/world_atlas_normalized.png` through `src/data/worldTiles.ts`.
 - Location markers: town, castle, cave, keep, shrine, tower, port, gate, eclipse spire.
 - Town/interior: stone floor/walls, exit gate, service signs, table/rug, crate, barrel, lamps.
 - Characters: Arlen/Mira/Kael portraits; fighter/priest/wizard normalized class sheets drive Arlen/Mira/Kael battle sprites, and the fighter sheet drives the visible exploration leader.
@@ -62,7 +63,8 @@ Still fallback or older assets:
 
 - Canvas/internal resolution: 960x540.
 - Display tile grid: 32x32.
-- V2 world and town tiles: 32x32 opaque PNGs.
+- V2 world atlas: 10 columns x 8 runtime rows, 206x206 cells, 2060x1648 opaque PNG, displayed as 32x32 map tiles.
+- V2 town tiles: 32x32 opaque PNGs.
 - Class character sheets: 5 columns x 2 rows, 704x512 cells, 3520x1024 sheet size, transparent PNG. Manifest anchor is bodyCenterX=352 and feetBaselineY=464.
 - V2 portraits: 32x40 transparent PNGs.
 - V2 normal enemies: 96x96 transparent PNGs.
@@ -74,6 +76,7 @@ Still fallback or older assets:
 - Dawnford/town service markers render as one clean horizontal row of five image-only icons. Do not add always-visible text labels such as Items/Arms/Magic/Clinic back onto those markers.
 - The town south exit uses the gate art only; there is no floating "Exit" label or persistent bottom-right interaction hint in normal town exploration.
 - Overworld locations render as larger 3x3-ish landmarks with matching entry footprints. Keep terrain tiles small/repeating, but landmarks should remain visually important.
+- The overworld atlas source is a 2048x2048 JPEG with 10 columns x 10 rows. Runtime rows intentionally select source rows `0,1,2,3,4,5,7,9` so duplicate source detail rows are skipped and the game keeps the canonical 10x8 terrain manifest.
 - Battle backgrounds are full 16:9 opaque JPEG images and are assigned linear texture filtering. Pixel sprites, tiles, UI, and icons remain nearest-neighbor filtered.
 - Battle party presentation uses the normalized fighter/priest/wizard class sheets only on the battlefield; redundant small head portraits/icons and old standalone party battle PNGs are intentionally not drawn there.
 

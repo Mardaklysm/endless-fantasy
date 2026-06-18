@@ -1,6 +1,6 @@
 # Testing And Validation
 
-There are no automated gameplay tests yet. Validation is currently a combination of TypeScript/build checks and manual browser smoke testing.
+Validation is currently a combination of TypeScript/build checks, a world-generation simulation test, and manual browser smoke testing.
 
 ## Build Check
 
@@ -13,6 +13,35 @@ npm run build
 This runs `tsc && vite build`.
 
 Known warning: Vite may warn that the Phaser bundle chunk is large. That is expected unless the bundling strategy changes.
+
+## World Generation Test
+
+Run from `D:\Projects\Endless Fantasy`:
+
+```powershell
+npm test
+```
+
+This runs `tools/worldgen/test_worldgen.mjs`, generates 100 deterministic worlds, and asserts:
+
+- start tile is walkable
+- required POIs are reachable and not on blocked/water terrain
+- water tiles are not walkable
+- bridges are walkable
+- every generated world has at least one bridge
+- same seed reproduces the same world
+- different seeds produce different tile grids
+
+To write a human-readable generation report and PNG minimap preview:
+
+```powershell
+npm run debug:worldgen -- optional-seed
+```
+
+Outputs:
+
+- `docs/debug/worldgen/latest-worldgen-report.md`
+- `docs/debug/worldgen/world-preview-seed-<seed>.png`
 
 ## Asset Import Validation
 
@@ -38,6 +67,14 @@ node tools\art_import\import_character_sprites.mjs
 ```
 
 Check `assets_v2/characters/classes/*_normalized.png`, `src/data/characterSprites.ts`, and `docs/debug/sprite-import/*.debug.png` / `*.import-report.md`. The normalized runtime sheets should be transparent 5x2 sheets with identical 704x512 cells; debug previews are the only files with labels, grid boxes, anchor crosses, and baseline lines.
+
+For the overworld atlas, run:
+
+```powershell
+node tools\art_import\import_world_atlas.mjs
+```
+
+Check `assets_v2/world/world_atlas_normalized.png`, `src/data/worldTiles.ts`, and `docs/debug/world-atlas/world_atlas.debug.png` / `world_atlas.import-report.md`. The runtime atlas should be a clean 10x8 sheet with 206x206 cells and no source separator lines; the debug preview is the only atlas output with labels/grid boxes.
 
 For rembg-related regeneration, use `D:\tools\rembg\venv_rembg\Scripts\rembg.exe` with `birefnet-general`. The expected AMD/Windows provider path is DirectML (`DmlExecutionProvider`). Do not add NVIDIA-specific checks.
 
@@ -96,6 +133,8 @@ Expected:
 - Confirm collision does not jitter or leave the player visually/logically between tiles.
 - Confirm the overworld leader remains readable when standing on a town/location marker.
 - Confirm v2 terrain does not show hard source-sheet border lines between every tile.
+- Confirm water and raw river tiles block movement, while bridge tiles are walkable.
+- Confirm new games produce different world seeds and load restores the same saved world.
 
 ## Battle Test
 
