@@ -16,6 +16,7 @@ At the start of every task:
    - Code architecture or refactors: `architecture.md`
    - Gameplay/balance/content: `gameplay-systems.md`
    - Art/assets/UI visuals: `art-and-assets.md`, plus root `ART_STYLE_GUIDE.md`, `ASSET_MANIFEST.md`, and `ASSET_IMPLEMENTATION_PLAN.md`
+   - Character sprite collage imports: `character-sprite-import.md`, plus the local Codex skill `C:\Users\Marku\.codex\skills\endless-fantasy-character-sprite-import\SKILL.md`
    - Testing/build/browser checks: `testing-and-validation.md`
    - Durable rules and product decisions: `known-decisions-and-rules.md`
    - Follow-up work and scope control: `backlog.md`
@@ -40,6 +41,7 @@ Crystal Oath is a compact browser-playable retro 2D top-down turn-based fantasy 
 - Update `agent_knowledge/gameplay-systems.md` when gameplay rules, data tables, progression, balance, or save/state behavior changes.
 - Update `agent_knowledge/testing-and-validation.md` when validation commands or manual test coverage changes.
 - Update `agent_knowledge/known-decisions-and-rules.md` for durable decisions.
+- Update `agent_knowledge/character-sprite-import.md` when the character collage import workflow, frame model, manifest, or skill path changes.
 - Update `agent_knowledge/backlog.md` for meaningful newly discovered gaps or completed follow-ups.
 
 ## Agent Startup Checklist
