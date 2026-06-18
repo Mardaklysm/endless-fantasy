@@ -43,7 +43,7 @@ Ignored/generated folders:
 
 ## Runtime Stack
 
-- Phaser 3 (`phaser` dependency) for game loop, canvas rendering, keyboard input, scale handling, and pixel-art mode.
+- Phaser 3 (`phaser` dependency) for game loop, canvas rendering, keyboard input, 16:9 scale fitting, and per-texture pixel-art filtering.
 - Phaser preload/image textures for PNG/JPEG assets in root `assets/` and `assets_v2/`.
 - TypeScript for source.
 - Vite for development server and production build.
@@ -55,6 +55,7 @@ Ignored/generated folders:
 - `index.html` mounts `<div id="game"></div>` and loads `/src/main.ts`.
 - `src/style.css` centers the game canvas, sets dark background, and enables pixelated rendering.
 - `src/main.ts` creates `new Phaser.Game(config)`.
+- Default Phaser backing canvas size is 1920x1080. The browser display is fitted to the available viewport by Phaser `Scale.FIT`.
 
 ## Main Source Units
 
@@ -119,7 +120,11 @@ The scene keeps generated fallback drawing for missing textures. It also tracks 
 
 Fighter/priest/wizard class sprites are normalized 5x2 transparent sheets in `assets_v2/characters/classes/`. Runtime rendering selects fixed manifest cells and positions each crop by manifest `bodyCenterX` and `feetBaselineY`, so walk and attack frames share a stable body anchor. The old Arlen/Mira/Kael tiny map/battle PNGs are excluded from the runtime asset glob.
 
-Overworld rendering uses `assets_v2/world/world_atlas_normalized.png`, a normalized 10x8 atlas with 206x206 cells. `drawWorldTile` crops atlas cells using `WORLD_TILES` metadata and draws them at the existing 32px display tile size. Procedural terrain drawing remains fallback only if the atlas texture is unavailable.
+Overworld rendering uses `assets_v2/world/world_atlas_normalized.png`, a normalized 10x8 atlas with 206x206 cells. `drawWorldTile` crops atlas cells using `WORLD_TILES` metadata and draws them at 32 layout pixels, which are scaled to 64 canvas pixels by the Full HD render scale. Procedural terrain drawing remains fallback only if the atlas texture is unavailable.
+
+Render resolution is split into clear constants: `DESIGN_WIDTH = 1920`, `DESIGN_HEIGHT = 1080`, `PIXEL_ART_SCALE = 2`, `LAYOUT_WIDTH = DESIGN_WIDTH / PIXEL_ART_SCALE`, and `LAYOUT_HEIGHT = DESIGN_HEIGHT / PIXEL_ART_SCALE`. Graphics commands, Phaser images, and live text are scaled by `PIXEL_ART_SCALE` when rendered, so existing 960x540-style layout coordinates fill a true 1920x1080 canvas. Pointer input maps from canvas coordinates back to layout coordinates by dividing by `PIXEL_ART_SCALE`.
+
+Texture filtering is per asset family: battle backgrounds use linear filtering and the canvas CSS uses `image-rendering: auto`; sprites, tiles, UI, icons, enemies, and class sheets use nearest-neighbor texture filtering.
 
 New games call the seeded world generator. The generated world includes the tile grid, POI coordinates, roads, rivers, bridges, start position, entry triggers, and validation result. `CrystalOathScene.locations()` adapts generated POIs back into the existing town/dungeon/gate/final entry behavior and keeps progression locks in code.
 
@@ -174,8 +179,11 @@ Current visuals use PNG assets where Batch 001 has been wired, with generated co
 
 ## Hardcoded Constants To Respect
 
-- `WIDTH = 960`
-- `HEIGHT = 540`
+- `DESIGN_WIDTH = 1920`
+- `DESIGN_HEIGHT = 1080`
+- `PIXEL_ART_SCALE = 2`
+- `LAYOUT_WIDTH = 960` derived from the Full HD design width
+- `LAYOUT_HEIGHT = 540` derived from the Full HD design height
 - `TILE = 32`
 - `SAVE_KEY = "crystal-oath-save-v1"`
 - `WORLD_W = 64`

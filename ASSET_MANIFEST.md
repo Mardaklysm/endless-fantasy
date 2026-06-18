@@ -4,9 +4,10 @@ This manifest covers the art needed by the current playable implementation. It i
 
 ## Current Code Constraints
 
-- Canvas is 960x540.
-- Tile grid is 32x32 display pixels (`TILE = 32`).
-- Recommended source tiles are 16x16 PNG displayed at 2x.
+- Canvas/backing render target is 1920x1080 by default.
+- The game keeps a 960x540-equivalent layout grid derived from `DESIGN_WIDTH / PIXEL_ART_SCALE`; render output is scaled to Full HD with `PIXEL_ART_SCALE = 2`.
+- Tile grid is 32x32 layout pixels, displayed as crisp 64x64 pixels at the Full HD render target.
+- Recommended source tiles are 16x16 PNG displayed at 4x on the Full HD render target.
 - Overworld map is 64x40 tiles.
 - Active overworld terrain now uses `assets_v2/world/world_atlas_normalized.png`, a 10x8 atlas with 206x206 source cells rendered into 32x32 map tiles via `src/data/worldTiles.ts`.
 - Dungeon floors are 22x14 tiles.
@@ -187,7 +188,7 @@ Normal enemies can share base forms: blob, beast, wing, knight, serpent. Bosses 
 | Asset ID | Filename | Category | Size | Req | Priority | Used In | Tint/Recolor | Artist Notes | Replacement Target |
 |---|---|---:|---:|---|---|---|---|---|---|
 | title_logo | assets/title/title_logo.png | Logo | 420x96 | Required | P3 | Title screen | No | Original readable pixel logo; no franchise mimicry. | `drawTitle` text logo |
-| title_stars_bg | assets/title/title_stars_bg.png | Background | 960x540 | Optional | P3 | Title screen | Partial | Sparse starfield similar to current, less noisy. | `drawTitle` star loop |
+| title_stars_bg | assets/title/title_stars_bg.png | Background | 1920x1080, 16:9 | Optional | P3 | Title screen | Partial | Sparse starfield similar to current, less noisy. | `drawTitle` star loop |
 | title_four_crystals | assets/title/four_star_relics.png | Title decoration | 192x64 | Required | P3 | Title/ending/relic motif | Partial | Four original crystal/star shapes. | `drawPixelCrystal` |
 | title_selector | assets/title/title_selector.png | Selector | 16x16 | Optional | P4 | Start/load selector | Yes | Reuse UI cursor if desired. | Title cursor text |
 

@@ -61,9 +61,10 @@ Still fallback or older assets:
 
 ## Current Sizes
 
-- Canvas/internal resolution: 960x540.
-- Display tile grid: 32x32.
-- V2 world atlas: 10 columns x 8 runtime rows, 206x206 cells, 2060x1648 opaque PNG, displayed as 32x32 map tiles.
+- Canvas/backing render target: 1920x1080 by default.
+- Layout grid: 960x540-equivalent coordinates derived from the Full HD design size with `PIXEL_ART_SCALE = 2`.
+- Display tile grid: 32x32 layout pixels, rendered as 64x64 canvas pixels at the default Full HD target.
+- V2 world atlas: 10 columns x 8 runtime rows, 206x206 cells, 2060x1648 opaque PNG, displayed as 32x32 layout-pixel map tiles and 64x64 canvas pixels at Full HD.
 - V2 town tiles: 32x32 opaque PNGs.
 - Class character sheets: 5 columns x 2 rows, 704x512 cells, 3520x1024 sheet size, transparent PNG. Manifest anchor is bodyCenterX=352 and feetBaselineY=464.
 - V2 portraits: 32x40 transparent PNGs.
@@ -77,7 +78,7 @@ Still fallback or older assets:
 - The town south exit uses the gate art only; there is no floating "Exit" label or persistent bottom-right interaction hint in normal town exploration.
 - Overworld locations render as larger 3x3-ish landmarks with matching entry footprints. Keep terrain tiles small/repeating, but landmarks should remain visually important.
 - The overworld atlas source is a 2048x2048 JPEG with 10 columns x 10 rows. Runtime rows intentionally select source rows `0,1,2,3,4,5,7,9` so duplicate source detail rows are skipped and the game keeps the canonical 10x8 terrain manifest.
-- Battle backgrounds are full 16:9 opaque JPEG images and are assigned linear texture filtering. Pixel sprites, tiles, UI, and icons remain nearest-neighbor filtered.
+- Battle backgrounds are full 16:9 opaque JPEG images and are assigned linear texture filtering. Pixel sprites, tiles, UI, and icons remain nearest-neighbor filtered. The canvas itself uses `image-rendering: auto` so high-resolution artwork is not globally pixelated.
 - Battle party presentation uses the normalized fighter/priest/wizard class sheets only on the battlefield; redundant small head portraits/icons and old standalone party battle PNGs are intentionally not drawn there.
 
 ## Real-Asset Rules

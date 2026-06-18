@@ -11,8 +11,14 @@ import {
 import { createWorldSeed, generateWorld, type GeneratedWorld } from "./world/worldGenerator.ts";
 import "./style.css";
 
-const WIDTH = 960;
-const HEIGHT = 540;
+const DESIGN_WIDTH = 1920;
+const DESIGN_HEIGHT = 1080;
+const ASPECT_RATIO = 16 / 9;
+const PIXEL_ART_SCALE = 2;
+const LAYOUT_WIDTH = DESIGN_WIDTH / PIXEL_ART_SCALE;
+const LAYOUT_HEIGHT = DESIGN_HEIGHT / PIXEL_ART_SCALE;
+const WIDTH = LAYOUT_WIDTH;
+const HEIGHT = LAYOUT_HEIGHT;
 const TILE = 32;
 const SAVE_KEY = "crystal-oath-save-v1";
 const WORLD_W = 64;
@@ -1173,15 +1179,19 @@ class CrystalOathScene extends Phaser.Scene {
     this.g.setDepth(0);
     this.ui = this.add.graphics();
     this.ui.setDepth(LAYER_UI_GRAPHICS);
+    this.configureRenderResolution();
     this.buildWorldFromSeed(this.worldSeed);
     this.configureTextureFiltering();
     this.input.keyboard?.on("keydown", (event: KeyboardEvent) => this.handleKey(event));
     this.input.keyboard?.on("keyup", (event: KeyboardEvent) => this.handleKeyUp(event));
-    this.input.on("pointerdown", () => {
-      this.audio.start();
-      this.audio.blip("confirm");
-    });
+    this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => this.handlePointer(pointer));
     this.draw();
+  }
+
+  private configureRenderResolution() {
+    this.cameras.main.roundPixels = true;
+    this.g.setScale(PIXEL_ART_SCALE);
+    this.ui.setScale(PIXEL_ART_SCALE);
   }
 
   update(_time: number, delta: number) {
@@ -1251,16 +1261,47 @@ class CrystalOathScene extends Phaser.Scene {
   private handleTitle(event: KeyboardEvent) {
     if (isUp(event)) this.adjustTitle(-1);
     else if (isDown(event)) this.adjustTitle(1);
-    else if (isConfirm(event)) {
-      const option = this.titleOptions[this.titleSelected];
-      this.audio.blip("confirm");
-      if (option === "New Game") this.newGame();
-      if (option === "Load Game") {
-        if (!this.loadGame()) this.flashMessage("No save found.");
-      }
-      if (option === "Controls") this.showControls("title");
-    }
+    else if (isConfirm(event)) this.confirmTitleSelection();
     this.markDirty();
+  }
+
+  private handlePointer(pointer: Phaser.Input.Pointer) {
+    this.audio.start();
+    const point = this.pointerToLayout(pointer);
+    if (this.mode === "title" && this.handleTitlePointer(point)) return;
+    this.audio.blip("confirm");
+  }
+
+  private pointerToLayout(pointer: Phaser.Input.Pointer): Vec {
+    return { x: pointer.x / PIXEL_ART_SCALE, y: pointer.y / PIXEL_ART_SCALE };
+  }
+
+  private handleTitlePointer(point: Vec): boolean {
+    const optionIndex = this.titleOptions.findIndex((_, idx) => {
+      const rowY = 332 + idx * 34;
+      return Math.abs(point.x - WIDTH / 2) <= 180 && point.y >= rowY - 8 && point.y <= rowY + 28;
+    });
+    if (optionIndex < 0) return false;
+    this.titleSelected = optionIndex;
+    const option = this.titleOptions[this.titleSelected];
+    if (option === "Load Game" && !localStorage.getItem(SAVE_KEY)) {
+      this.audio.blip("error");
+      this.markDirty();
+      return true;
+    }
+    this.confirmTitleSelection();
+    this.markDirty();
+    return true;
+  }
+
+  private confirmTitleSelection() {
+    const option = this.titleOptions[this.titleSelected];
+    this.audio.blip("confirm");
+    if (option === "New Game") this.newGame();
+    if (option === "Load Game") {
+      if (!this.loadGame()) this.flashMessage("No save found.");
+    }
+    if (option === "Controls") this.showControls("title");
   }
 
   private handleGameOver(event: KeyboardEvent) {
@@ -3452,16 +3493,17 @@ Statuses: ${statuses}`;
     options: { stroke?: string; strokeThickness?: number; wordWrapWidth?: number; fontStyle?: string } = {}
   ) {
     const strokeThickness = options.strokeThickness ?? (size >= 14 ? 2 : 1);
-    const t = this.add.text(x, y, value, {
+    const scaledSize = size * PIXEL_ART_SCALE;
+    const t = this.add.text(x * PIXEL_ART_SCALE, y * PIXEL_ART_SCALE, value, {
       fontFamily: 'Consolas, ui-monospace, "Courier New", monospace',
-      fontSize: `${size}px`,
+      fontSize: `${scaledSize}px`,
       fontStyle: options.fontStyle ?? "bold",
       color,
       align,
-      lineSpacing: Math.max(2, Math.floor(size * 0.22)),
+      lineSpacing: Math.max(2, Math.floor(scaledSize * 0.22)),
       stroke: options.stroke ?? "#050812",
-      strokeThickness,
-      wordWrap: { width: options.wordWrapWidth ?? (align === "center" ? WIDTH - 120 : WIDTH - x - 24) }
+      strokeThickness: strokeThickness * PIXEL_ART_SCALE,
+      wordWrap: { width: (options.wordWrapWidth ?? (align === "center" ? WIDTH - 120 : WIDTH - x - 24)) * PIXEL_ART_SCALE }
     });
     t.setResolution(2);
     t.setDepth(LAYER_TEXT);
@@ -3493,9 +3535,9 @@ Statuses: ${statuses}`;
     alpha = 1,
     tint?: number
   ) {
-    const image = this.add.image(x, y, key);
+    const image = this.add.image(x * PIXEL_ART_SCALE, y * PIXEL_ART_SCALE, key);
     image.setOrigin(0, 0);
-    image.setDisplaySize(width, height);
+    image.setDisplaySize(width * PIXEL_ART_SCALE, height * PIXEL_ART_SCALE);
     image.setDepth(depth);
     image.setAlpha(alpha);
     image.setScrollFactor(0);
@@ -3521,9 +3563,9 @@ Statuses: ${statuses}`;
     const frameKey = `${key}:${cropX},${cropY},${cropWidth},${cropHeight}`;
     const texture = this.textures.get(key);
     if (!texture.has(frameKey)) texture.add(frameKey, 0, cropX, cropY, cropWidth, cropHeight);
-    const image = this.add.image(x, y, key, frameKey);
+    const image = this.add.image(x * PIXEL_ART_SCALE, y * PIXEL_ART_SCALE, key, frameKey);
     image.setOrigin(0, 0);
-    image.setDisplaySize(displayWidth, displayHeight);
+    image.setDisplaySize(displayWidth * PIXEL_ART_SCALE, displayHeight * PIXEL_ART_SCALE);
     image.setDepth(depth);
     image.setAlpha(alpha);
     image.setScrollFactor(0);
@@ -4734,10 +4776,10 @@ function seededNoise(x: number, y: number, seed: number) {
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
   parent: "game",
-  width: WIDTH,
-  height: HEIGHT,
+  width: DESIGN_WIDTH,
+  height: DESIGN_HEIGHT,
   backgroundColor: "#050812",
-  pixelArt: true,
+  pixelArt: false,
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH

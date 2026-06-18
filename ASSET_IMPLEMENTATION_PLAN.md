@@ -96,8 +96,9 @@ This lets the game remain playable after every partial art import.
 
 ## Hardcoded Sizes To Respect
 
-- `WIDTH = 960`, `HEIGHT = 540`.
-- `TILE = 32`.
+- `DESIGN_WIDTH = 1920`, `DESIGN_HEIGHT = 1080`.
+- `PIXEL_ART_SCALE = 2`; layout coordinates are derived from the Full HD design size instead of using a low-res canvas.
+- `TILE = 32` layout pixels, rendered as 64 physical canvas pixels at the default Full HD target.
 - World camera assumes tile-sized map cells.
 - Town interior currently uses a 21x15 tile area offset at x=144, y=40.
 - Dungeon floors are generated as 22x14 character maps and rendered on the same 32px grid.

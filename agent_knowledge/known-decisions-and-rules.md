@@ -5,7 +5,8 @@
 - The project is a browser game built with Phaser 3, TypeScript, and Vite.
 - The current main implementation lives in `src/main.ts`.
 - Every completed code, docs, or asset change must be committed and pushed to the configured remote before the task is considered done.
-- The canvas is 960x540 with Phaser `pixelArt: true`.
+- The default Phaser backing canvas is 1920x1080. The scene keeps 960x540-equivalent layout coordinates derived from `DESIGN_WIDTH / PIXEL_ART_SCALE` and renders them at 2x into the Full HD canvas.
+- Canvas CSS uses `image-rendering: auto`; pixel-art crispness comes from nearest-neighbor texture filtering on sprites/tiles/UI plus integer render scaling, while battle backgrounds use linear filtering.
 - The tile grid is 32x32 display pixels.
 - The first playable game is intentionally compact, roughly 30-60 minutes when tuned.
 - Asset Batch 001 lives under root `assets/` and is loaded by Phaser from `src/main.ts`.

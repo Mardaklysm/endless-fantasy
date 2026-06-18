@@ -93,7 +93,7 @@ http://127.0.0.1:5173
 Expected:
 
 - Page title is `Crystal Oath: Dawn of the Four Stars`.
-- One 960x540 canvas appears.
+- One canvas appears with a 1920x1080 backing size, fitted to the browser viewport at 16:9.
 - Title screen is visible.
 - Browser console has no errors.
 
