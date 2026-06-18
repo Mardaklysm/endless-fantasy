@@ -25,7 +25,7 @@ The player starts in Dawnford, explores tile-based towns/world/dungeons, trigger
 - Towns: Dawnford, Brinewick, Elderleaf, Sunbarrow, Starfall Gate.
 - Dungeons: Moss Cave, Ashen Keep, Tide Shrine, Skyglass Tower, Eclipse Spire.
 - Systems: title/new/load, overworld, towns, dungeons, menu/status/items/magic/equipment/settings, battle, shops, inns, clinics, game over, ending.
-- Current art/audio: generated in code; no external art/music files are loaded.
+- Current art/audio: PNG/JPEG assets are loaded from `assets/` and `assets_v2/` with generated code fallbacks still present. Audio remains generated in code.
 
 ## Current Development State
 
@@ -37,7 +37,7 @@ The project also has a complete art planning pass:
 - `ASSET_MANIFEST.md`
 - `ASSET_IMPLEMENTATION_PLAN.md`
 
-No real asset-loader pipeline is implemented yet. The generated art/audio placeholders are still the runtime source of visuals and sound.
+The runtime asset-loader pipeline is implemented in `src/main.ts`. Generated art/audio placeholders remain as fallbacks where real assets are missing or not yet accepted.
 
 ## Legal And Originality Constraints
 

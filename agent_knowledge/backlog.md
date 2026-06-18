@@ -13,6 +13,7 @@ This backlog is practical project memory, not a full design document. Keep it sh
 - Add simple effect rendering only after battle timing can show short animations without slowing commands.
 - Add v2-quality art for later-region normal enemies not covered by the first twelve common roster crops.
 - Add route/bridge/water transition rendering if future world art supports it cleanly.
+- Consider dynamic loading/code splitting for large JPEG battle backgrounds and large normalized class sheets if bundle size becomes painful.
 
 ## Asset Manifest Follow-Up
 
@@ -22,6 +23,7 @@ This backlog is practical project memory, not a full design document. Keep it sh
 - `tile_water_b` and `tile_deep_water_b` are loaded but not animated yet.
 - `tile_bridge` exists in `assets_v2` but no bridge/route terrain overlay is implemented yet.
 - Reference-only UI window crops in `assets_v2/ui` are intentionally not loaded at runtime because they contain sample text.
+- Normalized fighter/priest/wizard class sheets are wired; keep old standalone party map/battle PNGs out of runtime glob loading unless intentionally reintroduced.
 
 ## Gameplay Gaps
 
@@ -56,4 +58,4 @@ This backlog is practical project memory, not a full design document. Keep it sh
 - Update architecture docs if `src/main.ts` is split into modules.
 - Update gameplay docs when mechanics, data tables, progression flags, or balancing change.
 - Update art docs when the real asset pipeline starts.
-- Create the GitHub repository `git@github.com:Mardaklysm/endless-fantasy.git`, add it as `origin`, and push `main`.
+- Keep committing and pushing completed changes to `origin/main`.

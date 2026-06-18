@@ -31,6 +31,14 @@ Check:
 - `assets_v2/previews/battle_backgrounds_preview.png`, if regenerated, should show the opaque 16:9 JPEG battle backgrounds without cropping artifacts.
 - `assets_v2/previews/QUALITY_REPORT.md` documents rembg/color-key choices.
 
+For fighter/priest/wizard class sheets, run:
+
+```powershell
+node tools\art_import\import_character_sprites.mjs
+```
+
+Check `assets_v2/characters/classes/*_normalized.png`, `src/data/characterSprites.ts`, and `docs/debug/sprite-import/*.debug.png` / `*.import-report.md`. The normalized runtime sheets should be transparent 5x2 sheets with identical 704x512 cells; debug previews are the only files with labels, grid boxes, anchor crosses, and baseline lines.
+
 For rembg-related regeneration, use `D:\tools\rembg\venv_rembg\Scripts\rembg.exe` with `birefnet-general`. The expected AMD/Windows provider path is DirectML (`DmlExecutionProvider`). Do not add NVIDIA-specific checks.
 
 ## Browser Startup Test

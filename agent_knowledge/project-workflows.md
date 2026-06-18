@@ -87,6 +87,7 @@ Batch 001 is already integrated under root `assets/` with Phaser preload keys in
 - Add or update manifest-style texture keys in the asset map.
 - Use image-first fallback rendering.
 - Keep generated placeholders until the replacement path is verified.
+- For class character sheets, use `tools/art_import/import_character_sprites.mjs`; it copies the alpha PNG sources, normalizes 5x2 sheets, writes `src/data/characterSprites.ts`, and produces debug reports.
 - Prefer one family at a time: UI panel pass, icon/menu pass, vehicle pass, effects pass, then polish animation.
 
 Generated placeholders must remain as fallbacks until replacement assets are integrated and verified.
@@ -108,15 +109,14 @@ Do not add raw logs or temporary plans to `agent_knowledge/`.
 
 Endless Fantasy is initialized as a local Git repository on default branch `main`.
 
-The intended GitHub remote is:
+The GitHub remote is:
 
 ```text
-git@github.com:Mardaklysm/endless-fantasy.git
+origin -> github.com:Mardaklysm/endless-fantasy.git
 ```
 
-As of the initial repository setup, that remote repository did not exist or was not accessible with the configured SSH key, so no `origin` remote is set yet.
-
+- Every completed code, docs, or asset change must be committed and pushed before the task is considered done.
 - Do not assume automatic deploy or release behavior.
 - Do not commit `node_modules/`, `dist/`, `.vite/`, logs, or local browser storage.
-- Inspect status/diff before any user-requested commit.
-- If a code change and knowledge update belong together, include both when the user asks for a commit.
+- Inspect status/diff before committing.
+- If a code change and knowledge update belong together, commit and push both.

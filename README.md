@@ -6,7 +6,7 @@ An original retro 2D top-down turn-based fantasy RPG set in Asterra. Three trave
 
 This project uses Phaser 3 with TypeScript and Vite. Phaser handles the browser game loop, canvas rendering, keyboard input, scaling, and pixel-art presentation cleanly, while TypeScript keeps the RPG data tables and battle state safer to evolve. Vite provides a small local dev/build workflow.
 
-Final/generated-first art assets now live under `assets/` and are loaded by Phaser at startup. The game renders PNG assets for dungeon tiles/objects, town/dungeon map sprites, battle portraits, enemies, title decoration/logo, UI cursors, and HP bars when those textures are available. The current overworld terrain, location markers, battle backdrop, battle party sprites, and town interiors use stronger original procedural art because the first generated asset batch was not readable enough in those spots. Code-generated fallback art remains in place so the game stays playable if an image is missing or fails to load.
+Final/generated-first art assets now live under `assets/` and `assets_v2/` and are loaded by Phaser at startup. The game renders PNG/JPEG assets for dungeon tiles/objects, town props, overworld markers, battle backgrounds, portraits, enemies, title decoration/logo, UI cursors, HP bars, and normalized fighter/priest/wizard class sprite sheets. Code-generated fallback art remains in place so the game stays playable if an image is missing or fails to load.
 
 No external sound, fonts, maps, music, asset packs, or copyrighted material are used. Audio is still synthesized in code.
 

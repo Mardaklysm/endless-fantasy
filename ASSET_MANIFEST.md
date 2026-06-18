@@ -9,7 +9,7 @@ This manifest covers the art needed by the current playable implementation. It i
 - Recommended source tiles are 16x16 PNG displayed at 2x.
 - Overworld map is 64x40 tiles.
 - Dungeon floors are 22x14 tiles.
-- Current drawing functions to refine later: `drawWorldTile`, `drawDungeonTile`, `drawLocationIcon`, `drawTown`, `drawLeader`, `drawNpc`, `drawPortrait`, `drawEnemySprite`, `drawPixelCrystal`, `drawPanel`, and `drawBar` in `src/main.ts`.
+- Current drawing functions to refine later: `drawWorldTile`, `drawDungeonTile`, `drawLocationIcon`, `drawTown`, `drawLeader`, `drawCharacterSpriteFrame`, `drawNpc`, `drawPortrait`, `drawEnemySprite`, `drawPixelCrystal`, `drawPanel`, and `drawBar` in `src/main.ts`.
 - Phaser preloads the current PNG/JPEG assets in `src/main.ts`. All generated placeholders should remain as fallback paths for missing textures and unfinished asset families.
 - Format target: PNG with transparency unless noted. Use lowercase snake_case filenames.
 
@@ -58,9 +58,9 @@ Priority scale: P1 readability-critical, P2 core gameplay polish, P3 boss/story 
 
 | Asset ID | Filename | Category | Size | Req | Priority | Used In | Tint/Recolor | Artist Notes | Replacement Target |
 |---|---|---:|---:|---|---|---|---|---|---|
-| char_arlen_map | assets/characters/arlen_map.png | Character sheet | 32x64 sheet, 16x16 frames | Required | P1 | Controlled party leader | No | 2 columns x 4 directions; red vanguard silhouette. | `drawLeader` |
-| char_mira_map | assets/characters/mira_map.png | Character sheet | 32x64 sheet | Optional | P3 | Future visible party swap/follower | No | White/green sage silhouette. | Future party rendering |
-| char_kael_map | assets/characters/kael_map.png | Character sheet | 32x64 sheet | Optional | P3 | Future visible party swap/follower | No | Red/gold mage silhouette. | Future party rendering |
+| class_fighter_sheet | assets_v2/characters/classes/fighter_normalized.png | Class sheet | 3520x1024 sheet, 704x512 frames | Required | P1 | Arlen/fighter exploration leader and battle sprite | No | 5x2 normalized alpha sheet with fixed anchor/baseline metadata. | `drawLeader`, `drawPartyBattler` |
+| class_priest_sheet | assets_v2/characters/classes/priest_normalized.png | Class sheet | 3520x1024 sheet, 704x512 frames | Required | P1 | Mira/priest battle sprite | No | 5x2 normalized alpha sheet with fixed anchor/baseline metadata. | `drawPartyBattler` |
+| class_wizard_sheet | assets_v2/characters/classes/wizard_normalized.png | Class sheet | 3520x1024 sheet, 704x512 frames | Required | P1 | Kael/wizard battle sprite | No | 5x2 normalized alpha sheet with fixed anchor/baseline metadata. | `drawPartyBattler` |
 | npc_guard | assets/characters/npc_guard.png | NPC sheet | 32x64 sheet | Required | P2 | Dawnford guard/scout | Yes | Reusable armored town NPC. | `drawNpc`, town NPC id variant |
 | npc_merchant | assets/characters/npc_merchant.png | NPC sheet | 32x64 sheet | Required | P2 | Shops/trader/harbormaster | Yes | Reusable apron/hat merchant. | `drawNpc`, town NPC id variant |
 | npc_elder | assets/characters/npc_elder.png | NPC sheet | 32x64 sheet | Required | P2 | King, druid, gatekeeper | Yes | Robed elder/quest giver. | `drawNpc`, town NPC id variant |
@@ -76,9 +76,7 @@ Priority scale: P1 readability-critical, P2 core gameplay polish, P3 boss/story 
 | battle_arlen_portrait | assets/portraits/battle_arlen.png | Battle portrait | 32x40 | Required | P2 | Battle party column | No | Strong vanguard face/torso, red cloak. | `drawPortrait(arlen)` |
 | battle_mira_portrait | assets/portraits/battle_mira.png | Battle portrait | 32x40 | Required | P2 | Battle party column | No | Kind healer, pale/green/white. | `drawPortrait(mira)` |
 | battle_kael_portrait | assets/portraits/battle_kael.png | Battle portrait | 32x40 | Required | P2 | Battle party column | No | Ember mage, angular hair/hood. | `drawPortrait(kael)` |
-| battle_arlen_stance | assets/characters/battle_arlen.png | Battle stance | 48x48 | Optional | P4 | Future party-side battle sprites | No | Only make if battle renderer gets party sprites. | Future battle layout |
-| battle_mira_stance | assets/characters/battle_mira.png | Battle stance | 48x48 | Optional | P4 | Future party-side battle sprites | No | Casting-ready stance. | Future battle layout |
-| battle_kael_stance | assets/characters/battle_kael.png | Battle stance | 48x48 | Optional | P4 | Future party-side battle sprites | No | Staff/fire-hand stance. | Future battle layout |
+| class_attack_frames | assets_v2/characters/classes/*_normalized.png | Battle attack frames | 5x2 sheet cells 0-1 | Required | P1 | Party attack windup/release | No | Uses `attack_windup_left` then `attack_release_left` from `src/data/characterSprites.ts`. | `drawPartyBattler` |
 | battle_down_overlay | assets/effects/status_down.png | Status overlay | 16x16 | Optional | P4 | Fallen character indicator | Yes | Small dim/cross/star marker if needed. | Future portrait overlay |
 
 ## D. Enemy Sprites
@@ -237,7 +235,9 @@ The current Dawnford/town screen uses generated readable counters, signs, props,
 - [ ] `assets/tiles/world/deep_water_a.png`
 - [ ] `assets/tiles/world/sand.png`
 - [ ] `assets/tiles/world/road.png`
-- [ ] `assets/characters/arlen_map.png`
+- [x] `assets_v2/characters/classes/fighter_normalized.png`
+- [x] `assets_v2/characters/classes/priest_normalized.png`
+- [x] `assets_v2/characters/classes/wizard_normalized.png`
 - [ ] `assets/ui/window_panel_9slice.png`
 - [ ] `assets/ui/cursor_arrow.png`
 - [ ] Normal enemy base set: blob, beast, wing, knight, serpent

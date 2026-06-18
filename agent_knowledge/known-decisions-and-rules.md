@@ -10,10 +10,11 @@
 - The first playable game is intentionally compact, roughly 30-60 minutes when tuned.
 - Asset Batch 001 lives under root `assets/` and is loaded by Phaser from `src/main.ts`.
 - Improved extracted art lives under root `assets_v2/` and is preferred over `assets/` for mapped texture keys.
+- Fighter/priest/wizard class sprite sheets are imported from `D:\Tools\rembg\bg_output` by copying the alpha PNG sources into `assets_v2/source_sheets/class_sprites/`, normalizing to 5x2 transparent sheets in `assets_v2/characters/classes/`, and writing frame/anchor metadata to `src/data/characterSprites.ts`.
 - Current art rendering is image-first with generated fallback behavior.
 - The active overworld uses cleaned v2 terrain and marker PNGs. Generated terrain/marker drawing remains fallback only.
 - Dawnford/town interiors use cleaned v2 floor, wall, exit, service sign, and prop PNGs. Service markers are icon-only in a five-marker row; do not add always-visible labels back onto the markers.
-- Battle presentation uses v2 opaque 16:9 JPEG backdrops, v2 enemies/bosses, v2 party battlers, and lower target/command/status panels. Redundant small party head portraits are intentionally not drawn on the battlefield.
+- Battle presentation uses v2 opaque 16:9 JPEG backdrops, v2 enemies/bosses, normalized fighter/priest/wizard party battlers, and lower target/command/status panels. Redundant small party head portraits and old standalone party battle PNGs are intentionally not drawn on the battlefield.
 - The local rembg environment for this project is `D:\tools\rembg\venv_rembg\Scripts\rembg.exe` with `birefnet-general`; available ONNX Runtime providers were `DmlExecutionProvider` and `CPUExecutionProvider`. Do not add NVIDIA/CUDA assumptions.
 - Audio is generated in code.
 - Save data uses browser `localStorage` under `crystal-oath-save-v1`.

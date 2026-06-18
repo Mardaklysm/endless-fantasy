@@ -32,7 +32,7 @@ Keep all paths lowercase snake_case. Use PNG for most raster art. Battle/backgro
 
 - World tiles: `terrain_name.png`, for example `plains.png`.
 - Animated tiles/effects: `name.png` as a horizontal sheet, for example `water_overlay.png` with frames in order.
-- Characters: `character_role_map.png`, for example `arlen_map.png`.
+- Characters: normalized class sheets such as `fighter_normalized.png`, `priest_normalized.png`, and `wizard_normalized.png`.
 - Enemies: `enemy_name.png`, for example `bristle_rat.png`; bosses use `boss_name.png`.
 - UI: `purpose_variant.png`, for example `window_panel_9slice.png`.
 - Icons: semantic item/category names, not shop names.
@@ -84,7 +84,7 @@ This lets the game remain playable after every partial art import.
 | Location markers | `drawLocationIcon` | `assets/tiles/markers/*` | Low, but needs location-id variant mapping |
 | Town floor/services | `drawTown` and service blocks | Town floor/service marker assets | Medium, because service text is currently drawn directly |
 | Dungeon tiles | `drawDungeonTile` | `assets/tiles/dungeons/*`, `assets/tiles/objects/*` | Low for base tiles, medium for opened chest state |
-| Player map sprite | `drawLeader` | `assets/characters/arlen_map.png` | Medium, needs animation frame selection and direction |
+| Player/class sprite sheets | `drawLeader`, `drawCharacterSpriteFrame`, `drawPartyBattler` | `assets_v2/characters/classes/*_normalized.png` plus `src/data/characterSprites.ts` | Medium, requires stable crop/anchor metadata |
 | NPC sprites | `drawNpc` | `assets/characters/npc_*.png` | Medium, needs NPC type data or deterministic mapping |
 | Battle portraits | `drawPortrait` | `assets/portraits/battle_*.png` | Low, current layout already reserves portrait slots |
 | Enemy sprites | `drawEnemySprite` | `assets/enemies/*.png` | Medium, needs size/anchor rules so labels/bars stay aligned |
@@ -105,16 +105,20 @@ This lets the game remain playable after every partial art import.
 
 ## Sprite Sheet Recommendations
 
-### Map Characters
+### Class Characters
 
-- Source sheet size: 32x64.
-- Frame size: 16x16.
+- Current imported source sheets live in `D:\Tools\rembg\bg_output` and already have alpha transparency; do not rerun rembg or chroma-key them.
+- Import with `node tools\art_import\import_character_sprites.mjs`.
+- Runtime output lives in `assets_v2/characters/classes/`.
+- Current normalized size is 5 columns x 2 rows, 704x512 cells, 3520x1024 sheet.
 - Layout:
-  - Row 0: down walk frames 0-1
-  - Row 1: left walk frames 0-1
-  - Row 2: right walk frames 0-1
-  - Row 3: up walk frames 0-1
-- Display: 2x scale inside 32x32 tile.
+  - Index 0: `attack_windup_left`
+  - Index 1: `attack_release_left`
+  - Index 2-3: `walk_down_a`, `walk_down_b`
+  - Index 4-5: `walk_left_a`, `walk_left_b`
+  - Index 6-7: `walk_right_a`, `walk_right_b`
+  - Index 8-9: `walk_up_a`, `walk_up_b`
+- Renderer must use `src/data/characterSprites.ts` anchor metadata rather than centering the full transparent crop.
 
 ### Effects
 
@@ -134,7 +138,7 @@ This lets the game remain playable after every partial art import.
 
 1. Add folder structure and loader keys for Phase 1 assets.
 2. Replace `drawWorldTile` with image-first fallback per terrain.
-3. Replace `drawLeader` with `arlen_map.png` using the existing `lastMoveDir` and `lastStepFrame`.
+3. Replace or extend class sprite rendering through `src/data/characterSprites.ts` and `drawCharacterSpriteFrame`.
 4. Replace `drawPanel` and menu cursor with UI assets.
 5. Replace normal enemy rendering by adding an enemy-id-to-texture map. Keep generated shapes if missing.
 6. Replace dungeon tiles and objects.

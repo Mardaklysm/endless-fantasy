@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { CHARACTER_SPRITES, type CharacterSpriteClass, type CharacterSpriteFrameName } from "./data/characterSprites";
 import "./style.css";
 
 const WIDTH = 960;
@@ -334,9 +335,9 @@ const ASSET_PATHS = [
   ["chest_open", "tiles/objects/chest_open.png"],
   ["switch_floor", "tiles/objects/switch_floor.png"],
   ["boss_relic_seal", "tiles/objects/boss_relic_seal.png"],
-  ["char_arlen_map", "characters/arlen_map.png"],
-  ["char_mira_map", "characters/mira_map.png"],
-  ["char_kael_map", "characters/kael_map.png"],
+  ["class_fighter_sheet", "characters/classes/fighter_normalized.png"],
+  ["class_priest_sheet", "characters/classes/priest_normalized.png"],
+  ["class_wizard_sheet", "characters/classes/wizard_normalized.png"],
   ["npc_guard", "characters/npc_guard.png"],
   ["npc_merchant", "characters/npc_merchant.png"],
   ["npc_elder", "characters/npc_elder.png"],
@@ -344,9 +345,6 @@ const ASSET_PATHS = [
   ["npc_sage", "characters/npc_sage.png"],
   ["vehicle_boat", "characters/vehicle_boat.png"],
   ["vehicle_skyship", "characters/vehicle_skyship.png"],
-  ["battle_arlen_sprite", "characters/arlen_battle.png"],
-  ["battle_mira_sprite", "characters/mira_battle.png"],
-  ["battle_kael_sprite", "characters/kael_battle.png"],
   ["battle_arlen_portrait", "portraits/battle_arlen.png"],
   ["battle_mira_portrait", "portraits/battle_mira.png"],
   ["battle_kael_portrait", "portraits/battle_kael.png"],
@@ -423,7 +421,7 @@ const ASSET_PATHS = [
 
 type AssetKey = (typeof ASSET_PATHS)[number][0];
 
-const ASSET_MODULES = import.meta.glob("../assets/**/*.{png,jpeg,jpg}", {
+const ASSET_MODULES = import.meta.glob(["../assets/**/*.{png,jpeg,jpg}", "!../assets/characters/arlen_map.png"], {
   eager: true,
   query: "?url",
   import: "default"
@@ -432,6 +430,12 @@ const ASSET_MODULES = import.meta.glob("../assets/**/*.{png,jpeg,jpg}", {
 const ASSET_V2_MODULES = import.meta.glob(
   [
     "../assets_v2/**/*.{png,jpeg,jpg}",
+    "!../assets_v2/characters/arlen_battle.png",
+    "!../assets_v2/characters/arlen_map.png",
+    "!../assets_v2/characters/kael_battle.png",
+    "!../assets_v2/characters/kael_map.png",
+    "!../assets_v2/characters/mira_battle.png",
+    "!../assets_v2/characters/mira_map.png",
     "!../assets_v2/previews/**/*.{png,jpeg,jpg}",
     "!../assets_v2/source_sheets/**/*.{png,jpeg,jpg}",
     "!../assets_v2/ui/command_window.png",
@@ -530,10 +534,16 @@ const TOWN_PROP_TEXTURES = {
   rug: "town_prop_rug"
 } as const satisfies Record<string, AssetKey>;
 
-const PARTY_BATTLE_TEXTURES: Record<CharacterState["id"], AssetKey> = {
-  arlen: "battle_arlen_sprite",
-  mira: "battle_mira_sprite",
-  kael: "battle_kael_sprite"
+const CHARACTER_CLASS_TEXTURES: Record<CharacterSpriteClass, AssetKey> = {
+  fighter: "class_fighter_sheet",
+  priest: "class_priest_sheet",
+  wizard: "class_wizard_sheet"
+};
+
+const PARTY_CLASS: Record<CharacterState["id"], CharacterSpriteClass> = {
+  arlen: "fighter",
+  mira: "priest",
+  kael: "wizard"
 };
 
 const ENEMY_TEXTURES: Record<string, AssetKey> = {
@@ -3521,9 +3531,11 @@ Statuses: ${statuses}`;
     alpha = 1,
     tint?: number
   ) {
-    const image = this.add.image(x, y, key);
+    const frameKey = `${key}:${cropX},${cropY},${cropWidth},${cropHeight}`;
+    const texture = this.textures.get(key);
+    if (!texture.has(frameKey)) texture.add(frameKey, 0, cropX, cropY, cropWidth, cropHeight);
+    const image = this.add.image(x, y, key, frameKey);
     image.setOrigin(0, 0);
-    image.setCrop(cropX, cropY, cropWidth, cropHeight);
     image.setDisplaySize(displayWidth, displayHeight);
     image.setDepth(depth);
     image.setAlpha(alpha);
@@ -3531,6 +3543,59 @@ Statuses: ${statuses}`;
     if (tint !== undefined) image.setTint(tint);
     this.images.push(image);
     return image;
+  }
+
+  private drawCharacterSpriteFrame(
+    classId: CharacterSpriteClass,
+    frameName: CharacterSpriteFrameName,
+    bodyCenterX: number,
+    feetBaselineY: number,
+    displayCellWidth: number,
+    depth = LAYER_CHARACTER_IMAGE,
+    alpha = 1
+  ): boolean {
+    const texture = CHARACTER_CLASS_TEXTURES[classId];
+    if (!this.hasTexture(texture)) return false;
+    const sprite = CHARACTER_SPRITES[classId];
+    const frame = sprite.frames[frameName];
+    const scale = displayCellWidth / sprite.grid.cellWidth;
+    const displayWidth = sprite.grid.cellWidth * scale;
+    const displayHeight = sprite.grid.cellHeight * scale;
+    const x = bodyCenterX - sprite.anchor.bodyCenterX * scale;
+    const y = feetBaselineY - sprite.anchor.feetBaselineY * scale;
+    this.drawCroppedTexture(
+      texture,
+      x,
+      y,
+      frame.col * sprite.grid.cellWidth,
+      frame.row * sprite.grid.cellHeight,
+      sprite.grid.cellWidth,
+      sprite.grid.cellHeight,
+      displayWidth,
+      displayHeight,
+      depth,
+      alpha
+    );
+    return true;
+  }
+
+  private explorationCharacterFrame(stepFrame: number): CharacterSpriteFrameName {
+    const suffix = stepFrame % 2 === 0 ? "a" : "b";
+    if (this.lastMoveDir.x < 0) return `walk_left_${suffix}` as CharacterSpriteFrameName;
+    if (this.lastMoveDir.x > 0) return `walk_right_${suffix}` as CharacterSpriteFrameName;
+    if (this.lastMoveDir.y < 0) return `walk_up_${suffix}` as CharacterSpriteFrameName;
+    return `walk_down_${suffix}` as CharacterSpriteFrameName;
+  }
+
+  private battleCharacterFrame(member: CharacterState): CharacterSpriteFrameName {
+    const animation = this.battle?.animation;
+    if (animation?.action.side === "party" && animation.action.actorId === member.id) {
+      if (animation.action.type === "attack") {
+        return animation.elapsed < animation.impactAt * 0.58 ? "attack_windup_left" : "attack_release_left";
+      }
+      return animation.elapsed < animation.impactAt ? "walk_left_b" : "walk_left_a";
+    }
+    return "walk_left_a";
   }
 
   private drawTileTexture(key: AssetKey | undefined, x: number, y: number, depth = LAYER_WORLD_IMAGE): boolean {
@@ -3929,16 +3994,17 @@ Statuses: ${statuses}`;
   }
 
   private drawPartyBattler(member: CharacterState, x: number, y: number, idx: number, active: boolean) {
-    const texture = PARTY_BATTLE_TEXTURES[member.id];
+    const classId = PARTY_CLASS[member.id];
+    const frame = this.battleCharacterFrame(member);
     const alpha = member.hp <= 0 ? 0.36 : 1;
-    this.drawActorShadow(x + 48, y + 78, 80, 15);
+    const bodyCenterX = x + 48;
+    const feetBaselineY = y + 82;
+    this.drawActorShadow(bodyCenterX, feetBaselineY - 4, 88, 16);
     if (active) {
-      this.g.fillStyle(0xfff0a8, 0.16).fillEllipse(x + 48, y + 78, 92, 22);
-      this.g.lineStyle(3, 0xfff0a8, 0.9).strokeEllipse(x + 48, y + 78, 92, 22);
+      this.g.fillStyle(0xfff0a8, 0.16).fillEllipse(bodyCenterX, feetBaselineY - 4, 96, 24);
+      this.g.lineStyle(3, 0xfff0a8, 0.9).strokeEllipse(bodyCenterX, feetBaselineY - 4, 96, 24);
     }
-    if (this.hasTexture(texture)) {
-      this.drawTexture(texture, x, y - 6, 96, 82, LAYER_BATTLE_IMAGE, alpha);
-    } else {
+    if (!this.drawCharacterSpriteFrame(classId, frame, bodyCenterX, feetBaselineY, 250, LAYER_BATTLE_IMAGE, alpha)) {
       const palettes = {
         arlen: [0xf0c18d, 0xc9433f, 0xe9edf7, 0x362a4b],
         mira: [0xf1d0aa, 0xf5f2e8, 0x5fac73, 0x314c33],
@@ -3960,7 +4026,7 @@ Statuses: ${statuses}`;
         this.g.fillStyle(0x657081, alpha).fillRect(x + 48, y + 20, 4, 10);
       }
     }
-    if (active) this.drawActiveTurnMarker(x + 48, y - 8);
+    if (active) this.drawActiveTurnMarker(bodyCenterX, y - 8);
   }
 
   private drawActiveTurnMarker(cx: number, y: number) {
@@ -4367,9 +4433,14 @@ Statuses: ${statuses}`;
 
   private drawLeader(x: number, y: number) {
     const frame = this.playerMoving ? Math.floor(this.walkAnimElapsed / 85) % 2 : 0;
-    this.drawActorShadow(x + 12, y + 38, 44, 12);
-    this.g.lineStyle(2, 0xfff0a8, this.mode === "world" ? 0.82 : 0.42).strokeEllipse(x + 12, y + 38, 42, 12);
-    if (this.mode === "world" && !this.hasTexture("char_arlen_map")) {
+    const bodyCenterX = x + 12;
+    const feetBaselineY = y + 38;
+    this.drawActorShadow(bodyCenterX, feetBaselineY, 48, 12);
+    this.g.lineStyle(2, 0xfff0a8, this.mode === "world" ? 0.82 : 0.42).strokeEllipse(bodyCenterX, feetBaselineY, 46, 12);
+    if (this.drawCharacterSpriteFrame(PARTY_CLASS.arlen, this.explorationCharacterFrame(frame), bodyCenterX, feetBaselineY, 132)) {
+      return;
+    }
+    if (this.mode === "world") {
       this.g.fillStyle(0x050812, 1).fillRect(x + 5, y + 3, 22, 29);
       this.g.fillStyle(0x2a213a, 1).fillRect(x + 7, y + 1, 18, 9);
       this.g.fillStyle(0xf0c18d, 1).fillRect(x + 9, y + 5, 14, 12);
@@ -4379,22 +4450,6 @@ Statuses: ${statuses}`;
       this.g.fillRect(x + 20, y + 30, 8, 7 + (1 - frame));
       this.g.fillStyle(0xffffff, 1).fillRect(x + 11, y + 10, 3, 3);
       this.g.fillRect(x + 19, y + 10, 3, 3);
-      return;
-    }
-    if (this.hasTexture("char_arlen_map")) {
-      const row = this.lastMoveDir.x < 0 ? 1 : this.lastMoveDir.x > 0 ? 2 : this.lastMoveDir.y < 0 ? 3 : 0;
-      this.drawCroppedTexture(
-        "char_arlen_map",
-        x - 16,
-        y - 21,
-        frame * TILE_FRAME,
-        row * TILE_FRAME,
-        TILE_FRAME,
-        TILE_FRAME,
-        56,
-        56,
-        LAYER_CHARACTER_IMAGE
-      );
       return;
     }
     this.g.fillStyle(0x1c2440, 1).fillRect(x + 8, y + 6, 10, 7);

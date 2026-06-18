@@ -25,6 +25,8 @@ D:\Projects\Endless Fantasy\
   tsconfig.json
   vite.config.ts
   src/
+    data/
+      characterSprites.ts
     main.ts
     style.css
     vite-env.d.ts
@@ -58,6 +60,7 @@ Ignored/generated folders:
 - Data/interface types for modes, terrain, characters, enemies, items, spells, gear, menus, dialogue, and battles.
 - Asset texture key/path maps and renderer lookup maps for terrain, locations, dungeons, enemies, portraits, and NPCs.
 - Data tables: `ITEMS`, `SPELLS`, `WEAPONS`, `ARMORS`, `ENEMIES`, `WORLD_TABLES`.
+- Imported class sprite manifest from `src/data/characterSprites.ts` for fighter/priest/wizard frame rectangles, anchors, and source metadata.
 - `SynthAudio`: WebAudio helper for generated music loops and sound effects.
 - `CrystalOathScene`: main Phaser scene containing game state, input handling, map movement, battles, menus, save/load, and rendering.
 - Dungeon generation helpers: `makeDungeonFloors`, `blankDungeon`, `carveRect`, `carveLine`, `setTile`, `floorToStrings`.
@@ -97,6 +100,7 @@ Key draw functions:
 - `drawDungeonTile`
 - `drawLocationIcon`
 - `drawLeader`
+- `drawCharacterSpriteFrame`
 - `drawNpc`
 - `drawPortrait`
 - `drawEnemySprite`
@@ -108,6 +112,8 @@ The renderer uses a dirty flag and redraws the full canvas on state/input change
 
 The scene keeps generated fallback drawing for missing textures. It also tracks transient Phaser image objects and destroys/recreates them on each redraw so image assets fit the existing immediate redraw model. Cropped texture rendering must use the requested display size directly; do not rescale cropped frames by the full source-sheet dimensions.
 
+Fighter/priest/wizard class sprites are normalized 5x2 transparent sheets in `assets_v2/characters/classes/`. Runtime rendering selects fixed manifest cells and positions each crop by manifest `bodyCenterX` and `feetBaselineY`, so walk and attack frames share a stable body anchor. The old Arlen/Mira/Kael tiny map/battle PNGs are excluded from the runtime asset glob.
+
 Overworld rendering now uses procedural terrain functions for plains, forest, hills, mountains, water/deep water, sand, roads, coast edges, location markers, and a clear world-map leader sprite. This was chosen because Batch 001 world art did not meet readability targets. Keep the loaded PNG keys available for future replacement batches, but do not re-enable weak world PNGs without visual verification.
 
 Battle rendering is split into helper sections:
@@ -118,6 +124,8 @@ Battle rendering is split into helper sections:
 - `drawBattleTargetPanel`: lower-left target/log panel.
 - `drawBattleCommandPanel`: lower-middle command panel for the current party actor.
 - `drawBattleStatusPanel`: lower-right party status and next-turn preview.
+
+Party battlers use the class sheets: Arlen -> fighter, Mira -> priest, Kael -> wizard. Battle idle uses `walk_left_a`; party attacks swap through `attack_windup_left` and `attack_release_left` during the existing lunge animation.
 
 ## Input Approach
 

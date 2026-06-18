@@ -19,6 +19,7 @@ Reusable scripts live in `tools/art_import/`:
 - `extract_new_art_assets.ps1`: reads JSON crop maps and extracts final PNGs to `assets_v2`.
 - `apply_rembg_candidates.ps1`: compares color-key and rembg outputs, promoting only approved rembg results.
 - `generate_asset_previews.ps1`: creates contact sheets and `assets_v2/previews/QUALITY_REPORT.md`.
+- `import_character_sprites.mjs`: imports `D:\Tools\rembg\bg_output\fighter.png`, `priest.png`, and `wizard.png` without running rembg, splits them as 5x2 alpha PNG sheets, normalizes fixed cells/anchors, writes `src/data/characterSprites.ts`, and creates debug previews/reports in `docs/debug/sprite-import/`.
 
 Manual crop maps live in `tools/art_import/crop_maps/`. The world tile crop map includes `postResizeCrop` cleanup to remove source-sheet border pixels after resizing. Keep this when regenerating terrain, or the overworld will look grid/debug-like.
 
@@ -45,7 +46,7 @@ Rendered now from `assets_v2`:
 - Overworld terrain: plains, forest, hills, mountain, shallow/deep water, sand, road.
 - Location markers: town, castle, cave, keep, shrine, tower, port, gate, eclipse spire.
 - Town/interior: stone floor/walls, exit gate, service signs, table/rug, crate, barrel, lamps.
-- Characters: Arlen/Mira/Kael portraits and battle sprites; Arlen map sprite is used for world/town/dungeon leader rendering.
+- Characters: Arlen/Mira/Kael portraits; fighter/priest/wizard normalized class sheets drive Arlen/Mira/Kael battle sprites, and the fighter sheet drives the visible exploration leader.
 - Common enemies: first twelve enemy IDs use cleaned roster crops.
 - Bosses: all five boss IDs use cleaned boss roster crops.
 - Battle backgrounds: forest path, plains, moss cave, ashen keep, tide shrine, eclipse spire.
@@ -62,7 +63,7 @@ Still fallback or older assets:
 - Canvas/internal resolution: 960x540.
 - Display tile grid: 32x32.
 - V2 world and town tiles: 32x32 opaque PNGs.
-- V2 map character sheets: 16x16 frames arranged as 2 columns x 4 rows.
+- Class character sheets: 5 columns x 2 rows, 704x512 cells, 3520x1024 sheet size, transparent PNG. Manifest anchor is bodyCenterX=352 and feetBaselineY=464.
 - V2 portraits: 32x40 transparent PNGs.
 - V2 normal enemies: 96x96 transparent PNGs.
 - V2 bosses: 192x192 transparent PNGs.
@@ -74,7 +75,7 @@ Still fallback or older assets:
 - The town south exit uses the gate art only; there is no floating "Exit" label or persistent bottom-right interaction hint in normal town exploration.
 - Overworld locations render as larger 3x3-ish landmarks with matching entry footprints. Keep terrain tiles small/repeating, but landmarks should remain visually important.
 - Battle backgrounds are full 16:9 opaque JPEG images and are assigned linear texture filtering. Pixel sprites, tiles, UI, and icons remain nearest-neighbor filtered.
-- Battle party presentation uses the main v2 battler sprites only on the battlefield; redundant small head portraits/icons are intentionally not drawn there.
+- Battle party presentation uses the normalized fighter/priest/wizard class sheets only on the battlefield; redundant small head portraits/icons and old standalone party battle PNGs are intentionally not drawn there.
 
 ## Real-Asset Rules
 
@@ -83,6 +84,7 @@ Still fallback or older assets:
 - Keep service labels and UI text live unless an image is purely decorative/title art.
 - Keep battle backgrounds opaque.
 - Keep terrain tiles rectangular and opaque; do not run rembg on terrain.
+- Do not rerun rembg or chroma-key the fighter/priest/wizard source sheets; their existing alpha channel is the source of truth.
 - Prefer nearest-neighbor scaling for tiles, icons, sprites, and enemies.
 - Review `assets_v2/previews/*.png` and `assets_v2/previews/QUALITY_REPORT.md` before expanding runtime mappings.
 

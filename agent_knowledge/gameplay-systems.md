@@ -40,7 +40,8 @@
 - Enemies execute AI on their own initiative turns and also use the short resolving animation path.
 - After every living combatant in the current order has had a turn or been skipped, a new initiative cycle is rolled.
 - The game does not use an all-party action queue round system.
-- Battle presentation now uses v2 scene backdrops, enemies on the left, v2 party battlers on the right, and lower panels for target/log, commands, and party status. The small redundant party head portraits are not drawn on the battlefield.
+- Battle presentation now uses v2 scene backdrops, enemies on the left, normalized fighter/priest/wizard class-sheet party battlers on the right, and lower panels for target/log, commands, and party status. The small redundant party head portraits are not drawn on the battlefield.
+- Party attack animations use the class-sheet `attack_windup_left` then `attack_release_left` frames during the existing lunge timing. Battle idle uses the left-facing walk frame.
 - Battle backgrounds are selected by dungeon first, then overworld terrain for random encounters.
 - Enemy actions are randomly selected from each enemy's move list.
 - Dead attack targets retarget to a living enemy.
@@ -56,9 +57,9 @@
 
 Current party:
 
-- Arlen: Vanguard, front-line attacker.
-- Mira: White Sage, healing/protection magic.
-- Kael: Ember Adept, offensive elemental magic.
+- Arlen: Vanguard/front-line attacker, rendered with the fighter class sheet.
+- Mira: White Sage/healing-protection magic, rendered with the priest class sheet.
+- Kael: Ember Adept/offensive elemental magic, rendered with the wizard class sheet.
 
 Characters track level, XP, next XP, HP/max HP, attack, defense, speed, luck, weapon, armor, statuses, spell charges, spells, and defend state.
 
