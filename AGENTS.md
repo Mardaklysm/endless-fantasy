@@ -32,6 +32,7 @@ Project rules:
 
 Current commit/deploy policy:
 
-- Git commit/push expectations are not yet defined for this project.
-- Do not assume automatic deploy or publishing behavior.
+- Every completed code, docs, or asset change must be committed and pushed to the configured remote before the task is considered done.
+- Use focused commit messages that describe the actual Endless Fantasy change.
+- Do not assume automatic deploy or publishing behavior beyond pushing git changes.
 - Do not commit generated build output, `node_modules`, or `dist`.

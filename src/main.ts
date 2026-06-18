@@ -9,8 +9,12 @@ const WORLD_W = 64;
 const WORLD_H = 40;
 const MOVE_DURATION_MS = 155;
 const FAST_MOVE_DURATION_MS = 95;
+const MOVE_TILES_PER_MS = 1 / MOVE_DURATION_MS;
+const FAST_MOVE_TILES_PER_MS = 1 / FAST_MOVE_DURATION_MS;
 const BATTLE_ACTION_DELAY_MS = 820;
 const BATTLE_TURN_DELAY_MS = 420;
+const PLAYER_HITBOX = { left: 0.22, top: 0.18, right: 0.78, bottom: 0.9 };
+const LANDMARK_FOOTPRINT = 3;
 
 type Mode =
   | "title"
@@ -156,6 +160,7 @@ interface LocationDef {
   kind: "town" | "dungeon" | "final" | "gate";
   x: number;
   y: number;
+  footprint?: number;
   requires?: () => boolean;
   lockedText?: string;
 }
@@ -214,15 +219,6 @@ interface Dialogue {
   done: () => void;
 }
 
-interface MovementState {
-  mode: ExploreMode;
-  from: Vec;
-  to: Vec;
-  dir: Vec;
-  elapsed: number;
-  duration: number;
-}
-
 interface BattleAction {
   side: "party" | "enemy";
   actorId: string;
@@ -230,6 +226,17 @@ interface BattleAction {
   targetIndex?: number;
   spellId?: string;
   itemId?: string;
+}
+
+interface BattleAnimation {
+  action: BattleAction;
+  elapsed: number;
+  duration: number;
+  impactAt: number;
+  resolved: boolean;
+  spent?: boolean;
+  targetSide?: "party" | "enemy";
+  targetActorId?: string;
 }
 
 type BattlePhase = "command" | "target" | "spell" | "item" | "allyTarget" | "resolving" | "log";
@@ -254,6 +261,7 @@ interface BattleState {
   actions: BattleAction[];
   selected: number;
   pendingAction?: Partial<BattleAction>;
+  animation?: BattleAnimation;
   log: string[];
   actionTimer: number;
   victoryAwarded: boolean;
@@ -271,11 +279,11 @@ interface TownServiceDef {
 }
 
 const TOWN_SERVICES: TownServiceDef[] = [
-  { kind: "inn", label: "Inn", x: 4, y: 4, color: 0xd9eeb8, accent: 0x6f8d5b },
-  { kind: "item", label: "Items", x: 8, y: 4, color: 0xf7d58b, accent: 0xb57435 },
-  { kind: "arms", label: "Arms", x: 12, y: 4, color: 0xd6d9e8, accent: 0x7c8397 },
-  { kind: "magic", label: "Magic", x: 16, y: 4, color: 0xc7a9ff, accent: 0x6f53b8 },
-  { kind: "clinic", label: "Clinic", x: 4, y: 9, color: 0xffc1d3, accent: 0xb64c6b }
+  { kind: "inn", label: "Inn", x: 4, y: 3, color: 0xd9eeb8, accent: 0x6f8d5b },
+  { kind: "item", label: "Items", x: 7, y: 3, color: 0xf7d58b, accent: 0xb57435 },
+  { kind: "arms", label: "Arms", x: 10, y: 3, color: 0xd6d9e8, accent: 0x7c8397 },
+  { kind: "magic", label: "Magic", x: 13, y: 3, color: 0xc7a9ff, accent: 0x6f53b8 },
+  { kind: "clinic", label: "Clinic", x: 16, y: 3, color: 0xffc1d3, accent: 0xb64c6b }
 ];
 
 const ASSET_PATHS = [
@@ -342,12 +350,12 @@ const ASSET_PATHS = [
   ["battle_arlen_portrait", "portraits/battle_arlen.png"],
   ["battle_mira_portrait", "portraits/battle_mira.png"],
   ["battle_kael_portrait", "portraits/battle_kael.png"],
-  ["battle_bg_forest_path", "battle/backgrounds/forest_path.png"],
-  ["battle_bg_plains", "battle/backgrounds/plains.png"],
-  ["battle_bg_moss_cave", "battle/backgrounds/moss_cave.png"],
-  ["battle_bg_ashen_keep", "battle/backgrounds/ashen_keep.png"],
-  ["battle_bg_tide_shrine", "battle/backgrounds/tide_shrine.png"],
-  ["battle_bg_eclipse_spire", "battle/backgrounds/eclipse_spire.png"],
+  ["battle_bg_forest_path", "battle/backgrounds/forest_path.jpeg"],
+  ["battle_bg_plains", "battle/backgrounds/plains.jpeg"],
+  ["battle_bg_moss_cave", "battle/backgrounds/moss_cave.jpeg"],
+  ["battle_bg_ashen_keep", "battle/backgrounds/ashen_keep.jpeg"],
+  ["battle_bg_tide_shrine", "battle/backgrounds/tide_shrine.jpeg"],
+  ["battle_bg_eclipse_spire", "battle/backgrounds/eclipse_spire.jpeg"],
   ["enemy_slimebud", "enemies/slimebud.png"],
   ["enemy_bristle_rat", "enemies/bristle_rat.png"],
   ["enemy_field_imp", "enemies/field_imp.png"],
@@ -415,7 +423,7 @@ const ASSET_PATHS = [
 
 type AssetKey = (typeof ASSET_PATHS)[number][0];
 
-const ASSET_MODULES = import.meta.glob("../assets/**/*.png", {
+const ASSET_MODULES = import.meta.glob("../assets/**/*.{png,jpeg,jpg}", {
   eager: true,
   query: "?url",
   import: "default"
@@ -423,9 +431,9 @@ const ASSET_MODULES = import.meta.glob("../assets/**/*.png", {
 
 const ASSET_V2_MODULES = import.meta.glob(
   [
-    "../assets_v2/**/*.png",
-    "!../assets_v2/previews/**/*.png",
-    "!../assets_v2/source_sheets/**/*.png",
+    "../assets_v2/**/*.{png,jpeg,jpg}",
+    "!../assets_v2/previews/**/*.{png,jpeg,jpg}",
+    "!../assets_v2/source_sheets/**/*.{png,jpeg,jpg}",
     "!../assets_v2/ui/command_window.png",
     "!../assets_v2/ui/target_window.png",
     "!../assets_v2/ui/party_status_window.png",
@@ -1111,10 +1119,10 @@ class CrystalOathScene extends Phaser.Scene {
   private gearBag: Record<string, number> = {};
   private gold = 0;
   private worldPos: Vec = { x: 10, y: 22 };
-  private townPos: Vec = { x: 10, y: 13 };
+  private townPos: Vec = { x: 10, y: 12 };
   private dungeonPos: Vec = { x: 1, y: 1 };
   private visualWorldPos: Vec = { x: 10, y: 22 };
-  private visualTownPos: Vec = { x: 10, y: 13 };
+  private visualTownPos: Vec = { x: 10, y: 12 };
   private visualDungeonPos: Vec = { x: 1, y: 1 };
   private currentTown = "dawnford";
   private currentDungeon = "mossCave";
@@ -1141,11 +1149,11 @@ class CrystalOathScene extends Phaser.Scene {
   private dirty = true;
   private lastStepFrame = 0;
   private lastMoveDir: Vec = { x: 0, y: 1 };
-  private movement?: MovementState;
   private heldDirections: DirectionName[] = [];
   private shiftHeld = false;
   private blockedMoveCooldown = 0;
   private walkAnimElapsed = 0;
+  private playerMoving = false;
 
   constructor() {
     super("CrystalOathScene");
@@ -1163,6 +1171,7 @@ class CrystalOathScene extends Phaser.Scene {
     this.ui = this.add.graphics();
     this.ui.setDepth(LAYER_UI_GRAPHICS);
     this.world = this.makeWorld();
+    this.configureTextureFiltering();
     this.input.keyboard?.on("keydown", (event: KeyboardEvent) => this.handleKey(event));
     this.input.keyboard?.on("keyup", (event: KeyboardEvent) => this.handleKeyUp(event));
     this.input.on("pointerdown", () => {
@@ -1307,23 +1316,19 @@ class CrystalOathScene extends Phaser.Scene {
   }
 
   private handleExplore(event: KeyboardEvent) {
-    if (this.movement) {
-      if (isCancel(event)) this.clearHeldMovement();
-      return;
-    }
     if (isCancel(event)) {
       this.clearHeldMovement();
       this.openMainMenu();
       return;
     }
     if (isConfirm(event)) {
-      if (this.movement) return;
       this.interact();
       return;
     }
     const dir = keyDirection(event);
     if (!dir) return;
-    this.tryStartHeldMovement();
+    this.lastMoveDir = { ...dir };
+    if (!event.repeat) this.moveExploreContinuously(dir, 32);
     this.markDirty();
   }
 
@@ -1356,7 +1361,7 @@ class CrystalOathScene extends Phaser.Scene {
     this.gearBag = { trainingBlade: 1, willowRod: 2, travelCloth: 3 };
     this.gold = 80;
     this.worldPos = { x: 10, y: 22 };
-    this.townPos = { x: 10, y: 13 };
+    this.townPos = { x: 10, y: 12 };
     this.dungeonPos = { x: 1, y: 1 };
     this.currentTown = "dawnford";
     this.currentDungeon = "mossCave";
@@ -1375,7 +1380,6 @@ class CrystalOathScene extends Phaser.Scene {
     this.settings.encounters = true;
     this.settings.xpMultiplier = 1;
     this.settings.fastText = false;
-    this.movement = undefined;
     this.clearHeldMovement();
     this.mode = "town";
     this.currentTown = "dawnford";
@@ -1460,7 +1464,12 @@ class CrystalOathScene extends Phaser.Scene {
       world.push(row);
     }
     for (const loc of this.locations()) {
-      world[loc.y][loc.x] = "road";
+      const radius = Math.floor(this.locationFootprint(loc) / 2);
+      for (let y = loc.y - radius; y <= loc.y + radius; y += 1) {
+        for (let x = loc.x - radius; x <= loc.x + radius; x += 1) {
+          if (world[y]?.[x] !== undefined) world[y][x] = "road";
+        }
+      }
     }
     return world;
   }
@@ -1722,91 +1731,147 @@ class CrystalOathScene extends Phaser.Scene {
 
   private updateMovement(delta: number) {
     this.blockedMoveCooldown = Math.max(0, this.blockedMoveCooldown - delta);
-    if (this.movement) {
-      this.movement.elapsed += delta;
-      this.walkAnimElapsed += delta;
-      this.updateVisualMovementPosition(this.movement);
-      if (this.movement.elapsed >= this.movement.duration) {
-        const completed = this.movement;
-        this.setVisualExplorePos(completed.mode, completed.to);
-        this.movement = undefined;
-        this.walkAnimElapsed = 0;
-        this.movePlayer(completed.dir.x, completed.dir.y);
-        this.syncAllVisualPositions();
-        this.markDirty();
-        if (this.isExploreMode(this.mode)) this.tryStartHeldMovement();
-        return;
-      }
-      this.markDirty();
+    this.playerMoving = false;
+    if (!this.isExploreMode(this.mode)) {
+      this.walkAnimElapsed = 0;
       return;
     }
-    this.walkAnimElapsed = 0;
-    if (this.isExploreMode(this.mode)) this.tryStartHeldMovement();
-  }
-
-  private tryStartHeldMovement(): boolean {
-    if (!this.isExploreMode(this.mode) || this.movement) return false;
     const dir = this.currentHeldDirection();
-    if (!dir) return false;
-    return this.startMovement(dir.x, dir.y);
-  }
-
-  private startMovement(dx: number, dy: number): boolean {
-    if (!this.isExploreMode(this.mode)) return false;
-    this.lastMoveDir = { x: dx, y: dy };
-    if (!this.canStartMovement(dx, dy)) {
+    if (!dir) {
+      this.walkAnimElapsed = 0;
+      return;
+    }
+    this.lastMoveDir = { ...dir };
+    if (!this.moveExploreContinuously(dir, delta)) {
       if (this.blockedMoveCooldown <= 0) {
         this.audio.blip("error");
         this.blockedMoveCooldown = 150;
       }
-      return false;
+      this.walkAnimElapsed = 0;
+      return;
     }
-    const from = this.currentExplorePos(this.mode);
-    this.setVisualExplorePos(this.mode, from);
-    this.movement = {
-      mode: this.mode,
-      from,
-      to: { x: from.x + dx, y: from.y + dy },
-      dir: { x: dx, y: dy },
-      elapsed: 0,
-      duration: this.shiftHeld ? FAST_MOVE_DURATION_MS : MOVE_DURATION_MS
-    };
-    this.walkAnimElapsed = 0;
+    this.playerMoving = true;
+    this.walkAnimElapsed += delta;
     this.markDirty();
+  }
+
+  private moveExploreContinuously(dir: Vec, delta: number): boolean {
+    if (!this.isExploreMode(this.mode)) return false;
+    const mode = this.mode;
+    const speed = (this.shiftHeld ? FAST_MOVE_TILES_PER_MS : MOVE_TILES_PER_MS) * delta;
+    let pos = this.visualExplorePos(mode);
+    let moved = false;
+    if (mode === "town" && dir.y > 0 && this.isTownExitTile(this.positionToTile(pos)) && pos.y >= 12.68) {
+      this.exitTownToWorld();
+      return true;
+    }
+    if (dir.x !== 0) {
+      const next = { x: pos.x + dir.x * speed, y: pos.y };
+      if (this.canOccupyExplorePos(mode, next)) {
+        pos = next;
+        moved = true;
+      }
+    }
+    if (dir.y !== 0 && this.isExploreMode(this.mode) && this.mode === mode) {
+      const next = { x: pos.x, y: pos.y + dir.y * speed };
+      if (this.canOccupyExplorePos(mode, next)) {
+        pos = next;
+        moved = true;
+      }
+    }
+    if (!moved || !this.isExploreMode(this.mode) || this.mode !== mode) return moved;
+    this.setVisualExplorePos(mode, pos);
+    this.updateEnteredExploreTile(mode, dir);
     return true;
   }
 
-  private canStartMovement(dx: number, dy: number): boolean {
-    if (!this.isExploreMode(this.mode)) return false;
-    const pos = this.currentExplorePos(this.mode);
-    const nx = pos.x + dx;
-    const ny = pos.y + dy;
-    if (this.mode === "world") {
-      if (nx < 0 || ny < 0 || nx >= WORLD_W || ny >= WORLD_H) return false;
-      return this.canEnterTerrain(this.world[ny][nx]) || !!this.locationAt(nx, ny);
-    }
-    if (this.mode === "town") {
-      if (this.townPos.y === 13 && this.townPos.x >= 9 && this.townPos.x <= 11 && dy > 0) return true;
-      return nx >= 1 && nx <= 19 && ny >= 1 && ny <= 13;
-    }
-    const dungeon = this.dungeons()[this.currentDungeon];
-    const floor = dungeon.floors[this.dungeonFloor];
-    const tile = floor[ny]?.[nx] ?? "#";
-    return !(tile === "#" || (tile === "D" && !this.puzzleFlags.has(`${this.currentDungeon}-switch`)));
-  }
-
-  private currentExplorePos(mode: ExploreMode): Vec {
+  private currentExploreTile(mode: ExploreMode): Vec {
     if (mode === "world") return { ...this.worldPos };
     if (mode === "town") return { ...this.townPos };
     return { ...this.dungeonPos };
   }
 
-  private updateVisualMovementPosition(movement: MovementState) {
-    const t = Phaser.Math.Clamp(movement.elapsed / movement.duration, 0, 1);
-    this.setVisualExplorePos(movement.mode, {
-      x: Phaser.Math.Linear(movement.from.x, movement.to.x, t),
-      y: Phaser.Math.Linear(movement.from.y, movement.to.y, t)
-    });
+  private setCurrentExploreTile(mode: ExploreMode, tile: Vec) {
+    const next = { ...tile };
+    if (mode === "world") this.worldPos = next;
+    else if (mode === "town") this.townPos = next;
+    else this.dungeonPos = next;
+  }
+
+  private positionToTile(pos: Vec): Vec {
+    return { x: Math.floor(pos.x + 0.5), y: Math.floor(pos.y + 0.5) };
+  }
+
+  private canOccupyExplorePos(mode: ExploreMode, pos: Vec): boolean {
+    const left = Math.floor(pos.x + PLAYER_HITBOX.left);
+    const right = Math.floor(pos.x + PLAYER_HITBOX.right);
+    const top = Math.floor(pos.y + PLAYER_HITBOX.top);
+    const bottom = Math.floor(pos.y + PLAYER_HITBOX.bottom);
+    for (let y = top; y <= bottom; y += 1) {
+      for (let x = left; x <= right; x += 1) {
+        if (!this.canOccupyExploreTile(mode, x, y)) return false;
+      }
+    }
+    return true;
+  }
+
+  private canOccupyExploreTile(mode: ExploreMode, x: number, y: number): boolean {
+    if (mode === "world") {
+      if (x < 0 || y < 0 || x >= WORLD_W || y >= WORLD_H) return false;
+      return this.canEnterTerrain(this.world[y][x]) || !!this.locationAt(x, y);
+    }
+    if (mode === "town") return x >= 1 && x <= 19 && y >= 1 && y <= 13;
+    const dungeon = this.dungeons()[this.currentDungeon];
+    const floor = dungeon.floors[this.dungeonFloor];
+    const tile = floor[y]?.[x] ?? "#";
+    return !(tile === "#" || (tile === "D" && !this.puzzleFlags.has(`${this.currentDungeon}-switch`)));
+  }
+
+  private updateEnteredExploreTile(mode: ExploreMode, dir: Vec) {
+    if (!this.isExploreMode(this.mode) || this.mode !== mode) return;
+    const tile = this.positionToTile(this.visualExplorePos(mode));
+    const previous = this.currentExploreTile(mode);
+    if (tile.x === previous.x && tile.y === previous.y) return;
+    this.setCurrentExploreTile(mode, tile);
+    this.lastStepFrame += 1;
+    if (mode === "world") {
+      this.applyWalkPoison();
+      const loc = this.locationAt(tile.x, tile.y);
+      if (loc) this.enterLocation(loc);
+      else this.maybeEncounter();
+      return;
+    }
+    if (mode === "town") {
+      if (dir.y > 0 && this.isTownExitTile(tile)) this.exitTownToWorld();
+      return;
+    }
+    const dungeon = this.dungeons()[this.currentDungeon];
+    const floor = dungeon.floors[this.dungeonFloor];
+    const dungeonTile = floor[tile.y]?.[tile.x] ?? "#";
+    this.applyWalkPoison();
+    if (dungeonTile === "E") {
+      this.clearHeldMovement();
+      this.mode = "world";
+      this.syncAllVisualPositions();
+      this.audio.setMode("world");
+      return;
+    }
+    if (dungeonTile === "S") {
+      this.clearHeldMovement();
+      this.dungeonFloor = this.dungeonFloor === 0 ? 1 : 0;
+      this.dungeonPos = this.dungeonFloor === 0 ? { x: 19, y: 12 } : { x: 2, y: 12 };
+      this.syncAllVisualPositions();
+      return;
+    }
+    if (dungeonTile === "B") {
+      this.startBossBattle(dungeon);
+      return;
+    }
+    if (dungeonTile === "C" || dungeonTile === "K") {
+      this.interact();
+      return;
+    }
+    this.maybeDungeonEncounter(dungeon);
   }
 
   private setVisualExplorePos(mode: ExploreMode, pos: Vec) {
@@ -1828,94 +1893,23 @@ class CrystalOathScene extends Phaser.Scene {
     return { ...this.visualDungeonPos };
   }
 
-  private movePlayer(dx: number, dy: number): boolean {
-    this.lastMoveDir = { x: dx, y: dy };
-    this.lastStepFrame += 1;
-    if (this.mode === "world") return this.moveWorld(dx, dy);
-    if (this.mode === "town") return this.moveTown(dx, dy);
-    if (this.mode === "dungeon") return this.moveDungeon(dx, dy);
-    return false;
+  private isTownExitTile(tile: Vec): boolean {
+    return tile.y >= 13 && tile.x >= 9 && tile.x <= 11;
   }
 
-  private moveWorld(dx: number, dy: number): boolean {
-    const nx = this.worldPos.x + dx;
-    const ny = this.worldPos.y + dy;
-    if (nx < 0 || ny < 0 || nx >= WORLD_W || ny >= WORLD_H) return false;
-    if (!this.canEnterTerrain(this.world[ny][nx]) && !this.locationAt(nx, ny)) {
-      this.audio.blip("error");
-      return false;
+  private exitTownToWorld() {
+    this.clearHeldMovement();
+    const loc = this.locations().find((candidate) => candidate.id === this.currentTown);
+    if (loc) {
+      const radius = Math.floor(this.locationFootprint(loc) / 2);
+      const y = Phaser.Math.Clamp(loc.y + radius + 1, 0, WORLD_H - 1);
+      this.worldPos = { x: loc.x, y };
     }
-    this.worldPos = { x: nx, y: ny };
-    this.applyWalkPoison();
-    const loc = this.locationAt(nx, ny);
-    if (loc && loc.kind !== "gate") {
-      this.enterLocation(loc);
-      return true;
-    }
-    if (loc?.kind === "gate") {
-      this.enterLocation(loc);
-      return true;
-    }
-    this.maybeEncounter();
-    return true;
-  }
-
-  private moveTown(dx: number, dy: number): boolean {
-    if (this.townPos.y === 13 && this.townPos.x >= 9 && this.townPos.x <= 11 && dy > 0) {
-      this.clearHeldMovement();
-      this.mode = "world";
-      this.audio.setMode("world");
-      this.saveGame();
-      return true;
-    }
-    const nx = this.townPos.x + dx;
-    const ny = this.townPos.y + dy;
-    if (nx < 1 || nx > 19 || ny < 1 || ny > 13) return false;
-    if (ny === 13 && nx >= 9 && nx <= 11) {
-      this.clearHeldMovement();
-      this.mode = "world";
-      this.audio.setMode("world");
-      this.saveGame();
-      return true;
-    }
-    this.townPos = { x: nx, y: ny };
-    return true;
-  }
-
-  private moveDungeon(dx: number, dy: number): boolean {
-    const dungeon = this.dungeons()[this.currentDungeon];
-    const floor = dungeon.floors[this.dungeonFloor];
-    const nx = this.dungeonPos.x + dx;
-    const ny = this.dungeonPos.y + dy;
-    const tile = floor[ny]?.[nx] ?? "#";
-    if (tile === "#" || (tile === "D" && !this.puzzleFlags.has(`${this.currentDungeon}-switch`))) {
-      this.audio.blip("error");
-      return false;
-    }
-    this.dungeonPos = { x: nx, y: ny };
-    this.applyWalkPoison();
-    if (tile === "E") {
-      this.clearHeldMovement();
-      this.mode = "world";
-      this.audio.setMode("world");
-      return true;
-    }
-    if (tile === "S") {
-      this.clearHeldMovement();
-      this.dungeonFloor = this.dungeonFloor === 0 ? 1 : 0;
-      this.dungeonPos = this.dungeonFloor === 0 ? { x: 19, y: 12 } : { x: 2, y: 12 };
-      return true;
-    }
-    if (tile === "B") {
-      this.startBossBattle(dungeon);
-      return true;
-    }
-    if (tile === "C" || tile === "K") {
-      this.interact();
-      return true;
-    }
-    this.maybeDungeonEncounter(dungeon);
-    return true;
+    this.mode = "world";
+    this.syncAllVisualPositions();
+    this.audio.setMode("world");
+    this.saveGame();
+    this.markDirty();
   }
 
   private interact() {
@@ -2054,8 +2048,17 @@ class CrystalOathScene extends Phaser.Scene {
     return count;
   }
 
+  private locationFootprint(loc: LocationDef): number {
+    return loc.footprint ?? LANDMARK_FOOTPRINT;
+  }
+
+  private locationContainsTile(loc: LocationDef, x: number, y: number): boolean {
+    const radius = Math.floor(this.locationFootprint(loc) / 2);
+    return x >= loc.x - radius && x <= loc.x + radius && y >= loc.y - radius && y <= loc.y + radius;
+  }
+
   private locationAt(x: number, y: number): LocationDef | undefined {
-    return this.locations().find((loc) => loc.x === x && loc.y === y);
+    return this.locations().find((loc) => this.locationContainsTile(loc, x, y));
   }
 
   private canEnterTerrain(terrain: Terrain): boolean {
@@ -2138,7 +2141,6 @@ class CrystalOathScene extends Phaser.Scene {
 
   private beginBattle(kind: BattleState["kind"], enemies: EnemyState[], canRun: boolean, intro: string, dungeonId?: string, bossId?: string) {
     this.clearHeldMovement();
-    this.movement = undefined;
     this.syncAllVisualPositions();
     this.party.forEach((c) => (c.defending = false));
     this.battle = {
@@ -2164,9 +2166,37 @@ class CrystalOathScene extends Phaser.Scene {
   }
 
   private updateBattleFlow(delta: number) {
-    if (!this.battle || this.mode !== "battle" || this.battle.phase !== "resolving") return;
+    if (!this.battle || this.mode !== "battle") return;
+    if (this.battle.animation) {
+      this.updateBattleAnimation(delta);
+      return;
+    }
+    if (["command", "target", "spell", "item", "allyTarget"].includes(this.battle.phase)) this.markDirty();
+    if (this.battle.phase !== "resolving") return;
     this.battle.actionTimer -= delta;
     if (this.battle.actionTimer <= 0) this.advanceBattleAfterDelay();
+    this.markDirty();
+  }
+
+  private updateBattleAnimation(delta: number) {
+    if (!this.battle?.animation) return;
+    const animation = this.battle.animation;
+    animation.elapsed += delta;
+    if (!animation.resolved && animation.elapsed >= animation.impactAt) {
+      animation.resolved = true;
+      animation.spent =
+        animation.action.side === "party" ? this.resolvePartyAction(animation.action) : this.resolveEnemyAction(animation.action);
+      if (!this.battle) return;
+    }
+    if (animation.elapsed >= animation.duration && this.battle) {
+      const spent = animation.spent ?? true;
+      this.battle.animation = undefined;
+      if (spent) this.finishCurrentTurn(BATTLE_ACTION_DELAY_MS);
+      else {
+        this.battle.phase = this.currentBattleActor() ? "command" : "resolving";
+        this.battle.selected = 0;
+      }
+    }
     this.markDirty();
   }
 
@@ -2235,8 +2265,7 @@ class CrystalOathScene extends Phaser.Scene {
         this.finishCurrentTurn(BATTLE_ACTION_DELAY_MS);
         return;
       }
-      this.resolveEnemyAction({ side: "enemy", actorId: enemy.uid, type: "attack" });
-      this.finishCurrentTurn(BATTLE_ACTION_DELAY_MS);
+      this.queueBattleActionAnimation({ side: "enemy", actorId: enemy.uid, type: "attack" });
       return;
     }
     this.checkBattleEnd();
@@ -2389,9 +2418,50 @@ class CrystalOathScene extends Phaser.Scene {
 
   private executePlayerAction(action: BattleAction) {
     if (!this.battle) return;
-    const spent = this.resolvePartyAction(action);
+    this.queueBattleActionAnimation(action);
+  }
+
+  private queueBattleActionAnimation(action: BattleAction) {
     if (!this.battle) return;
-    if (spent) this.finishCurrentTurn(BATTLE_ACTION_DELAY_MS);
+    const target = this.battleAnimationTarget(action);
+    this.battle.phase = "resolving";
+    this.battle.pendingAction = undefined;
+    this.battle.selected = 0;
+    this.battle.actionTimer = 0;
+    this.battle.animation = {
+      action,
+      elapsed: 0,
+      duration: 390,
+      impactAt: 155,
+      resolved: false,
+      ...target
+    };
+    this.markDirty();
+  }
+
+  private battleAnimationTarget(action: BattleAction): Pick<BattleAnimation, "targetSide" | "targetActorId"> {
+    if (!this.battle) return {};
+    if (action.side === "enemy") return {};
+    if (action.type === "attack") {
+      const target = this.battle.enemies[action.targetIndex ?? -1] ?? this.battle.enemies.find((enemy) => enemy.hp > 0);
+      return target ? { targetSide: "enemy", targetActorId: target.uid } : {};
+    }
+    if (action.type === "spell" && action.spellId) {
+      const spell = SPELLS[action.spellId];
+      if (spell.target === "enemy") {
+        const target = this.battle.enemies[action.targetIndex ?? -1] ?? this.battle.enemies.find((enemy) => enemy.hp > 0);
+        return target ? { targetSide: "enemy", targetActorId: target.uid } : {};
+      }
+      if (spell.target === "ally" || spell.target === "self") {
+        const target = spell.target === "self" ? this.party.find((member) => member.id === action.actorId) : this.party[action.targetIndex ?? 0];
+        return target ? { targetSide: "party", targetActorId: target.id } : {};
+      }
+    }
+    if (action.type === "item" && action.itemId && !["smokeBomb", "etherleaf"].includes(action.itemId)) {
+      const target = this.party[action.targetIndex ?? 0];
+      return target ? { targetSide: "party", targetActorId: target.id } : {};
+    }
+    return {};
   }
 
   private cancelBattleSubmenu() {
@@ -3338,7 +3408,6 @@ Statuses: ${statuses}`;
       this.audio.setMuted(this.settings.muted);
       this.encounterCounter = data.encounterCounter ?? 10;
       this.mode = "world";
-      this.movement = undefined;
       this.clearHeldMovement();
       this.syncAllVisualPositions();
       this.audio.setMode("world");
@@ -3407,6 +3476,14 @@ Statuses: ${statuses}`;
 
   private hasTexture(key: AssetKey): boolean {
     return this.textures.exists(key);
+  }
+
+  private configureTextureFiltering() {
+    for (const [key] of ASSET_PATHS) {
+      if (!this.textures.exists(key)) continue;
+      const filter = key.startsWith("battle_bg_") ? Phaser.Textures.FilterMode.LINEAR : Phaser.Textures.FilterMode.NEAREST;
+      this.textures.get(key).setFilter(filter);
+    }
   }
 
   private drawTexture(
@@ -3508,8 +3585,9 @@ Statuses: ${statuses}`;
       }
     }
     for (const loc of this.locations()) {
-      if (loc.x < startX || loc.x > endX || loc.y < startY || loc.y > endY) continue;
-      this.drawLocationIcon(loc, loc.x * TILE - cam.x, loc.y * TILE - cam.y);
+      const radius = Math.floor(this.locationFootprint(loc) / 2);
+      if (loc.x + radius < startX || loc.x - radius > endX || loc.y + radius < startY || loc.y - radius > endY) continue;
+      this.drawLocationIcon(loc, (loc.x - radius) * TILE - cam.x, (loc.y - radius) * TILE - cam.y);
     }
     this.drawLeader(leaderPos.x * TILE - cam.x + 4, leaderPos.y * TILE - cam.y + 3);
     this.drawHud("World");
@@ -3626,35 +3704,23 @@ Statuses: ${statuses}`;
 
   private drawTownService(service: TownServiceDef, ox: number, oy: number) {
     const cx = ox + service.x * TILE + TILE / 2;
-    const zoneX = ox + (service.x - 1) * TILE;
-    const zoneY = oy + (service.y - 1) * TILE;
-    this.g.fillStyle(0xfff0b8, 0.12).fillRect(zoneX, zoneY, TILE * 3, TILE * 3);
-    this.g.lineStyle(1, service.color, 0.35).strokeRect(zoneX + 2, zoneY + 2, TILE * 3 - 4, TILE * 3 - 4);
-
-    const kioskX = cx - 46;
-    const kioskY = oy + service.y * TILE - 34;
-    this.g.fillStyle(0x172033, 0.55).fillRect(kioskX + 5, kioskY + 8, 92, 62);
-    this.g.fillStyle(service.color, 1).fillRect(kioskX, kioskY, 92, 48);
-    this.g.fillStyle(service.accent, 1).fillRect(kioskX, kioskY + 34, 92, 22);
-    this.g.fillStyle(0x111827, 0.3).fillRect(kioskX + 8, kioskY + 8, 76, 12);
-    this.g.lineStyle(2, 0x172033, 1).strokeRect(kioskX, kioskY, 92, 56);
-    this.g.lineStyle(2, 0xfff5c8, 0.75).lineBetween(kioskX + 5, kioskY + 4, kioskX + 87, kioskY + 4);
+    const kioskW = 66;
+    const kioskH = 72;
+    const kioskX = cx - kioskW / 2;
+    const kioskY = oy + service.y * TILE - 31;
+    this.g.fillStyle(0x07101f, 0.35).fillEllipse(cx, kioskY + kioskH - 7, kioskW + 10, 15);
+    this.g.fillStyle(0x111827, 0.94).fillRect(kioskX, kioskY + 10, kioskW, kioskH - 14);
+    this.g.fillStyle(service.color, 0.92).fillRect(kioskX + 5, kioskY + 15, kioskW - 10, kioskH - 24);
+    this.g.fillStyle(service.accent, 0.92).fillRect(kioskX + 5, kioskY + kioskH - 26, kioskW - 10, 16);
+    this.g.lineStyle(2, 0xfff5c8, 0.72).strokeRect(kioskX + 4, kioskY + 14, kioskW - 8, kioskH - 22);
+    this.g.lineStyle(2, 0x07101f, 1).strokeRect(kioskX, kioskY + 10, kioskW, kioskH - 14);
 
     const serviceTexture = TOWN_SERVICE_TEXTURES[service.kind];
     if (this.hasTexture(serviceTexture)) {
-      this.drawTexture(serviceTexture, cx - 44, kioskY - 23, 88, 72, LAYER_OBJECT_IMAGE);
+      this.drawTexture(serviceTexture, cx - 31, kioskY, 62, 62, LAYER_OBJECT_IMAGE);
     } else {
-      this.drawTownServiceIcon(service.kind, cx, kioskY + 24, service.accent);
+      this.drawTownServiceIcon(service.kind, cx, kioskY + 38, service.accent);
     }
-
-    const signW = service.kind === "clinic" ? 104 : 96;
-    const signCx = cx + (service.kind === "clinic" ? -22 : 0);
-    const signX = signCx - signW / 2;
-    const signY = kioskY - 26;
-    this.g.fillStyle(0x111827, 1).fillRect(signX, signY, signW, 24);
-    this.g.fillStyle(0xfff1bb, 1).fillRect(signX + 3, signY + 3, signW - 6, 18);
-    this.g.lineStyle(2, 0x412b1c, 1).strokeRect(signX, signY, signW, 24);
-    this.text(signCx, signY + 3, service.label, 15, "#172033", "center", { strokeThickness: 0, wordWrapWidth: signW });
   }
 
   private drawTownDecor(ox: number, oy: number) {
@@ -3675,14 +3741,12 @@ Statuses: ${statuses}`;
     if (this.hasTexture("town_exit_gate")) {
       this.g.fillStyle(0x07101f, 0.75).fillRect(x - 4, y - 6, TILE * 3 + 8, TILE + 8);
       this.drawTexture("town_exit_gate", x, y - 50, TILE * 3, 80, LAYER_OBJECT_IMAGE);
-      this.text(x + TILE * 1.5, y - 76, "Exit", 14, "#fff2a8", "center", { wordWrapWidth: 90 });
       return;
     }
     this.g.fillStyle(0x07101f, 1).fillRect(x, y - 6, TILE * 3, TILE + 6);
     this.g.fillStyle(0x1d2b44, 1).fillRect(x + 10, y - 2, TILE * 3 - 20, TILE + 2);
     this.g.fillStyle(0xf5d27c, 1).fillRect(x + 4, y - 8, TILE * 3 - 8, 5);
     this.g.lineStyle(2, 0x0b1324, 1).strokeRect(x, y - 6, TILE * 3, TILE + 6);
-    this.text(x + TILE * 1.5, y - 28, "Exit", 14, "#fff2a8", "center", { wordWrapWidth: 90 });
   }
 
   private drawTown() {
@@ -3711,7 +3775,6 @@ Statuses: ${statuses}`;
     const leaderPos = this.visualExplorePos("town");
     this.drawLeader(ox + leaderPos.x * TILE + 4, oy + leaderPos.y * TILE + 3);
     this.drawHud(town.name);
-    this.drawPrompt("Interact / south gate exits");
   }
 
   private drawDungeon() {
@@ -3740,25 +3803,31 @@ Statuses: ${statuses}`;
     this.battle.enemies.forEach((enemy, idx) => {
       const slot = this.enemyBattleSlot(enemy, idx);
       const targeted = selectedEnemy?.uid === enemy.uid;
-      this.drawBattleEnemy(enemy, slot.x, slot.y, slot.size, targeted);
+      const offset = this.battleActorOffset("enemy", enemy.uid);
+      this.drawBattleEnemy(enemy, slot.x + offset.x, slot.y + offset.y, slot.size, targeted);
     });
     this.party.forEach((member, idx) => {
-      const active = this.currentBattleEntry()?.side === "party" && this.currentBattleEntry()?.actorId === member.id && this.battle?.phase !== "resolving";
-      this.drawPartyBattler(member, 690 + idx * 42, 104 + idx * 72, idx, active);
-      this.drawPortrait(member, 890, 66 + idx * 88, 1.3);
+      const slot = this.partyBattleSlot(idx);
+      const offset = this.battleActorOffset("party", member.id);
+      const active =
+        this.currentBattleEntry()?.side === "party" &&
+        this.currentBattleEntry()?.actorId === member.id &&
+        !this.battle?.animation &&
+        this.battle?.phase !== "resolving";
+      this.drawPartyBattler(member, slot.x + offset.x, slot.y + offset.y, idx, active);
     });
-    this.drawBattleTargetPanel(16, 388, 250, 136);
-    this.drawBattleCommandPanel(276, 388, 222, 136);
-    this.drawBattleStatusPanel(508, 388, 436, 136);
+    this.drawBattleTargetPanel(14, 374, 288, 152);
+    this.drawBattleCommandPanel(312, 374, 216, 152);
+    this.drawBattleStatusPanel(538, 374, 408, 152);
   }
 
   private drawBattleBackdrop() {
     const background = this.battle?.background;
     if (background && this.hasTexture(background)) {
       this.g.fillStyle(0x050812, 1).fillRect(0, 0, WIDTH, HEIGHT);
-      this.drawTexture(background, 0, 0, WIDTH, 390, LAYER_WORLD_IMAGE);
-      this.g.fillStyle(0x000000, 0.14).fillRect(0, 0, WIDTH, 390);
-      this.g.fillStyle(0x06101f, 1).fillRect(0, 390, WIDTH, HEIGHT - 390);
+      this.drawTexture(background, 0, 0, WIDTH, HEIGHT, LAYER_WORLD_IMAGE);
+      this.g.fillStyle(0x000000, 0.05).fillRect(0, 0, WIDTH, 374);
+      this.g.fillStyle(0x06101f, 0.48).fillRect(0, 374, WIDTH, HEIGHT - 374);
       return;
     }
     this.g.fillStyle(0x0a1422, 1).fillRect(0, 0, WIDTH, HEIGHT);
@@ -3795,6 +3864,49 @@ Statuses: ${statuses}`;
     return slots[idx % slots.length];
   }
 
+  private partyBattleSlot(idx: number): { x: number; y: number; size: number } {
+    const slots = [
+      { x: 678, y: 92, size: 96 },
+      { x: 728, y: 170, size: 96 },
+      { x: 778, y: 248, size: 96 }
+    ];
+    return slots[idx % slots.length];
+  }
+
+  private battleActorCenter(side: "party" | "enemy", actorId: string): Vec | undefined {
+    if (!this.battle) return undefined;
+    if (side === "party") {
+      const idx = this.party.findIndex((member) => member.id === actorId);
+      if (idx < 0) return undefined;
+      const slot = this.partyBattleSlot(idx);
+      return { x: slot.x + 48, y: slot.y + 42 };
+    }
+    const enemy = this.battle.enemies.find((candidate) => candidate.uid === actorId);
+    if (!enemy) return undefined;
+    const slot = this.enemyBattleSlot(enemy, this.battle.enemies.indexOf(enemy));
+    return { x: slot.x + slot.size / 2, y: slot.y + slot.size * 0.56 };
+  }
+
+  private battleActorOffset(side: "party" | "enemy", actorId: string): Vec {
+    const animation = this.battle?.animation;
+    if (!animation || animation.action.side !== side || animation.action.actorId !== actorId) return { x: 0, y: 0 };
+    const actor = this.battleActorCenter(side, actorId);
+    const target =
+      animation.targetSide && animation.targetActorId ? this.battleActorCenter(animation.targetSide, animation.targetActorId) : undefined;
+    let vx = (target?.x ?? actor?.x ?? 0) - (actor?.x ?? 0);
+    let vy = (target?.y ?? actor?.y ?? 0) - (actor?.y ?? 0);
+    if (!target || Math.hypot(vx, vy) < 1) {
+      vx = side === "party" ? -1 : 1;
+      vy = 0;
+    }
+    const length = Math.max(1, Math.hypot(vx, vy));
+    const outward = Phaser.Math.Clamp(animation.elapsed / animation.impactAt, 0, 1);
+    const inward = Phaser.Math.Clamp((animation.elapsed - animation.impactAt) / Math.max(1, animation.duration - animation.impactAt), 0, 1);
+    const phase = animation.elapsed <= animation.impactAt ? Phaser.Math.Easing.Cubic.Out(outward) : 1 - Phaser.Math.Easing.Cubic.In(inward);
+    const distance = side === "party" ? (animation.targetSide ? 44 : 30) : 32;
+    return { x: (vx / length) * distance * phase, y: (vy / length) * distance * phase };
+  }
+
   private selectedBattleEnemy(): EnemyState | undefined {
     if (!this.battle || this.battle.phase !== "target") return undefined;
     return this.battle.enemies.filter((enemy) => enemy.hp > 0)[this.battle.selected];
@@ -3826,43 +3938,54 @@ Statuses: ${statuses}`;
     }
     if (this.hasTexture(texture)) {
       this.drawTexture(texture, x, y - 6, 96, 82, LAYER_BATTLE_IMAGE, alpha);
-      return;
-    }
-    const palettes = {
-      arlen: [0xf0c18d, 0xc9433f, 0xe9edf7, 0x362a4b],
-      mira: [0xf1d0aa, 0xf5f2e8, 0x5fac73, 0x314c33],
-      kael: [0xe1b284, 0x1c365d, 0xf0b13e, 0x121827]
-    }[member.id];
-    this.g.fillStyle(0x050812, alpha).fillRect(x + 12, y + 10, 24, 42);
-    this.g.fillStyle(palettes[0], alpha).fillRect(x + 14, y, 18, 18);
-    this.g.fillStyle(palettes[1], alpha).fillRect(x + 9, y + 18, 28, 31);
-    this.g.fillStyle(palettes[2], alpha).fillRect(x + 16, y + 24, 10, 25);
-    this.g.fillStyle(palettes[3], alpha).fillRect(x + 9, y + 49, 9, 12 + (idx % 2));
-    this.g.fillRect(x + 28, y + 49, 9, 12 + ((idx + 1) % 2));
-    if (member.id === "mira") {
-      this.g.lineStyle(3, 0xeaf7ff, alpha).lineBetween(x + 38, y + 14, x + 48, y + 49);
-      this.g.fillStyle(0x8ee8ff, alpha).fillCircle(x + 39, y + 13, 5);
-    } else if (member.id === "kael") {
-      this.g.fillStyle(0xf8d45a, alpha).fillTriangle(x + 34, y + 14, x + 48, y + 20, x + 36, y + 26);
     } else {
-      this.g.fillStyle(0xdfe7ee, alpha).fillRect(x + 31, y + 22, 20, 6);
-      this.g.fillStyle(0x657081, alpha).fillRect(x + 48, y + 20, 4, 10);
+      const palettes = {
+        arlen: [0xf0c18d, 0xc9433f, 0xe9edf7, 0x362a4b],
+        mira: [0xf1d0aa, 0xf5f2e8, 0x5fac73, 0x314c33],
+        kael: [0xe1b284, 0x1c365d, 0xf0b13e, 0x121827]
+      }[member.id];
+      this.g.fillStyle(0x050812, alpha).fillRect(x + 12, y + 10, 24, 42);
+      this.g.fillStyle(palettes[0], alpha).fillRect(x + 14, y, 18, 18);
+      this.g.fillStyle(palettes[1], alpha).fillRect(x + 9, y + 18, 28, 31);
+      this.g.fillStyle(palettes[2], alpha).fillRect(x + 16, y + 24, 10, 25);
+      this.g.fillStyle(palettes[3], alpha).fillRect(x + 9, y + 49, 9, 12 + (idx % 2));
+      this.g.fillRect(x + 28, y + 49, 9, 12 + ((idx + 1) % 2));
+      if (member.id === "mira") {
+        this.g.lineStyle(3, 0xeaf7ff, alpha).lineBetween(x + 38, y + 14, x + 48, y + 49);
+        this.g.fillStyle(0x8ee8ff, alpha).fillCircle(x + 39, y + 13, 5);
+      } else if (member.id === "kael") {
+        this.g.fillStyle(0xf8d45a, alpha).fillTriangle(x + 34, y + 14, x + 48, y + 20, x + 36, y + 26);
+      } else {
+        this.g.fillStyle(0xdfe7ee, alpha).fillRect(x + 31, y + 22, 20, 6);
+        this.g.fillStyle(0x657081, alpha).fillRect(x + 48, y + 20, 4, 10);
+      }
     }
+    if (active) this.drawActiveTurnMarker(x + 48, y - 8);
+  }
+
+  private drawActiveTurnMarker(cx: number, y: number) {
+    const bob = Math.sin(this.time.now / 140) * 3;
+    this.ui.fillStyle(0x050812, 0.45).fillTriangle(cx, y + bob + 3, cx - 13, y + bob - 12, cx + 13, y + bob - 12);
+    this.ui.fillStyle(0xfff0a8, 1).fillTriangle(cx, y + bob + 1, cx - 10, y + bob - 11, cx + 10, y + bob - 11);
+    this.ui.lineStyle(2, 0xffffff, 0.7).strokeTriangle(cx, y + bob + 1, cx - 10, y + bob - 11, cx + 10, y + bob - 11);
   }
 
   private drawBattleTargetPanel(x: number, y: number, w: number, h: number) {
     if (!this.battle) return;
     this.drawPanel(x, y, w, h);
     const target = this.selectedBattleEnemy();
-    this.text(x + 16, y + 14, target ? "Target" : "Battle", 18, "#fff2a8");
+    this.text(x + 16, y + 12, target ? "Target" : "Battle Log", 17, "#fff2a8");
+    this.ui.fillStyle(0xfff0a8, 0.16).fillRect(x + 16, y + 35, w - 32, 1);
     if (target) {
-      this.text(x + 16, y + 42, target.name, 18, "#ffffff");
-      this.text(x + 16, y + 70, `HP ${target.hp}/${target.maxHp}`, 15, "#dce9ff");
-      this.drawBar(x + 16, y + 94, w - 32, 12, target.hp, target.maxHp, 0xd95252);
+      this.text(x + 16, y + 48, target.name, 18, "#ffffff", "left", { wordWrapWidth: w - 32 });
+      this.text(x + 16, y + 78, `HP ${target.hp}/${target.maxHp}`, 14, "#dce9ff");
+      this.drawBar(x + 16, y + 104, w - 32, 12, target.hp, target.maxHp, 0xd95252);
     } else {
-      this.battle!.log.slice(-4).forEach((line, idx) =>
-        this.text(x + 16, y + 42 + idx * 20, line, 14, "#ffffff", "left", { wordWrapWidth: w - 32 })
-      );
+      this.battle!.log.slice(-4).forEach((line, idx) => {
+        const rowY = y + 46 + idx * 22;
+        if (idx % 2 === 0) this.ui.fillStyle(0xffffff, 0.035).fillRect(x + 12, rowY - 3, w - 24, 20);
+        this.text(x + 18, rowY, line, 13, "#ffffff", "left", { wordWrapWidth: w - 36 });
+      });
     }
   }
 
@@ -3881,36 +4004,51 @@ Statuses: ${statuses}`;
             : this.battle.phase === "item"
               ? `${actor.name}: choose item`
               : `${actor.name}: choose ally`;
-      this.text(x + 16, y + 14, prompt, 16, "#fff2a8", "left", { wordWrapWidth: w - 32 });
+      this.text(x + 16, y + 12, prompt, 14, "#fff2a8", "left", { wordWrapWidth: w - 32 });
+      this.ui.fillStyle(0xfff0a8, 0.16).fillRect(x + 16, y + 35, w - 32, 1);
       this.battleOptions().forEach((option, idx) => {
         const selected = idx === this.battle!.selected;
-        if (selected) this.drawCursor(x + 13, y + 43 + idx * 17);
+        const rowY = y + 45 + idx * 18;
+        if (selected) {
+          this.ui.fillStyle(0xfff0a8, 0.16).fillRect(x + 12, rowY - 4, w - 24, 18);
+          this.ui.lineStyle(1, 0xfff0a8, 0.72).strokeRect(x + 12, rowY - 4, w - 24, 18);
+          this.drawCursor(x + 16, rowY - 1);
+        }
         const prefix = selected && !this.hasTexture("ui_cursor_arrow") ? ">" : " ";
-        this.text(x + 34, y + 39 + idx * 17, `${prefix} ${option}`, 13, "#ffffff", "left", { wordWrapWidth: w - 44 });
+        this.text(x + 36, rowY - 3, `${prefix} ${option}`, 12, "#ffffff", "left", { wordWrapWidth: w - 48 });
       });
     } else {
-      this.text(x + 16, y + 14, this.battle.phase === "resolving" ? this.currentBattleActorName() : "Continue", 17, "#fff2a8");
-      this.text(x + 16, y + 48, this.battle.phase === "log" ? "Enter continues" : "Resolving...", 16, "#ffffff");
+      this.text(x + 16, y + 16, this.battle.phase === "resolving" ? this.currentBattleActorName() : "Continue", 16, "#fff2a8", "left", {
+        wordWrapWidth: w - 32
+      });
+      this.text(x + 16, y + 54, this.battle.phase === "log" ? "Enter continues" : "Resolving...", 14, "#ffffff");
     }
   }
 
   private drawBattleStatusPanel(x: number, y: number, w: number, h: number) {
     if (!this.battle) return;
     this.drawPanel(x, y, w, h);
-    this.text(x + 16, y + 14, `Now: ${this.currentBattleActorName()}`, 17, "#fff2a8");
+    this.text(x + 16, y + 12, `Now: ${this.currentBattleActorName()}`, 15, "#fff2a8", "left", { wordWrapWidth: w - 32 });
+    this.ui.fillStyle(0xfff0a8, 0.16).fillRect(x + 16, y + 35, w - 32, 1);
     this.party.forEach((c, idx) => {
-      const rowY = y + 42 + idx * 24;
-      const active = this.currentBattleEntry()?.side === "party" && this.currentBattleEntry()?.actorId === c.id && this.battle?.phase !== "resolving";
+      const rowY = y + 43 + idx * 29;
+      const active =
+        this.currentBattleEntry()?.side === "party" &&
+        this.currentBattleEntry()?.actorId === c.id &&
+        !this.battle?.animation &&
+        this.battle?.phase !== "resolving";
       const statuses = Object.keys(c.statuses).filter((s) => c.statuses[s as keyof StatusState]).join(" ") || "ok";
-      if (active) this.ui.fillStyle(0xfff0a8, 0.12).fillRect(x + 10, rowY - 3, w - 20, 22);
-      this.text(x + 16, rowY, c.name, 14, c.hp <= 0 ? "#858b98" : "#ffffff", "left", { wordWrapWidth: 92 });
-      this.text(x + 104, rowY, `${c.hp}/${c.maxHp}`, 14, "#dce9ff");
-      this.drawBar(x + 178, rowY + 5, 104, 8, c.hp, c.maxHp, 0x54bb77);
-      this.text(x + 294, rowY, `T ${c.charges["1"].current}/${c.charges["2"].current}/${c.charges["3"].current} ${statuses}`, 13, "#c5d2f2", "left", {
-        wordWrapWidth: 126
+      if (active) this.ui.fillStyle(0xfff0a8, 0.14).fillRect(x + 10, rowY - 5, w - 20, 26);
+      this.text(x + 16, rowY - 1, c.name, 13, c.hp <= 0 ? "#858b98" : "#ffffff", "left", { wordWrapWidth: 80 });
+      this.text(x + 96, rowY - 1, `${c.hp}/${c.maxHp}`, 12, "#dce9ff", "left", { wordWrapWidth: 70 });
+      this.drawBar(x + 164, rowY + 2, 110, 9, c.hp, c.maxHp, 0x54bb77);
+      this.text(x + 286, rowY - 1, `T ${c.charges["1"].current}/${c.charges["2"].current}/${c.charges["3"].current}`, 12, "#c5d2f2", "left", {
+        wordWrapWidth: 54
       });
+      this.text(x + 338, rowY - 1, statuses, 12, statuses === "ok" ? "#96d7a5" : "#ffd98a", "left", { wordWrapWidth: 52 });
     });
-    this.text(x + 16, y + h - 24, `Next: ${this.turnPreviewText()}`, 13, "#cbd6ff", "left", { wordWrapWidth: w - 32 });
+    this.ui.fillStyle(0xffffff, 0.045).fillRect(x + 12, y + h - 28, w - 24, 18);
+    this.text(x + 18, y + h - 27, `Next: ${this.turnPreviewText()}`, 12, "#cbd6ff", "left", { wordWrapWidth: w - 36 });
   }
 
   private drawMenuScreen() {
@@ -4164,70 +4302,63 @@ Statuses: ${statuses}`;
   }
 
   private drawLocationIcon(loc: LocationDef, sx: number, sy: number) {
-    this.drawActorShadow(sx + 16, sy + 28, 34, 9);
+    const footprint = this.locationFootprint(loc);
+    const size = footprint * TILE;
+    const cx = sx + size / 2;
+    const bottom = sy + size - 8;
+    this.drawActorShadow(cx, bottom, size * 0.72, 18);
     const locationTexture = LOCATION_TEXTURES[loc.id];
     if (locationTexture && this.hasTexture(locationTexture)) {
-      this.drawTexture(locationTexture, sx, sy - 2, TILE, TILE, LAYER_OBJECT_IMAGE);
+      this.drawTexture(locationTexture, sx, sy - 4, size, size, LAYER_OBJECT_IMAGE);
       return;
     }
-    if (loc.id === "dawnford") {
-      this.g.fillStyle(0x39434f, 1).fillRect(sx + 1, sy + 5, 30, 24);
-      this.g.fillStyle(0x6d7682, 1).fillRect(sx + 5, sy - 2, 8, 31);
-      this.g.fillRect(sx + 19, sy - 2, 8, 31);
-      this.g.fillStyle(0xbec5c8, 1).fillRect(sx + 8, sy + 3, 16, 8);
-      this.g.fillStyle(0xdf6132, 1).fillTriangle(sx + 5, sy - 2, sx + 9, sy - 11, sx + 13, sy - 2);
-      this.g.fillTriangle(sx + 19, sy - 2, sx + 23, sy - 11, sx + 27, sy - 2);
-      this.g.fillStyle(0x121820, 1).fillRect(sx + 12, sy + 16, 8, 13);
-      this.g.fillStyle(0xe9edf0, 1).fillRect(sx + 4, sy + 24, 24, 3);
-      return;
-    }
-    if (loc.kind === "town") {
+    const u = size / 96;
+    if (loc.id === "dawnford" || loc.kind === "town") {
       const roof = loc.id === "brinewick" ? 0x4c9fc7 : loc.id === "sunbarrow" ? 0xf08a2e : 0xd9542e;
-      for (let i = 0; i < 3; i += 1) {
-        const hx = sx + 3 + i * 9;
-        const hy = sy + 10 + (i % 2) * 6;
-        this.g.fillStyle(0xf2eee0, 1).fillRect(hx, hy + 6, 9, 10);
-        this.g.fillStyle(roof, 1).fillTriangle(hx - 1, hy + 7, hx + 4, hy, hx + 10, hy + 7);
-        this.g.fillStyle(0x263044, 0.8).fillRect(hx + 3, hy + 11, 3, 5);
-      }
+      this.g.fillStyle(0x1a2334, 0.55).fillRect(sx + 18 * u, sy + 54 * u, 60 * u, 24 * u);
+      this.g.fillStyle(0xf2eee0, 1).fillRect(sx + 26 * u, sy + 42 * u, 44 * u, 34 * u);
+      this.g.fillStyle(roof, 1).fillTriangle(sx + 18 * u, sy + 44 * u, cx, sy + 22 * u, sx + 78 * u, sy + 44 * u);
+      this.g.fillStyle(0x283044, 1).fillRect(cx - 8 * u, sy + 57 * u, 16 * u, 20 * u);
+      this.g.fillStyle(0xffefbd, 1).fillRect(sx + 32 * u, sy + 52 * u, 8 * u, 8 * u);
+      this.g.fillRect(sx + 56 * u, sy + 52 * u, 8 * u, 8 * u);
       return;
     }
     if (loc.kind === "gate") {
-      this.g.fillStyle(0x4b467a, 1).fillRect(sx + 4, sy + 7, 8, 22);
-      this.g.fillRect(sx + 20, sy + 7, 8, 22);
-      this.g.fillStyle(0xffdf76, 1).fillCircle(sx + 16, sy + 8, 6);
-      this.g.lineStyle(3, 0xd5c8ff, 1).lineBetween(sx + 8, sy + 9, sx + 24, sy + 9);
+      this.g.fillStyle(0x4b467a, 1).fillRect(sx + 24 * u, sy + 28 * u, 16 * u, 50 * u);
+      this.g.fillRect(sx + 56 * u, sy + 28 * u, 16 * u, 50 * u);
+      this.g.fillStyle(0xffdf76, 1).fillCircle(cx, sy + 26 * u, 12 * u);
+      this.g.lineStyle(5 * u, 0xd5c8ff, 1).lineBetween(sx + 32 * u, sy + 32 * u, sx + 64 * u, sy + 32 * u);
       return;
     }
     if (loc.id === "mossCave") {
-      this.g.fillStyle(0x4a5744, 1).fillTriangle(sx + 1, sy + 29, sx + 16, sy + 4, sx + 31, sy + 29);
-      this.g.fillStyle(0x142018, 1).fillRect(sx + 9, sy + 15, 14, 14);
-      this.g.fillStyle(0x4aa44d, 1).fillRect(sx + 5, sy + 23, 6, 5);
+      this.g.fillStyle(0x4a5744, 1).fillTriangle(sx + 12 * u, sy + 78 * u, cx, sy + 20 * u, sx + 84 * u, sy + 78 * u);
+      this.g.fillStyle(0x142018, 1).fillRect(cx - 17 * u, sy + 48 * u, 34 * u, 30 * u);
+      this.g.fillStyle(0x4aa44d, 1).fillRect(sx + 22 * u, sy + 64 * u, 14 * u, 10 * u);
       return;
     }
     if (loc.id === "ashenKeep") {
-      this.g.fillStyle(0x454044, 1).fillRect(sx + 3, sy + 7, 26, 22);
-      this.g.fillStyle(0xdf5a2e, 1).fillRect(sx + 8, sy + 3, 5, 9);
-      this.g.fillRect(sx + 20, sy + 3, 5, 9);
-      this.g.fillStyle(0x111018, 1).fillRect(sx + 13, sy + 17, 7, 12);
+      this.g.fillStyle(0x454044, 1).fillRect(sx + 16 * u, sy + 34 * u, 64 * u, 44 * u);
+      this.g.fillStyle(0xdf5a2e, 1).fillRect(sx + 28 * u, sy + 20 * u, 12 * u, 22 * u);
+      this.g.fillRect(sx + 58 * u, sy + 20 * u, 12 * u, 22 * u);
+      this.g.fillStyle(0x111018, 1).fillRect(cx - 10 * u, sy + 56 * u, 20 * u, 22 * u);
       return;
     }
     if (loc.id === "tideShrine") {
-      this.g.fillStyle(0xdfe8ef, 1).fillRect(sx + 5, sy + 10, 22, 17);
-      this.g.fillStyle(0x4ab3d1, 1).fillTriangle(sx + 3, sy + 10, sx + 16, sy + 2, sx + 29, sy + 10);
-      this.g.fillStyle(0x1a5e80, 1).fillRect(sx + 9, sy + 17, 4, 10);
-      this.g.fillRect(sx + 20, sy + 17, 4, 10);
+      this.g.fillStyle(0xdfe8ef, 1).fillRect(sx + 20 * u, sy + 40 * u, 56 * u, 36 * u);
+      this.g.fillStyle(0x4ab3d1, 1).fillTriangle(sx + 14 * u, sy + 42 * u, cx, sy + 18 * u, sx + 82 * u, sy + 42 * u);
+      this.g.fillStyle(0x1a5e80, 1).fillRect(sx + 32 * u, sy + 55 * u, 10 * u, 22 * u);
+      this.g.fillRect(sx + 56 * u, sy + 55 * u, 10 * u, 22 * u);
       return;
     }
     if (loc.id === "skyglassTower") {
-      this.g.fillStyle(0x647081, 1).fillRect(sx + 11, sy + 2, 11, 27);
-      this.g.fillStyle(0x98edf7, 1).fillTriangle(sx + 8, sy + 8, sx + 16, sy - 3, sx + 24, sy + 8);
-      this.g.fillStyle(0x273548, 1).fillRect(sx + 14, sy + 18, 5, 11);
+      this.g.fillStyle(0x647081, 1).fillRect(cx - 13 * u, sy + 20 * u, 26 * u, 58 * u);
+      this.g.fillStyle(0x98edf7, 1).fillTriangle(cx - 20 * u, sy + 30 * u, cx, sy + 6 * u, cx + 20 * u, sy + 30 * u);
+      this.g.fillStyle(0x273548, 1).fillRect(cx - 6 * u, sy + 58 * u, 12 * u, 20 * u);
       return;
     }
-    this.g.fillStyle(0x2a1d3d, 1).fillTriangle(sx + 4, sy + 29, sx + 16, sy + 2, sx + 28, sy + 29);
-    this.g.fillStyle(0xb388ff, 1).fillRect(sx + 13, sy + 8, 6, 18);
-    this.g.fillStyle(0xffdf78, 1).fillRect(sx + 11, sy + 4, 10, 4);
+    this.g.fillStyle(0x2a1d3d, 1).fillTriangle(sx + 20 * u, sy + 80 * u, cx, sy + 12 * u, sx + 76 * u, sy + 80 * u);
+    this.g.fillStyle(0xb388ff, 1).fillRect(cx - 8 * u, sy + 28 * u, 16 * u, 44 * u);
+    this.g.fillStyle(0xffdf78, 1).fillRect(cx - 14 * u, sy + 18 * u, 28 * u, 10 * u);
   }
 
   private drawActorShadow(x: number, y: number, width = 26, height = 8) {
@@ -4235,9 +4366,9 @@ Statuses: ${statuses}`;
   }
 
   private drawLeader(x: number, y: number) {
-    const frame = this.movement ? Math.floor(this.walkAnimElapsed / 85) % 2 : 0;
-    this.drawActorShadow(x + 12, y + 30, 34, 10);
-    this.g.lineStyle(2, 0xfff0a8, this.mode === "world" ? 0.82 : 0.45).strokeEllipse(x + 12, y + 30, 32, 10);
+    const frame = this.playerMoving ? Math.floor(this.walkAnimElapsed / 85) % 2 : 0;
+    this.drawActorShadow(x + 12, y + 38, 44, 12);
+    this.g.lineStyle(2, 0xfff0a8, this.mode === "world" ? 0.82 : 0.42).strokeEllipse(x + 12, y + 38, 42, 12);
     if (this.mode === "world" && !this.hasTexture("char_arlen_map")) {
       this.g.fillStyle(0x050812, 1).fillRect(x + 5, y + 3, 22, 29);
       this.g.fillStyle(0x2a213a, 1).fillRect(x + 7, y + 1, 18, 9);
@@ -4254,14 +4385,14 @@ Statuses: ${statuses}`;
       const row = this.lastMoveDir.x < 0 ? 1 : this.lastMoveDir.x > 0 ? 2 : this.lastMoveDir.y < 0 ? 3 : 0;
       this.drawCroppedTexture(
         "char_arlen_map",
-        x - 8,
-        y - 10,
+        x - 16,
+        y - 21,
         frame * TILE_FRAME,
         row * TILE_FRAME,
         TILE_FRAME,
         TILE_FRAME,
-        40,
-        40,
+        56,
+        56,
         LAYER_CHARACTER_IMAGE
       );
       return;
@@ -4399,12 +4530,18 @@ Statuses: ${statuses}`;
   }
 
   private drawHud(place: string) {
-    this.drawPanel(18, 16, 356, 74);
-    this.text(36, 27, place, 21, "#fff2a8");
-    this.text(36, 58, `Gold ${this.gold}   Relics ${this.relicCount()}/4   ${this.flags.skyship ? "Skyship" : this.flags.boat ? "Boat" : "On Foot"}`, 15, "#e7efff");
-    this.drawPanel(710, 16, 232, 74);
-    this.text(728, 29, `Enc ${this.settings.encounters ? "ON" : "OFF"}   XP ${this.settings.xpMultiplier}x`, 16, "#e7efff");
-    this.text(728, 57, `${this.settings.muted ? "Muted" : "Audio"} | Esc Menu`, 15, "#c5d2f2");
+    const travel = this.flags.skyship ? "Skyship" : this.flags.boat ? "Boat" : "On Foot";
+    this.drawPanel(12, 10, 286, 56);
+    this.text(28, 18, place, 17, "#fff2a8", "left", { wordWrapWidth: 250 });
+    this.text(28, 42, `Gold ${this.gold}  Relics ${this.relicCount()}/4  ${travel}`, 12, "#e7efff", "left", { wordWrapWidth: 250 });
+
+    const rightW = 258;
+    const rightX = WIDTH - rightW - 12;
+    this.drawPanel(rightX, 10, rightW, 56);
+    this.text(rightX + 16, 19, `Enc ${this.settings.encounters ? "ON" : "OFF"}  XP ${this.settings.xpMultiplier}x`, 13, "#e7efff", "left", {
+      wordWrapWidth: rightW - 32
+    });
+    this.text(rightX + 16, 41, `${this.settings.muted ? "Muted" : "Audio"}  Esc Menu`, 12, "#c5d2f2", "left", { wordWrapWidth: rightW - 32 });
   }
 
   private drawPrompt(text: string) {

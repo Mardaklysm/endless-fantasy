@@ -26,7 +26,7 @@ assets/
   title/
 ```
 
-Keep all paths lowercase snake_case. Use PNG for all raster art. Use transparent backgrounds for sprites, enemies, icons, effects, and markers. Full-screen title backgrounds may be opaque PNG.
+Keep all paths lowercase snake_case. Use PNG for most raster art. Battle/background images may use high-resolution opaque JPEG when transparency is not needed. Use transparent backgrounds for sprites, enemies, icons, effects, and markers. Full-screen title backgrounds may be opaque PNG or JPEG.
 
 ## Naming Convention
 

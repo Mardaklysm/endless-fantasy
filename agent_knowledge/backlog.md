@@ -7,7 +7,7 @@ This backlog is practical project memory, not a full design document. Keep it sh
 - Keep Batch 001 assets under root `assets/`; do not nest a second `assets/` folder inside it.
 - Consider splitting asset key maps out of `src/main.ts` if future batches add many more files.
 - Consider splitting the v2 asset import scripts into shared helpers if more batches arrive.
-- Improve UI panel skinning further only if it preserves current live text space and readability.
+- Improve UI panel skinning further only if it preserves current live text space and readability. Exploration HUD and battle panels now have compact layouts, but the v2 panel art still has strong decorative lines that may deserve a future dedicated HUD frame.
 - Add item/equipment/relic icons to inventory, shops, equipment menus, and HUD when there is a clean layout slot.
 - Add vehicle rendering for boat/skyship on the overworld after deciding whether they replace or accompany Arlen.
 - Add simple effect rendering only after battle timing can show short animations without slowing commands.
@@ -37,8 +37,9 @@ This backlog is practical project memory, not a full design document. Keep it sh
 - Effect PNG sheets are loaded but not rendered yet.
 - No animated water/torch/chest sparkle polish yet.
 - Battle enemies use PNGs now; future larger boss art still needs overlap checks when progression reaches each boss.
+- Battle actions now have short lunge/step movement; future effect-sheet rendering can layer spell/item VFX on top of the timing path.
 - Battle backdrops now use v2 region panels; later tuning can reduce bundle weight with dynamic loading/code splitting.
-- Town service blocks now use v2 signs/props plus readable live labels.
+- Town service blocks now use v2 icon signs in one unlabeled five-marker row.
 - Title logo and four-star decoration render; title background remains generated.
 - Audio is simple oscillator loops; no composed music assets are planned unless approved.
 

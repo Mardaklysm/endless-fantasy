@@ -66,7 +66,15 @@ Still fallback or older assets:
 - V2 portraits: 32x40 transparent PNGs.
 - V2 normal enemies: 96x96 transparent PNGs.
 - V2 bosses: 192x192 transparent PNGs.
-- V2 battle backgrounds: 960x390 opaque PNGs.
+- V2 battle backgrounds: 2752x1536 opaque JPEGs, rendered full-canvas at 16:9.
+
+## Current Runtime Presentation Notes
+
+- Dawnford/town service markers render as one clean horizontal row of five image-only icons. Do not add always-visible text labels such as Items/Arms/Magic/Clinic back onto those markers.
+- The town south exit uses the gate art only; there is no floating "Exit" label or persistent bottom-right interaction hint in normal town exploration.
+- Overworld locations render as larger 3x3-ish landmarks with matching entry footprints. Keep terrain tiles small/repeating, but landmarks should remain visually important.
+- Battle backgrounds are full 16:9 opaque JPEG images and are assigned linear texture filtering. Pixel sprites, tiles, UI, and icons remain nearest-neighbor filtered.
+- Battle party presentation uses the main v2 battler sprites only on the battlefield; redundant small head portraits/icons are intentionally not drawn there.
 
 ## Real-Asset Rules
 

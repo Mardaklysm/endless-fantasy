@@ -28,7 +28,7 @@ Check:
 - `assets_v2/previews/markers_preview.png` has transparent markers without adjacent fragments.
 - `assets_v2/previews/town_props_preview.png` has clean service signs/props.
 - `assets_v2/previews/characters_preview.png`, `portraits_preview.png`, `enemies_preview.png`, and `bosses_preview.png` have transparent backgrounds and no cut-off neighboring sprites.
-- `assets_v2/previews/battle_backgrounds_preview.png` shows opaque 960x390 panels.
+- `assets_v2/previews/battle_backgrounds_preview.png`, if regenerated, should show the opaque 16:9 JPEG battle backgrounds without cropping artifacts.
 - `assets_v2/previews/QUALITY_REPORT.md` documents rembg/color-key choices.
 
 For rembg-related regeneration, use `D:\tools\rembg\venv_rembg\Scripts\rembg.exe` with `birefnet-general`. The expected AMD/Windows provider path is DirectML (`DmlExecutionProvider`). Do not add NVIDIA-specific checks.

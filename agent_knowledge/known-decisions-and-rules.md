@@ -4,6 +4,7 @@
 
 - The project is a browser game built with Phaser 3, TypeScript, and Vite.
 - The current main implementation lives in `src/main.ts`.
+- Every completed code, docs, or asset change must be committed and pushed to the configured remote before the task is considered done.
 - The canvas is 960x540 with Phaser `pixelArt: true`.
 - The tile grid is 32x32 display pixels.
 - The first playable game is intentionally compact, roughly 30-60 minutes when tuned.
@@ -11,15 +12,16 @@
 - Improved extracted art lives under root `assets_v2/` and is preferred over `assets/` for mapped texture keys.
 - Current art rendering is image-first with generated fallback behavior.
 - The active overworld uses cleaned v2 terrain and marker PNGs. Generated terrain/marker drawing remains fallback only.
-- Dawnford/town interiors use cleaned v2 floor, wall, exit, service sign, and prop PNGs with live service text.
-- Battle presentation uses v2 opaque backdrops, v2 enemies/bosses, v2 party battlers/portraits, and lower target/command/status panels.
+- Dawnford/town interiors use cleaned v2 floor, wall, exit, service sign, and prop PNGs. Service markers are icon-only in a five-marker row; do not add always-visible labels back onto the markers.
+- Battle presentation uses v2 opaque 16:9 JPEG backdrops, v2 enemies/bosses, v2 party battlers, and lower target/command/status panels. Redundant small party head portraits are intentionally not drawn on the battlefield.
 - The local rembg environment for this project is `D:\tools\rembg\venv_rembg\Scripts\rembg.exe` with `birefnet-general`; available ONNX Runtime providers were `DmlExecutionProvider` and `CPUExecutionProvider`. Do not add NVIDIA/CUDA assumptions.
 - Audio is generated in code.
 - Save data uses browser `localStorage` under `crystal-oath-save-v1`.
 - Keyboard is the primary input; mouse support is minimal.
 - Input helpers accept both `KeyboardEvent.code` and `KeyboardEvent.key` for movement/confirm/cancel compatibility.
-- Exploration movement is grid-logical but visually smooth; tile effects commit only after a completed tile step.
-- Exploration rendering uses persistent visual tile coordinates during movement. Do not let render code fall back to logical coordinates while a step is still in progress.
+- Exploration movement is continuous pixel/tile-space movement; tile effects commit when the derived logical tile changes.
+- Exploration rendering uses persistent visual tile coordinates during movement. Do not let render code fall back to stale logical coordinates mid-move.
+- Overworld locations use larger 3x3-ish visual and trigger footprints so landmarks read as important instead of one-tile icons.
 - Battle uses individual initiative turns. The game does not use all-party action queue rounds.
 
 ## Legal Originality Rules
@@ -74,7 +76,6 @@ The current generated art fallback is still required for missing textures and fo
 
 ## Unknowns / Needs Verification
 
-- The user explicitly requested commit/push for the v2 artwork pass, but there is still no general automatic commit/deploy policy for unrelated future tasks.
 - No automated tests exist yet.
 - Save migration requirements are not defined.
 - The first asset loader is implemented in `src/main.ts`; future work may split it into modules if the file grows further.

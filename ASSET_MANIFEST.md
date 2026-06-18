@@ -10,7 +10,7 @@ This manifest covers the art needed by the current playable implementation. It i
 - Overworld map is 64x40 tiles.
 - Dungeon floors are 22x14 tiles.
 - Current drawing functions to refine later: `drawWorldTile`, `drawDungeonTile`, `drawLocationIcon`, `drawTown`, `drawLeader`, `drawNpc`, `drawPortrait`, `drawEnemySprite`, `drawPixelCrystal`, `drawPanel`, and `drawBar` in `src/main.ts`.
-- Phaser preloads the current PNG assets in `src/main.ts`. All generated placeholders should remain as fallback paths for missing textures and unfinished asset families.
+- Phaser preloads the current PNG/JPEG assets in `src/main.ts`. All generated placeholders should remain as fallback paths for missing textures and unfinished asset families.
 - Format target: PNG with transparency unless noted. Use lowercase snake_case filenames.
 
 Priority scale: P1 readability-critical, P2 core gameplay polish, P3 boss/story identity, P4 optional polish.

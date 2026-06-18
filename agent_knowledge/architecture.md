@@ -39,7 +39,7 @@ Ignored/generated folders:
 ## Runtime Stack
 
 - Phaser 3 (`phaser` dependency) for game loop, canvas rendering, keyboard input, scale handling, and pixel-art mode.
-- Phaser preload/image textures for PNG assets in root `assets/`.
+- Phaser preload/image textures for PNG/JPEG assets in root `assets/` and `assets_v2/`.
 - TypeScript for source.
 - Vite for development server and production build.
 - Browser `localStorage` for saves.
@@ -82,7 +82,7 @@ State transitions are managed inside `CrystalOathScene`.
 
 ## Rendering Approach
 
-Rendering is layered Phaser `Graphics`, Phaser image textures, and live Phaser text. `preload()` loads Batch 001 PNGs from root `assets/` through manifest-style texture keys. Draw paths are image-first and fallback-second where the first batch is strong enough; weak first-pass world terrain/markers are currently superseded by original procedural world art while the PNGs remain loaded.
+Rendering is layered Phaser `Graphics`, Phaser image textures, and live Phaser text. `preload()` loads Batch 001 PNGs from root `assets/` and newer PNG/JPEG files from `assets_v2/` through manifest-style texture keys. Draw paths are image-first and fallback-second where the first batch is strong enough; weak first-pass world terrain/markers are currently superseded by original procedural world art while the PNGs remain loaded.
 
 Key draw functions:
 
@@ -131,9 +131,9 @@ Keyboard events are registered in `create()`:
 - F: fullscreen.
 - F9: hidden debug menu outside battle.
 
-Exploration movement is grid-logical with a `MovementState` interpolation layer plus persistent visual tile positions: `visualWorldPos`, `visualTownPos`, and `visualDungeonPos`. Direction keydown records held direction, keyup releases it, and completed tile steps call the existing world/town/dungeon movement completion logic.
+Exploration movement is continuous in tile-space using persistent visual positions: `visualWorldPos`, `visualTownPos`, and `visualDungeonPos`. Direction keydown records held direction, keyup releases it, and update-time movement advances the visual position by small deltas instead of committing to whole-tile steps. The saved/logical tile positions (`worldPos`, `townPos`, `dungeonPos`) are derived when the player crosses tile centers so encounters, exits, dungeon objects, and location entry still use tile data.
 
-Important movement rule: renderers read the persistent visual tile positions, not transient movement math and not stale logical coordinates. The old snap-forward/reset-back bug came from allowing redraws and mode transitions to recompute from logical tile positions while a step was visually in progress. New movement code writes interpolated positions every frame, commits logical position only at step completion, then syncs visual positions after transitions.
+Important movement rule: renderers read the persistent visual tile positions, not stale logical coordinates. Collision uses a small player hitbox checked against the tile map on each proposed movement axis, allowing smooth pixel movement while preserving tile-based blocking.
 
 Mouse support is minimal and mainly starts audio/click blips.
 
@@ -174,5 +174,5 @@ Current visuals use PNG assets where Batch 001 has been wired, with generated co
 
 - `src/main.ts` is large and combines data, state management, rendering, audio, and gameplay. Future refactors should be incremental and test after each extraction.
 - Asset maps now live in `src/main.ts`; they may deserve a small module if future batches grow the file further.
-- Battle visual effects are not time-based yet; adding animations requires state/timing work.
+- Battle actions have a short timed animation state with temporary render offsets for lunges/steps before returning to home positions. Damage/heal/item math remains in the existing battle resolvers.
 - Save data has no versioned migration layer yet.
