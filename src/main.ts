@@ -295,7 +295,7 @@ const TOWN_SERVICES: TownServiceDef[] = [
 ];
 
 const ASSET_PATHS = [
-  ["world_atlas", "world/world_atlas_normalized.png"],
+  ["world_atlas", "world/world_atlas.normalized.png"],
   ["tile_plains", "tiles/world/plains.png"],
   ["tile_forest", "tiles/world/forest.png"],
   ["tile_hills", "tiles/world/hills.png"],
@@ -435,6 +435,12 @@ const ASSET_MODULES = import.meta.glob(["../assets/**/*.{png,jpeg,jpg}", "!../as
   import: "default"
 }) as Record<string, string>;
 
+const SRC_ASSET_MODULES = import.meta.glob(["./assets/**/*.{png,jpeg,jpg}", "!./assets/world/source/**/*.{png,jpeg,jpg}"], {
+  eager: true,
+  query: "?url",
+  import: "default"
+}) as Record<string, string>;
+
 const ASSET_V2_MODULES = import.meta.glob(
   [
     "../assets_v2/**/*.{png,jpeg,jpg}",
@@ -487,11 +493,20 @@ const ASSET_V2_PATH_OVERRIDES: Partial<Record<AssetKey, string>> = {
   ui_hp_bar: "ui/hp_bar.png"
 };
 
+const ASSET_SRC_PATH_OVERRIDES: Partial<Record<AssetKey, string>> = {
+  world_atlas: "world/world_atlas.normalized.png"
+};
+
 const ASSET_URLS = Object.fromEntries(
-  ASSET_PATHS.map(([key, path]) => [
-    key,
-    ASSET_V2_MODULES[`../assets_v2/${ASSET_V2_PATH_OVERRIDES[key] ?? path}`] ?? ASSET_MODULES[`../assets/${path}`]
-  ])
+  ASSET_PATHS.map(([key, path]) => {
+    const srcPath = ASSET_SRC_PATH_OVERRIDES[key];
+    return [
+      key,
+      (srcPath ? SRC_ASSET_MODULES[`./assets/${srcPath}`] : undefined) ??
+        ASSET_V2_MODULES[`../assets_v2/${ASSET_V2_PATH_OVERRIDES[key] ?? path}`] ??
+        ASSET_MODULES[`../assets/${path}`]
+    ];
+  })
 ) as Partial<Record<AssetKey, string>>;
 
 const DUNGEON_FLOOR_TEXTURES: Record<string, AssetKey> = {
@@ -3669,19 +3684,20 @@ Statuses: ${statuses}`;
     this.g.fillStyle(0x050812, 1).fillRect(0, 0, WIDTH, HEIGHT);
     const leaderPos = this.visualExplorePos("world");
     const cam = this.cameraFor(leaderPos, WORLD_W, WORLD_H);
-    const startX = Math.max(0, Math.floor(cam.x / TILE) - 1);
-    const endX = Math.min(WORLD_W - 1, Math.ceil((cam.x + WIDTH) / TILE));
-    const startY = Math.max(0, Math.floor(cam.y / TILE) - 1);
-    const endY = Math.min(WORLD_H - 1, Math.ceil((cam.y + HEIGHT) / TILE));
+    const tileCam = { x: Math.round(cam.x), y: Math.round(cam.y) };
+    const startX = Math.max(0, Math.floor(tileCam.x / TILE) - 1);
+    const endX = Math.min(WORLD_W - 1, Math.ceil((tileCam.x + WIDTH) / TILE));
+    const startY = Math.max(0, Math.floor(tileCam.y / TILE) - 1);
+    const endY = Math.min(WORLD_H - 1, Math.ceil((tileCam.y + HEIGHT) / TILE));
     for (let y = startY; y <= endY; y += 1) {
       for (let x = startX; x <= endX; x += 1) {
-        this.drawWorldTile(this.world[y][x], x * TILE - cam.x, y * TILE - cam.y, x, y);
+        this.drawWorldTile(this.world[y][x], x * TILE - tileCam.x, y * TILE - tileCam.y, x, y);
       }
     }
     for (const loc of this.locations()) {
       const radius = Math.floor(this.locationFootprint(loc) / 2);
       if (loc.x + radius < startX || loc.x - radius > endX || loc.y + radius < startY || loc.y - radius > endY) continue;
-      this.drawLocationIcon(loc, (loc.x - radius) * TILE - cam.x, (loc.y - radius) * TILE - cam.y);
+      this.drawLocationIcon(loc, (loc.x - radius) * TILE - tileCam.x, (loc.y - radius) * TILE - tileCam.y);
     }
     this.drawLeader(leaderPos.x * TILE - cam.x + 4, leaderPos.y * TILE - cam.y + 3);
     this.drawHud("World");

@@ -1,133 +1,157 @@
 # World Atlas Import Report
 
-Source: `C:/Users/Marku/Downloads/redo_this_please_2K_202606182233.jpeg`
-Copied source: `assets_v2/source_sheets/world_atlas/redo_this_please_2k_202606182233.jpeg`
+Source: `C:/Users/Marku/Downloads/redo_this_please_2K_202606182350.jpeg`
+Copied source: `src/assets/world/source/redo_this_please_2K_202606182350.jpeg`
 Source dimensions: 2048x2048
 Source color: JPEG RGB converted through Windows imaging
 Detected source grid: 10 columns x 10 rows
-Runtime grid: 10 columns x 8 rows
-Normalized tile size: 206x206
-Normalized atlas: `assets_v2/world/world_atlas_normalized.png`
+Runtime grid: 10 columns x 10 rows
+Normalized tile size: 256x256
+Normalized atlas: `src/assets/world/world_atlas.normalized.png`
 Debug preview: `docs/debug/world-atlas/world_atlas.debug.png`
+Embedded border crop: 2px per tile edge
+Output edge bleed: 2px
 
-## Separator Detection
+## Grid Detection
 
-The source is a square 10x10 JPEG atlas with separator/border lines. Dark separator lines were detected near the expected grid boundaries and excluded from each runtime tile before nearest-neighbor normalization.
+The source is the corrected square 10x10 JPEG atlas. It is 2048x2048, so 10-way source cells are fractional and cannot be sliced directly in runtime code. The importer uses proportional source cell edges, crops 2px from each tile edge to remove residual JPEG boundary artifacts, normalizes every tile to 256x256, then applies a 2px interior edge bleed to prevent atlas sampling seams.
 
-The game uses the requested 10x8 logical terrain model. Source rows 0, 1, 2, 3, 4, 5, 7, 9 were selected for runtime rows 0-7; duplicate/detail rows not in that list are kept only in the copied source/debug provenance.
+The game uses the full corrected 10x10 terrain model. Source rows 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 map one-to-one to runtime rows 0-9.
 
-Column boundaries:
+Column edges:
 
-- 0: expected 0, separator 0-0, avg 8.2
-- 1: expected 204.7, separator 203-204, avg 15.3
-- 2: expected 409.4, separator 409-409, avg 12.3
-- 3: expected 614.1, separator 613-613, avg 9.7
-- 4: expected 818.8, separator 818-819, avg 8.6
-- 5: expected 1023.5, separator 1023-1024, avg 7.8
-- 6: expected 1228.2, separator 1228-1229, avg 10.4
-- 7: expected 1432.9, separator 1433-1434, avg 10
-- 8: expected 1637.6, separator 1638-1639, avg 6.5
-- 9: expected 1842.3, separator 1843-1844, avg 11
-- 10: expected 2047, separator 2047-2047, avg 8.7
+- 0: expected 0, edge 0, avg 99.9
+- 1: expected 204.8, edge 205, avg 100.8
+- 2: expected 409.6, edge 410, avg 87.8
+- 3: expected 614.4, edge 614, avg 87.4
+- 4: expected 819.2, edge 819, avg 80.8
+- 5: expected 1024, edge 1024, avg 85.3
+- 6: expected 1228.8, edge 1229, avg 84.4
+- 7: expected 1433.6, edge 1434, avg 71.1
+- 8: expected 1638.4, edge 1638, avg 72
+- 9: expected 1843.2, edge 1843, avg 81.1
+- 10: expected 2048, edge 2048, avg 73.7
 
-Row boundaries:
+Row edges:
 
-- 0: expected 0, separator 0-0, avg 3.2
-- 1: expected 204.7, separator 205-206, avg 5.9
-- 2: expected 409.4, separator 410-411, avg 4.9
-- 3: expected 614.1, separator 616-617, avg 26.8
-- 4: expected 818.8, separator 819-820, avg 10
-- 5: expected 1023.5, separator 1023-1025, avg 5.4
-- 6: expected 1228.2, separator 1227-1228, avg 8.8
-- 7: expected 1432.9, separator 1432-1432, avg 8
-- 8: expected 1637.6, separator 1635-1636, avg 4.2
-- 9: expected 1842.3, separator 1839-1840, avg 9.2
-- 10: expected 2047, separator 2047-2047, avg 18
+- 0: expected 0, edge 0, avg 62.5
+- 1: expected 204.8, edge 205, avg 68.1
+- 2: expected 409.6, edge 410, avg 42.8
+- 3: expected 614.4, edge 614, avg 110.5
+- 4: expected 819.2, edge 819, avg 188.4
+- 5: expected 1024, edge 1024, avg 51.1
+- 6: expected 1228.8, edge 1229, avg 45.2
+- 7: expected 1433.6, edge 1434, avg 82.8
+- 8: expected 1638.4, edge 1638, avg 66.4
+- 9: expected 1843.2, edge 1843, avg 63.4
+- 10: expected 2048, edge 2048, avg 62.3
 
-Source crop widths: 202-204
-Source crop heights: 201-206
+Source crop widths: 204-205
+Source crop heights: 204-205
+Clean crop widths: 200-201
+Clean crop heights: 200-201
 
 ## Cells
 
-| Runtime Row | Source Row | Col | Tile ID | Source Rect | Normalized Rect |
-|---:|---:|---:|---|---|---|
-| 0 | 0 | 0 | `bright_grass` | 1,1,202,204 | 0,0,206,206 |
-| 0 | 0 | 1 | `medium_grass` | 205,1,204,204 | 206,0,206,206 |
-| 0 | 0 | 2 | `dark_grass` | 410,1,203,204 | 412,0,206,206 |
-| 0 | 0 | 3 | `flower_meadow` | 614,1,204,204 | 618,0,206,206 |
-| 0 | 0 | 4 | `clover_lush_grass` | 820,1,203,204 | 824,0,206,206 |
-| 0 | 0 | 5 | `trampled_grass` | 1025,1,203,204 | 1030,0,206,206 |
-| 0 | 0 | 6 | `weeds_grass` | 1230,1,203,204 | 1236,0,206,206 |
-| 0 | 0 | 7 | `dirt_patch` | 1435,1,203,204 | 1442,0,206,206 |
-| 0 | 0 | 8 | `grass_stones` | 1640,1,203,204 | 1648,0,206,206 |
-| 0 | 0 | 9 | `yellow_flower_grass` | 1845,1,202,204 | 1854,0,206,206 |
-| 1 | 1 | 0 | `forest_floor` | 1,207,202,203 | 0,206,206,206 |
-| 1 | 1 | 1 | `dark_forest_floor` | 205,207,204,203 | 206,206,206,206 |
-| 1 | 1 | 2 | `mossy_forest_ground` | 410,207,203,203 | 412,206,206,206 |
-| 1 | 1 | 3 | `dense_leafy_woodland` | 614,207,204,203 | 618,206,206,206 |
-| 1 | 1 | 4 | `bush_hedge` | 820,207,203,203 | 824,206,206,206 |
-| 1 | 1 | 5 | `tree_covered_green` | 1025,207,203,203 | 1030,206,206,206 |
-| 1 | 1 | 6 | `rooty_forest_earth` | 1230,207,203,203 | 1236,206,206,206 |
-| 1 | 1 | 7 | `autumn_woodland` | 1435,207,203,203 | 1442,206,206,206 |
-| 1 | 1 | 8 | `enchanted_forest_ground` | 1640,207,203,203 | 1648,206,206,206 |
-| 1 | 1 | 9 | `forest_path` | 1845,207,202,203 | 1854,206,206,206 |
-| 2 | 2 | 0 | `bright_sand` | 1,412,202,204 | 0,412,206,206 |
-| 2 | 2 | 1 | `golden_sand` | 205,412,204,204 | 206,412,206,206 |
-| 2 | 2 | 2 | `dune_sand` | 410,412,203,204 | 412,412,206,206 |
-| 2 | 2 | 3 | `rocky_sand` | 614,412,204,204 | 618,412,206,206 |
-| 2 | 2 | 4 | `cracked_dry_earth` | 820,412,203,204 | 824,412,206,206 |
-| 2 | 2 | 5 | `reddish_desert_soil` | 1025,412,203,204 | 1030,412,206,206 |
-| 2 | 2 | 6 | `cactus_scrub` | 1230,412,203,204 | 1236,412,206,206 |
-| 2 | 2 | 7 | `oasis` | 1435,412,203,204 | 1442,412,206,206 |
-| 2 | 2 | 8 | `sandstone_floor` | 1640,412,203,204 | 1648,412,206,206 |
-| 2 | 2 | 9 | `desert_scrub_path` | 1845,412,202,204 | 1854,412,206,206 |
-| 3 | 3 | 0 | `clean_snow` | 1,618,202,201 | 0,618,206,206 |
-| 3 | 3 | 1 | `packed_snow` | 205,618,204,201 | 206,618,206,206 |
-| 3 | 3 | 2 | `icy_snow` | 410,618,203,201 | 412,618,206,206 |
-| 3 | 3 | 3 | `frozen_ground` | 614,618,204,201 | 618,618,206,206 |
-| 3 | 3 | 4 | `frosty_sparkle_snow` | 820,618,203,201 | 824,618,206,206 |
-| 3 | 3 | 5 | `snow_rock` | 1025,618,203,201 | 1030,618,206,206 |
-| 3 | 3 | 6 | `frozen_lake_ice` | 1230,618,203,201 | 1236,618,206,206 |
-| 3 | 3 | 7 | `cracked_ice` | 1435,618,203,201 | 1442,618,206,206 |
-| 3 | 3 | 8 | `glacier_ice` | 1640,618,203,201 | 1648,618,206,206 |
-| 3 | 3 | 9 | `snowy_path` | 1845,618,202,201 | 1854,618,206,206 |
-| 4 | 4 | 0 | `darkland_grass` | 1,821,202,202 | 0,824,206,206 |
-| 4 | 4 | 1 | `dead_earth` | 205,821,204,202 | 206,824,206,206 |
-| 4 | 4 | 2 | `muddy_swamp` | 410,821,203,202 | 412,824,206,206 |
-| 4 | 4 | 3 | `boggy_wetland` | 614,821,204,202 | 618,824,206,206 |
-| 4 | 4 | 4 | `toxic_marsh` | 820,821,203,202 | 824,824,206,206 |
-| 4 | 4 | 5 | `ash_ground` | 1025,821,203,202 | 1030,824,206,206 |
-| 4 | 4 | 6 | `cursed_purple_soil` | 1230,821,203,202 | 1236,824,206,206 |
-| 4 | 4 | 7 | `blackened_wasteland` | 1435,821,203,202 | 1442,824,206,206 |
-| 4 | 4 | 8 | `sickly_corrupted_ground` | 1640,821,203,202 | 1648,824,206,206 |
-| 4 | 4 | 9 | `haunted_dead_forest_floor` | 1845,821,202,202 | 1854,824,206,206 |
-| 5 | 5 | 0 | `deep_ocean_water` | 1,1026,202,201 | 0,1030,206,206 |
-| 5 | 5 | 1 | `light_water` | 205,1026,204,201 | 206,1030,206,206 |
-| 5 | 5 | 2 | `river_water` | 410,1026,203,201 | 412,1030,206,206 |
-| 5 | 5 | 3 | `shallow_water` | 614,1026,204,201 | 618,1030,206,206 |
-| 5 | 5 | 4 | `swamp_water` | 820,1026,203,201 | 824,1030,206,206 |
-| 5 | 5 | 5 | `beach_shore` | 1025,1026,203,201 | 1030,1030,206,206 |
-| 5 | 5 | 6 | `wooden_bridge_horizontal` | 1230,1026,203,201 | 1236,1030,206,206 |
-| 5 | 5 | 7 | `wooden_bridge_vertical` | 1435,1026,203,201 | 1442,1030,206,206 |
-| 5 | 5 | 8 | `stone_bridge_horizontal` | 1640,1026,203,201 | 1648,1030,206,206 |
-| 5 | 5 | 9 | `stone_bridge_vertical` | 1845,1026,202,201 | 1854,1030,206,206 |
-| 6 | 7 | 0 | `rocky_hill_ground` | 1,1433,202,202 | 0,1236,206,206 |
-| 6 | 7 | 1 | `mountain_foothill` | 205,1433,204,202 | 206,1236,206,206 |
-| 6 | 7 | 2 | `dark_mountain_ground` | 410,1433,203,202 | 412,1236,206,206 |
-| 6 | 7 | 3 | `gravel_stone_ground` | 614,1433,204,202 | 618,1236,206,206 |
-| 6 | 7 | 4 | `cliff_top_rock` | 820,1433,203,202 | 824,1236,206,206 |
-| 6 | 7 | 5 | `canyon_stone` | 1025,1433,203,202 | 1030,1236,206,206 |
-| 6 | 7 | 6 | `mossy_rock` | 1230,1433,203,202 | 1236,1236,206,206 |
-| 6 | 7 | 7 | `volcanic_stone` | 1435,1433,203,202 | 1442,1236,206,206 |
-| 6 | 7 | 8 | `crystal_rock` | 1640,1433,203,202 | 1648,1236,206,206 |
-| 6 | 7 | 9 | `cave_rock` | 1845,1433,202,202 | 1854,1236,206,206 |
-| 7 | 9 | 0 | `dirt_road` | 1,1841,202,206 | 0,1442,206,206 |
-| 7 | 9 | 1 | `worn_path` | 205,1841,204,206 | 206,1442,206,206 |
-| 7 | 9 | 2 | `cobblestone_road` | 410,1841,203,206 | 412,1442,206,206 |
-| 7 | 9 | 3 | `ancient_ruin_floor` | 614,1841,204,206 | 618,1442,206,206 |
-| 7 | 9 | 4 | `lava_cracked_ground` | 820,1841,203,206 | 824,1442,206,206 |
-| 7 | 9 | 5 | `tropical_lush_ground` | 1025,1841,203,206 | 1030,1442,206,206 |
-| 7 | 9 | 6 | `tropical_beach_sand` | 1230,1841,203,206 | 1236,1442,206,206 |
-| 7 | 9 | 7 | `magical_crystal_field` | 1435,1841,203,206 | 1442,1442,206,206 |
-| 7 | 9 | 8 | `graveyard_earth` | 1640,1841,203,206 | 1648,1442,206,206 |
-| 7 | 9 | 9 | `mixed_utility_terrain` | 1845,1841,202,206 | 1854,1442,206,206 |
+| Runtime Row | Source Row | Col | Tile ID | Raw Source Rect | Clean Source Rect | Normalized Rect |
+|---:|---:|---:|---|---|---|---|
+| 0 | 0 | 0 | `bright_grass` | 0,0,205,205 | 2,2,201,201 | 0,0,256,256 |
+| 0 | 0 | 1 | `medium_grass` | 205,0,205,205 | 207,2,201,201 | 256,0,256,256 |
+| 0 | 0 | 2 | `dark_grass` | 410,0,204,205 | 412,2,200,201 | 512,0,256,256 |
+| 0 | 0 | 3 | `flower_meadow` | 614,0,205,205 | 616,2,201,201 | 768,0,256,256 |
+| 0 | 0 | 4 | `clover_lush_grass` | 819,0,205,205 | 821,2,201,201 | 1024,0,256,256 |
+| 0 | 0 | 5 | `trampled_grass` | 1024,0,205,205 | 1026,2,201,201 | 1280,0,256,256 |
+| 0 | 0 | 6 | `weeds_grass` | 1229,0,205,205 | 1231,2,201,201 | 1536,0,256,256 |
+| 0 | 0 | 7 | `dirt_patch` | 1434,0,204,205 | 1436,2,200,201 | 1792,0,256,256 |
+| 0 | 0 | 8 | `grass_stones` | 1638,0,205,205 | 1640,2,201,201 | 2048,0,256,256 |
+| 0 | 0 | 9 | `yellow_flower_grass` | 1843,0,205,205 | 1845,2,201,201 | 2304,0,256,256 |
+| 1 | 1 | 0 | `forest_floor` | 0,205,205,205 | 2,207,201,201 | 0,256,256,256 |
+| 1 | 1 | 1 | `dark_forest_floor` | 205,205,205,205 | 207,207,201,201 | 256,256,256,256 |
+| 1 | 1 | 2 | `mossy_forest_ground` | 410,205,204,205 | 412,207,200,201 | 512,256,256,256 |
+| 1 | 1 | 3 | `dense_leafy_woodland` | 614,205,205,205 | 616,207,201,201 | 768,256,256,256 |
+| 1 | 1 | 4 | `bush_hedge` | 819,205,205,205 | 821,207,201,201 | 1024,256,256,256 |
+| 1 | 1 | 5 | `tree_covered_green` | 1024,205,205,205 | 1026,207,201,201 | 1280,256,256,256 |
+| 1 | 1 | 6 | `rooty_forest_earth` | 1229,205,205,205 | 1231,207,201,201 | 1536,256,256,256 |
+| 1 | 1 | 7 | `autumn_woodland` | 1434,205,204,205 | 1436,207,200,201 | 1792,256,256,256 |
+| 1 | 1 | 8 | `enchanted_forest_ground` | 1638,205,205,205 | 1640,207,201,201 | 2048,256,256,256 |
+| 1 | 1 | 9 | `forest_path` | 1843,205,205,205 | 1845,207,201,201 | 2304,256,256,256 |
+| 2 | 2 | 0 | `bright_sand` | 0,410,205,204 | 2,412,201,200 | 0,512,256,256 |
+| 2 | 2 | 1 | `golden_sand` | 205,410,205,204 | 207,412,201,200 | 256,512,256,256 |
+| 2 | 2 | 2 | `dune_sand` | 410,410,204,204 | 412,412,200,200 | 512,512,256,256 |
+| 2 | 2 | 3 | `rocky_sand` | 614,410,205,204 | 616,412,201,200 | 768,512,256,256 |
+| 2 | 2 | 4 | `cracked_dry_earth` | 819,410,205,204 | 821,412,201,200 | 1024,512,256,256 |
+| 2 | 2 | 5 | `reddish_desert_soil` | 1024,410,205,204 | 1026,412,201,200 | 1280,512,256,256 |
+| 2 | 2 | 6 | `cactus_scrub` | 1229,410,205,204 | 1231,412,201,200 | 1536,512,256,256 |
+| 2 | 2 | 7 | `oasis` | 1434,410,204,204 | 1436,412,200,200 | 1792,512,256,256 |
+| 2 | 2 | 8 | `sandstone_floor` | 1638,410,205,204 | 1640,412,201,200 | 2048,512,256,256 |
+| 2 | 2 | 9 | `desert_scrub_path` | 1843,410,205,204 | 1845,412,201,200 | 2304,512,256,256 |
+| 3 | 3 | 0 | `clean_snow` | 0,614,205,205 | 2,616,201,201 | 0,768,256,256 |
+| 3 | 3 | 1 | `packed_snow` | 205,614,205,205 | 207,616,201,201 | 256,768,256,256 |
+| 3 | 3 | 2 | `icy_snow` | 410,614,204,205 | 412,616,200,201 | 512,768,256,256 |
+| 3 | 3 | 3 | `frozen_ground` | 614,614,205,205 | 616,616,201,201 | 768,768,256,256 |
+| 3 | 3 | 4 | `frosty_sparkle_snow` | 819,614,205,205 | 821,616,201,201 | 1024,768,256,256 |
+| 3 | 3 | 5 | `snow_rock` | 1024,614,205,205 | 1026,616,201,201 | 1280,768,256,256 |
+| 3 | 3 | 6 | `frozen_lake_ice` | 1229,614,205,205 | 1231,616,201,201 | 1536,768,256,256 |
+| 3 | 3 | 7 | `cracked_ice` | 1434,614,204,205 | 1436,616,200,201 | 1792,768,256,256 |
+| 3 | 3 | 8 | `glacier_ice` | 1638,614,205,205 | 1640,616,201,201 | 2048,768,256,256 |
+| 3 | 3 | 9 | `snowy_path` | 1843,614,205,205 | 1845,616,201,201 | 2304,768,256,256 |
+| 4 | 4 | 0 | `darkland_grass` | 0,819,205,205 | 2,821,201,201 | 0,1024,256,256 |
+| 4 | 4 | 1 | `dead_earth` | 205,819,205,205 | 207,821,201,201 | 256,1024,256,256 |
+| 4 | 4 | 2 | `muddy_swamp` | 410,819,204,205 | 412,821,200,201 | 512,1024,256,256 |
+| 4 | 4 | 3 | `boggy_wetland` | 614,819,205,205 | 616,821,201,201 | 768,1024,256,256 |
+| 4 | 4 | 4 | `toxic_marsh` | 819,819,205,205 | 821,821,201,201 | 1024,1024,256,256 |
+| 4 | 4 | 5 | `ash_ground` | 1024,819,205,205 | 1026,821,201,201 | 1280,1024,256,256 |
+| 4 | 4 | 6 | `cursed_purple_soil` | 1229,819,205,205 | 1231,821,201,201 | 1536,1024,256,256 |
+| 4 | 4 | 7 | `blackened_wasteland` | 1434,819,204,205 | 1436,821,200,201 | 1792,1024,256,256 |
+| 4 | 4 | 8 | `sickly_corrupted_ground` | 1638,819,205,205 | 1640,821,201,201 | 2048,1024,256,256 |
+| 4 | 4 | 9 | `haunted_dead_forest_floor` | 1843,819,205,205 | 1845,821,201,201 | 2304,1024,256,256 |
+| 5 | 5 | 0 | `deep_ocean_water` | 0,1024,205,205 | 2,1026,201,201 | 0,1280,256,256 |
+| 5 | 5 | 1 | `light_water` | 205,1024,205,205 | 207,1026,201,201 | 256,1280,256,256 |
+| 5 | 5 | 2 | `river_water` | 410,1024,204,205 | 412,1026,200,201 | 512,1280,256,256 |
+| 5 | 5 | 3 | `shallow_water` | 614,1024,205,205 | 616,1026,201,201 | 768,1280,256,256 |
+| 5 | 5 | 4 | `swamp_water` | 819,1024,205,205 | 821,1026,201,201 | 1024,1280,256,256 |
+| 5 | 5 | 5 | `beach_shore` | 1024,1024,205,205 | 1026,1026,201,201 | 1280,1280,256,256 |
+| 5 | 5 | 6 | `wooden_bridge_horizontal` | 1229,1024,205,205 | 1231,1026,201,201 | 1536,1280,256,256 |
+| 5 | 5 | 7 | `wooden_bridge_vertical` | 1434,1024,204,205 | 1436,1026,200,201 | 1792,1280,256,256 |
+| 5 | 5 | 8 | `stone_bridge_horizontal` | 1638,1024,205,205 | 1640,1026,201,201 | 2048,1280,256,256 |
+| 5 | 5 | 9 | `stone_bridge_vertical` | 1843,1024,205,205 | 1845,1026,201,201 | 2304,1280,256,256 |
+| 6 | 6 | 0 | `deep_ocean_water_variant` | 0,1229,205,205 | 2,1231,201,201 | 0,1536,256,256 |
+| 6 | 6 | 1 | `rocky_ocean_water` | 205,1229,205,205 | 207,1231,201,201 | 256,1536,256,256 |
+| 6 | 6 | 2 | `clear_shallow_water` | 410,1229,204,205 | 412,1231,200,201 | 512,1536,256,256 |
+| 6 | 6 | 3 | `lily_swamp_water` | 614,1229,205,205 | 616,1231,201,201 | 768,1536,256,256 |
+| 6 | 6 | 4 | `foamy_beach_shore` | 819,1229,205,205 | 821,1231,201,201 | 1024,1536,256,256 |
+| 6 | 6 | 5 | `sandy_rock_shore` | 1024,1229,205,205 | 1026,1231,201,201 | 1280,1536,256,256 |
+| 6 | 6 | 6 | `wooden_bridge_horizontal_variant` | 1229,1229,205,205 | 1231,1231,201,201 | 1536,1536,256,256 |
+| 6 | 6 | 7 | `wooden_bridge_vertical_variant` | 1434,1229,204,205 | 1436,1231,200,201 | 1792,1536,256,256 |
+| 6 | 6 | 8 | `stone_bridge_horizontal_variant` | 1638,1229,205,205 | 1640,1231,201,201 | 2048,1536,256,256 |
+| 6 | 6 | 9 | `stone_bridge_vertical_variant` | 1843,1229,205,205 | 1845,1231,201,201 | 2304,1536,256,256 |
+| 7 | 7 | 0 | `rocky_hill_ground` | 0,1434,205,204 | 2,1436,201,200 | 0,1792,256,256 |
+| 7 | 7 | 1 | `mountain_foothill` | 205,1434,205,204 | 207,1436,201,200 | 256,1792,256,256 |
+| 7 | 7 | 2 | `dark_mountain_ground` | 410,1434,204,204 | 412,1436,200,200 | 512,1792,256,256 |
+| 7 | 7 | 3 | `gravel_stone_ground` | 614,1434,205,204 | 616,1436,201,200 | 768,1792,256,256 |
+| 7 | 7 | 4 | `cliff_top_rock` | 819,1434,205,204 | 821,1436,201,200 | 1024,1792,256,256 |
+| 7 | 7 | 5 | `canyon_stone` | 1024,1434,205,204 | 1026,1436,201,200 | 1280,1792,256,256 |
+| 7 | 7 | 6 | `mossy_rock` | 1229,1434,205,204 | 1231,1436,201,200 | 1536,1792,256,256 |
+| 7 | 7 | 7 | `volcanic_stone` | 1434,1434,204,204 | 1436,1436,200,200 | 1792,1792,256,256 |
+| 7 | 7 | 8 | `crystal_rock` | 1638,1434,205,204 | 1640,1436,201,200 | 2048,1792,256,256 |
+| 7 | 7 | 9 | `cave_rock` | 1843,1434,205,204 | 1845,1436,201,200 | 2304,1792,256,256 |
+| 8 | 8 | 0 | `mossy_mountain_variant` | 0,1638,205,205 | 2,1640,201,201 | 0,2048,256,256 |
+| 8 | 8 | 1 | `dark_mountain_variant` | 205,1638,205,205 | 207,1640,201,201 | 256,2048,256,256 |
+| 8 | 8 | 2 | `rocky_ground_variant` | 410,1638,204,205 | 412,1640,200,201 | 512,2048,256,256 |
+| 8 | 8 | 3 | `tan_rocky_ground_variant` | 614,1638,205,205 | 616,1640,201,201 | 768,2048,256,256 |
+| 8 | 8 | 4 | `canyon_cliff_variant` | 819,1638,205,205 | 821,1640,201,201 | 1024,2048,256,256 |
+| 8 | 8 | 5 | `mossy_ruin_rock_variant` | 1024,1638,205,205 | 1026,1640,201,201 | 1280,2048,256,256 |
+| 8 | 8 | 6 | `crystal_rock_variant` | 1229,1638,205,205 | 1231,1640,201,201 | 1536,2048,256,256 |
+| 8 | 8 | 7 | `cave_entrance_variant` | 1434,1638,204,205 | 1436,1640,200,201 | 1792,2048,256,256 |
+| 8 | 8 | 8 | `stone_ruin_wall_variant` | 1638,1638,205,205 | 1640,1640,201,201 | 2048,2048,256,256 |
+| 8 | 8 | 9 | `rocky_path_variant` | 1843,1638,205,205 | 1845,1640,201,201 | 2304,2048,256,256 |
+| 9 | 9 | 0 | `dirt_road` | 0,1843,205,205 | 2,1845,201,201 | 0,2304,256,256 |
+| 9 | 9 | 1 | `worn_path` | 205,1843,205,205 | 207,1845,201,201 | 256,2304,256,256 |
+| 9 | 9 | 2 | `cobblestone_road` | 410,1843,204,205 | 412,1845,200,201 | 512,2304,256,256 |
+| 9 | 9 | 3 | `ancient_ruin_floor` | 614,1843,205,205 | 616,1845,201,201 | 768,2304,256,256 |
+| 9 | 9 | 4 | `lava_cracked_ground` | 819,1843,205,205 | 821,1845,201,201 | 1024,2304,256,256 |
+| 9 | 9 | 5 | `tropical_lush_ground` | 1024,1843,205,205 | 1026,1845,201,201 | 1280,2304,256,256 |
+| 9 | 9 | 6 | `tropical_beach_sand` | 1229,1843,205,205 | 1231,1845,201,201 | 1536,2304,256,256 |
+| 9 | 9 | 7 | `magical_crystal_field` | 1434,1843,204,205 | 1436,1845,200,201 | 1792,2304,256,256 |
+| 9 | 9 | 8 | `graveyard_earth` | 1638,1843,205,205 | 1640,1845,201,201 | 2048,2304,256,256 |
+| 9 | 9 | 9 | `mixed_utility_terrain` | 1843,1843,205,205 | 1845,1845,201,201 | 2304,2304,256,256 |

@@ -10,7 +10,7 @@
 - Holding a direction moves smoothly; releasing can stop between tiles rather than completing a forced tile step.
 - Shift keeps faster exploration movement, but still advances continuously rather than skipping tiles.
 - Visual position and logical tile position are intentionally separate during movement. Do not recompute rendering from stale logical tile coordinates mid-move.
-- Terrain uses the 80 tile IDs in `src/data/worldTiles.ts`, grouped by biome, walkability, movement cost, and tags.
+- Terrain uses the 100 tile IDs in `src/data/worldTiles.ts`, grouped by biome, walkability, movement cost, and tags.
 - World collision uses centralized `isWorldTileWalkable(tileId)` from the tile manifest.
 - Water, river, ocean, swamp water, cliffs, lava, and blocked mountain tiles are not walkable.
 - Bridges, roads, paths, and carved POI footprints are walkable.

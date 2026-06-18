@@ -8,17 +8,22 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PROJECT_ROOT = path.resolve(__dirname, "..", "..");
 
-const SOURCE_ATLAS = "C:/Users/Marku/Downloads/redo_this_please_2K_202606182233.jpeg";
-const SOURCE_COPY_DIR = path.join(PROJECT_ROOT, "assets_v2", "source_sheets", "world_atlas");
-const OUTPUT_DIR = path.join(PROJECT_ROOT, "assets_v2", "world");
+const SOURCE_ATLAS = "C:/Users/Marku/Downloads/redo_this_please_2K_202606182350.jpeg";
+const OUTPUT_DIR = path.join(PROJECT_ROOT, "src", "assets", "world");
+const SOURCE_COPY_DIR = path.join(OUTPUT_DIR, "source");
 const REPORT_DIR = path.join(PROJECT_ROOT, "docs", "debug", "world-atlas");
 const DATA_OUTPUT = path.join(PROJECT_ROOT, "src", "data", "worldTiles.ts");
+const NORMALIZED_ATLAS_FILENAME = "world_atlas.normalized.png";
+const SOURCE_COPY_FILENAME = "redo_this_please_2K_202606182350.jpeg";
 
 const COLUMNS = 10;
-const ROWS = 8;
+const ROWS = 10;
 const SOURCE_COLUMNS = 10;
 const SOURCE_ROWS = 10;
-const SOURCE_ROWS_FOR_OUTPUT = [0, 1, 2, 3, 4, 5, 7, 9];
+const SOURCE_ROWS_FOR_OUTPUT = Array.from({ length: SOURCE_ROWS }, (_, row) => row);
+const NORMALIZED_TILE_SIZE = 256;
+const EMBEDDED_BORDER_CROP_PX = 2;
+const OUTPUT_EDGE_BLEED_PX = 2;
 
 const TILE_ROWS = [
   {
@@ -125,6 +130,23 @@ const TILE_ROWS = [
   },
   {
     row: 6,
+    biome: "water",
+    family: "water",
+    tiles: [
+      ["deep_ocean_water_variant", false, 99, ["water", "ocean", "deep", "variant"]],
+      ["rocky_ocean_water", false, 99, ["water", "ocean", "rocks", "variant"]],
+      ["clear_shallow_water", false, 99, ["water", "shallow", "variant"]],
+      ["lily_swamp_water", false, 99, ["water", "swamp", "variant"]],
+      ["foamy_beach_shore", true, 1.15, ["shore", "beach", "land", "variant"]],
+      ["sandy_rock_shore", true, 1.2, ["shore", "beach", "rocks", "land", "variant"]],
+      ["wooden_bridge_horizontal_variant", true, 0.7, ["bridge", "road", "land", "variant"]],
+      ["wooden_bridge_vertical_variant", true, 0.7, ["bridge", "road", "land", "variant"]],
+      ["stone_bridge_horizontal_variant", true, 0.65, ["bridge", "road", "land", "variant"]],
+      ["stone_bridge_vertical_variant", true, 0.65, ["bridge", "road", "land", "variant"]]
+    ]
+  },
+  {
+    row: 7,
     biome: "mountain",
     family: "hills",
     tiles: [
@@ -141,7 +163,24 @@ const TILE_ROWS = [
     ]
   },
   {
-    row: 7,
+    row: 8,
+    biome: "mountain",
+    family: "hills",
+    tiles: [
+      ["mossy_mountain_variant", false, 99, ["mountain", "blocked", "variant"]],
+      ["dark_mountain_variant", false, 99, ["mountain", "blocked", "variant"]],
+      ["rocky_ground_variant", true, 2, ["rock", "land", "variant"]],
+      ["tan_rocky_ground_variant", true, 1.9, ["rock", "dry", "land", "variant"]],
+      ["canyon_cliff_variant", false, 99, ["canyon", "cliff", "blocked", "variant"]],
+      ["mossy_ruin_rock_variant", true, 2.1, ["rock", "ruin", "moss", "land", "variant"]],
+      ["crystal_rock_variant", false, 99, ["crystal", "blocked", "variant"]],
+      ["cave_entrance_variant", true, 2.2, ["cave", "rock", "land", "variant"]],
+      ["stone_ruin_wall_variant", false, 99, ["stone", "ruin", "blocked", "variant"]],
+      ["rocky_path_variant", true, 1.4, ["rock", "road", "path", "land", "variant"]]
+    ]
+  },
+  {
+    row: 9,
     biome: "road",
     family: "road",
     tiles: [
@@ -166,8 +205,9 @@ function main() {
   ensureDir(path.dirname(DATA_OUTPUT));
   if (!fs.existsSync(SOURCE_ATLAS)) throw new Error(`Missing source atlas: ${SOURCE_ATLAS}`);
 
-  const copiedSource = path.join(SOURCE_COPY_DIR, "redo_this_please_2k_202606182233.jpeg");
+  const copiedSource = path.join(SOURCE_COPY_DIR, SOURCE_COPY_FILENAME);
   fs.rmSync(path.join(SOURCE_COPY_DIR, "atlas.png"), { force: true });
+  fs.rmSync(path.join(SOURCE_COPY_DIR, "redo_this_please_2k_202606182233.jpeg"), { force: true });
   fs.copyFileSync(SOURCE_ATLAS, copiedSource);
 
   const image = readSourceImage(SOURCE_ATLAS);
@@ -177,17 +217,19 @@ function main() {
   for (let row = 0; row < ROWS; row += 1) {
     const sourceRow = SOURCE_ROWS_FOR_OUTPUT[row];
     for (let col = 0; col < COLUMNS; col += 1) {
+      const sourceRect = {
+        x: columnBoundaries[col].end,
+        y: rowBoundaries[sourceRow].end,
+        width: columnBoundaries[col + 1].start - columnBoundaries[col].end,
+        height: rowBoundaries[sourceRow + 1].start - rowBoundaries[sourceRow].end
+      };
       sourceCells.push({
         row,
         col,
         sourceRow,
         id: TILE_ROWS[row].tiles[col][0],
-        sourceRect: {
-          x: columnBoundaries[col].end + 1,
-          y: rowBoundaries[sourceRow].end + 1,
-          width: columnBoundaries[col + 1].start - columnBoundaries[col].end - 1,
-          height: rowBoundaries[sourceRow + 1].start - rowBoundaries[sourceRow].end - 1
-        }
+        sourceRect,
+        cleanRect: insetSourceRect(sourceRect, EMBEDDED_BORDER_CROP_PX)
       });
     }
   }
@@ -203,15 +245,17 @@ function main() {
       width: normalizedTileSize,
       height: normalizedTileSize
     };
-    drawScaledNearest(image, normalized, cell.sourceRect, destRect);
-    drawScaledNearest(image, debug, cell.sourceRect, destRect);
+    drawScaledNearest(image, normalized, cell.cleanRect, destRect);
+    bleedTileEdges(normalized, destRect, OUTPUT_EDGE_BLEED_PX);
+    drawScaledNearest(image, debug, cell.cleanRect, destRect);
+    bleedTileEdges(debug, destRect, OUTPUT_EDGE_BLEED_PX);
     drawRect(debug, destRect.x, destRect.y, destRect.width - 1, destRect.height - 1, [255, 230, 128, 255]);
     drawTinyLabel(debug, destRect.x + 5, destRect.y + 5, `${cell.row},${cell.col} src${cell.sourceRow}`, [255, 255, 255, 255]);
     drawTinyLabel(debug, destRect.x + 5, destRect.y + 18, cell.id.slice(0, 17), [180, 232, 255, 255]);
     cells.push({ ...cell, destRect });
   }
 
-  const normalizedPath = path.join(OUTPUT_DIR, "world_atlas_normalized.png");
+  const normalizedPath = path.join(OUTPUT_DIR, NORMALIZED_ATLAS_FILENAME);
   const debugPath = path.join(REPORT_DIR, "world_atlas.debug.png");
   const reportPath = path.join(REPORT_DIR, "world_atlas.import-report.md");
   writePng(normalizedPath, normalized);
@@ -226,40 +270,34 @@ function main() {
 }
 
 function chooseTileSize(cells) {
-  const sizes = cells.flatMap((cell) => [cell.sourceRect.width, cell.sourceRect.height]).sort((a, b) => a - b);
-  return Math.max(...sizes);
+  if (cells.some((cell) => cell.cleanRect.width <= 0 || cell.cleanRect.height <= 0)) {
+    throw new Error("Atlas border cleanup produced an empty source tile.");
+  }
+  return NORMALIZED_TILE_SIZE;
+}
+
+function insetSourceRect(rect, inset) {
+  const maxInsetX = Math.max(0, Math.floor((rect.width - 1) / 2));
+  const maxInsetY = Math.max(0, Math.floor((rect.height - 1) / 2));
+  const cropX = Math.min(inset, maxInsetX);
+  const cropY = Math.min(inset, maxInsetY);
+  return {
+    x: rect.x + cropX,
+    y: rect.y + cropY,
+    width: rect.width - cropX * 2,
+    height: rect.height - cropY * 2
+  };
 }
 
 function detectBoundaries(image, divisions, axis) {
   const size = axis === "x" ? image.width : image.height;
-  const other = axis === "x" ? image.height : image.width;
-  const bpp = 4;
   const boundaries = [];
   for (let i = 0; i <= divisions; i += 1) {
-    const expected = (i * (size - 1)) / divisions;
-    const min = Math.max(0, Math.floor(expected - 3));
-    const max = Math.min(size - 1, Math.ceil(expected + 3));
-    let best = min;
-    let bestScore = Infinity;
-    for (let p = min; p <= max; p += 1) {
-      let brightness = 0;
-      for (let q = 0; q < other; q += 1) {
-        const x = axis === "x" ? p : q;
-        const y = axis === "x" ? q : p;
-        const offset = (y * image.width + x) * bpp;
-        brightness += (image.data[offset] + image.data[offset + 1] + image.data[offset + 2]) / 3;
-      }
-      brightness /= other;
-      if (brightness < bestScore) {
-        bestScore = brightness;
-        best = p;
-      }
-    }
-    let start = best;
-    let end = best;
-    while (start > 0 && averageLineBrightness(image, start - 1, axis) < bestScore + 14 && Math.abs(start - 1 - expected) <= 4) start -= 1;
-    while (end < size - 1 && averageLineBrightness(image, end + 1, axis) < bestScore + 14 && Math.abs(end + 1 - expected) <= 4) end += 1;
-    boundaries.push({ index: i, expected: Math.round(expected * 100) / 100, start, end, averageBrightness: Math.round(bestScore * 10) / 10 });
+    const expected = (i * size) / divisions;
+    const edge = Math.round(expected);
+    const sample = Math.max(0, Math.min(size - 1, edge === size ? size - 1 : edge));
+    const averageBrightness = Math.round(averageLineBrightness(image, sample, axis) * 10) / 10;
+    boundaries.push({ index: i, expected: Math.round(expected * 100) / 100, start: edge, end: edge, averageBrightness });
   }
   return boundaries;
 }
@@ -288,34 +326,38 @@ Source color: ${image.sourceColorType}
 Detected source grid: ${SOURCE_COLUMNS} columns x ${SOURCE_ROWS} rows
 Runtime grid: ${COLUMNS} columns x ${ROWS} rows
 Normalized tile size: ${normalizedTileSize}x${normalizedTileSize}
-Normalized atlas: \`${relative(path.join(OUTPUT_DIR, "world_atlas_normalized.png"))}\`
+Normalized atlas: \`${relative(path.join(OUTPUT_DIR, NORMALIZED_ATLAS_FILENAME))}\`
 Debug preview: \`${relative(path.join(REPORT_DIR, "world_atlas.debug.png"))}\`
+Embedded border crop: ${EMBEDDED_BORDER_CROP_PX}px per tile edge
+Output edge bleed: ${OUTPUT_EDGE_BLEED_PX}px
 
-## Separator Detection
+## Grid Detection
 
-The source is a square ${SOURCE_COLUMNS}x${SOURCE_ROWS} JPEG atlas with separator/border lines. Dark separator lines were detected near the expected grid boundaries and excluded from each runtime tile before nearest-neighbor normalization.
+The source is the corrected square ${SOURCE_COLUMNS}x${SOURCE_ROWS} JPEG atlas. It is 2048x2048, so 10-way source cells are fractional and cannot be sliced directly in runtime code. The importer uses proportional source cell edges, crops ${EMBEDDED_BORDER_CROP_PX}px from each tile edge to remove residual JPEG boundary artifacts, normalizes every tile to ${normalizedTileSize}x${normalizedTileSize}, then applies a ${OUTPUT_EDGE_BLEED_PX}px interior edge bleed to prevent atlas sampling seams.
 
-The game uses the requested ${COLUMNS}x${ROWS} logical terrain model. Source rows ${SOURCE_ROWS_FOR_OUTPUT.join(", ")} were selected for runtime rows 0-${ROWS - 1}; duplicate/detail rows not in that list are kept only in the copied source/debug provenance.
+The game uses the full corrected ${COLUMNS}x${ROWS} terrain model. Source rows ${SOURCE_ROWS_FOR_OUTPUT.join(", ")} map one-to-one to runtime rows 0-${ROWS - 1}.
 
-Column boundaries:
+Column edges:
 
-${columnBoundaries.map((b) => `- ${b.index}: expected ${b.expected}, separator ${b.start}-${b.end}, avg ${b.averageBrightness}`).join("\n")}
+${columnBoundaries.map((b) => `- ${b.index}: expected ${b.expected}, edge ${b.start}, avg ${b.averageBrightness}`).join("\n")}
 
-Row boundaries:
+Row edges:
 
-${rowBoundaries.map((b) => `- ${b.index}: expected ${b.expected}, separator ${b.start}-${b.end}, avg ${b.averageBrightness}`).join("\n")}
+${rowBoundaries.map((b) => `- ${b.index}: expected ${b.expected}, edge ${b.start}, avg ${b.averageBrightness}`).join("\n")}
 
 Source crop widths: ${Math.min(...sourceCellWidths)}-${Math.max(...sourceCellWidths)}
 Source crop heights: ${Math.min(...sourceCellHeights)}-${Math.max(...sourceCellHeights)}
+Clean crop widths: ${Math.min(...cells.map((cell) => cell.cleanRect.width))}-${Math.max(...cells.map((cell) => cell.cleanRect.width))}
+Clean crop heights: ${Math.min(...cells.map((cell) => cell.cleanRect.height))}-${Math.max(...cells.map((cell) => cell.cleanRect.height))}
 
 ## Cells
 
-| Runtime Row | Source Row | Col | Tile ID | Source Rect | Normalized Rect |
-|---:|---:|---:|---|---|---|
+| Runtime Row | Source Row | Col | Tile ID | Raw Source Rect | Clean Source Rect | Normalized Rect |
+|---:|---:|---:|---|---|---|---|
 ${cells
   .map(
     (cell) =>
-      `| ${cell.row} | ${cell.sourceRow} | ${cell.col} | \`${cell.id}\` | ${cell.sourceRect.x},${cell.sourceRect.y},${cell.sourceRect.width},${cell.sourceRect.height} | ${cell.destRect.x},${cell.destRect.y},${cell.destRect.width},${cell.destRect.height} |`
+      `| ${cell.row} | ${cell.sourceRow} | ${cell.col} | \`${cell.id}\` | ${cell.sourceRect.x},${cell.sourceRect.y},${cell.sourceRect.width},${cell.sourceRect.height} | ${cell.cleanRect.x},${cell.cleanRect.y},${cell.cleanRect.width},${cell.cleanRect.height} | ${cell.destRect.x},${cell.destRect.y},${cell.destRect.width},${cell.destRect.height} |`
   )
   .join("\n")}
 `;
@@ -340,8 +382,8 @@ function buildTypeScriptManifest(normalizedTileSize) {
   }
   return `export const WORLD_ATLAS = {
   textureKey: "world_atlas",
-  image: "assets_v2/world/world_atlas_normalized.png",
-  sourceCopy: "assets_v2/source_sheets/world_atlas/redo_this_please_2k_202606182233.jpeg",
+  image: "src/assets/world/${NORMALIZED_ATLAS_FILENAME}",
+  sourceCopy: "src/assets/world/source/${SOURCE_COPY_FILENAME}",
   columns: ${COLUMNS},
   rows: ${ROWS},
   sourceColumns: ${SOURCE_COLUMNS},
@@ -420,6 +462,38 @@ function drawScaledNearest(source, target, sourceRect, destRect) {
       target.data[targetOffset + 3] = 255;
     }
   }
+}
+
+function bleedTileEdges(image, rect, bleed) {
+  const safeBleed = Math.max(0, Math.min(bleed, Math.floor(Math.min(rect.width, rect.height) / 3)));
+  if (!safeBleed) return;
+  const leftRef = rect.x + safeBleed;
+  const rightRef = rect.x + rect.width - 1 - safeBleed;
+  const topRef = rect.y + safeBleed;
+  const bottomRef = rect.y + rect.height - 1 - safeBleed;
+  for (let y = rect.y; y < rect.y + rect.height; y += 1) {
+    for (let i = 0; i < safeBleed; i += 1) {
+      copyPixel(image, leftRef, y, rect.x + i, y);
+      copyPixel(image, rightRef, y, rect.x + rect.width - 1 - i, y);
+    }
+  }
+  for (let x = rect.x; x < rect.x + rect.width; x += 1) {
+    for (let i = 0; i < safeBleed; i += 1) {
+      copyPixel(image, x, topRef, x, rect.y + i);
+      copyPixel(image, x, bottomRef, x, rect.y + rect.height - 1 - i);
+    }
+  }
+}
+
+function copyPixel(image, sourceX, sourceY, targetX, targetY) {
+  if (sourceX < 0 || sourceY < 0 || targetX < 0 || targetY < 0) return;
+  if (sourceX >= image.width || targetX >= image.width || sourceY >= image.height || targetY >= image.height) return;
+  const sourceOffset = (sourceY * image.width + sourceX) * 4;
+  const targetOffset = (targetY * image.width + targetX) * 4;
+  image.data[targetOffset] = image.data[sourceOffset];
+  image.data[targetOffset + 1] = image.data[sourceOffset + 1];
+  image.data[targetOffset + 2] = image.data[sourceOffset + 2];
+  image.data[targetOffset + 3] = image.data[sourceOffset + 3];
 }
 
 function drawRect(image, x, y, width, height, color) {

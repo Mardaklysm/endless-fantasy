@@ -74,7 +74,7 @@ For the overworld atlas, run:
 node tools\art_import\import_world_atlas.mjs
 ```
 
-Check `assets_v2/world/world_atlas_normalized.png`, `src/data/worldTiles.ts`, and `docs/debug/world-atlas/world_atlas.debug.png` / `world_atlas.import-report.md`. The runtime atlas should be a clean 10x8 sheet with 206x206 cells and no source separator lines; the debug preview is the only atlas output with labels/grid boxes.
+Check `src/assets/world/world_atlas.normalized.png`, `src/data/worldTiles.ts`, and `docs/debug/world-atlas/world_atlas.debug.png` / `world_atlas.import-report.md`. The runtime atlas should be a clean 10x10 sheet with 256x256 cells and no source separator lines; the debug preview is the only atlas output with labels/grid boxes.
 
 For rembg-related regeneration, use `D:\tools\rembg\venv_rembg\Scripts\rembg.exe` with `birefnet-general`. The expected AMD/Windows provider path is DirectML (`DmlExecutionProvider`). Do not add NVIDIA-specific checks.
 

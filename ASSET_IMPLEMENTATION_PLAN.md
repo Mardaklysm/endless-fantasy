@@ -39,7 +39,7 @@ Keep all paths lowercase snake_case. Use PNG for most raster art. Battle/backgro
 
 ## Loading Strategy
 
-Current note: the Phaser scene already has a `preload()` image loader. The active overworld terrain uses the single `world_atlas` texture from `assets_v2/world/world_atlas_normalized.png` plus `src/data/worldTiles.ts`; individual root `assets/tiles/world/*` files are fallback/legacy references.
+Current note: the Phaser scene already has a `preload()` image loader. The active overworld terrain uses the single `world_atlas` texture from `src/assets/world/world_atlas.normalized.png` plus `src/data/worldTiles.ts`; individual root `assets/tiles/world/*` files are fallback/legacy references.
 
 The current Phaser scene does not use `preload()` or image assets. Add a small asset loader later:
 
@@ -82,7 +82,7 @@ This lets the game remain playable after every partial art import.
 
 | Code Area | Current Function | Future Asset Hook | Risk |
 |---|---|---|---|
-| World terrain | `drawWorldTile` | `assets_v2/world/world_atlas_normalized.png` + `src/data/worldTiles.ts` | Active path; atlas cells render into 32px display tiles |
+| World terrain | `drawWorldTile` | `src/assets/world/world_atlas.normalized.png` + `src/data/worldTiles.ts` | Active path; atlas cells render into 32px display tiles |
 | Location markers | `drawLocationIcon` | `assets/tiles/markers/*` | Low, but needs location-id variant mapping |
 | Town floor/services | `drawTown` and service blocks | Town floor/service marker assets | Medium, because service text is currently drawn directly |
 | Dungeon tiles | `drawDungeonTile` | `assets/tiles/dungeons/*`, `assets/tiles/objects/*` | Low for base tiles, medium for opened chest state |

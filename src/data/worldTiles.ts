@@ -1,16 +1,16 @@
 export const WORLD_ATLAS = {
   textureKey: "world_atlas",
-  image: "assets_v2/world/world_atlas_normalized.png",
-  sourceCopy: "assets_v2/source_sheets/world_atlas/redo_this_please_2k_202606182233.jpeg",
+  image: "src/assets/world/world_atlas.normalized.png",
+  sourceCopy: "src/assets/world/source/redo_this_please_2K_202606182350.jpeg",
   columns: 10,
-  rows: 8,
+  rows: 10,
   sourceColumns: 10,
   sourceRows: 10,
-  selectedSourceRows: [0,1,2,3,4,5,7,9],
-  tileWidth: 206,
-  tileHeight: 206,
-  sheetWidth: 2060,
-  sheetHeight: 1648
+  selectedSourceRows: [0,1,2,3,4,5,6,7,8,9],
+  tileWidth: 256,
+  tileHeight: 256,
+  sheetWidth: 2560,
+  sheetHeight: 2560
 } as const;
 
 export type WorldBiome =
@@ -869,8 +869,157 @@ export const WORLD_TILE_DEFINITIONS = [
     ]
   },
   {
-    "id": "rocky_hill_ground",
+    "id": "deep_ocean_water_variant",
     "row": 6,
+    "col": 0,
+    "biome": "water",
+    "encounterFamily": "water",
+    "walkable": false,
+    "movementCost": 99,
+    "tags": [
+      "water",
+      "ocean",
+      "deep",
+      "variant"
+    ]
+  },
+  {
+    "id": "rocky_ocean_water",
+    "row": 6,
+    "col": 1,
+    "biome": "water",
+    "encounterFamily": "water",
+    "walkable": false,
+    "movementCost": 99,
+    "tags": [
+      "water",
+      "ocean",
+      "rocks",
+      "variant"
+    ]
+  },
+  {
+    "id": "clear_shallow_water",
+    "row": 6,
+    "col": 2,
+    "biome": "water",
+    "encounterFamily": "water",
+    "walkable": false,
+    "movementCost": 99,
+    "tags": [
+      "water",
+      "shallow",
+      "variant"
+    ]
+  },
+  {
+    "id": "lily_swamp_water",
+    "row": 6,
+    "col": 3,
+    "biome": "water",
+    "encounterFamily": "water",
+    "walkable": false,
+    "movementCost": 99,
+    "tags": [
+      "water",
+      "swamp",
+      "variant"
+    ]
+  },
+  {
+    "id": "foamy_beach_shore",
+    "row": 6,
+    "col": 4,
+    "biome": "water",
+    "encounterFamily": "water",
+    "walkable": true,
+    "movementCost": 1.15,
+    "tags": [
+      "shore",
+      "beach",
+      "land",
+      "variant"
+    ]
+  },
+  {
+    "id": "sandy_rock_shore",
+    "row": 6,
+    "col": 5,
+    "biome": "water",
+    "encounterFamily": "water",
+    "walkable": true,
+    "movementCost": 1.2,
+    "tags": [
+      "shore",
+      "beach",
+      "rocks",
+      "land",
+      "variant"
+    ]
+  },
+  {
+    "id": "wooden_bridge_horizontal_variant",
+    "row": 6,
+    "col": 6,
+    "biome": "water",
+    "encounterFamily": "water",
+    "walkable": true,
+    "movementCost": 0.7,
+    "tags": [
+      "bridge",
+      "road",
+      "land",
+      "variant"
+    ]
+  },
+  {
+    "id": "wooden_bridge_vertical_variant",
+    "row": 6,
+    "col": 7,
+    "biome": "water",
+    "encounterFamily": "water",
+    "walkable": true,
+    "movementCost": 0.7,
+    "tags": [
+      "bridge",
+      "road",
+      "land",
+      "variant"
+    ]
+  },
+  {
+    "id": "stone_bridge_horizontal_variant",
+    "row": 6,
+    "col": 8,
+    "biome": "water",
+    "encounterFamily": "water",
+    "walkable": true,
+    "movementCost": 0.65,
+    "tags": [
+      "bridge",
+      "road",
+      "land",
+      "variant"
+    ]
+  },
+  {
+    "id": "stone_bridge_vertical_variant",
+    "row": 6,
+    "col": 9,
+    "biome": "water",
+    "encounterFamily": "water",
+    "walkable": true,
+    "movementCost": 0.65,
+    "tags": [
+      "bridge",
+      "road",
+      "land",
+      "variant"
+    ]
+  },
+  {
+    "id": "rocky_hill_ground",
+    "row": 7,
     "col": 0,
     "biome": "mountain",
     "encounterFamily": "hills",
@@ -884,7 +1033,7 @@ export const WORLD_TILE_DEFINITIONS = [
   },
   {
     "id": "mountain_foothill",
-    "row": 6,
+    "row": 7,
     "col": 1,
     "biome": "mountain",
     "encounterFamily": "hills",
@@ -898,7 +1047,7 @@ export const WORLD_TILE_DEFINITIONS = [
   },
   {
     "id": "dark_mountain_ground",
-    "row": 6,
+    "row": 7,
     "col": 2,
     "biome": "mountain",
     "encounterFamily": "hills",
@@ -911,7 +1060,7 @@ export const WORLD_TILE_DEFINITIONS = [
   },
   {
     "id": "gravel_stone_ground",
-    "row": 6,
+    "row": 7,
     "col": 3,
     "biome": "mountain",
     "encounterFamily": "hills",
@@ -925,7 +1074,7 @@ export const WORLD_TILE_DEFINITIONS = [
   },
   {
     "id": "cliff_top_rock",
-    "row": 6,
+    "row": 7,
     "col": 4,
     "biome": "mountain",
     "encounterFamily": "hills",
@@ -938,7 +1087,7 @@ export const WORLD_TILE_DEFINITIONS = [
   },
   {
     "id": "canyon_stone",
-    "row": 6,
+    "row": 7,
     "col": 5,
     "biome": "mountain",
     "encounterFamily": "hills",
@@ -951,7 +1100,7 @@ export const WORLD_TILE_DEFINITIONS = [
   },
   {
     "id": "mossy_rock",
-    "row": 6,
+    "row": 7,
     "col": 6,
     "biome": "mountain",
     "encounterFamily": "hills",
@@ -965,7 +1114,7 @@ export const WORLD_TILE_DEFINITIONS = [
   },
   {
     "id": "volcanic_stone",
-    "row": 6,
+    "row": 7,
     "col": 7,
     "biome": "mountain",
     "encounterFamily": "hills",
@@ -979,7 +1128,7 @@ export const WORLD_TILE_DEFINITIONS = [
   },
   {
     "id": "crystal_rock",
-    "row": 6,
+    "row": 7,
     "col": 8,
     "biome": "mountain",
     "encounterFamily": "hills",
@@ -992,7 +1141,7 @@ export const WORLD_TILE_DEFINITIONS = [
   },
   {
     "id": "cave_rock",
-    "row": 6,
+    "row": 7,
     "col": 9,
     "biome": "mountain",
     "encounterFamily": "hills",
@@ -1005,8 +1154,156 @@ export const WORLD_TILE_DEFINITIONS = [
     ]
   },
   {
+    "id": "mossy_mountain_variant",
+    "row": 8,
+    "col": 0,
+    "biome": "mountain",
+    "encounterFamily": "hills",
+    "walkable": false,
+    "movementCost": 99,
+    "tags": [
+      "mountain",
+      "blocked",
+      "variant"
+    ]
+  },
+  {
+    "id": "dark_mountain_variant",
+    "row": 8,
+    "col": 1,
+    "biome": "mountain",
+    "encounterFamily": "hills",
+    "walkable": false,
+    "movementCost": 99,
+    "tags": [
+      "mountain",
+      "blocked",
+      "variant"
+    ]
+  },
+  {
+    "id": "rocky_ground_variant",
+    "row": 8,
+    "col": 2,
+    "biome": "mountain",
+    "encounterFamily": "hills",
+    "walkable": true,
+    "movementCost": 2,
+    "tags": [
+      "rock",
+      "land",
+      "variant"
+    ]
+  },
+  {
+    "id": "tan_rocky_ground_variant",
+    "row": 8,
+    "col": 3,
+    "biome": "mountain",
+    "encounterFamily": "hills",
+    "walkable": true,
+    "movementCost": 1.9,
+    "tags": [
+      "rock",
+      "dry",
+      "land",
+      "variant"
+    ]
+  },
+  {
+    "id": "canyon_cliff_variant",
+    "row": 8,
+    "col": 4,
+    "biome": "mountain",
+    "encounterFamily": "hills",
+    "walkable": false,
+    "movementCost": 99,
+    "tags": [
+      "canyon",
+      "cliff",
+      "blocked",
+      "variant"
+    ]
+  },
+  {
+    "id": "mossy_ruin_rock_variant",
+    "row": 8,
+    "col": 5,
+    "biome": "mountain",
+    "encounterFamily": "hills",
+    "walkable": true,
+    "movementCost": 2.1,
+    "tags": [
+      "rock",
+      "ruin",
+      "moss",
+      "land",
+      "variant"
+    ]
+  },
+  {
+    "id": "crystal_rock_variant",
+    "row": 8,
+    "col": 6,
+    "biome": "mountain",
+    "encounterFamily": "hills",
+    "walkable": false,
+    "movementCost": 99,
+    "tags": [
+      "crystal",
+      "blocked",
+      "variant"
+    ]
+  },
+  {
+    "id": "cave_entrance_variant",
+    "row": 8,
+    "col": 7,
+    "biome": "mountain",
+    "encounterFamily": "hills",
+    "walkable": true,
+    "movementCost": 2.2,
+    "tags": [
+      "cave",
+      "rock",
+      "land",
+      "variant"
+    ]
+  },
+  {
+    "id": "stone_ruin_wall_variant",
+    "row": 8,
+    "col": 8,
+    "biome": "mountain",
+    "encounterFamily": "hills",
+    "walkable": false,
+    "movementCost": 99,
+    "tags": [
+      "stone",
+      "ruin",
+      "blocked",
+      "variant"
+    ]
+  },
+  {
+    "id": "rocky_path_variant",
+    "row": 8,
+    "col": 9,
+    "biome": "mountain",
+    "encounterFamily": "hills",
+    "walkable": true,
+    "movementCost": 1.4,
+    "tags": [
+      "rock",
+      "road",
+      "path",
+      "land",
+      "variant"
+    ]
+  },
+  {
     "id": "dirt_road",
-    "row": 7,
+    "row": 9,
     "col": 0,
     "biome": "road",
     "encounterFamily": "road",
@@ -1019,7 +1316,7 @@ export const WORLD_TILE_DEFINITIONS = [
   },
   {
     "id": "worn_path",
-    "row": 7,
+    "row": 9,
     "col": 1,
     "biome": "road",
     "encounterFamily": "road",
@@ -1033,7 +1330,7 @@ export const WORLD_TILE_DEFINITIONS = [
   },
   {
     "id": "cobblestone_road",
-    "row": 7,
+    "row": 9,
     "col": 2,
     "biome": "road",
     "encounterFamily": "road",
@@ -1047,7 +1344,7 @@ export const WORLD_TILE_DEFINITIONS = [
   },
   {
     "id": "ancient_ruin_floor",
-    "row": 7,
+    "row": 9,
     "col": 3,
     "biome": "road",
     "encounterFamily": "road",
@@ -1061,7 +1358,7 @@ export const WORLD_TILE_DEFINITIONS = [
   },
   {
     "id": "lava_cracked_ground",
-    "row": 7,
+    "row": 9,
     "col": 4,
     "biome": "road",
     "encounterFamily": "road",
@@ -1074,7 +1371,7 @@ export const WORLD_TILE_DEFINITIONS = [
   },
   {
     "id": "tropical_lush_ground",
-    "row": 7,
+    "row": 9,
     "col": 5,
     "biome": "road",
     "encounterFamily": "road",
@@ -1088,7 +1385,7 @@ export const WORLD_TILE_DEFINITIONS = [
   },
   {
     "id": "tropical_beach_sand",
-    "row": 7,
+    "row": 9,
     "col": 6,
     "biome": "road",
     "encounterFamily": "road",
@@ -1102,7 +1399,7 @@ export const WORLD_TILE_DEFINITIONS = [
   },
   {
     "id": "magical_crystal_field",
-    "row": 7,
+    "row": 9,
     "col": 7,
     "biome": "road",
     "encounterFamily": "road",
@@ -1116,7 +1413,7 @@ export const WORLD_TILE_DEFINITIONS = [
   },
   {
     "id": "graveyard_earth",
-    "row": 7,
+    "row": 9,
     "col": 8,
     "biome": "road",
     "encounterFamily": "road",
@@ -1130,7 +1427,7 @@ export const WORLD_TILE_DEFINITIONS = [
   },
   {
     "id": "mixed_utility_terrain",
-    "row": 7,
+    "row": 9,
     "col": 9,
     "biome": "road",
     "encounterFamily": "road",
