@@ -180,11 +180,18 @@ function validateWorldgen() {
 
     let sawWater = false;
     let sawBlocked = false;
-    for (const row of world.tiles) {
-      for (const tile of row) {
+    for (let y = 0; y < world.tiles.length; y += 1) {
+      const row = world.tiles[y];
+      for (let x = 0; x < row.length; x += 1) {
+        const tile = row[x];
+        const isWorldEdge = x === 0 || y === 0 || x === world.width - 1 || y === world.height - 1;
         assert(WORLD_TILE_ID_SET.has(tile), `World ${i} generated unknown or empty tile ID ${tile}.`);
         const def = worldTileById(tile);
         assert(def, `World ${i} generated an atlas cell without a tile definition: ${tile}.`);
+        if (isWorldEdge) {
+          assert(tile === WORLD_TILE_IDS.rockyMountainGround, `World ${i} edge ${x},${y} is ${tile}, expected rocky mountain border.`);
+          assert(!isWorldTileWalkable(tile), `World ${i} edge ${x},${y} is walkable.`);
+        }
         if (worldTileHasTag(tile, "water")) {
           sawWater = true;
           assert(!isWorldTileWalkable(tile), `World ${i} water tile ${tile} is walkable.`);

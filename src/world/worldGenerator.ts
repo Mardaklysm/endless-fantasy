@@ -287,6 +287,7 @@ function generateWorldAttempt(seed: string, width: number, height: number): Gene
   addMountainCluster(seed, tiles, biomes, Math.round(width * 0.34), Math.round(height * 0.4), 5, 3, false);
   addMountainCluster(seed, tiles, biomes, Math.round(width * 0.62), Math.round(height * 0.34), 6, 4, true);
   addMountainCluster(seed, tiles, biomes, Math.round(width * 0.78), Math.round(height * 0.19), 5, 3, false);
+  addMountainBorder(tiles, biomes);
 
   const pois = placePois(seed, tiles, biomes);
   carvePoiFootprints(tiles, biomes, pois);
@@ -367,6 +368,18 @@ function addMountainCluster(seed: string, tiles: WorldTileId[][], biomes: WorldB
         tiles[y][x] = ROCK_WALKABLE_TILES[0];
         biomes[y][x] = "mountain";
       }
+    }
+  }
+}
+
+function addMountainBorder(tiles: WorldTileId[][], biomes: WorldBiome[][]) {
+  const height = tiles.length;
+  const width = tiles[0]?.length ?? 0;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (x !== 0 && y !== 0 && x !== width - 1 && y !== height - 1) continue;
+      tiles[y][x] = MOUNTAIN_BLOCKERS[0];
+      biomes[y][x] = "mountain";
     }
   }
 }

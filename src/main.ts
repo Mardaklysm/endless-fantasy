@@ -2890,7 +2890,7 @@ class CrystalOathScene extends Phaser.Scene {
         member.level += 1;
         member.nextXp = Math.floor(42 + member.level * member.level * 26);
         member.maxHp += member.id === "arlen" ? 9 : member.id === "mira" ? 6 : 5;
-        member.hp = member.maxHp;
+        if (member.hp > 0) member.hp = member.maxHp;
         member.baseAttack += member.id === "arlen" ? 2 : 1;
         member.baseDefense += member.id === "arlen" ? 2 : 1;
         if (member.level % 2 === 0) member.speed += 1;
@@ -3312,13 +3312,13 @@ Statuses: ${statuses}`;
             this.restoreParty(true);
             this.saveGame();
             this.say(["The party rests. HP and spell charges restored. Game saved."], () => {
-              this.mode = "town";
+              this.closeMenuTo("town");
             });
           }
         },
-        { label: "Leave", action: () => (this.mode = "town") }
+        { label: "Leave", action: () => this.closeMenuTo("town") }
       ],
-      () => (this.mode = "town")
+      () => this.closeMenuTo("town")
     );
   }
 
@@ -3341,8 +3341,8 @@ Statuses: ${statuses}`;
           c.statuses = {};
           this.openClinic(town);
         }
-      })).concat([{ label: "Leave", action: () => (this.mode = "town") }]),
-      () => (this.mode = "town")
+      })).concat([{ label: "Leave", action: () => this.closeMenuTo("town") }]),
+      () => this.closeMenuTo("town")
     );
   }
 
@@ -3365,8 +3365,8 @@ Statuses: ${statuses}`;
           else this.gearBag[entry.id] = (this.gearBag[entry.id] ?? 0) + 1;
           this.openShop(title, stock);
         }
-      })) as MenuOption[]).concat([{ label: "Leave", action: () => (this.mode = "town") }]),
-      () => (this.mode = "town"),
+      })) as MenuOption[]).concat([{ label: "Leave", action: () => this.closeMenuTo("town") }]),
+      () => this.closeMenuTo("town"),
       () => `Gold ${this.gold}`
     );
   }
@@ -3392,8 +3392,8 @@ Statuses: ${statuses}`;
           learner.spells.push(id);
           this.openMagicShop(town);
         }
-      })) as MenuOption[]).concat([{ label: "Leave", action: () => (this.mode = "town") }]),
-      () => (this.mode = "town"),
+      })) as MenuOption[]).concat([{ label: "Leave", action: () => this.closeMenuTo("town") }]),
+      () => this.closeMenuTo("town"),
       () => `Gold ${this.gold}`
     );
   }
@@ -3445,6 +3445,7 @@ Statuses: ${statuses}`;
   }
 
   private openMenu(title: string, options: MenuOption[], cancel: () => void, footer?: string | (() => string)) {
+    this.rememberMenuReturnMode();
     this.clearHeldMovement();
     this.menu = { title, options, selected: 0, cancel, footer };
     this.mode = "menu";
@@ -3454,6 +3455,13 @@ Statuses: ${statuses}`;
   private closeMenu() {
     this.mode = this.menuReturnMode();
     this.menu = undefined;
+    this.markDirty();
+  }
+
+  private closeMenuTo(mode: Mode) {
+    this.mode = mode;
+    this.menu = undefined;
+    if (mode !== "menu" && mode !== "dialogue") this.previousMode = mode;
     this.markDirty();
   }
 
@@ -3622,7 +3630,8 @@ Statuses: ${statuses}`;
     depth = LAYER_WORLD_IMAGE,
     alpha = 1,
     tint?: number,
-    flipX = false
+    flipX = false,
+    flipY = false
   ) {
     const image = this.add.image(x * PIXEL_ART_SCALE, y * PIXEL_ART_SCALE, key);
     image.setOrigin(0, 0);
@@ -3631,6 +3640,7 @@ Statuses: ${statuses}`;
     image.setAlpha(alpha);
     image.setScrollFactor(0);
     image.setFlipX(flipX);
+    image.setFlipY(flipY);
     if (tint !== undefined) image.setTint(tint);
     this.images.push(image);
     return image;
@@ -3717,9 +3727,9 @@ Statuses: ${statuses}`;
     return "walk_left_a";
   }
 
-  private drawTileTexture(key: AssetKey | undefined, x: number, y: number, depth = LAYER_WORLD_IMAGE): boolean {
+  private drawTileTexture(key: AssetKey | undefined, x: number, y: number, depth = LAYER_WORLD_IMAGE, flipX = false, flipY = false): boolean {
     if (!key || !this.hasTexture(key)) return false;
-    this.drawTexture(key, x, y, TILE, TILE, depth);
+    this.drawTexture(key, x, y, TILE, TILE, depth, 1, undefined, flipX, flipY);
     return true;
   }
 
@@ -4583,7 +4593,7 @@ Statuses: ${statuses}`;
       this.g.fillStyle(0xffffff, 0.05).fillRect(sx + 4, sy + 4, TILE - 8, TILE - 8);
     }
     const objectKey = this.dungeonObjectTexture(tile, dungeon, tileX, tileY);
-    if (this.drawTileTexture(objectKey, sx, sy, LAYER_OBJECT_IMAGE)) return;
+    if (this.drawTileTexture(objectKey, sx, sy, LAYER_OBJECT_IMAGE, false, tile === "S")) return;
     if (tile === "C") {
       this.g.fillStyle(dungeon.palette.chest, 1).fillRect(sx + 7, sy + 10, 18, 14);
       this.g.fillStyle(0x3a2111, 1).fillRect(sx + 7, sy + 17, 18, 3);
