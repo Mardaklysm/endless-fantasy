@@ -18,9 +18,9 @@
 - Generated overworld edges are deep water, and land must not touch the outer map border.
 - The player sprite uses the same compact doubled map size on the world map, in towns, and in dungeons; this is visual only and does not change collision or movement.
 - The `atlas_v3_archipelago_world` generator creates at least three named islands: Greenhaven (starter), Coralreach (tropical/pirate/ruins), and Ashfang Isle (volcanic/dangerous). It stores island id, name, tier, theme, bounds, local tile map, town position, harbor position, dungeon positions, and landmark positions.
-- The active atlas includes distinct beach/coast, shallow-water, forest/jungle, road, mountain, darkland, and volcanic terrain IDs. The generator paints shallow water as blocked water terrain, orients road tiles from their neighbor connections, uses `src/assets/world/pier_atlas.png` for generated harbor dock overlays, and uses `src/assets/world/world_objects.png` as a transparent second layer for generated dungeons, harbors, landmarks, reefs, wrecks, barrels, and whirlpools. Sea route dots remain lightweight generated overlays.
+- The active atlas includes distinct beach/coast, shallow-water, forest/jungle, road, mountain, darkland, and volcanic terrain IDs. The generator paints `medium_grass` as the dominant non-volcanic land tile, adds lower-frequency clustered grass/forest/hill patches, uses simple sand/wet-sand beaches and simple shallow water to avoid misoriented directional coast art, orients deduped road tiles from their neighbor connections, uses `src/assets/world/pier_atlas.png` for generated harbor dock overlays, and uses `src/assets/world/world_objects.png` as a transparent second layer for generated dungeons, harbors, landmarks, reefs, wrecks, barrels, and whirlpools. Sea route dots remain lightweight generated overlays.
 - Each island has a town, harbor, at least one dungeon, roads between important points, and several landmarks such as shipwrecks, shrines, hidden chests, monster nests, ruins, caves, resource nodes, merchants, or ancient doors. Non-town generated POIs carry object overlay IDs so their visible marker matches their gameplay kind.
-- Overworld locations use larger 3x3-ish footprints for rendering and entry. The terrain under each footprint is carved to walkable atlas-v3 land so the player can approach and enter naturally.
+- Overworld locations use larger 3x3-ish footprints for entry and forgiving interaction. The terrain under each footprint is carved to walkable atlas-v3 land so the player can approach and enter naturally, but visual overlays render smaller within that footprint so object art does not dominate the tile scale.
 - Towns/dungeons/gates/final locations enter automatically when crossed. Harbor and landmark footprints are overworld interactions that open travel, rewards, shops, healing, lore, or optional fights.
 - Town south gates can exit when stepping into the exit tile or pressing south while already standing on the gate tile.
 - Town interactions check the facing tile first, then the nearby forgiving service/NPC fallback.
@@ -191,7 +191,7 @@ Each town has item stock, weapon stock, armor stock, spell stock, inn price, cli
 - Inns restore HP/spell charges and save.
 - Clinics revive fallen characters for gold.
 - Shops buy items, gear, and spells.
-- Town/city interiors render floor and wall tiles from the opaque `dungeon_atlas`, with atlas-backed shop pads under the existing service icon sprites.
+- Town/city interiors render floor and wall tiles from the opaque `dungeon_atlas`, with atlas-backed shop pads under the existing service icon sprites. Interior atlas picks are weighted toward one base tile with sparse crack/moss/debris accents so floors do not become checkerboards.
 
 Shop UI is menu-based text only.
 
@@ -207,7 +207,7 @@ Dungeons are data-driven in `dungeons()` but their floors come from `src/world/d
 
 Each dungeon has two deterministic procedural 22x14 floors generated from `worldSeed + dungeonId + tier`, with rooms, corridors, chests, stairs, a switch/gate puzzle, a boss tile, boss intro text, and reward text.
 
-Dungeon floors, walls, gates, stairs, exits, chests, switches, and boss relic seals render from the active opaque `dungeon_atlas` sheet with theme-specific cells for Mossy Cave, Coralreach Ruins/Tide Shrine, Ashfang Keep, Skyglass Tower, and Eclipse Spire. Older individual dungeon PNGs and generated drawing remain fallback paths. Opened chest art is wired through `openedChests`.
+Dungeon floors, walls, gates, stairs, exits, chests, switches, and boss relic seals render from the active opaque `dungeon_atlas` sheet with theme-specific cells for Mossy Cave, Coralreach Ruins/Tide Shrine, Ashfang Keep, Skyglass Tower, and Eclipse Spire. Dungeon atlas picks are weighted toward a theme base tile with sparse accents, unused solid-fill `#` cells render as void unless they border carved floor, and small 22x14 dungeon maps are centered in the viewport. Older individual dungeon PNGs and generated drawing remain fallback paths. Opened chest art is wired through `openedChests`.
 
 Progression flags:
 

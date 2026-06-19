@@ -4624,7 +4624,16 @@ Statuses: ${statuses}`;
 
   private pickDungeonAtlasTile(ids: DungeonTileId[], dungeon: DungeonDef, tileX: number, tileY: number, salt = 0): DungeonTileId {
     const hash = this.dungeonTileHash(dungeon.id, tileX, tileY, this.dungeonFloor + salt);
-    return ids[hash % ids.length];
+    return this.pickWeightedDungeonAtlasTile(ids, hash);
+  }
+
+  private pickWeightedDungeonAtlasTile(ids: DungeonTileId[], hash: number): DungeonTileId {
+    if (ids.length <= 1) return ids[0];
+    const roll = (hash % 1000) / 1000;
+    if (roll < 0.72) return ids[0];
+    if (roll < 0.88) return ids[1] ?? ids[0];
+    if (roll < 0.96) return ids[2] ?? ids[ids.length - 1];
+    return ids[3 + ((hash >>> 8) % Math.max(1, ids.length - 3))] ?? ids[ids.length - 1];
   }
 
   private dungeonTileHash(dungeonId: string, tileX: number, tileY: number, salt: number): number {
@@ -4713,7 +4722,7 @@ Statuses: ${statuses}`;
   }
 
   private drawTownFloorTile(px: number, py: number, x: number, y: number) {
-    const atlasTile = TOWN_ATLAS_FLOOR_TILES[this.dungeonTileHash("town-floor", x, y, 0) % TOWN_ATLAS_FLOOR_TILES.length];
+    const atlasTile = this.pickWeightedDungeonAtlasTile(TOWN_ATLAS_FLOOR_TILES, this.dungeonTileHash("town-floor", x, y, 0));
     if (this.drawDungeonAtlasTile(atlasTile, px, py)) return;
     if (this.drawTileTexture("town_floor", px, py)) return;
     const base = (x + y) % 2 === 0 ? 0x40506c : 0x384762;
@@ -4724,7 +4733,7 @@ Statuses: ${statuses}`;
   }
 
   private drawTownWallTile(px: number, py: number, x: number, y: number) {
-    const atlasTile = TOWN_ATLAS_WALL_TILES[this.dungeonTileHash("town-wall", x, y, 1) % TOWN_ATLAS_WALL_TILES.length];
+    const atlasTile = this.pickWeightedDungeonAtlasTile(TOWN_ATLAS_WALL_TILES, this.dungeonTileHash("town-wall", x, y, 1));
     if (this.drawDungeonAtlasTile(atlasTile, px, py)) return;
     if (this.drawTileTexture("town_wall", px, py)) return;
     this.g.fillStyle(0x536b94, 1).fillRect(px, py, TILE, TILE);
@@ -4917,6 +4926,9 @@ Statuses: ${statuses}`;
     const floor = dungeon.floors[this.dungeonFloor];
     const leaderPos = this.visualExplorePos("dungeon");
     const cam = this.cameraFor(leaderPos, floor[0].length, floor.length);
+    const mapScreenX = -cam.x;
+    const mapScreenY = -cam.y;
+    this.g.fillStyle(0x070d18, 1).fillRect(mapScreenX - 10, mapScreenY - 10, floor[0].length * TILE + 20, floor.length * TILE + 20);
     for (let y = 0; y < floor.length; y += 1) {
       for (let x = 0; x < floor[y].length; x += 1) {
         const sx = x * TILE - cam.x;
@@ -5619,6 +5631,10 @@ Statuses: ${statuses}`;
   private drawDungeonTile(tile: string, sx: number, sy: number, dungeon: DungeonDef, tileX: number, tileY: number) {
     const theme = this.dungeonThemeTiles(dungeon);
     if (tile === "#") {
+      if (!this.isDungeonWallEdge(tileX, tileY)) {
+        this.g.fillStyle(0x050812, 1).fillRect(sx, sy, TILE, TILE);
+        return;
+      }
       const wallTile = this.pickDungeonAtlasTile(theme.walls, dungeon, tileX, tileY, 19);
       if (this.drawDungeonAtlasTile(wallTile, sx, sy)) return;
       if (this.drawTileTexture("dungeon_wall_base", sx, sy)) return;
@@ -5663,16 +5679,32 @@ Statuses: ${statuses}`;
     }
   }
 
-  private drawLocationIcon(loc: LocationDef, sx: number, sy: number) {
+  private isDungeonWallEdge(tileX: number, tileY: number): boolean {
+    const dungeon = this.dungeons()[this.currentDungeon];
+    const floor = dungeon.floors[this.dungeonFloor];
+    for (let yy = tileY - 1; yy <= tileY + 1; yy += 1) {
+      for (let xx = tileX - 1; xx <= tileX + 1; xx += 1) {
+        if (xx === tileX && yy === tileY) continue;
+        const neighbor = floor[yy]?.[xx];
+        if (neighbor && neighbor !== "#") return true;
+      }
+    }
+    return false;
+  }
+
+  private drawLocationIcon(loc: LocationDef, footprintX: number, footprintY: number) {
     const footprint = this.locationFootprint(loc);
-    const size = footprint * TILE;
+    const footprintSize = footprint * TILE;
+    const size = this.locationVisualSize(loc, footprintSize);
+    const sx = footprintX + footprintSize / 2 - size / 2;
+    const sy = footprintY + footprintSize - size - this.locationVisualLift(loc);
     const cx = sx + size / 2;
-    const bottom = sy + size - 8;
-    this.drawActorShadow(cx, bottom, size * 0.72, 18);
-    if (this.drawWorldObjectCell(loc.objectId, sx, sy - 4, size, size)) return;
+    const bottom = sy + size - 6;
+    this.drawActorShadow(cx, bottom, size * 0.72, Math.max(10, size * 0.16));
+    if (this.drawWorldObjectCell(loc.objectId, sx, sy - 2, size, size)) return;
     const locationTexture = LOCATION_TEXTURES[loc.id] ?? this.locationTextureForKind(loc);
     if (locationTexture && this.hasTexture(locationTexture)) {
-      this.drawTexture(locationTexture, sx, sy - 4, size, size, LAYER_OBJECT_IMAGE);
+      this.drawTexture(locationTexture, sx, sy - 2, size, size, LAYER_OBJECT_IMAGE);
       return;
     }
     const u = size / 96;
@@ -5736,6 +5768,26 @@ Statuses: ${statuses}`;
     this.g.fillStyle(0x2a1d3d, 1).fillTriangle(sx + 20 * u, sy + 80 * u, cx, sy + 12 * u, sx + 76 * u, sy + 80 * u);
     this.g.fillStyle(0xb388ff, 1).fillRect(cx - 8 * u, sy + 28 * u, 16 * u, 44 * u);
     this.g.fillStyle(0xffdf78, 1).fillRect(cx - 14 * u, sy + 18 * u, 28 * u, 10 * u);
+  }
+
+  private locationVisualSize(loc: LocationDef, footprintSize: number): number {
+    const byKind: Record<WorldPoiKind, number> = {
+      town: 2.45,
+      harbor: 1.55,
+      dungeon: 2.15,
+      gate: 2.2,
+      final: 2.35,
+      landmark: 1.55
+    };
+    if (loc.landmarkKind === "shipwreck" || loc.landmarkKind === "secretMerchant") return Math.min(footprintSize, TILE * 1.85);
+    if (loc.landmarkKind === "ancientDoor" || loc.landmarkKind === "ruins") return Math.min(footprintSize, TILE * 2);
+    return Math.min(footprintSize, TILE * (byKind[loc.kind] ?? 1.75));
+  }
+
+  private locationVisualLift(loc: LocationDef): number {
+    if (loc.kind === "town" || loc.kind === "final") return 4;
+    if (loc.kind === "dungeon" || loc.kind === "gate") return 2;
+    return 8;
   }
 
   private drawActorShadow(x: number, y: number, width = 26, height = 8) {
@@ -5922,9 +5974,17 @@ Statuses: ${statuses}`;
   }
 
   private cameraFor(pos: Vec, mapW: number, mapH: number): Vec {
+    const mapPixelW = mapW * TILE;
+    const mapPixelH = mapH * TILE;
     return {
-      x: Phaser.Math.Clamp(pos.x * TILE - WIDTH / 2 + TILE / 2, 0, Math.max(0, mapW * TILE - WIDTH)),
-      y: Phaser.Math.Clamp(pos.y * TILE - HEIGHT / 2 + TILE / 2, 0, Math.max(0, mapH * TILE - HEIGHT))
+      x:
+        mapPixelW <= WIDTH
+          ? -(WIDTH - mapPixelW) / 2
+          : Phaser.Math.Clamp(pos.x * TILE - WIDTH / 2 + TILE / 2, 0, mapPixelW - WIDTH),
+      y:
+        mapPixelH <= HEIGHT
+          ? -(HEIGHT - mapPixelH) / 2
+          : Phaser.Math.Clamp(pos.y * TILE - HEIGHT / 2 + TILE / 2, 0, mapPixelH - HEIGHT)
     };
   }
 

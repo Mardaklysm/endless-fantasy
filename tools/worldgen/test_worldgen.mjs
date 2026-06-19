@@ -251,6 +251,9 @@ function validateRuntimeReferences() {
   assert(mainRuntime.includes("dungeonAtlasSourceRectWithInset"), "Runtime does not use the dungeon atlas source rect helper.");
   assert(mainRuntime.includes("drawDungeonAtlasTile"), "Runtime does not have the dungeon atlas draw path.");
   assert(mainRuntime.includes("TOWN_SHOP_PAD_TILES"), "Runtime does not use dungeon atlas shop pads in towns.");
+  assert(mainRuntime.includes("isDungeonWallEdge"), "Runtime does not cull unused dungeon wall filler into void.");
+  assert(mainRuntime.includes("mapPixelW <= WIDTH"), "Runtime camera no longer centers maps smaller than the viewport.");
+  assert(mainRuntime.includes("locationVisualSize"), "Runtime does not decouple overworld POI visual size from interaction footprint.");
 }
 
 function validateRuntimeDebugInsetConsistency() {
@@ -312,10 +315,34 @@ function validateWorldgen() {
       assert(worldTileHasTag(world.tiles[overlay.y]?.[overlay.x], "water"), `World ${i} object overlay ${overlay.id} was not placed on water.`);
     }
 
+    const roadKeys = new Set(world.roads.map((pos) => `${pos.x},${pos.y}`));
+    assert(roadKeys.size === world.roads.length, `World ${i} recorded duplicate road tiles.`);
+    for (const road of world.roads) {
+      const tile = world.tiles[road.y]?.[road.x];
+      assert(worldTileHasTag(tile, "road"), `World ${i} road record ${road.x},${road.y} points at non-road tile ${tile}.`);
+      assert(!worldTileHasTag(tile, "water"), `World ${i} road record ${road.x},${road.y} points at water.`);
+    }
+
     let sawWater = false;
     let sawBlocked = false;
     let sawBeach = false;
     let sawForestBiome = false;
+    let greenhavenGrassBase = 0;
+    let greenhavenGrassPatch = 0;
+    const directionalCoastTiles = new Set([
+      WORLD_TILE_IDS.grassSandCoast,
+      WORLD_TILE_IDS.sandWaterEdge,
+      WORLD_TILE_IDS.sandWaterCorner,
+      WORLD_TILE_IDS.coveCoast,
+      WORLD_TILE_IDS.foamyShallowWater
+    ]);
+    const greenhavenGrassPatchTiles = new Set([
+      WORLD_TILE_IDS.brightGrass,
+      WORLD_TILE_IDS.flowerMeadowGrass,
+      WORLD_TILE_IDS.lushCloverGrass,
+      WORLD_TILE_IDS.weedsGrass,
+      WORLD_TILE_IDS.trampledGrass
+    ]);
     for (let y = 0; y < world.tiles.length; y += 1) {
       const row = world.tiles[y];
       for (let x = 0; x < row.length; x += 1) {
@@ -324,6 +351,7 @@ function validateWorldgen() {
         assert(WORLD_TILE_ID_SET.has(tile), `World ${i} generated unknown or empty tile ID ${tile}.`);
         const def = worldTileById(tile);
         assert(def, `World ${i} generated an atlas cell without a tile definition: ${tile}.`);
+        assert(!directionalCoastTiles.has(tile), `World ${i} used directional coast/foam tile ${tile} directly in worldgen.`);
         if (isWorldEdge) {
           assert(tile === WORLD_TILE_IDS.deepWater, `World ${i} edge ${x},${y} is ${tile}, expected ocean border.`);
           assert(!isWorldTileWalkable(tile), `World ${i} edge ${x},${y} is walkable.`);
@@ -336,6 +364,10 @@ function validateWorldgen() {
           sawBlocked = true;
           assert(!isWorldTileWalkable(tile), `World ${i} blocked tile ${tile} is walkable.`);
         }
+        if (world.islandByTile[y][x] === "greenhaven") {
+          if (tile === WORLD_TILE_IDS.mediumGrass) greenhavenGrassBase += 1;
+          if (greenhavenGrassPatchTiles.has(tile)) greenhavenGrassPatch += 1;
+        }
         if (worldTileHasTag(tile, "sand")) sawBeach = true;
         if (world.biomes[y][x] === "forest") sawForestBiome = true;
       }
@@ -344,6 +376,7 @@ function validateWorldgen() {
     assert(sawBlocked, `World ${i} did not generate blocked terrain.`);
     assert(sawBeach, `World ${i} did not generate beaches.`);
     assert(sawForestBiome, `World ${i} did not generate forest/jungle biome hooks.`);
+    assert(greenhavenGrassBase > greenhavenGrassPatch, `World ${i} Greenhaven overuses grass variants (${greenhavenGrassBase} base vs ${greenhavenGrassPatch} patch).`);
 
     const signature = world.tiles.map((row) => row.join(",")).join("|");
     if (i === 0) firstSignature = signature;

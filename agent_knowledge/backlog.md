@@ -13,7 +13,7 @@ This backlog is practical project memory, not a full design document. Keep it sh
 - Add simple effect rendering only after battle timing can show short animations without slowing commands.
 - Add v2-quality art for later-region normal enemies not covered by the first twelve common roster crops.
 - Archipelago generation now uses real atlas-v3 road, beach/coast, shallow-water, forest/jungle, and volcanic support tiles, pier-atlas dock overlays, and the transparent world-objects atlas for generated dungeons, landmarks, harbors, reefs, wrecks, barrels, and whirlpools. Sea route dots remain lightweight generated overlays.
-- If overworld terrain still feels grid-like after the atlas source inset, improve it with real transition tiles or lower-frequency worldgen patches; do not add map-level terrain pixel blending.
+- Overworld terrain selection now uses dominant base tiles with lower-frequency patches and avoids random fixed-direction coast stamps. Future coastline polish should add direction-aware transition placement or new neutral coast tiles, not map-level pixel blending.
 - Consider dynamic loading/code splitting for large JPEG battle backgrounds and large normalized class sheets if bundle size becomes painful.
 
 ## Asset Manifest Follow-Up
@@ -26,6 +26,7 @@ This backlog is practical project memory, not a full design document. Keep it sh
 - Reference-only UI window crops in `assets_v2/ui` are intentionally not loaded at runtime because they contain sample text.
 - Normalized fighter/priest/wizard class sheets are wired; keep old standalone party map/battle PNGs out of runtime glob loading unless intentionally reintroduced.
 - Dungeon/city tiles are wired through the active `src/assets/world/dungeon_atlas.png` sheet; older individual dungeon PNGs remain fallback only.
+- Dungeon/city atlas rendering now uses weighted base/accent selection; future dungeon polish should focus on room dressing and clearer wall/floor transition art rather than adding more evenly random tile variants.
 - Keep the archived classic tileset pack out of active runtime unless a future task explicitly reopens that direction. Active terrain should continue to use only non-empty `atlas_v3` cells.
 
 ## Gameplay Gaps

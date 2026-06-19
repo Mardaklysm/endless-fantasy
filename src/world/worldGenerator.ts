@@ -188,23 +188,24 @@ const ISLAND_TEMPLATES: IslandTemplate[] = [
   }
 ];
 
-const GRASS_TILES = [
+const MAIN_GRASS_TILE = WORLD_TILE_IDS.mediumGrass;
+const GRASS_PATCH_TILES = [
   WORLD_TILE_IDS.brightGrass,
-  WORLD_TILE_IDS.mediumGrass,
   WORLD_TILE_IDS.flowerMeadowGrass,
   WORLD_TILE_IDS.lushCloverGrass,
-  WORLD_TILE_IDS.weedsGrass
+  WORLD_TILE_IDS.weedsGrass,
+  WORLD_TILE_IDS.trampledGrass
 ];
-const FOREST_TILES = [WORLD_TILE_IDS.lightForest, WORLD_TILE_IDS.denseForest, WORLD_TILE_IDS.weedsGrass];
-const JUNGLE_TILES = [WORLD_TILE_IDS.jungle, WORLD_TILE_IDS.denseForest, WORLD_TILE_IDS.lightForest];
-const BEACH_TILES = [WORLD_TILE_IDS.beachSand, WORLD_TILE_IDS.wetBeachSand, WORLD_TILE_IDS.grassSandCoast, WORLD_TILE_IDS.sandWaterEdge, WORLD_TILE_IDS.coveCoast];
+const FOREST_TILES = [WORLD_TILE_IDS.lightForest, WORLD_TILE_IDS.denseForest];
+const JUNGLE_TILES = [WORLD_TILE_IDS.jungle, WORLD_TILE_IDS.denseForest];
+const BEACH_TILES = [WORLD_TILE_IDS.beachSand, WORLD_TILE_IDS.wetBeachSand];
 const ROAD_TILE = WORLD_TILE_IDS.roadHorizontal;
 const HILL_TILES = [WORLD_TILE_IDS.grassStones, WORLD_TILE_IDS.gravelStoneGround, WORLD_TILE_IDS.rockyHills];
 const ASH_WALKABLE_TILES = [WORLD_TILE_IDS.deadCrackedEarth, WORLD_TILE_IDS.ashBlackGround, WORLD_TILE_IDS.volcanicAshGround, WORLD_TILE_IDS.ashForest];
 const MOUNTAIN_TILE = WORLD_TILE_IDS.rockyMountainGround;
 const LAVA_TILE = WORLD_TILE_IDS.lavaCrackedGround;
 const WATER_TILE = WORLD_TILE_IDS.deepWater;
-const SHALLOW_WATER_TILES = [WORLD_TILE_IDS.shallowWater, WORLD_TILE_IDS.foamyShallowWater];
+const SHALLOW_WATER_TILES = [WORLD_TILE_IDS.shallowWater];
 
 export function createWorldSeed(): string {
   return `archipelago-${Date.now().toString(36)}-${Math.floor(Math.random() * 0xffffffff).toString(36)}`;
@@ -399,16 +400,18 @@ function generateWorldAttempt(seed: string, width: number, height: number): Gene
   addTinyIslets(seed, tiles, biomes, islandByTile, rng.fork("islets"));
 
   const pois: WorldPoi[] = [];
-  const roads: WorldVec[] = [];
+  const roadKeys = new Set<string>();
   const bridges: WorldBridge[] = [];
   for (const state of states) {
     const islandPois = placeIslandPois(seed, tiles, biomes, islandByTile, state, rng.fork(`${state.template.id}:pois`));
     state.pois = islandPois;
     pois.push(...islandPois);
     carvePoiFootprints(tiles, biomes, islandByTile, islandPois);
-    carveIslandRoads(tiles, biomes, islandByTile, state.template.id, islandPois, roads);
+    carveIslandRoads(tiles, biomes, islandByTile, state.template.id, islandPois, roadKeys);
     bridges.push(...dockTilesForHarbor(tiles, state.template.id, islandPois.find((poi) => poi.kind === "harbor")));
   }
+  orientRoadTiles(tiles, biomes, roadKeys);
+  const roads = [...roadKeys].map(parseKey);
 
   const shallows = markShallowWater(tiles, biomes);
   const reefs = decorateOcean(seed, tiles, pois, shallows, rng.fork("ocean-details"));
@@ -490,29 +493,71 @@ function paintIsland(
   const { template, land } = state;
   for (const key of land) {
     const { x, y } = parseKey(key);
-    const n = fbm(`${seed}:${template.id}:detail`, x / 6, y / 6, 3, 2);
-    const hill = fbm(`${seed}:${template.id}:hills`, x / 5.5, y / 5.5, 3, 2.1);
-    const volcanic = fbm(`${seed}:${template.id}:volcano`, x / 4.5, y / 4.5, 3, 2.2);
-    const coastal = neighbors8(x, y).some((pos) => !land.has(posKey(pos)));
+    const detail = fbm(`${seed}:${template.id}:detail`, x / 12, y / 12, 3, 2);
+    const hill = fbm(`${seed}:${template.id}:hills`, x / 9.5, y / 9.5, 3, 2.1);
+    const volcanic = fbm(`${seed}:${template.id}:volcano`, x / 7.5, y / 7.5, 3, 2.2);
+    const coastal = isCoastalLand(land, x, y);
     islandByTile[y][x] = template.id;
     if (coastal) {
-      setWorldTile(tiles, biomes, x, y, pickByNoise(BEACH_TILES, seed, x, y), "desert");
+      setWorldTile(tiles, biomes, x, y, beachTileFor(seed, x, y), "desert");
       continue;
     }
     if (template.theme === "volcanic") {
-      if (volcanic > 0.86) setWorldTile(tiles, biomes, x, y, pickByNoise([LAVA_TILE, WORLD_TILE_IDS.lavaRockTransition], seed, x, y), "lava");
-      else if (volcanic > 0.74) setWorldTile(tiles, biomes, x, y, MOUNTAIN_TILE, "mountain");
-      else if (hill > 0.65) setWorldTile(tiles, biomes, x, y, WORLD_TILE_IDS.gravelStoneGround, "mountain");
-      else setWorldTile(tiles, biomes, x, y, pickByNoise(ASH_WALKABLE_TILES, seed, x, y), "darkland");
+      if (volcanic > 0.9) setWorldTile(tiles, biomes, x, y, pickByNoise([LAVA_TILE, WORLD_TILE_IDS.lavaRockTransition], seed, x, y), "lava");
+      else if (volcanic > 0.78) setWorldTile(tiles, biomes, x, y, MOUNTAIN_TILE, "mountain");
+      else if (hill > 0.77) setWorldTile(tiles, biomes, x, y, WORLD_TILE_IDS.gravelStoneGround, "mountain");
+      else if (detail > 0.71) setWorldTile(tiles, biomes, x, y, pickByNoise(ASH_WALKABLE_TILES, seed, x, y), "darkland");
+      else setWorldTile(tiles, biomes, x, y, WORLD_TILE_IDS.volcanicAshGround, "darkland");
     } else if (template.theme === "tropical") {
-      if (hill > 0.8) setWorldTile(tiles, biomes, x, y, WORLD_TILE_IDS.gravelStoneGround, "mountain");
-      else if (n > 0.54) setWorldTile(tiles, biomes, x, y, pickByNoise(JUNGLE_TILES, seed, x, y), "forest");
-      else if (n < 0.2) setWorldTile(tiles, biomes, x, y, pickByNoise(BEACH_TILES, seed, x, y), "desert");
-      else setWorldTile(tiles, biomes, x, y, pickByNoise(GRASS_TILES, seed, x, y), "grassland");
+      if (hill > 0.84) setWorldTile(tiles, biomes, x, y, WORLD_TILE_IDS.gravelStoneGround, "mountain");
+      else if (detail > 0.57) setWorldTile(tiles, biomes, x, y, pickByNoise(JUNGLE_TILES, seed, x, y), "forest");
+      else if (detail < 0.22) setWorldTile(tiles, biomes, x, y, grassPatchTileFor(seed, x, y), "grassland");
+      else setWorldTile(tiles, biomes, x, y, MAIN_GRASS_TILE, "grassland");
     } else {
-      if (hill > 0.78) setWorldTile(tiles, biomes, x, y, pickByNoise(HILL_TILES, seed, x, y), "mountain");
-      else if (n > 0.62) setWorldTile(tiles, biomes, x, y, pickByNoise(FOREST_TILES, seed, x, y), "forest");
-      else setWorldTile(tiles, biomes, x, y, pickByNoise(GRASS_TILES, seed, x, y), "grassland");
+      if (hill > 0.84) setWorldTile(tiles, biomes, x, y, pickByNoise(HILL_TILES, seed, x, y), "mountain");
+      else if (detail > 0.62) setWorldTile(tiles, biomes, x, y, pickByNoise(FOREST_TILES, seed, x, y), "forest");
+      else if (detail < 0.18) setWorldTile(tiles, biomes, x, y, grassPatchTileFor(seed, x, y), "grassland");
+      else setWorldTile(tiles, biomes, x, y, MAIN_GRASS_TILE, "grassland");
+    }
+  }
+  ensureIslandGrove(seed, tiles, biomes, state);
+}
+
+function isCoastalLand(land: Set<string>, x: number, y: number): boolean {
+  const cardinalWater = neighbors4(x, y).some((pos) => !land.has(posKey(pos)));
+  if (cardinalWater) return true;
+  const diagonalWater = neighbors8(x, y).filter((pos) => !land.has(posKey(pos))).length;
+  return diagonalWater >= 2;
+}
+
+function beachTileFor(seed: string, x: number, y: number): WorldTileId {
+  return hashNoise(`${seed}:beach-wetness`, x, y) > 0.72 ? BEACH_TILES[1] : BEACH_TILES[0];
+}
+
+function grassPatchTileFor(seed: string, x: number, y: number): WorldTileId {
+  return pickByNoise(GRASS_PATCH_TILES, `${seed}:grass-patch`, x, y);
+}
+
+function ensureIslandGrove(seed: string, tiles: WorldTileId[][], biomes: WorldBiome[][], state: IslandBuildState) {
+  if (state.template.theme === "volcanic") return;
+  const land = [...state.land].map(parseKey);
+  const forestCount = land.filter((pos) => biomes[pos.y]?.[pos.x] === "forest").length;
+  const targetCount = Math.max(8, Math.floor(land.length * 0.035));
+  if (forestCount >= targetCount) return;
+
+  const candidates = land
+    .filter((pos) => !isCoastalLand(state.land, pos.x, pos.y) && isWorldTileWalkable(tiles[pos.y]?.[pos.x]))
+    .map((pos) => ({ pos, score: fbm(`${seed}:${state.template.id}:grove`, pos.x / 7, pos.y / 7, 3, 2) }))
+    .sort((a, b) => b.score - a.score);
+  const center = candidates[0]?.pos ?? state.center;
+  const pool = state.template.theme === "tropical" ? JUNGLE_TILES : FOREST_TILES;
+  const radius = state.template.theme === "tropical" ? 3 : 2;
+  for (let y = center.y - radius; y <= center.y + radius; y += 1) {
+    for (let x = center.x - radius; x <= center.x + radius; x += 1) {
+      if (!state.land.has(posKey({ x, y })) || isCoastalLand(state.land, x, y)) continue;
+      const d = Math.hypot(x - center.x, y - center.y);
+      if (d > radius + 0.15) continue;
+      setWorldTile(tiles, biomes, x, y, pickByNoise(pool, `${seed}:${state.template.id}:grove-pick`, x, y), "forest");
     }
   }
 }
@@ -533,14 +578,8 @@ function addTinyIslets(
       for (let xx = x - radius; xx <= x + radius; xx += 1) {
         if (Math.hypot(xx - x, yy - y) > radius + 0.25 || !inBounds(tiles[0].length, tiles.length, xx, yy)) continue;
         islandByTile[yy][xx] = null;
-        setWorldTile(
-          tiles,
-          biomes,
-          xx,
-          yy,
-          rng.chance(0.55) ? WORLD_TILE_IDS.beachSand : pickByNoise(GRASS_TILES, `${seed}:islet`, xx, yy),
-          rng.chance(0.55) ? "desert" : "grassland"
-        );
+        const beach = rng.chance(0.55);
+        setWorldTile(tiles, biomes, xx, yy, beach ? WORLD_TILE_IDS.beachSand : MAIN_GRASS_TILE, beach ? "desert" : "grassland");
       }
     }
   }
@@ -750,20 +789,7 @@ function carvePoiFootprints(
   pois: WorldPoi[]
 ) {
   for (const poi of pois) {
-    const tile =
-      poi.kind === "harbor"
-        ? WORLD_TILE_IDS.beachSand
-        : poi.kind === "town"
-          ? ROAD_TILE
-          : poi.kind === "final"
-            ? WORLD_TILE_IDS.cursedPurpleGround
-            : poi.kind === "gate"
-              ? WORLD_TILE_IDS.grassStones
-              : poi.kind === "dungeon"
-                ? WORLD_TILE_IDS.grassStones
-                : poi.landmarkKind === "shipwreck"
-                  ? WORLD_TILE_IDS.rockySand
-                  : ROAD_TILE;
+    const tile = poiFootprintGroundTile(poi);
     const biome = WORLD_TILES[tile].biome;
     for (const pos of poiFootprintTiles(poi)) {
       if (!tiles[pos.y]?.[pos.x]) continue;
@@ -774,29 +800,40 @@ function carvePoiFootprints(
   }
 }
 
+function poiFootprintGroundTile(poi: WorldPoi): WorldTileId {
+  if (poi.kind === "harbor") return WORLD_TILE_IDS.beachSand;
+  if (poi.kind === "town") return poi.islandId === "ashfang" ? WORLD_TILE_IDS.volcanicAshGround : MAIN_GRASS_TILE;
+  if (poi.kind === "final") return WORLD_TILE_IDS.cursedPurpleGround;
+  if (poi.kind === "gate" || poi.kind === "dungeon") return WORLD_TILE_IDS.grassStones;
+  if (poi.landmarkKind === "shipwreck") return WORLD_TILE_IDS.rockySand;
+  if (poi.landmarkKind === "resourceNode") return WORLD_TILE_IDS.gravelStoneGround;
+  if (poi.landmarkKind === "monsterNest") return WORLD_TILE_IDS.weedsGrass;
+  if (poi.landmarkKind === "secretMerchant") return WORLD_TILE_IDS.trampledGrass;
+  if (poi.landmarkKind === "ancientDoor") return WORLD_TILE_IDS.grassStones;
+  return poi.islandId === "ashfang" ? WORLD_TILE_IDS.volcanicAshGround : MAIN_GRASS_TILE;
+}
+
 function carveIslandRoads(
   tiles: WorldTileId[][],
   biomes: WorldBiome[][],
   islandByTile: (IslandId | null)[][],
   islandId: IslandId,
   pois: WorldPoi[],
-  roads: WorldVec[]
+  roadKeys: Set<string>
 ) {
   const town = pois.find((poi) => poi.kind === "town");
   const harbor = pois.find((poi) => poi.kind === "harbor");
   const important = pois.filter((poi) => poi.kind === "dungeon" || poi.kind === "gate" || poi.kind === "final");
   if (!town || !harbor) return;
-  const islandRoadKeys = new Set<string>();
   for (const destination of [harbor, ...important]) {
     const path = findIslandPath(tiles, islandByTile, islandId, town, destination);
     for (const pos of path) {
       if (isWaterTile(tiles[pos.y][pos.x])) continue;
       setWorldTile(tiles, biomes, pos.x, pos.y, ROAD_TILE, "grassland");
-      roads.push(pos);
-      islandRoadKeys.add(posKey(pos));
+      const key = posKey(pos);
+      roadKeys.add(key);
     }
   }
-  orientRoadTiles(tiles, biomes, islandRoadKeys);
 }
 
 function orientRoadTiles(tiles: WorldTileId[][], biomes: WorldBiome[][], roadKeys: Set<string>) {
@@ -854,7 +891,7 @@ function findIslandPath(
     for (const next of nextSteps) {
       const key = posKey(next);
       if (seen.has(key) || !inBounds(tiles[0].length, tiles.length, next.x, next.y)) continue;
-      if (islandByTile[next.y][next.x] !== islandId || isWaterTile(tiles[next.y][next.x])) continue;
+      if (islandByTile[next.y][next.x] !== islandId || !isWorldTileWalkable(tiles[next.y][next.x])) continue;
       seen.add(key);
       cameFrom.set(key, posKey(current));
       queue.push(next);
@@ -983,7 +1020,7 @@ function findStartPosition(
   ];
   for (const pos of candidates) {
     if (!tiles[pos.y]?.[pos.x] || isWaterTile(tiles[pos.y][pos.x])) continue;
-    setWorldTile(tiles, biomes, pos.x, pos.y, WORLD_TILE_IDS.brightGrass, "grassland");
+        setWorldTile(tiles, biomes, pos.x, pos.y, MAIN_GRASS_TILE, "grassland");
     islandByTile[pos.y][pos.x] = "greenhaven";
     return pos;
   }
