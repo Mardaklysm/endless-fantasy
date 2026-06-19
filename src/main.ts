@@ -36,6 +36,8 @@ const FAST_MOVE_TILES_PER_MS = 1 / FAST_MOVE_DURATION_MS;
 const BATTLE_ACTION_DELAY_MS = 820;
 const BATTLE_TURN_DELAY_MS = 420;
 const PLAYER_HITBOX = { left: 0.22, top: 0.18, right: 0.78, bottom: 0.9 };
+const WORLD_PLAYER_BASE_SPRITE_WIDTH = 33;
+const WORLD_PLAYER_SPRITE_WIDTH = WORLD_PLAYER_BASE_SPRITE_WIDTH * 2;
 const LANDMARK_FOOTPRINT = 3;
 
 type Mode =
@@ -2989,8 +2991,12 @@ class CrystalOathScene extends Phaser.Scene {
     return this.flags.relics.root && this.flags.relics.flame && this.flags.relics.tide && this.flags.relics.gale;
   }
 
+  private rememberMenuReturnMode() {
+    if (this.mode !== "menu" && this.mode !== "dialogue") this.previousMode = this.mode;
+  }
+
   private openMainMenu() {
-    this.previousMode = this.mode;
+    this.rememberMenuReturnMode();
     this.openMenu(
       "Menu",
       [
@@ -3228,7 +3234,7 @@ Statuses: ${statuses}`;
   }
 
   private openDebugMenu() {
-    this.previousMode = this.mode;
+    this.rememberMenuReturnMode();
     this.openMenu(
       "Debug",
       [
@@ -3423,9 +3429,16 @@ Statuses: ${statuses}`;
   }
 
   private closeMenu() {
-    this.mode = this.previousMode;
+    this.mode = this.menuReturnMode();
     this.menu = undefined;
     this.markDirty();
+  }
+
+  private menuReturnMode(): Mode {
+    if (this.previousMode === "menu" || this.previousMode === "dialogue") {
+      return this.generatedWorld ? "world" : "title";
+    }
+    return this.previousMode;
   }
 
   private adjustMenu(delta: number) {
@@ -3585,7 +3598,8 @@ Statuses: ${statuses}`;
     height: number,
     depth = LAYER_WORLD_IMAGE,
     alpha = 1,
-    tint?: number
+    tint?: number,
+    flipX = false
   ) {
     const image = this.add.image(x * PIXEL_ART_SCALE, y * PIXEL_ART_SCALE, key);
     image.setOrigin(0, 0);
@@ -3593,6 +3607,7 @@ Statuses: ${statuses}`;
     image.setDepth(depth);
     image.setAlpha(alpha);
     image.setScrollFactor(0);
+    image.setFlipX(flipX);
     if (tint !== undefined) image.setTint(tint);
     this.images.push(image);
     return image;
@@ -4639,13 +4654,13 @@ Statuses: ${statuses}`;
     const currentMode = mode ?? this.mode;
     const frame = this.playerMoving ? Math.floor(this.walkAnimElapsed / 85) % 2 : 0;
     const isWorld = currentMode === "world";
-    const spriteCellWidth = isWorld ? 33 : 132;
-    const shadowWidth = isWorld ? 18 : 48;
-    const shadowHeight = isWorld ? 6 : 12;
-    const ellipseW = isWorld ? 16 : 46;
-    const ellipseH = isWorld ? 6 : 12;
-    const bodyOffsetX = isWorld ? 4 : 12;
-    const bodyOffsetY = isWorld ? 14 : 38;
+    const spriteCellWidth = isWorld ? WORLD_PLAYER_SPRITE_WIDTH : 132;
+    const shadowWidth = isWorld ? 36 : 48;
+    const shadowHeight = isWorld ? 12 : 12;
+    const ellipseW = isWorld ? 32 : 46;
+    const ellipseH = isWorld ? 12 : 12;
+    const bodyOffsetX = isWorld ? 12 : 12;
+    const bodyOffsetY = isWorld ? 28 : 38;
     const bodyCenterX = x + bodyOffsetX;
     const feetBaselineY = y + bodyOffsetY;
     this.drawActorShadow(bodyCenterX, feetBaselineY, shadowWidth, shadowHeight);
@@ -4654,16 +4669,18 @@ Statuses: ${statuses}`;
       return;
     }
     if (isWorld) {
-      const scale = 1;
-      this.g.fillStyle(0x050812, 1).fillRect(x + 5, y + 3, 22 * scale, 29 * scale);
-      this.g.fillStyle(0x2a213a, 1).fillRect(x + 7, y + 1, 18 * scale, 9 * scale);
-      this.g.fillStyle(0xf0c18d, 1).fillRect(x + 9, y + 5, 14 * scale, 12 * scale);
-      this.g.fillStyle(0xb93434, 1).fillRect(x + 6, y + 17, 22 * scale, 13 * scale);
-      this.g.fillStyle(0xf2e9dd, 1).fillRect(x + 15, y + 17, 7 * scale, 16 * scale);
-      this.g.fillStyle(0x1c2238, 1).fillRect(x + 7, y + 30, 8 * scale, 7 + frame);
-      this.g.fillRect(x + 20, y + 30, 8 * scale, 7 + (1 - frame));
-      this.g.fillStyle(0xffffff, 1).fillRect(x + 11, y + 10, 3 * scale, 3 * scale);
-      this.g.fillRect(x + 19, y + 10, 3 * scale, 3 * scale);
+      const scale = 2;
+      const fx = bodyCenterX - 11 * scale;
+      const fy = feetBaselineY - 37 * scale;
+      this.g.fillStyle(0x050812, 1).fillRect(fx + 5 * scale, fy + 3 * scale, 22 * scale, 29 * scale);
+      this.g.fillStyle(0x2a213a, 1).fillRect(fx + 7 * scale, fy + scale, 18 * scale, 9 * scale);
+      this.g.fillStyle(0xf0c18d, 1).fillRect(fx + 9 * scale, fy + 5 * scale, 14 * scale, 12 * scale);
+      this.g.fillStyle(0xb93434, 1).fillRect(fx + 6 * scale, fy + 17 * scale, 22 * scale, 13 * scale);
+      this.g.fillStyle(0xf2e9dd, 1).fillRect(fx + 15 * scale, fy + 17 * scale, 7 * scale, 16 * scale);
+      this.g.fillStyle(0x1c2238, 1).fillRect(fx + 7 * scale, fy + 30 * scale, 8 * scale, (7 + frame) * scale);
+      this.g.fillRect(fx + 20 * scale, fy + 30 * scale, 8 * scale, (7 + (1 - frame)) * scale);
+      this.g.fillStyle(0xffffff, 1).fillRect(fx + 11 * scale, fy + 10 * scale, 3 * scale, 3 * scale);
+      this.g.fillRect(fx + 19 * scale, fy + 10 * scale, 3 * scale, 3 * scale);
       return;
     }
     this.g.fillStyle(0x1c2440, 1).fillRect(x + 8, y + 6, 10, 7);
@@ -4709,7 +4726,7 @@ Statuses: ${statuses}`;
   private drawEnemySprite(enemy: EnemyState, x: number, y: number, s: number, displaySize = 96) {
     const texture = ENEMY_TEXTURES[enemy.id];
     if (texture && this.hasTexture(texture)) {
-      this.drawTexture(texture, x, y, displaySize, displaySize, LAYER_BATTLE_IMAGE, enemy.hp <= 0 ? 0.28 : 1);
+      this.drawTexture(texture, x, y, displaySize, displaySize, LAYER_BATTLE_IMAGE, enemy.hp <= 0 ? 0.28 : 1, undefined, true);
       return;
     }
     const p = enemy.palette.map((c) => parseInt(c.slice(1), 16));

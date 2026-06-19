@@ -14,6 +14,7 @@
 - World collision uses centralized `isWorldTileWalkable(tileId)` from the tile manifest.
 - Deep water, lava, volcanoes, and blocked mountain tiles are not walkable.
 - Grass, desert/dryland, snow/ice ground, dark ground, gravel, and carved POI footprints are walkable.
+- The world-map player sprite is rendered at double its earlier small map size for readability; this is visual only and does not change collision or movement.
 - Boat and skyship flags still gate progression/location access, but they no longer make raw water or blocked mountains walkable.
 - The `atlas_v3_tile_world` generator creates coherent grass, desert, snow, dark, water, rock, and sparse lava regions plus procedural POI coordinates, then validates that required POIs are reachable from the start. It currently does not generate roads, rivers, beaches, or bridges.
 - Overworld locations use larger 3x3-ish footprints for rendering and entry. The terrain under each footprint is carved to walkable atlas-v3 land so the player can approach and enter naturally.
@@ -44,7 +45,7 @@
 - After every living combatant in the current order has had a turn or been skipped, a new initiative cycle is rolled.
 - The game does not use an all-party action queue round system.
 - Battle presentation now uses v2 scene backdrops, enemies on the left, normalized fighter/priest/wizard class-sheet party battlers on the right, and lower panels for target/log, commands, and party status. The small redundant party head portraits are not drawn on the battlefield.
-- Party attack animations use the class-sheet `attack_windup_left` then `attack_release_left` frames during the existing lunge timing. Battle idle uses the left-facing walk frame.
+- Party attack animations use the class-sheet `attack_windup_left` then `attack_release_left` frames during the existing lunge timing. Battle idle uses the left-facing walk frame, while enemy PNG battlers are horizontally flipped so enemies on the left face right toward the party.
 - Battle backgrounds are selected by dungeon first, then overworld terrain for random encounters.
 - Enemy actions are randomly selected from each enemy's move list.
 - Dead attack targets retarget to a living enemy.

@@ -30,8 +30,10 @@
 - Input helpers accept both `KeyboardEvent.code` and `KeyboardEvent.key` for movement/confirm/cancel compatibility.
 - Exploration movement is continuous pixel/tile-space movement; tile effects commit when the derived logical tile changes.
 - Exploration rendering uses persistent visual tile coordinates during movement. Do not let render code fall back to stale logical coordinates mid-move.
+- Nested menu flows must preserve the original non-menu return mode; settings/status/item/equipment backs should not overwrite it with `menu` or `dialogue`.
 - Overworld locations use larger 3x3-ish visual and trigger footprints so landmarks read as important instead of one-tile icons.
 - Battle uses individual initiative turns. The game does not use all-party action queue rounds.
+- Battle sides should face each other: party battlers face left from the right side, and enemy battlers on the left face right toward the party.
 
 ## Legal Originality Rules
 
