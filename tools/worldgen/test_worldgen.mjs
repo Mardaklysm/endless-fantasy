@@ -17,18 +17,26 @@ import {
   worldTileById,
   worldTileHasTag
 } from "../../src/data/worldTiles.ts";
+import {
+  WORLD_OBJECT_ATLAS,
+  WORLD_OBJECT_CELLS,
+  WORLD_OBJECT_ID_SET,
+  WORLD_OBJECTS,
+  worldObjectById
+} from "../../src/data/worldObjects.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PROJECT_ROOT = path.resolve(__dirname, "..", "..");
 
 validateAtlasV3();
+validateWorldObjects();
 validateAtlasV3SourceInset();
 validateRuntimeReferences();
 validateRuntimeDebugInsetConsistency();
 validateWorldgen();
 
-console.log("atlas_v3 source inset, worldgen, and runtime reference validation passed.");
+console.log("atlas_v3, world object overlays, worldgen, and runtime reference validation passed.");
 
 function validateAtlasV3() {
   const runtimeAtlasPath = path.join(PROJECT_ROOT, WORLD_ATLAS.image);
@@ -90,6 +98,36 @@ function validateAtlasV3() {
   assert(isWorldTileWalkable(WORLD_TILE_IDS.lightForest), "light_forest must be walkable.");
 }
 
+function validateWorldObjects() {
+  const runtimeAtlasPath = path.join(PROJECT_ROOT, WORLD_OBJECT_ATLAS.image);
+  const manifestPath = path.join(PROJECT_ROOT, WORLD_OBJECT_ATLAS.manifest);
+  assert(fs.existsSync(runtimeAtlasPath), `Runtime world object atlas does not exist: ${WORLD_OBJECT_ATLAS.image}`);
+  assert(fs.existsSync(manifestPath), `Runtime world object manifest does not exist: ${WORLD_OBJECT_ATLAS.manifest}`);
+
+  const dimensions = readPngDimensions(runtimeAtlasPath);
+  assert(WORLD_OBJECT_ATLAS.id === "world_objects", `Active world object atlas is ${WORLD_OBJECT_ATLAS.id}, expected world_objects.`);
+  assert(WORLD_OBJECT_ATLAS.textureKey === "world_objects", `World object texture key is ${WORLD_OBJECT_ATLAS.textureKey}, expected world_objects.`);
+  assert(WORLD_OBJECT_ATLAS.columns === 8 && WORLD_OBJECT_ATLAS.rows === 8, `World object grid is ${WORLD_OBJECT_ATLAS.columns}x${WORLD_OBJECT_ATLAS.rows}, expected 8x8.`);
+  assert(WORLD_OBJECT_ATLAS.tileWidth === 128 && WORLD_OBJECT_ATLAS.tileHeight === 128, `World object cells are ${WORLD_OBJECT_ATLAS.tileWidth}x${WORLD_OBJECT_ATLAS.tileHeight}, expected 128x128.`);
+  assert(dimensions.width === 1024 && dimensions.height === 1024, `world_objects dimensions changed unexpectedly: ${dimensions.width}x${dimensions.height}.`);
+  assert(dimensions.colorType === 6 || dimensions.colorType === 4, `world_objects PNG color type ${dimensions.colorType} does not include alpha.`);
+  assert(WORLD_OBJECT_CELLS.length === 64, `World object manifest has ${WORLD_OBJECT_CELLS.length} cells, expected 64.`);
+  assert(Object.keys(WORLD_OBJECTS).length === 64, `World object manifest has ${Object.keys(WORLD_OBJECTS).length} objects, expected 64.`);
+
+  const seenIds = new Set();
+  for (const cell of WORLD_OBJECT_CELLS) {
+    assert(cell.row >= 0 && cell.row < 8 && cell.col >= 0 && cell.col < 8, `World object ${cell.id} is outside the 8x8 grid.`);
+    assert(cell.source.x === cell.col * WORLD_OBJECT_ATLAS.tileWidth, `World object ${cell.id} source x is not col * tileWidth.`);
+    assert(cell.source.y === cell.row * WORLD_OBJECT_ATLAS.tileHeight, `World object ${cell.id} source y is not row * tileHeight.`);
+    assert(cell.source.width === WORLD_OBJECT_ATLAS.tileWidth && cell.source.height === WORLD_OBJECT_ATLAS.tileHeight, `World object ${cell.id} source size is not 128x128.`);
+    assert(!seenIds.has(cell.id), `Duplicate world object id: ${cell.id}`);
+    seenIds.add(cell.id);
+    assert(WORLD_OBJECT_ID_SET.has(cell.id), `World object ID set is missing ${cell.id}.`);
+    assert(worldObjectById(cell.id), `World object lookup is missing ${cell.id}.`);
+    assert(Array.isArray(cell.tags) && cell.tags.length > 0, `World object ${cell.id} has no tags.`);
+  }
+}
+
 function validateAtlasV3SourceInset() {
   assert(ATLAS_V3_SOURCE_INSET >= 0, `atlas_v3 source inset must be non-negative, got ${ATLAS_V3_SOURCE_INSET}.`);
   assert(ATLAS_V3_SOURCE_INSET * 2 < WORLD_ATLAS.tileWidth, `atlas_v3 source inset ${ATLAS_V3_SOURCE_INSET} is too wide for ${WORLD_ATLAS.tileWidth}px tiles.`);
@@ -123,7 +161,7 @@ function validateAtlasV3SourceInset() {
 }
 
 function validateRuntimeReferences() {
-  const runtimeFiles = ["src/main.ts", "src/data/worldTiles.ts", "src/world/worldGenerator.ts"];
+  const runtimeFiles = ["src/main.ts", "src/data/worldTiles.ts", "src/data/worldObjects.ts", "src/world/worldGenerator.ts"];
   const deprecated = [
     "classic_world_tileset.cleaned.png",
     "classicWorldTileset.manifest.json",
@@ -174,6 +212,7 @@ function validateWorldgen() {
     assert(world.roads.length > 0, `World ${i} did not generate roads.`);
     assert(world.rivers.length === 0, `World ${i} generated rivers.`);
     assert(world.bridges.length > 0, `World ${i} did not generate harbor dock/bridge markers.`);
+    assert(world.objectOverlays.length > 0, `World ${i} did not generate world object overlays.`);
     assert(world.shallows.length > 0, `World ${i} did not track shallow water.`);
     assert(world.reefs.length > 0, `World ${i} did not add ocean details.`);
     assert(world.seaRoutes.length >= 2, `World ${i} did not add sea routes.`);
@@ -195,6 +234,14 @@ function validateWorldgen() {
       assert(isWorldTileWalkable(tile), `World ${i} POI ${poi.id} was placed on blocked terrain.`);
       assert(world.validation.reachablePoiIds.includes(poi.id), `World ${i} POI ${poi.id} was not reachable.`);
       if (poi.kind === "harbor") assert(hasAdjacentWater(world, poi), `World ${i} harbor ${poi.id} is not coastal.`);
+      if (poi.kind !== "town") {
+        assert(poi.objectId && WORLD_OBJECT_ID_SET.has(poi.objectId), `World ${i} POI ${poi.id} has invalid object overlay ${poi.objectId}.`);
+      }
+    }
+
+    for (const overlay of world.objectOverlays) {
+      assert(WORLD_OBJECT_ID_SET.has(overlay.objectId), `World ${i} object overlay ${overlay.id} has invalid object ${overlay.objectId}.`);
+      assert(worldTileHasTag(world.tiles[overlay.y]?.[overlay.x], "water"), `World ${i} object overlay ${overlay.id} was not placed on water.`);
     }
 
     let sawWater = false;
@@ -240,6 +287,7 @@ function validateWorldgen() {
   const different = generateWorld({ seed: "atlas-v3-different-seed" });
   assert(JSON.stringify(stableA.tiles) === JSON.stringify(stableB.tiles), "Same seed produced different tile grids.");
   assert(JSON.stringify(stableA.pois) === JSON.stringify(stableB.pois), "Same seed produced different POIs.");
+  assert(JSON.stringify(stableA.objectOverlays) === JSON.stringify(stableB.objectOverlays), "Same seed produced different object overlays.");
   assert(JSON.stringify(stableA.islands) === JSON.stringify(stableB.islands), "Same seed produced different islands.");
   assert(JSON.stringify(stableA.tiles) !== JSON.stringify(different.tiles), "Different seeds produced the same tile grid.");
   assert(sawDifferentWorld, "Generated worlds did not vary across different seeds.");
@@ -275,7 +323,8 @@ function readPngDimensions(filePath) {
   assert(buffer.subarray(0, 8).toString("hex") === "89504e470d0a1a0a", `Runtime atlas is not a PNG: ${filePath}`);
   return {
     width: buffer.readUInt32BE(16),
-    height: buffer.readUInt32BE(20)
+    height: buffer.readUInt32BE(20),
+    colorType: buffer[25]
   };
 }
 

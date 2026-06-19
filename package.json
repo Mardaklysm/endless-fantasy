@@ -9,7 +9,8 @@
     "preview": "vite preview --host 127.0.0.1",
     "test": "node tools/worldgen/test_worldgen.mjs",
     "debug:worldgen": "node tools/worldgen/write_worldgen_debug.mjs",
-    "import:atlas-v3": "node tools/art_import/import_atlas_v3.mjs"
+    "import:atlas-v3": "node tools/art_import/import_atlas_v3.mjs",
+    "import:world-objects": "node tools/art_import/import_world_objects.mjs"
   },
   "dependencies": {
     "phaser": "^3.90.0"

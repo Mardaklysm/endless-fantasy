@@ -1,0 +1,75 @@
+# World Objects Atlas Import Report
+
+- Source: `D:\Projects\new_artwork\world_objects_atlas.jpeg`
+- Runtime PNG: `src/assets/world/world_objects.png`
+- Manifest: `src/assets/world/worldObjectAtlas.manifest.json`
+- Grid: 8x8, 128x128px cells
+- Background removal: ImageMagick edge flood-fill from the outer magenta matte, fuzz 18%
+- Note: this intentionally avoids global magenta removal so purple portal, crystal, and gem objects remain intact.
+
+## Objects
+
+- 0,0: mossy_cave_entrance (dungeonEntrance) - Mossy cave entrance.
+- 0,1: bandit_hideout_door (dungeonEntrance) - Bandit hideout door.
+- 0,2: jungle_ruins_stairs (dungeonEntrance) - Jungle ruins stair entrance.
+- 0,3: pirate_grotto_entrance (dungeonEntrance) - Pirate grotto entrance.
+- 0,4: volcanic_temple_entrance (dungeonEntrance) - Volcanic temple entrance.
+- 0,5: cursed_fortress_gate (dungeonEntrance) - Cursed fortress gate.
+- 0,6: ancient_sealed_door (dungeonEntrance) - Ancient sealed stone door.
+- 0,7: dark_boss_portal (dungeonEntrance) - Dark boss portal.
+- 1,0: small_broken_ruins (landmark) - Small broken stone ruins.
+- 1,1: ruined_archway (landmark) - Ruined archway.
+- 1,2: cracked_stone_obelisk (landmark) - Cracked stone obelisk.
+- 1,3: mossy_statue (landmark) - Mossy statue.
+- 1,4: jungle_idol_shrine (landmark) - Jungle idol shrine.
+- 1,5: glowing_magic_shrine (landmark) - Glowing magic shrine.
+- 1,6: ancient_standing_stones (landmark) - Ancient standing stones.
+- 1,7: grave_marker_cluster (landmark) - Small grave marker cluster.
+- 2,0: closed_treasure_chest (treasure) - Closed wooden treasure chest.
+- 2,1: open_treasure_chest (treasure) - Open treasure chest with gold.
+- 2,2: stone_guardian_cache (treasure) - Stone guardian cache.
+- 2,3: supply_crates (prop) - Supply crates.
+- 2,4: barrel_stack (prop) - Barrel stack.
+- 2,5: ore_node (resource) - Ore resource node.
+- 2,6: herb_bush (resource) - Herb gathering bush.
+- 2,7: fishing_spot (resource) - Fishing spot marker.
+- 3,0: octopus_cache (treasure) - Octopus sea cache.
+- 3,1: coral_cluster_blue (waterOverlay) - Blue and purple coral cluster.
+- 3,2: jeweled_magic_cache (treasure) - Jeweled magic cache.
+- 3,3: mossy_locked_cache (treasure) - Mossy locked cache.
+- 3,4: shipwreck_debris (waterOverlay) - Small shipwreck debris.
+- 3,5: broken_mast (waterOverlay) - Broken mast sticking from water.
+- 3,6: floating_treasure_barrel (waterOverlay) - Floating treasure barrel.
+- 3,7: whirlpool_swirl (waterOverlay) - Whirlpool swirl.
+- 4,0: harbor_signpost (harbor) - Harbor signpost.
+- 4,1: wooden_rowboat (harbor) - Small wooden rowboat.
+- 4,2: mooring_post_rope (harbor) - Mooring post with rope.
+- 4,3: anchor (harbor) - Anchor.
+- 4,4: dock_lantern_post (harbor) - Dock lantern post.
+- 4,5: fishing_nets_stack (harbor) - Stacked fishing nets and barrels.
+- 4,6: travel_flag_marker (harbor) - Travel flag marker.
+- 4,7: coastal_market_stall (merchant) - Small coastal market stall.
+- 5,0: monster_nest (encounter) - Monster nest.
+- 5,1: campfire_cookpot (camp) - Campfire campsite with cookpot.
+- 5,2: secret_merchant_tent (merchant) - Secret merchant tent.
+- 5,3: locked_iron_gate (landmark) - Locked iron gate.
+- 5,4: ancient_key_pedestal (landmark) - Ancient key pedestal.
+- 5,5: discovery_sparkle (effect) - Glowing discovery sparkle marker.
+- 5,6: smoke_plume (effect) - Smoke plume marker.
+- 5,7: quest_notice_board (prop) - Quest notice board.
+- 6,0: broadleaf_tree (nature) - Centered broadleaf tree.
+- 6,1: dark_pine_tree (nature) - Centered dark pine tree.
+- 6,2: palm_tree (nature) - Centered palm tree.
+- 6,3: dense_jungle_bush (nature) - Dense jungle bush.
+- 6,4: thorn_bramble (nature) - Thorn bramble.
+- 6,5: fallen_log (nature) - Fallen log.
+- 6,6: giant_mushroom_cluster (nature) - Giant mushroom cluster.
+- 6,7: vines_over_stone (nature) - Vines over stone.
+- 7,0: gray_boulder_pile (rock) - Centered gray boulder pile.
+- 7,1: rocky_hill_object (rock) - Centered rocky hill object.
+- 7,2: small_mountain_peak (rock) - Centered small mountain peak.
+- 7,3: snowy_mountain_peak (rock) - Centered snowy mountain peak.
+- 7,4: volcano_cone (volcanic) - Centered volcano cone.
+- 7,5: lava_vent_rocks (volcanic) - Lava vent rocks.
+- 7,6: black_ash_rock_cluster (volcanic) - Black ash rock cluster.
+- 7,7: cursed_purple_crystal_cluster (crystal) - Cursed purple crystal cluster.

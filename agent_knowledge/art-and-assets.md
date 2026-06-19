@@ -21,6 +21,7 @@ Reusable scripts live in `tools/art_import/`:
 - `generate_asset_previews.ps1`: creates contact sheets and `assets_v2/previews/QUALITY_REPORT.md`.
 - `import_character_sprites.mjs`: imports `D:\Tools\rembg\bg_output\fighter.png`, `priest.png`, and `wizard.png` without running rembg, splits them as 5x2 alpha PNG sheets, normalizes fixed cells/anchors, writes `src/data/characterSprites.ts`, and creates debug previews/reports in `docs/debug/sprite-import/`.
 - `import_atlas_v3.mjs`: imports `D:\Projects\new_artwork\atlas_v3.jpeg`, normalizes it to the 1024x1024 runtime PNG at `src/assets/world/atlas_v3.png`, writes all 64 atlas cell classifications to `src/assets/world/atlasV3.manifest.json`, and creates `docs/debug/world-atlas-v3/atlas-v3-labeled.png` plus `atlas-v3-import-report.md`.
+- `import_world_objects.mjs`: imports `D:\Projects\new_artwork\world_objects_atlas.jpeg`, resizes it to the 1024x1024 transparent runtime PNG at `src/assets/world/world_objects.png`, writes all 64 object overlay cells to `src/assets/world/worldObjectAtlas.manifest.json`, and creates `docs/debug/world-objects/world-objects-import-report.md`.
 - `import_world_atlas.mjs`: legacy importer for the older final PNG source `C:\Users\Marku\Downloads\master_overworld_tileset_atlas_10x10.png`. It can still recreate `src/assets/world/world_atlas.normalized.png` and debug atlas outputs, but that 10x10 generated atlas is no longer active runtime terrain.
 - `import_classic_world_tileset.mjs`: archived importer for the complex classic sheet `C:\Users\Marku\Downloads\57105.png`. The classic sheet is not active runtime terrain.
 
@@ -48,6 +49,7 @@ Rendered now from `assets_v2`:
 
 - Overworld terrain: generated worlds render from `src/assets/world/atlas_v3.png` through `src/assets/world/atlasV3.manifest.json` and `src/data/worldTiles.ts`. The active grid is 8x8 with 64 classified terrain cells, including grass, beaches/coasts, shallow/deep water, forests/jungle, roads, mountains, darkland, and lava/volcanic tiles. Valid tile draws use `ATLAS_V3_SOURCE_INSET = 3`, cropping dirty source-cell edges while drawing the clean interior into the full destination tile.
 - Harbor docks: generated harbor dock/bridge markers render from `src/assets/world/pier_atlas.png`, a 1024x1024 4x4 sheet normalized from `D:\Projects\new_artwork\pier_atlas.jpeg`. The runtime currently uses horizontal and vertical pier cells, with generated Graphics fallback if the texture is missing.
+- World object overlays: generated dungeons, harbors, landmarks, and ocean details can render from `src/assets/world/world_objects.png` through `src/assets/world/worldObjectAtlas.manifest.json` and `src/data/worldObjects.ts`. The source is a magenta-matte JPG from `D:\Projects\new_artwork\world_objects_atlas.jpeg`; the importer uses ImageMagick edge flood-fill transparency, not global color removal, so purple portals/crystals/gems remain intact.
 - Location markers: town, castle, cave, keep, shrine, tower, port, gate, eclipse spire.
 - Town/interior: stone floor/walls, exit gate, service signs, table/rug, crate, barrel, lamps.
 - Characters: Arlen/Mira/Kael portraits; fighter/priest/wizard normalized class sheets drive Arlen/Mira/Kael battle sprites, and the fighter sheet drives the visible exploration leader.
@@ -74,6 +76,7 @@ Legacy/reference world atlas:
 - Display tile grid: 32x32 layout pixels, rendered as 64x64 canvas pixels at the default Full HD target.
 - Active `atlas_v3` world atlas: source `D:\Projects\new_artwork\atlas_v3.jpeg`, runtime `src/assets/world/atlas_v3.png`, 1024x1024 PNG, 8 columns x 8 rows, 128x128 logical cells, 64 non-empty terrain cells, and no active empty cells.
 - Active pier atlas: source `D:\Projects\new_artwork\pier_atlas.jpeg`, runtime `src/assets/world/pier_atlas.png`, 1024x1024 PNG, 4 columns x 4 rows, 256x256 logical cells.
+- Active world object atlas: source `D:\Projects\new_artwork\world_objects_atlas.jpeg`, runtime `src/assets/world/world_objects.png`, 1024x1024 transparent PNG, 8 columns x 8 rows, 128x128 logical cells, 64 overlay object cells.
 - Legacy world atlas: 10 columns x 10 rows, 256x256 cells, 2560x2560 opaque PNG. It is not active gameplay terrain.
 - V2 town tiles: 32x32 opaque PNGs.
 - Class character sheets: 5 columns x 2 rows, 704x512 cells, 3520x1024 sheet size, transparent PNG. Manifest anchor is bodyCenterX=352 and feetBaselineY=464.
@@ -89,6 +92,7 @@ Legacy/reference world atlas:
 - Overworld locations render as larger 3x3-ish landmarks with matching entry footprints. Keep terrain tiles small/repeating, but landmarks should remain visually important.
 - Active overworld slicing starts from exact 8x8 atlas math from `atlasV3.manifest.json`, then applies the shared source inset: `sx = tile.source.x + 3`, `sy = tile.source.y + 3`, `sw = tile.source.width - 6`, `sh = tile.source.height - 6`. Do not reintroduce classic special tiles, old 10x10 assumptions, chroma-keying, global black transparency, or debug-grid art for runtime terrain.
 - Roads, beaches/coasts, shallow water, forests/jungle, and volcanic support now have real atlas cells. Generated fallback art still remains for missing textures and for lightweight non-atlas overlays such as sea route dots and optional ocean details.
+- Generated POIs carry optional `objectId` values, and ocean object overlays are seed-derived from reef/detail positions. `drawLocationIcon` and `drawWorldOverlays` prefer `world_objects` for those objects, then fall back to older marker textures or generated Graphics.
 - Do not implement runtime map-level seam blending for `atlas_v3`. Runtime and debug previews should crop valid source cells inward and must not mutate cached map pixels by mixing water/grass or other neighboring terrain colors after placement.
 - Battle backgrounds are full 16:9 opaque JPEG images and are assigned linear texture filtering. Pixel sprites, tiles, UI, and icons remain nearest-neighbor filtered. The canvas itself uses `image-rendering: auto` so high-resolution artwork is not globally pixelated.
 - Battle party presentation uses the normalized fighter/priest/wizard class sheets only on the battlefield; redundant small head portraits/icons and old standalone party battle PNGs are intentionally not drawn there.
@@ -101,6 +105,7 @@ Legacy/reference world atlas:
 - Keep battle backgrounds opaque.
 - Keep terrain tiles rectangular and opaque; do not run rembg on terrain.
 - For `atlas_v3`, all current cells are classified terrain. Do not chroma-key the atlas or treat black as transparency if a future source sheet reintroduces black margins.
+- For `world_objects`, do not use global magenta removal on the whole sheet. The current importer removes only the connected edge matte with ImageMagick flood-fill so interior purple object pixels survive. Rembg can be compared for ordinary single-object cutouts, but this sheet should stay deterministic unless a future transparent PNG source replaces it.
 - Do not rerun rembg or chroma-key the fighter/priest/wizard source sheets; their existing alpha channel is the source of truth.
 - Prefer nearest-neighbor scaling for tiles, icons, sprites, and enemies.
 - Review `assets_v2/previews/*.png` and `assets_v2/previews/QUALITY_REPORT.md` before expanding runtime mappings.

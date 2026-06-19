@@ -42,6 +42,8 @@ This runs `tools/worldgen/test_worldgen.mjs`. It validates the active `atlas_v3`
 - blocked mountain, volcano, and lava tiles are not walkable
 - generated world edges are a deep-water ocean border
 - generated worlds include oriented roads, shallow-water terrain/tracking, pier-atlas docks/bridges, sea routes, beaches/coasts, forest/jungle biome hooks, reefs/ocean details, and no empty-cell references
+- runtime world object overlay atlas `src/assets/world/world_objects.png` exists as a 1024x1024 transparent PNG with a 64-cell `worldObjectAtlas.manifest.json`
+- generated non-town POIs have valid object overlay IDs, and generated ocean object overlays are deterministic, valid, and placed on water
 - same seed reproduces the same world
 - different seeds produce different tile grids
 
@@ -93,6 +95,14 @@ npm run import:atlas-v3
 ```
 
 Check `src/assets/world/atlas_v3.png`, `src/assets/world/atlasV3.manifest.json`, `docs/debug/world-atlas-v3/atlas-v3-labeled.png`, and `docs/debug/world-atlas-v3/atlas-v3-import-report.md`. The current atlas classifies all 64 cells as terrain. Do not chroma-key black or treat black pixels as transparency.
+
+For the active `world_objects` overlay atlas, run after changing `D:\Projects\new_artwork\world_objects_atlas.jpeg` or the object classification rules:
+
+```powershell
+npm run import:world-objects
+```
+
+Check `src/assets/world/world_objects.png`, `src/assets/world/worldObjectAtlas.manifest.json`, and `docs/debug/world-objects/world-objects-import-report.md`. The current importer uses ImageMagick resize plus edge flood-fill transparency from the magenta matte. Do not use global magenta removal because the atlas intentionally contains purple portal, crystal, and gem pixels.
 
 For the legacy 10x10 overworld atlas, run only if intentionally regenerating that archived asset:
 
@@ -160,7 +170,7 @@ Expected:
 - Confirm the camera follows the interpolated visual position without a visible reset.
 - Exit Greenhaven through the south gate.
 - Confirm pressing south while already standing on Greenhaven's south gate exits to the overworld.
-- Confirm the overworld is mostly ocean with three islands, beach/coast edges, shallow-water/route overlays, harbor markers, and landmark markers.
+- Confirm the overworld is mostly ocean with three islands, beach/coast edges, shallow-water/route overlays, harbor markers, landmark markers, and transparent object overlays for dungeons/landmarks/ocean details.
 - Walk on world terrain.
 - Enter a town/location by stepping onto it.
 - Confirm town/dungeon/location entry occurs after the tile step completes, not mid-step.

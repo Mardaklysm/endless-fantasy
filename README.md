@@ -59,7 +59,7 @@ The game saves to `localStorage`. You can save from the menu on the overworld or
 ## Gameplay Summary
 
 - Three-character party: Arlen, Mira, and Kael
-- Seeded procedural archipelago overworld using the 8x8 `atlas_v3` terrain atlas, ocean borders, irregular islands, beaches, shallow water, roads, harbors, pier overlays, dungeons, landmarks, and random encounters
+- Seeded procedural archipelago overworld using the 8x8 `atlas_v3` terrain atlas plus a transparent object overlay atlas for dungeons, landmarks, reefs, wrecks, harbor signs, beaches, shallow water, roads, harbors, pier overlays, and random encounters
 - Three major islands: Greenhaven, Coralreach, and Ashfang Isle, with 10 gold harbor passage and deterministic world seeds
 - Procedural room-and-corridor dungeons derived from the world seed and dungeon id
 - Turn-based battles with Attack, Skill, Magic, Item, Defend, and Run commands

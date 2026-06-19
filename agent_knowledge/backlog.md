@@ -12,7 +12,7 @@ This backlog is practical project memory, not a full design document. Keep it sh
 - Add vehicle rendering for boat/skyship on the overworld after deciding whether they replace or accompany Arlen.
 - Add simple effect rendering only after battle timing can show short animations without slowing commands.
 - Add v2-quality art for later-region normal enemies not covered by the first twelve common roster crops.
-- Archipelago generation now uses real atlas-v3 road, beach/coast, shallow-water, forest/jungle, and volcanic support tiles, plus pier-atlas dock overlays. Sea route dots and optional ocean details remain lightweight overlays.
+- Archipelago generation now uses real atlas-v3 road, beach/coast, shallow-water, forest/jungle, and volcanic support tiles, pier-atlas dock overlays, and the transparent world-objects atlas for generated dungeons, landmarks, harbors, reefs, wrecks, barrels, and whirlpools. Sea route dots remain lightweight generated overlays.
 - If overworld terrain still feels grid-like after the atlas source inset, improve it with real transition tiles or lower-frequency worldgen patches; do not add map-level terrain pixel blending.
 - Consider dynamic loading/code splitting for large JPEG battle backgrounds and large normalized class sheets if bundle size becomes painful.
 
@@ -42,7 +42,7 @@ This backlog is practical project memory, not a full design document. Keep it sh
 
 - Effect PNG sheets are loaded but not rendered yet.
 - No animated water/torch/chest sparkle polish yet.
-- Sea routes and optional ocean details use simple overlay graphics; shallow water and docks now have atlas-backed art.
+- Sea route dots still use simple overlay graphics; shallow water, docks, generated POI markers, and ocean details now have atlas-backed art.
 - Battle enemies use PNGs now; future larger boss art still needs overlap checks when progression reaches each boss.
 - Battle actions now have short lunge/step movement; future effect-sheet rendering can layer spell/item VFX on top of the timing path.
 - Battle backdrops now use v2 region panels; later tuning can reduce bundle weight with dynamic loading/code splitting.

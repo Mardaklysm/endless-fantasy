@@ -27,6 +27,7 @@ D:\Projects\Endless Fantasy\
   src/
     data/
       characterSprites.ts
+      worldObjects.ts
       worldTiles.ts
     world/
       dungeonGenerator.ts
@@ -68,6 +69,7 @@ Ignored/generated folders:
 - Data tables: `ITEMS`, `SPELLS`, `WEAPONS`, `ARMORS`, `ENEMIES`, `WORLD_TABLES`.
 - Imported class sprite manifest from `src/data/characterSprites.ts` for fighter/priest/wizard frame rectangles, anchors, and source metadata.
 - Imported world tile manifest from `src/data/worldTiles.ts` for the active `atlas_v3` overworld atlas, 8x8 source rectangles, shared source-edge inset, tile IDs, walkability, movement cost, encounter family, and tags. The current atlas has 64 classified terrain cells.
+- Imported world object overlay manifest from `src/data/worldObjects.ts` for the active `world_objects` atlas, 8x8 source rectangles, object IDs, categories, tags, and source metadata.
 - `src/world/seededRng.ts`: deterministic RNG/hash/noise helpers shared by map and dungeon generation.
 - `src/world/worldGenerator.ts`: seeded deterministic `atlas_v3_archipelago_world` generation. It starts from ocean, builds three irregular islands (Greenhaven, Coralreach, Ashfang Isle), tracks island metadata/tile maps, places towns/harbors/dungeons/landmarks, carves oriented roads, paints beach/coast and shallow-water terrain, records sea routes and dock markers, and validates island-local reachability.
 - `src/world/dungeonGenerator.ts`: deterministic room-and-corridor dungeon floor generation from `worldSeed + dungeonId + tier`, including entrance/stairs, chests, switch/gate, and boss placement.
@@ -131,9 +133,9 @@ Render resolution is split into clear constants: `DESIGN_WIDTH = 1920`, `DESIGN_
 
 Texture filtering is per asset family: battle backgrounds use linear filtering and the canvas CSS uses `image-rendering: auto`; sprites, tiles, UI, icons, enemies, and class sheets use nearest-neighbor texture filtering.
 
-New games call the seeded archipelago generator. The generated world includes the tile grid, island ids per tile, island records, POI coordinates, start position, harbor docks, shallow-water/detail coordinates, sea routes, entry triggers, and validation result. `CrystalOathScene.locations()` adapts generated POIs back into town/dungeon/gate/final entry behavior and also exposes harbor/landmark overworld interactions.
+New games call the seeded archipelago generator. The generated world includes the tile grid, island ids per tile, island records, POI coordinates and object IDs, seed-derived ocean object overlays, start position, harbor docks, shallow-water/detail coordinates, sea routes, entry triggers, and validation result. `CrystalOathScene.locations()` adapts generated POIs back into town/dungeon/gate/final entry behavior and also exposes harbor/landmark overworld interactions.
 
-The terrain cache still draws atlas-v3 base tiles only. Shallow water is now an atlas tile; `drawWorldOverlays` adds route dots, optional ocean detail hints, and pier-atlas dock/bridge cells over the cached map without modifying atlas pixels.
+The terrain cache still draws atlas-v3 base tiles only. Shallow water is now an atlas tile; `drawWorldOverlays` adds route dots, seed-derived `world_objects` ocean overlays, and pier-atlas dock/bridge cells over the cached map without modifying atlas pixels. `drawLocationIcon` prefers POI `objectId` values from `world_objects` for generated dungeons/landmarks/harbors, then falls back to legacy marker textures or generated art.
 
 Battle rendering is split into helper sections:
 

@@ -1,0 +1,2225 @@
+{
+  "schemaVersion": 1,
+  "id": "world_objects",
+  "sourceImage": "D:\\Projects\\new_artwork\\world_objects_atlas.jpeg",
+  "runtimeImage": "src/assets/world/world_objects.png",
+  "columns": 8,
+  "rows": 8,
+  "tileWidth": 128,
+  "tileHeight": 128,
+  "image": {
+    "width": 1024,
+    "height": 1024,
+    "runtimeFormat": "png",
+    "sourceFormat": "jpeg"
+  },
+  "backgroundRemoval": {
+    "method": "resize-then-edge-floodfill",
+    "tool": "ImageMagick",
+    "sampledBackground": "#F34CE1",
+    "fuzzPercent": 18,
+    "reason": "The source is a full object sheet on a magenta JPG matte. Edge flood-fill removes the connected matte while preserving interior purple portal, crystal, and gem pixels."
+  },
+  "cells": [
+    {
+      "row": 0,
+      "col": 0,
+      "source": {
+        "x": 0,
+        "y": 0,
+        "width": 128,
+        "height": 128
+      },
+      "id": "mossy_cave_entrance",
+      "category": "dungeonEntrance",
+      "tags": [
+        "dungeon",
+        "cave",
+        "entrance"
+      ],
+      "notes": "Mossy cave entrance."
+    },
+    {
+      "row": 0,
+      "col": 1,
+      "source": {
+        "x": 128,
+        "y": 0,
+        "width": 128,
+        "height": 128
+      },
+      "id": "bandit_hideout_door",
+      "category": "dungeonEntrance",
+      "tags": [
+        "dungeon",
+        "door",
+        "hideout"
+      ],
+      "notes": "Bandit hideout door."
+    },
+    {
+      "row": 0,
+      "col": 2,
+      "source": {
+        "x": 256,
+        "y": 0,
+        "width": 128,
+        "height": 128
+      },
+      "id": "jungle_ruins_stairs",
+      "category": "dungeonEntrance",
+      "tags": [
+        "dungeon",
+        "ruins",
+        "stairs"
+      ],
+      "notes": "Jungle ruins stair entrance."
+    },
+    {
+      "row": 0,
+      "col": 3,
+      "source": {
+        "x": 384,
+        "y": 0,
+        "width": 128,
+        "height": 128
+      },
+      "id": "pirate_grotto_entrance",
+      "category": "dungeonEntrance",
+      "tags": [
+        "dungeon",
+        "cave",
+        "pirate"
+      ],
+      "notes": "Pirate grotto entrance."
+    },
+    {
+      "row": 0,
+      "col": 4,
+      "source": {
+        "x": 512,
+        "y": 0,
+        "width": 128,
+        "height": 128
+      },
+      "id": "volcanic_temple_entrance",
+      "category": "dungeonEntrance",
+      "tags": [
+        "dungeon",
+        "volcanic",
+        "temple"
+      ],
+      "notes": "Volcanic temple entrance."
+    },
+    {
+      "row": 0,
+      "col": 5,
+      "source": {
+        "x": 640,
+        "y": 0,
+        "width": 128,
+        "height": 128
+      },
+      "id": "cursed_fortress_gate",
+      "category": "dungeonEntrance",
+      "tags": [
+        "dungeon",
+        "gate",
+        "cursed"
+      ],
+      "notes": "Cursed fortress gate."
+    },
+    {
+      "row": 0,
+      "col": 6,
+      "source": {
+        "x": 768,
+        "y": 0,
+        "width": 128,
+        "height": 128
+      },
+      "id": "ancient_sealed_door",
+      "category": "dungeonEntrance",
+      "tags": [
+        "dungeon",
+        "door",
+        "sealed"
+      ],
+      "notes": "Ancient sealed stone door."
+    },
+    {
+      "row": 0,
+      "col": 7,
+      "source": {
+        "x": 896,
+        "y": 0,
+        "width": 128,
+        "height": 128
+      },
+      "id": "dark_boss_portal",
+      "category": "dungeonEntrance",
+      "tags": [
+        "dungeon",
+        "portal",
+        "boss"
+      ],
+      "notes": "Dark boss portal."
+    },
+    {
+      "row": 1,
+      "col": 0,
+      "source": {
+        "x": 0,
+        "y": 128,
+        "width": 128,
+        "height": 128
+      },
+      "id": "small_broken_ruins",
+      "category": "landmark",
+      "tags": [
+        "ruins",
+        "stone"
+      ],
+      "notes": "Small broken stone ruins."
+    },
+    {
+      "row": 1,
+      "col": 1,
+      "source": {
+        "x": 128,
+        "y": 128,
+        "width": 128,
+        "height": 128
+      },
+      "id": "ruined_archway",
+      "category": "landmark",
+      "tags": [
+        "ruins",
+        "arch"
+      ],
+      "notes": "Ruined archway."
+    },
+    {
+      "row": 1,
+      "col": 2,
+      "source": {
+        "x": 256,
+        "y": 128,
+        "width": 128,
+        "height": 128
+      },
+      "id": "cracked_stone_obelisk",
+      "category": "landmark",
+      "tags": [
+        "obelisk",
+        "stone"
+      ],
+      "notes": "Cracked stone obelisk."
+    },
+    {
+      "row": 1,
+      "col": 3,
+      "source": {
+        "x": 384,
+        "y": 128,
+        "width": 128,
+        "height": 128
+      },
+      "id": "mossy_statue",
+      "category": "landmark",
+      "tags": [
+        "statue",
+        "moss"
+      ],
+      "notes": "Mossy statue."
+    },
+    {
+      "row": 1,
+      "col": 4,
+      "source": {
+        "x": 512,
+        "y": 128,
+        "width": 128,
+        "height": 128
+      },
+      "id": "jungle_idol_shrine",
+      "category": "landmark",
+      "tags": [
+        "shrine",
+        "jungle",
+        "idol"
+      ],
+      "notes": "Jungle idol shrine."
+    },
+    {
+      "row": 1,
+      "col": 5,
+      "source": {
+        "x": 640,
+        "y": 128,
+        "width": 128,
+        "height": 128
+      },
+      "id": "glowing_magic_shrine",
+      "category": "landmark",
+      "tags": [
+        "shrine",
+        "magic"
+      ],
+      "notes": "Glowing magic shrine."
+    },
+    {
+      "row": 1,
+      "col": 6,
+      "source": {
+        "x": 768,
+        "y": 128,
+        "width": 128,
+        "height": 128
+      },
+      "id": "ancient_standing_stones",
+      "category": "landmark",
+      "tags": [
+        "stones",
+        "ancient"
+      ],
+      "notes": "Ancient standing stones."
+    },
+    {
+      "row": 1,
+      "col": 7,
+      "source": {
+        "x": 896,
+        "y": 128,
+        "width": 128,
+        "height": 128
+      },
+      "id": "grave_marker_cluster",
+      "category": "landmark",
+      "tags": [
+        "grave",
+        "stones"
+      ],
+      "notes": "Small grave marker cluster."
+    },
+    {
+      "row": 2,
+      "col": 0,
+      "source": {
+        "x": 0,
+        "y": 256,
+        "width": 128,
+        "height": 128
+      },
+      "id": "closed_treasure_chest",
+      "category": "treasure",
+      "tags": [
+        "chest",
+        "closed"
+      ],
+      "notes": "Closed wooden treasure chest."
+    },
+    {
+      "row": 2,
+      "col": 1,
+      "source": {
+        "x": 128,
+        "y": 256,
+        "width": 128,
+        "height": 128
+      },
+      "id": "open_treasure_chest",
+      "category": "treasure",
+      "tags": [
+        "chest",
+        "open",
+        "gold"
+      ],
+      "notes": "Open treasure chest with gold."
+    },
+    {
+      "row": 2,
+      "col": 2,
+      "source": {
+        "x": 256,
+        "y": 256,
+        "width": 128,
+        "height": 128
+      },
+      "id": "stone_guardian_cache",
+      "category": "treasure",
+      "tags": [
+        "chest",
+        "guardian",
+        "stone"
+      ],
+      "notes": "Stone guardian cache."
+    },
+    {
+      "row": 2,
+      "col": 3,
+      "source": {
+        "x": 384,
+        "y": 256,
+        "width": 128,
+        "height": 128
+      },
+      "id": "supply_crates",
+      "category": "prop",
+      "tags": [
+        "crate",
+        "supplies"
+      ],
+      "notes": "Supply crates."
+    },
+    {
+      "row": 2,
+      "col": 4,
+      "source": {
+        "x": 512,
+        "y": 256,
+        "width": 128,
+        "height": 128
+      },
+      "id": "barrel_stack",
+      "category": "prop",
+      "tags": [
+        "barrel",
+        "supplies"
+      ],
+      "notes": "Barrel stack."
+    },
+    {
+      "row": 2,
+      "col": 5,
+      "source": {
+        "x": 640,
+        "y": 256,
+        "width": 128,
+        "height": 128
+      },
+      "id": "ore_node",
+      "category": "resource",
+      "tags": [
+        "ore",
+        "resource"
+      ],
+      "notes": "Ore resource node."
+    },
+    {
+      "row": 2,
+      "col": 6,
+      "source": {
+        "x": 768,
+        "y": 256,
+        "width": 128,
+        "height": 128
+      },
+      "id": "herb_bush",
+      "category": "resource",
+      "tags": [
+        "herb",
+        "bush"
+      ],
+      "notes": "Herb gathering bush."
+    },
+    {
+      "row": 2,
+      "col": 7,
+      "source": {
+        "x": 896,
+        "y": 256,
+        "width": 128,
+        "height": 128
+      },
+      "id": "fishing_spot",
+      "category": "resource",
+      "tags": [
+        "fishing",
+        "water"
+      ],
+      "notes": "Fishing spot marker."
+    },
+    {
+      "row": 3,
+      "col": 0,
+      "source": {
+        "x": 0,
+        "y": 384,
+        "width": 128,
+        "height": 128
+      },
+      "id": "octopus_cache",
+      "category": "treasure",
+      "tags": [
+        "chest",
+        "sea",
+        "monster"
+      ],
+      "notes": "Octopus sea cache."
+    },
+    {
+      "row": 3,
+      "col": 1,
+      "source": {
+        "x": 128,
+        "y": 384,
+        "width": 128,
+        "height": 128
+      },
+      "id": "coral_cluster_blue",
+      "category": "waterOverlay",
+      "tags": [
+        "coral",
+        "reef",
+        "water"
+      ],
+      "notes": "Blue and purple coral cluster."
+    },
+    {
+      "row": 3,
+      "col": 2,
+      "source": {
+        "x": 256,
+        "y": 384,
+        "width": 128,
+        "height": 128
+      },
+      "id": "jeweled_magic_cache",
+      "category": "treasure",
+      "tags": [
+        "chest",
+        "magic",
+        "gems"
+      ],
+      "notes": "Jeweled magic cache."
+    },
+    {
+      "row": 3,
+      "col": 3,
+      "source": {
+        "x": 384,
+        "y": 384,
+        "width": 128,
+        "height": 128
+      },
+      "id": "mossy_locked_cache",
+      "category": "treasure",
+      "tags": [
+        "chest",
+        "moss",
+        "locked"
+      ],
+      "notes": "Mossy locked cache."
+    },
+    {
+      "row": 3,
+      "col": 4,
+      "source": {
+        "x": 512,
+        "y": 384,
+        "width": 128,
+        "height": 128
+      },
+      "id": "shipwreck_debris",
+      "category": "waterOverlay",
+      "tags": [
+        "shipwreck",
+        "water"
+      ],
+      "notes": "Small shipwreck debris."
+    },
+    {
+      "row": 3,
+      "col": 5,
+      "source": {
+        "x": 640,
+        "y": 384,
+        "width": 128,
+        "height": 128
+      },
+      "id": "broken_mast",
+      "category": "waterOverlay",
+      "tags": [
+        "shipwreck",
+        "mast",
+        "water"
+      ],
+      "notes": "Broken mast sticking from water."
+    },
+    {
+      "row": 3,
+      "col": 6,
+      "source": {
+        "x": 768,
+        "y": 384,
+        "width": 128,
+        "height": 128
+      },
+      "id": "floating_treasure_barrel",
+      "category": "waterOverlay",
+      "tags": [
+        "barrel",
+        "water"
+      ],
+      "notes": "Floating treasure barrel."
+    },
+    {
+      "row": 3,
+      "col": 7,
+      "source": {
+        "x": 896,
+        "y": 384,
+        "width": 128,
+        "height": 128
+      },
+      "id": "whirlpool_swirl",
+      "category": "waterOverlay",
+      "tags": [
+        "whirlpool",
+        "water"
+      ],
+      "notes": "Whirlpool swirl."
+    },
+    {
+      "row": 4,
+      "col": 0,
+      "source": {
+        "x": 0,
+        "y": 512,
+        "width": 128,
+        "height": 128
+      },
+      "id": "harbor_signpost",
+      "category": "harbor",
+      "tags": [
+        "harbor",
+        "sign"
+      ],
+      "notes": "Harbor signpost."
+    },
+    {
+      "row": 4,
+      "col": 1,
+      "source": {
+        "x": 128,
+        "y": 512,
+        "width": 128,
+        "height": 128
+      },
+      "id": "wooden_rowboat",
+      "category": "harbor",
+      "tags": [
+        "boat",
+        "harbor"
+      ],
+      "notes": "Small wooden rowboat."
+    },
+    {
+      "row": 4,
+      "col": 2,
+      "source": {
+        "x": 256,
+        "y": 512,
+        "width": 128,
+        "height": 128
+      },
+      "id": "mooring_post_rope",
+      "category": "harbor",
+      "tags": [
+        "dock",
+        "rope"
+      ],
+      "notes": "Mooring post with rope."
+    },
+    {
+      "row": 4,
+      "col": 3,
+      "source": {
+        "x": 384,
+        "y": 512,
+        "width": 128,
+        "height": 128
+      },
+      "id": "anchor",
+      "category": "harbor",
+      "tags": [
+        "anchor",
+        "harbor"
+      ],
+      "notes": "Anchor."
+    },
+    {
+      "row": 4,
+      "col": 4,
+      "source": {
+        "x": 512,
+        "y": 512,
+        "width": 128,
+        "height": 128
+      },
+      "id": "dock_lantern_post",
+      "category": "harbor",
+      "tags": [
+        "lantern",
+        "dock"
+      ],
+      "notes": "Dock lantern post."
+    },
+    {
+      "row": 4,
+      "col": 5,
+      "source": {
+        "x": 640,
+        "y": 512,
+        "width": 128,
+        "height": 128
+      },
+      "id": "fishing_nets_stack",
+      "category": "harbor",
+      "tags": [
+        "nets",
+        "barrels"
+      ],
+      "notes": "Stacked fishing nets and barrels."
+    },
+    {
+      "row": 4,
+      "col": 6,
+      "source": {
+        "x": 768,
+        "y": 512,
+        "width": 128,
+        "height": 128
+      },
+      "id": "travel_flag_marker",
+      "category": "harbor",
+      "tags": [
+        "flag",
+        "travel"
+      ],
+      "notes": "Travel flag marker."
+    },
+    {
+      "row": 4,
+      "col": 7,
+      "source": {
+        "x": 896,
+        "y": 512,
+        "width": 128,
+        "height": 128
+      },
+      "id": "coastal_market_stall",
+      "category": "merchant",
+      "tags": [
+        "merchant",
+        "market"
+      ],
+      "notes": "Small coastal market stall."
+    },
+    {
+      "row": 5,
+      "col": 0,
+      "source": {
+        "x": 0,
+        "y": 640,
+        "width": 128,
+        "height": 128
+      },
+      "id": "monster_nest",
+      "category": "encounter",
+      "tags": [
+        "monster",
+        "nest"
+      ],
+      "notes": "Monster nest."
+    },
+    {
+      "row": 5,
+      "col": 1,
+      "source": {
+        "x": 128,
+        "y": 640,
+        "width": 128,
+        "height": 128
+      },
+      "id": "campfire_cookpot",
+      "category": "camp",
+      "tags": [
+        "campfire",
+        "camp"
+      ],
+      "notes": "Campfire campsite with cookpot."
+    },
+    {
+      "row": 5,
+      "col": 2,
+      "source": {
+        "x": 256,
+        "y": 640,
+        "width": 128,
+        "height": 128
+      },
+      "id": "secret_merchant_tent",
+      "category": "merchant",
+      "tags": [
+        "merchant",
+        "tent"
+      ],
+      "notes": "Secret merchant tent."
+    },
+    {
+      "row": 5,
+      "col": 3,
+      "source": {
+        "x": 384,
+        "y": 640,
+        "width": 128,
+        "height": 128
+      },
+      "id": "locked_iron_gate",
+      "category": "landmark",
+      "tags": [
+        "gate",
+        "locked"
+      ],
+      "notes": "Locked iron gate."
+    },
+    {
+      "row": 5,
+      "col": 4,
+      "source": {
+        "x": 512,
+        "y": 640,
+        "width": 128,
+        "height": 128
+      },
+      "id": "ancient_key_pedestal",
+      "category": "landmark",
+      "tags": [
+        "key",
+        "pedestal"
+      ],
+      "notes": "Ancient key pedestal."
+    },
+    {
+      "row": 5,
+      "col": 5,
+      "source": {
+        "x": 640,
+        "y": 640,
+        "width": 128,
+        "height": 128
+      },
+      "id": "discovery_sparkle",
+      "category": "effect",
+      "tags": [
+        "sparkle",
+        "discovery"
+      ],
+      "notes": "Glowing discovery sparkle marker."
+    },
+    {
+      "row": 5,
+      "col": 6,
+      "source": {
+        "x": 768,
+        "y": 640,
+        "width": 128,
+        "height": 128
+      },
+      "id": "smoke_plume",
+      "category": "effect",
+      "tags": [
+        "smoke"
+      ],
+      "notes": "Smoke plume marker."
+    },
+    {
+      "row": 5,
+      "col": 7,
+      "source": {
+        "x": 896,
+        "y": 640,
+        "width": 128,
+        "height": 128
+      },
+      "id": "quest_notice_board",
+      "category": "prop",
+      "tags": [
+        "notice",
+        "board"
+      ],
+      "notes": "Quest notice board."
+    },
+    {
+      "row": 6,
+      "col": 0,
+      "source": {
+        "x": 0,
+        "y": 768,
+        "width": 128,
+        "height": 128
+      },
+      "id": "broadleaf_tree",
+      "category": "nature",
+      "tags": [
+        "tree",
+        "forest"
+      ],
+      "notes": "Centered broadleaf tree."
+    },
+    {
+      "row": 6,
+      "col": 1,
+      "source": {
+        "x": 128,
+        "y": 768,
+        "width": 128,
+        "height": 128
+      },
+      "id": "dark_pine_tree",
+      "category": "nature",
+      "tags": [
+        "tree",
+        "pine"
+      ],
+      "notes": "Centered dark pine tree."
+    },
+    {
+      "row": 6,
+      "col": 2,
+      "source": {
+        "x": 256,
+        "y": 768,
+        "width": 128,
+        "height": 128
+      },
+      "id": "palm_tree",
+      "category": "nature",
+      "tags": [
+        "tree",
+        "palm"
+      ],
+      "notes": "Centered palm tree."
+    },
+    {
+      "row": 6,
+      "col": 3,
+      "source": {
+        "x": 384,
+        "y": 768,
+        "width": 128,
+        "height": 128
+      },
+      "id": "dense_jungle_bush",
+      "category": "nature",
+      "tags": [
+        "jungle",
+        "bush"
+      ],
+      "notes": "Dense jungle bush."
+    },
+    {
+      "row": 6,
+      "col": 4,
+      "source": {
+        "x": 512,
+        "y": 768,
+        "width": 128,
+        "height": 128
+      },
+      "id": "thorn_bramble",
+      "category": "nature",
+      "tags": [
+        "thorn",
+        "bramble"
+      ],
+      "notes": "Thorn bramble."
+    },
+    {
+      "row": 6,
+      "col": 5,
+      "source": {
+        "x": 640,
+        "y": 768,
+        "width": 128,
+        "height": 128
+      },
+      "id": "fallen_log",
+      "category": "nature",
+      "tags": [
+        "log"
+      ],
+      "notes": "Fallen log."
+    },
+    {
+      "row": 6,
+      "col": 6,
+      "source": {
+        "x": 768,
+        "y": 768,
+        "width": 128,
+        "height": 128
+      },
+      "id": "giant_mushroom_cluster",
+      "category": "nature",
+      "tags": [
+        "mushroom"
+      ],
+      "notes": "Giant mushroom cluster."
+    },
+    {
+      "row": 6,
+      "col": 7,
+      "source": {
+        "x": 896,
+        "y": 768,
+        "width": 128,
+        "height": 128
+      },
+      "id": "vines_over_stone",
+      "category": "nature",
+      "tags": [
+        "vines",
+        "stone"
+      ],
+      "notes": "Vines over stone."
+    },
+    {
+      "row": 7,
+      "col": 0,
+      "source": {
+        "x": 0,
+        "y": 896,
+        "width": 128,
+        "height": 128
+      },
+      "id": "gray_boulder_pile",
+      "category": "rock",
+      "tags": [
+        "rock",
+        "boulder"
+      ],
+      "notes": "Centered gray boulder pile."
+    },
+    {
+      "row": 7,
+      "col": 1,
+      "source": {
+        "x": 128,
+        "y": 896,
+        "width": 128,
+        "height": 128
+      },
+      "id": "rocky_hill_object",
+      "category": "rock",
+      "tags": [
+        "rock",
+        "hill"
+      ],
+      "notes": "Centered rocky hill object."
+    },
+    {
+      "row": 7,
+      "col": 2,
+      "source": {
+        "x": 256,
+        "y": 896,
+        "width": 128,
+        "height": 128
+      },
+      "id": "small_mountain_peak",
+      "category": "rock",
+      "tags": [
+        "mountain"
+      ],
+      "notes": "Centered small mountain peak."
+    },
+    {
+      "row": 7,
+      "col": 3,
+      "source": {
+        "x": 384,
+        "y": 896,
+        "width": 128,
+        "height": 128
+      },
+      "id": "snowy_mountain_peak",
+      "category": "rock",
+      "tags": [
+        "mountain",
+        "snow"
+      ],
+      "notes": "Centered snowy mountain peak."
+    },
+    {
+      "row": 7,
+      "col": 4,
+      "source": {
+        "x": 512,
+        "y": 896,
+        "width": 128,
+        "height": 128
+      },
+      "id": "volcano_cone",
+      "category": "volcanic",
+      "tags": [
+        "volcano"
+      ],
+      "notes": "Centered volcano cone."
+    },
+    {
+      "row": 7,
+      "col": 5,
+      "source": {
+        "x": 640,
+        "y": 896,
+        "width": 128,
+        "height": 128
+      },
+      "id": "lava_vent_rocks",
+      "category": "volcanic",
+      "tags": [
+        "lava",
+        "vent"
+      ],
+      "notes": "Lava vent rocks."
+    },
+    {
+      "row": 7,
+      "col": 6,
+      "source": {
+        "x": 768,
+        "y": 896,
+        "width": 128,
+        "height": 128
+      },
+      "id": "black_ash_rock_cluster",
+      "category": "volcanic",
+      "tags": [
+        "ash",
+        "rock"
+      ],
+      "notes": "Black ash rock cluster."
+    },
+    {
+      "row": 7,
+      "col": 7,
+      "source": {
+        "x": 896,
+        "y": 896,
+        "width": 128,
+        "height": 128
+      },
+      "id": "cursed_purple_crystal_cluster",
+      "category": "crystal",
+      "tags": [
+        "crystal",
+        "cursed"
+      ],
+      "notes": "Cursed purple crystal cluster."
+    }
+  ],
+  "objects": {
+    "mossy_cave_entrance": {
+      "row": 0,
+      "col": 0,
+      "source": {
+        "x": 0,
+        "y": 0,
+        "width": 128,
+        "height": 128
+      },
+      "id": "mossy_cave_entrance",
+      "category": "dungeonEntrance",
+      "tags": [
+        "dungeon",
+        "cave",
+        "entrance"
+      ],
+      "notes": "Mossy cave entrance."
+    },
+    "bandit_hideout_door": {
+      "row": 0,
+      "col": 1,
+      "source": {
+        "x": 128,
+        "y": 0,
+        "width": 128,
+        "height": 128
+      },
+      "id": "bandit_hideout_door",
+      "category": "dungeonEntrance",
+      "tags": [
+        "dungeon",
+        "door",
+        "hideout"
+      ],
+      "notes": "Bandit hideout door."
+    },
+    "jungle_ruins_stairs": {
+      "row": 0,
+      "col": 2,
+      "source": {
+        "x": 256,
+        "y": 0,
+        "width": 128,
+        "height": 128
+      },
+      "id": "jungle_ruins_stairs",
+      "category": "dungeonEntrance",
+      "tags": [
+        "dungeon",
+        "ruins",
+        "stairs"
+      ],
+      "notes": "Jungle ruins stair entrance."
+    },
+    "pirate_grotto_entrance": {
+      "row": 0,
+      "col": 3,
+      "source": {
+        "x": 384,
+        "y": 0,
+        "width": 128,
+        "height": 128
+      },
+      "id": "pirate_grotto_entrance",
+      "category": "dungeonEntrance",
+      "tags": [
+        "dungeon",
+        "cave",
+        "pirate"
+      ],
+      "notes": "Pirate grotto entrance."
+    },
+    "volcanic_temple_entrance": {
+      "row": 0,
+      "col": 4,
+      "source": {
+        "x": 512,
+        "y": 0,
+        "width": 128,
+        "height": 128
+      },
+      "id": "volcanic_temple_entrance",
+      "category": "dungeonEntrance",
+      "tags": [
+        "dungeon",
+        "volcanic",
+        "temple"
+      ],
+      "notes": "Volcanic temple entrance."
+    },
+    "cursed_fortress_gate": {
+      "row": 0,
+      "col": 5,
+      "source": {
+        "x": 640,
+        "y": 0,
+        "width": 128,
+        "height": 128
+      },
+      "id": "cursed_fortress_gate",
+      "category": "dungeonEntrance",
+      "tags": [
+        "dungeon",
+        "gate",
+        "cursed"
+      ],
+      "notes": "Cursed fortress gate."
+    },
+    "ancient_sealed_door": {
+      "row": 0,
+      "col": 6,
+      "source": {
+        "x": 768,
+        "y": 0,
+        "width": 128,
+        "height": 128
+      },
+      "id": "ancient_sealed_door",
+      "category": "dungeonEntrance",
+      "tags": [
+        "dungeon",
+        "door",
+        "sealed"
+      ],
+      "notes": "Ancient sealed stone door."
+    },
+    "dark_boss_portal": {
+      "row": 0,
+      "col": 7,
+      "source": {
+        "x": 896,
+        "y": 0,
+        "width": 128,
+        "height": 128
+      },
+      "id": "dark_boss_portal",
+      "category": "dungeonEntrance",
+      "tags": [
+        "dungeon",
+        "portal",
+        "boss"
+      ],
+      "notes": "Dark boss portal."
+    },
+    "small_broken_ruins": {
+      "row": 1,
+      "col": 0,
+      "source": {
+        "x": 0,
+        "y": 128,
+        "width": 128,
+        "height": 128
+      },
+      "id": "small_broken_ruins",
+      "category": "landmark",
+      "tags": [
+        "ruins",
+        "stone"
+      ],
+      "notes": "Small broken stone ruins."
+    },
+    "ruined_archway": {
+      "row": 1,
+      "col": 1,
+      "source": {
+        "x": 128,
+        "y": 128,
+        "width": 128,
+        "height": 128
+      },
+      "id": "ruined_archway",
+      "category": "landmark",
+      "tags": [
+        "ruins",
+        "arch"
+      ],
+      "notes": "Ruined archway."
+    },
+    "cracked_stone_obelisk": {
+      "row": 1,
+      "col": 2,
+      "source": {
+        "x": 256,
+        "y": 128,
+        "width": 128,
+        "height": 128
+      },
+      "id": "cracked_stone_obelisk",
+      "category": "landmark",
+      "tags": [
+        "obelisk",
+        "stone"
+      ],
+      "notes": "Cracked stone obelisk."
+    },
+    "mossy_statue": {
+      "row": 1,
+      "col": 3,
+      "source": {
+        "x": 384,
+        "y": 128,
+        "width": 128,
+        "height": 128
+      },
+      "id": "mossy_statue",
+      "category": "landmark",
+      "tags": [
+        "statue",
+        "moss"
+      ],
+      "notes": "Mossy statue."
+    },
+    "jungle_idol_shrine": {
+      "row": 1,
+      "col": 4,
+      "source": {
+        "x": 512,
+        "y": 128,
+        "width": 128,
+        "height": 128
+      },
+      "id": "jungle_idol_shrine",
+      "category": "landmark",
+      "tags": [
+        "shrine",
+        "jungle",
+        "idol"
+      ],
+      "notes": "Jungle idol shrine."
+    },
+    "glowing_magic_shrine": {
+      "row": 1,
+      "col": 5,
+      "source": {
+        "x": 640,
+        "y": 128,
+        "width": 128,
+        "height": 128
+      },
+      "id": "glowing_magic_shrine",
+      "category": "landmark",
+      "tags": [
+        "shrine",
+        "magic"
+      ],
+      "notes": "Glowing magic shrine."
+    },
+    "ancient_standing_stones": {
+      "row": 1,
+      "col": 6,
+      "source": {
+        "x": 768,
+        "y": 128,
+        "width": 128,
+        "height": 128
+      },
+      "id": "ancient_standing_stones",
+      "category": "landmark",
+      "tags": [
+        "stones",
+        "ancient"
+      ],
+      "notes": "Ancient standing stones."
+    },
+    "grave_marker_cluster": {
+      "row": 1,
+      "col": 7,
+      "source": {
+        "x": 896,
+        "y": 128,
+        "width": 128,
+        "height": 128
+      },
+      "id": "grave_marker_cluster",
+      "category": "landmark",
+      "tags": [
+        "grave",
+        "stones"
+      ],
+      "notes": "Small grave marker cluster."
+    },
+    "closed_treasure_chest": {
+      "row": 2,
+      "col": 0,
+      "source": {
+        "x": 0,
+        "y": 256,
+        "width": 128,
+        "height": 128
+      },
+      "id": "closed_treasure_chest",
+      "category": "treasure",
+      "tags": [
+        "chest",
+        "closed"
+      ],
+      "notes": "Closed wooden treasure chest."
+    },
+    "open_treasure_chest": {
+      "row": 2,
+      "col": 1,
+      "source": {
+        "x": 128,
+        "y": 256,
+        "width": 128,
+        "height": 128
+      },
+      "id": "open_treasure_chest",
+      "category": "treasure",
+      "tags": [
+        "chest",
+        "open",
+        "gold"
+      ],
+      "notes": "Open treasure chest with gold."
+    },
+    "stone_guardian_cache": {
+      "row": 2,
+      "col": 2,
+      "source": {
+        "x": 256,
+        "y": 256,
+        "width": 128,
+        "height": 128
+      },
+      "id": "stone_guardian_cache",
+      "category": "treasure",
+      "tags": [
+        "chest",
+        "guardian",
+        "stone"
+      ],
+      "notes": "Stone guardian cache."
+    },
+    "supply_crates": {
+      "row": 2,
+      "col": 3,
+      "source": {
+        "x": 384,
+        "y": 256,
+        "width": 128,
+        "height": 128
+      },
+      "id": "supply_crates",
+      "category": "prop",
+      "tags": [
+        "crate",
+        "supplies"
+      ],
+      "notes": "Supply crates."
+    },
+    "barrel_stack": {
+      "row": 2,
+      "col": 4,
+      "source": {
+        "x": 512,
+        "y": 256,
+        "width": 128,
+        "height": 128
+      },
+      "id": "barrel_stack",
+      "category": "prop",
+      "tags": [
+        "barrel",
+        "supplies"
+      ],
+      "notes": "Barrel stack."
+    },
+    "ore_node": {
+      "row": 2,
+      "col": 5,
+      "source": {
+        "x": 640,
+        "y": 256,
+        "width": 128,
+        "height": 128
+      },
+      "id": "ore_node",
+      "category": "resource",
+      "tags": [
+        "ore",
+        "resource"
+      ],
+      "notes": "Ore resource node."
+    },
+    "herb_bush": {
+      "row": 2,
+      "col": 6,
+      "source": {
+        "x": 768,
+        "y": 256,
+        "width": 128,
+        "height": 128
+      },
+      "id": "herb_bush",
+      "category": "resource",
+      "tags": [
+        "herb",
+        "bush"
+      ],
+      "notes": "Herb gathering bush."
+    },
+    "fishing_spot": {
+      "row": 2,
+      "col": 7,
+      "source": {
+        "x": 896,
+        "y": 256,
+        "width": 128,
+        "height": 128
+      },
+      "id": "fishing_spot",
+      "category": "resource",
+      "tags": [
+        "fishing",
+        "water"
+      ],
+      "notes": "Fishing spot marker."
+    },
+    "octopus_cache": {
+      "row": 3,
+      "col": 0,
+      "source": {
+        "x": 0,
+        "y": 384,
+        "width": 128,
+        "height": 128
+      },
+      "id": "octopus_cache",
+      "category": "treasure",
+      "tags": [
+        "chest",
+        "sea",
+        "monster"
+      ],
+      "notes": "Octopus sea cache."
+    },
+    "coral_cluster_blue": {
+      "row": 3,
+      "col": 1,
+      "source": {
+        "x": 128,
+        "y": 384,
+        "width": 128,
+        "height": 128
+      },
+      "id": "coral_cluster_blue",
+      "category": "waterOverlay",
+      "tags": [
+        "coral",
+        "reef",
+        "water"
+      ],
+      "notes": "Blue and purple coral cluster."
+    },
+    "jeweled_magic_cache": {
+      "row": 3,
+      "col": 2,
+      "source": {
+        "x": 256,
+        "y": 384,
+        "width": 128,
+        "height": 128
+      },
+      "id": "jeweled_magic_cache",
+      "category": "treasure",
+      "tags": [
+        "chest",
+        "magic",
+        "gems"
+      ],
+      "notes": "Jeweled magic cache."
+    },
+    "mossy_locked_cache": {
+      "row": 3,
+      "col": 3,
+      "source": {
+        "x": 384,
+        "y": 384,
+        "width": 128,
+        "height": 128
+      },
+      "id": "mossy_locked_cache",
+      "category": "treasure",
+      "tags": [
+        "chest",
+        "moss",
+        "locked"
+      ],
+      "notes": "Mossy locked cache."
+    },
+    "shipwreck_debris": {
+      "row": 3,
+      "col": 4,
+      "source": {
+        "x": 512,
+        "y": 384,
+        "width": 128,
+        "height": 128
+      },
+      "id": "shipwreck_debris",
+      "category": "waterOverlay",
+      "tags": [
+        "shipwreck",
+        "water"
+      ],
+      "notes": "Small shipwreck debris."
+    },
+    "broken_mast": {
+      "row": 3,
+      "col": 5,
+      "source": {
+        "x": 640,
+        "y": 384,
+        "width": 128,
+        "height": 128
+      },
+      "id": "broken_mast",
+      "category": "waterOverlay",
+      "tags": [
+        "shipwreck",
+        "mast",
+        "water"
+      ],
+      "notes": "Broken mast sticking from water."
+    },
+    "floating_treasure_barrel": {
+      "row": 3,
+      "col": 6,
+      "source": {
+        "x": 768,
+        "y": 384,
+        "width": 128,
+        "height": 128
+      },
+      "id": "floating_treasure_barrel",
+      "category": "waterOverlay",
+      "tags": [
+        "barrel",
+        "water"
+      ],
+      "notes": "Floating treasure barrel."
+    },
+    "whirlpool_swirl": {
+      "row": 3,
+      "col": 7,
+      "source": {
+        "x": 896,
+        "y": 384,
+        "width": 128,
+        "height": 128
+      },
+      "id": "whirlpool_swirl",
+      "category": "waterOverlay",
+      "tags": [
+        "whirlpool",
+        "water"
+      ],
+      "notes": "Whirlpool swirl."
+    },
+    "harbor_signpost": {
+      "row": 4,
+      "col": 0,
+      "source": {
+        "x": 0,
+        "y": 512,
+        "width": 128,
+        "height": 128
+      },
+      "id": "harbor_signpost",
+      "category": "harbor",
+      "tags": [
+        "harbor",
+        "sign"
+      ],
+      "notes": "Harbor signpost."
+    },
+    "wooden_rowboat": {
+      "row": 4,
+      "col": 1,
+      "source": {
+        "x": 128,
+        "y": 512,
+        "width": 128,
+        "height": 128
+      },
+      "id": "wooden_rowboat",
+      "category": "harbor",
+      "tags": [
+        "boat",
+        "harbor"
+      ],
+      "notes": "Small wooden rowboat."
+    },
+    "mooring_post_rope": {
+      "row": 4,
+      "col": 2,
+      "source": {
+        "x": 256,
+        "y": 512,
+        "width": 128,
+        "height": 128
+      },
+      "id": "mooring_post_rope",
+      "category": "harbor",
+      "tags": [
+        "dock",
+        "rope"
+      ],
+      "notes": "Mooring post with rope."
+    },
+    "anchor": {
+      "row": 4,
+      "col": 3,
+      "source": {
+        "x": 384,
+        "y": 512,
+        "width": 128,
+        "height": 128
+      },
+      "id": "anchor",
+      "category": "harbor",
+      "tags": [
+        "anchor",
+        "harbor"
+      ],
+      "notes": "Anchor."
+    },
+    "dock_lantern_post": {
+      "row": 4,
+      "col": 4,
+      "source": {
+        "x": 512,
+        "y": 512,
+        "width": 128,
+        "height": 128
+      },
+      "id": "dock_lantern_post",
+      "category": "harbor",
+      "tags": [
+        "lantern",
+        "dock"
+      ],
+      "notes": "Dock lantern post."
+    },
+    "fishing_nets_stack": {
+      "row": 4,
+      "col": 5,
+      "source": {
+        "x": 640,
+        "y": 512,
+        "width": 128,
+        "height": 128
+      },
+      "id": "fishing_nets_stack",
+      "category": "harbor",
+      "tags": [
+        "nets",
+        "barrels"
+      ],
+      "notes": "Stacked fishing nets and barrels."
+    },
+    "travel_flag_marker": {
+      "row": 4,
+      "col": 6,
+      "source": {
+        "x": 768,
+        "y": 512,
+        "width": 128,
+        "height": 128
+      },
+      "id": "travel_flag_marker",
+      "category": "harbor",
+      "tags": [
+        "flag",
+        "travel"
+      ],
+      "notes": "Travel flag marker."
+    },
+    "coastal_market_stall": {
+      "row": 4,
+      "col": 7,
+      "source": {
+        "x": 896,
+        "y": 512,
+        "width": 128,
+        "height": 128
+      },
+      "id": "coastal_market_stall",
+      "category": "merchant",
+      "tags": [
+        "merchant",
+        "market"
+      ],
+      "notes": "Small coastal market stall."
+    },
+    "monster_nest": {
+      "row": 5,
+      "col": 0,
+      "source": {
+        "x": 0,
+        "y": 640,
+        "width": 128,
+        "height": 128
+      },
+      "id": "monster_nest",
+      "category": "encounter",
+      "tags": [
+        "monster",
+        "nest"
+      ],
+      "notes": "Monster nest."
+    },
+    "campfire_cookpot": {
+      "row": 5,
+      "col": 1,
+      "source": {
+        "x": 128,
+        "y": 640,
+        "width": 128,
+        "height": 128
+      },
+      "id": "campfire_cookpot",
+      "category": "camp",
+      "tags": [
+        "campfire",
+        "camp"
+      ],
+      "notes": "Campfire campsite with cookpot."
+    },
+    "secret_merchant_tent": {
+      "row": 5,
+      "col": 2,
+      "source": {
+        "x": 256,
+        "y": 640,
+        "width": 128,
+        "height": 128
+      },
+      "id": "secret_merchant_tent",
+      "category": "merchant",
+      "tags": [
+        "merchant",
+        "tent"
+      ],
+      "notes": "Secret merchant tent."
+    },
+    "locked_iron_gate": {
+      "row": 5,
+      "col": 3,
+      "source": {
+        "x": 384,
+        "y": 640,
+        "width": 128,
+        "height": 128
+      },
+      "id": "locked_iron_gate",
+      "category": "landmark",
+      "tags": [
+        "gate",
+        "locked"
+      ],
+      "notes": "Locked iron gate."
+    },
+    "ancient_key_pedestal": {
+      "row": 5,
+      "col": 4,
+      "source": {
+        "x": 512,
+        "y": 640,
+        "width": 128,
+        "height": 128
+      },
+      "id": "ancient_key_pedestal",
+      "category": "landmark",
+      "tags": [
+        "key",
+        "pedestal"
+      ],
+      "notes": "Ancient key pedestal."
+    },
+    "discovery_sparkle": {
+      "row": 5,
+      "col": 5,
+      "source": {
+        "x": 640,
+        "y": 640,
+        "width": 128,
+        "height": 128
+      },
+      "id": "discovery_sparkle",
+      "category": "effect",
+      "tags": [
+        "sparkle",
+        "discovery"
+      ],
+      "notes": "Glowing discovery sparkle marker."
+    },
+    "smoke_plume": {
+      "row": 5,
+      "col": 6,
+      "source": {
+        "x": 768,
+        "y": 640,
+        "width": 128,
+        "height": 128
+      },
+      "id": "smoke_plume",
+      "category": "effect",
+      "tags": [
+        "smoke"
+      ],
+      "notes": "Smoke plume marker."
+    },
+    "quest_notice_board": {
+      "row": 5,
+      "col": 7,
+      "source": {
+        "x": 896,
+        "y": 640,
+        "width": 128,
+        "height": 128
+      },
+      "id": "quest_notice_board",
+      "category": "prop",
+      "tags": [
+        "notice",
+        "board"
+      ],
+      "notes": "Quest notice board."
+    },
+    "broadleaf_tree": {
+      "row": 6,
+      "col": 0,
+      "source": {
+        "x": 0,
+        "y": 768,
+        "width": 128,
+        "height": 128
+      },
+      "id": "broadleaf_tree",
+      "category": "nature",
+      "tags": [
+        "tree",
+        "forest"
+      ],
+      "notes": "Centered broadleaf tree."
+    },
+    "dark_pine_tree": {
+      "row": 6,
+      "col": 1,
+      "source": {
+        "x": 128,
+        "y": 768,
+        "width": 128,
+        "height": 128
+      },
+      "id": "dark_pine_tree",
+      "category": "nature",
+      "tags": [
+        "tree",
+        "pine"
+      ],
+      "notes": "Centered dark pine tree."
+    },
+    "palm_tree": {
+      "row": 6,
+      "col": 2,
+      "source": {
+        "x": 256,
+        "y": 768,
+        "width": 128,
+        "height": 128
+      },
+      "id": "palm_tree",
+      "category": "nature",
+      "tags": [
+        "tree",
+        "palm"
+      ],
+      "notes": "Centered palm tree."
+    },
+    "dense_jungle_bush": {
+      "row": 6,
+      "col": 3,
+      "source": {
+        "x": 384,
+        "y": 768,
+        "width": 128,
+        "height": 128
+      },
+      "id": "dense_jungle_bush",
+      "category": "nature",
+      "tags": [
+        "jungle",
+        "bush"
+      ],
+      "notes": "Dense jungle bush."
+    },
+    "thorn_bramble": {
+      "row": 6,
+      "col": 4,
+      "source": {
+        "x": 512,
+        "y": 768,
+        "width": 128,
+        "height": 128
+      },
+      "id": "thorn_bramble",
+      "category": "nature",
+      "tags": [
+        "thorn",
+        "bramble"
+      ],
+      "notes": "Thorn bramble."
+    },
+    "fallen_log": {
+      "row": 6,
+      "col": 5,
+      "source": {
+        "x": 640,
+        "y": 768,
+        "width": 128,
+        "height": 128
+      },
+      "id": "fallen_log",
+      "category": "nature",
+      "tags": [
+        "log"
+      ],
+      "notes": "Fallen log."
+    },
+    "giant_mushroom_cluster": {
+      "row": 6,
+      "col": 6,
+      "source": {
+        "x": 768,
+        "y": 768,
+        "width": 128,
+        "height": 128
+      },
+      "id": "giant_mushroom_cluster",
+      "category": "nature",
+      "tags": [
+        "mushroom"
+      ],
+      "notes": "Giant mushroom cluster."
+    },
+    "vines_over_stone": {
+      "row": 6,
+      "col": 7,
+      "source": {
+        "x": 896,
+        "y": 768,
+        "width": 128,
+        "height": 128
+      },
+      "id": "vines_over_stone",
+      "category": "nature",
+      "tags": [
+        "vines",
+        "stone"
+      ],
+      "notes": "Vines over stone."
+    },
+    "gray_boulder_pile": {
+      "row": 7,
+      "col": 0,
+      "source": {
+        "x": 0,
+        "y": 896,
+        "width": 128,
+        "height": 128
+      },
+      "id": "gray_boulder_pile",
+      "category": "rock",
+      "tags": [
+        "rock",
+        "boulder"
+      ],
+      "notes": "Centered gray boulder pile."
+    },
+    "rocky_hill_object": {
+      "row": 7,
+      "col": 1,
+      "source": {
+        "x": 128,
+        "y": 896,
+        "width": 128,
+        "height": 128
+      },
+      "id": "rocky_hill_object",
+      "category": "rock",
+      "tags": [
+        "rock",
+        "hill"
+      ],
+      "notes": "Centered rocky hill object."
+    },
+    "small_mountain_peak": {
+      "row": 7,
+      "col": 2,
+      "source": {
+        "x": 256,
+        "y": 896,
+        "width": 128,
+        "height": 128
+      },
+      "id": "small_mountain_peak",
+      "category": "rock",
+      "tags": [
+        "mountain"
+      ],
+      "notes": "Centered small mountain peak."
+    },
+    "snowy_mountain_peak": {
+      "row": 7,
+      "col": 3,
+      "source": {
+        "x": 384,
+        "y": 896,
+        "width": 128,
+        "height": 128
+      },
+      "id": "snowy_mountain_peak",
+      "category": "rock",
+      "tags": [
+        "mountain",
+        "snow"
+      ],
+      "notes": "Centered snowy mountain peak."
+    },
+    "volcano_cone": {
+      "row": 7,
+      "col": 4,
+      "source": {
+        "x": 512,
+        "y": 896,
+        "width": 128,
+        "height": 128
+      },
+      "id": "volcano_cone",
+      "category": "volcanic",
+      "tags": [
+        "volcano"
+      ],
+      "notes": "Centered volcano cone."
+    },
+    "lava_vent_rocks": {
+      "row": 7,
+      "col": 5,
+      "source": {
+        "x": 640,
+        "y": 896,
+        "width": 128,
+        "height": 128
+      },
+      "id": "lava_vent_rocks",
+      "category": "volcanic",
+      "tags": [
+        "lava",
+        "vent"
+      ],
+      "notes": "Lava vent rocks."
+    },
+    "black_ash_rock_cluster": {
+      "row": 7,
+      "col": 6,
+      "source": {
+        "x": 768,
+        "y": 896,
+        "width": 128,
+        "height": 128
+      },
+      "id": "black_ash_rock_cluster",
+      "category": "volcanic",
+      "tags": [
+        "ash",
+        "rock"
+      ],
+      "notes": "Black ash rock cluster."
+    },
+    "cursed_purple_crystal_cluster": {
+      "row": 7,
+      "col": 7,
+      "source": {
+        "x": 896,
+        "y": 896,
+        "width": 128,
+        "height": 128
+      },
+      "id": "cursed_purple_crystal_cluster",
+      "category": "crystal",
+      "tags": [
+        "crystal",
+        "cursed"
+      ],
+      "notes": "Cursed purple crystal cluster."
+    }
+  }
+}

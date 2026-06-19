@@ -2,7 +2,14 @@ import Phaser from "phaser";
 import { CHARACTER_SPRITES, type CharacterSpriteClass, type CharacterSpriteFrameName } from "./data/characterSprites";
 import atlasV3ImageUrl from "./assets/world/atlas_v3.png";
 import pierAtlasImageUrl from "./assets/world/pier_atlas.png";
+import worldObjectsImageUrl from "./assets/world/world_objects.png";
 import atlasV3Manifest from "./assets/world/atlasV3.manifest.json" with { type: "json" };
+import {
+  WORLD_OBJECT_ATLAS,
+  WORLD_OBJECTS,
+  worldObjectById,
+  type WorldObjectId
+} from "./data/worldObjects.ts";
 import {
   ATLAS_V3_SOURCE_INSET,
   WORLD_ATLAS,
@@ -220,6 +227,7 @@ interface LocationDef {
   kind: WorldPoiKind;
   islandId?: IslandId;
   landmarkKind?: WorldLandmarkKind;
+  objectId?: WorldObjectId;
   difficultyTier?: number;
   x: number;
   y: number;
@@ -360,6 +368,7 @@ const TOWN_SERVICES: TownServiceDef[] = [
 const ASSET_PATHS = [
   ["atlas_v3", "world/atlas_v3.png"],
   ["pier_atlas", "world/pier_atlas.png"],
+  ["world_objects", "world/world_objects.png"],
   ["tile_plains", "tiles/world/plains.png"],
   ["tile_forest", "tiles/world/forest.png"],
   ["tile_hills", "tiles/world/hills.png"],
@@ -567,7 +576,8 @@ const ASSET_V2_PATH_OVERRIDES: Partial<Record<AssetKey, string>> = {
 
 const EXPLICIT_ASSET_URLS: Partial<Record<AssetKey, string>> = {
   atlas_v3: atlasV3ImageUrl,
-  pier_atlas: pierAtlasImageUrl
+  pier_atlas: pierAtlasImageUrl,
+  world_objects: worldObjectsImageUrl
 };
 
 const ASSET_URLS = Object.fromEntries(
@@ -1406,7 +1416,9 @@ class CrystalOathScene extends Phaser.Scene {
         "Terrain cache postprocess: disabled",
         `Image: ${WORLD_ATLAS.image}`,
         `Manifest: ${WORLD_ATLAS.manifest}`,
-        `Manifest entries: ${Object.keys(atlasV3Manifest.tiles ?? {}).length} non-empty tiles`
+        `Manifest entries: ${Object.keys(atlasV3Manifest.tiles ?? {}).length} non-empty tiles`,
+        `Object overlay atlas: ${WORLD_OBJECT_ATLAS.image}`,
+        `Object overlay entries: ${Object.keys(WORLD_OBJECTS).length}`
       ].join("\n")
     );
   }
@@ -1767,6 +1779,7 @@ class CrystalOathScene extends Phaser.Scene {
       kind: poi.kind,
       islandId: poi.islandId,
       landmarkKind: poi.landmarkKind,
+      objectId: poi.objectId,
       difficultyTier: poi.difficultyTier,
       x: poi.x,
       y: poi.y,
@@ -5036,12 +5049,22 @@ Statuses: ${statuses}`;
         this.g.fillStyle(0xfff0a8, 0.62).fillCircle(sx + TILE / 2, sy + TILE / 2, 3);
       });
     }
-    for (const reef of this.generatedWorld.reefs) {
-      if (!inView(reef)) continue;
-      const sx = reef.x * TILE - tileCam.x;
-      const sy = reef.y * TILE - tileCam.y;
-      this.g.fillStyle(0xd8d0a0, 0.85).fillTriangle(sx + 8, sy + 23, sx + 14, sy + 12, sx + 20, sy + 23);
-      this.g.fillStyle(0x6c7c8a, 0.8).fillRect(sx + 19, sy + 19, 6, 4);
+    const hasObjectAtlas = this.hasTexture(WORLD_OBJECT_ATLAS.textureKey);
+    for (const overlay of this.generatedWorld.objectOverlays) {
+      if (!inView(overlay)) continue;
+      const displaySize = TILE * overlay.scale;
+      const sx = overlay.x * TILE - tileCam.x + TILE / 2 - displaySize / 2;
+      const sy = overlay.y * TILE - tileCam.y + TILE / 2 - displaySize / 2;
+      this.drawWorldObjectCell(overlay.objectId, sx, sy, displaySize, displaySize, 0.92);
+    }
+    if (!hasObjectAtlas) {
+      for (const reef of this.generatedWorld.reefs) {
+        if (!inView(reef)) continue;
+        const sx = reef.x * TILE - tileCam.x;
+        const sy = reef.y * TILE - tileCam.y;
+        this.g.fillStyle(0xd8d0a0, 0.85).fillTriangle(sx + 8, sy + 23, sx + 14, sy + 12, sx + 20, sy + 23);
+        this.g.fillStyle(0x6c7c8a, 0.8).fillRect(sx + 19, sy + 19, 6, 4);
+      }
     }
     for (const bridge of this.generatedWorld.bridges) {
       if (!inView(bridge)) continue;
@@ -5053,6 +5076,26 @@ Statuses: ${statuses}`;
       this.g.fillStyle(color, 0.95).fillRect(sx + 7, sy + 12, TILE - 14, 8);
       this.g.lineStyle(1, 0xffefbd, 0.65).lineBetween(sx + 8, sy + 16, sx + TILE - 8, sy + 16);
     }
+  }
+
+  private drawWorldObjectCell(objectId: WorldObjectId | undefined, sx: number, sy: number, width: number, height: number, alpha = 1): boolean {
+    if (!objectId || !this.hasTexture(WORLD_OBJECT_ATLAS.textureKey)) return false;
+    const object = worldObjectById(objectId);
+    if (!object) return false;
+    this.drawCroppedTexture(
+      WORLD_OBJECT_ATLAS.textureKey,
+      sx,
+      sy,
+      object.source.x,
+      object.source.y,
+      object.source.width,
+      object.source.height,
+      width,
+      height,
+      LAYER_OBJECT_IMAGE,
+      alpha
+    );
+    return true;
   }
 
   private drawPierDockTile(bridge: { orientation: "horizontal" | "vertical"; material: "wood" | "stone" }, sx: number, sy: number): boolean {
@@ -5369,6 +5412,7 @@ Statuses: ${statuses}`;
     const cx = sx + size / 2;
     const bottom = sy + size - 8;
     this.drawActorShadow(cx, bottom, size * 0.72, 18);
+    if (this.drawWorldObjectCell(loc.objectId, sx, sy - 4, size, size)) return;
     const locationTexture = LOCATION_TEXTURES[loc.id] ?? this.locationTextureForKind(loc);
     if (locationTexture && this.hasTexture(locationTexture)) {
       this.drawTexture(locationTexture, sx, sy - 4, size, size, LAYER_OBJECT_IMAGE);

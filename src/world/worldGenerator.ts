@@ -9,6 +9,7 @@ import {
   type WorldEncounterFamily,
   type WorldTileId
 } from "../data/worldTiles.ts";
+import { WORLD_OBJECT_IDS, type WorldObjectId } from "../data/worldObjects.ts";
 import { createSeededRng, fbm, hashNoise, type SeededRng } from "./seededRng.ts";
 
 export const DEFAULT_WORLD_WIDTH = 96;
@@ -43,7 +44,14 @@ export interface WorldPoi {
   y: number;
   footprint: number;
   landmarkKind?: WorldLandmarkKind;
+  objectId?: WorldObjectId;
   difficultyTier: number;
+}
+
+export interface WorldObjectOverlay extends WorldVec {
+  id: string;
+  objectId: WorldObjectId;
+  scale: number;
 }
 
 export interface WorldEntryTrigger {
@@ -91,6 +99,7 @@ export interface GeneratedWorld {
   roads: WorldVec[];
   rivers: WorldVec[][];
   bridges: WorldBridge[];
+  objectOverlays: WorldObjectOverlay[];
   shallows: WorldVec[];
   reefs: WorldVec[];
   seaRoutes: WorldVec[][];
@@ -327,7 +336,7 @@ export function buildWorldDebugReport(world: GeneratedWorld): string {
     )
     .join("\n");
   const poiLines = world.pois
-    .map((poi) => `- ${poi.name} (${poi.id}, ${poi.kind}${poi.landmarkKind ? `/${poi.landmarkKind}` : ""}) on ${poi.islandId} at ${poi.x},${poi.y}`)
+    .map((poi) => `- ${poi.name} (${poi.id}, ${poi.kind}${poi.landmarkKind ? `/${poi.landmarkKind}` : ""}${poi.objectId ? `, object ${poi.objectId}` : ""}) on ${poi.islandId} at ${poi.x},${poi.y}`)
     .join("\n");
   const biomeLines = Object.entries(world.validation.biomeCounts)
     .sort(([a], [b]) => a.localeCompare(b))
@@ -349,6 +358,7 @@ Island count: ${world.islands.length}
 Road tiles carved: ${world.roads.length}
 Shallow-water tiles tracked: ${world.shallows.length}
 Reef/detail tiles tracked: ${world.reefs.length}
+Object overlays: ${world.objectOverlays.length}
 Sea route count: ${world.seaRoutes.length}
 Bridge/dock count: ${world.bridges.length}
 
@@ -402,6 +412,7 @@ function generateWorldAttempt(seed: string, width: number, height: number): Gene
 
   const shallows = markShallowWater(tiles, biomes);
   const reefs = decorateOcean(seed, tiles, pois, shallows, rng.fork("ocean-details"));
+  const objectOverlays = buildWorldObjectOverlays(seed, reefs);
   const seaRoutes = buildSeaRoutes(pois);
   const islands = buildGeneratedIslands(tiles, states, pois);
   const dawnford = pois.find((poi) => poi.id === "dawnford") ?? pois[0];
@@ -421,6 +432,7 @@ function generateWorldAttempt(seed: string, width: number, height: number): Gene
     roads,
     rivers: [],
     bridges,
+    objectOverlays,
     shallows,
     reefs,
     seaRoutes,
@@ -563,7 +575,8 @@ function placeIslandPois(
         : farthestValidTile(tiles, islandByTile, template.id, placed.map((poi) => ({ x: poi.x, y: poi.y })), placed, 3);
     placed.push({
       ...makePoi(`${template.id}-${kind}-${i}`, landmarkName(kind, template.name), "landmark", template, target, 3),
-      landmarkKind: kind
+      landmarkKind: kind,
+      objectId: landmarkObjectForKind(kind, template.id, i)
     });
   }
 
@@ -571,7 +584,46 @@ function placeIslandPois(
 }
 
 function makePoi(id: string, name: string, kind: WorldPoiKind, template: IslandTemplate, pos: WorldVec, footprint: number): WorldPoi {
-  return { id, name, kind, islandId: template.id, x: pos.x, y: pos.y, footprint, difficultyTier: template.difficultyTier };
+  const objectId = poiObjectForId(id, kind);
+  return {
+    id,
+    name,
+    kind,
+    islandId: template.id,
+    x: pos.x,
+    y: pos.y,
+    footprint,
+    difficultyTier: template.difficultyTier,
+    ...(objectId ? { objectId } : {})
+  };
+}
+
+function poiObjectForId(id: string, kind: WorldPoiKind): WorldObjectId | undefined {
+  if (kind === "town") return undefined;
+  if (kind === "harbor") return WORLD_OBJECT_IDS.harborSignpost;
+  if (id === "mossCave") return WORLD_OBJECT_IDS.mossyCaveEntrance;
+  if (id === "tideShrine") return WORLD_OBJECT_IDS.jungleRuinsStairs;
+  if (id === "ashenKeep") return WORLD_OBJECT_IDS.volcanicTempleEntrance;
+  if (id === "skyglassTower") return WORLD_OBJECT_IDS.ancientStandingStones;
+  if (id === "starfallGate") return WORLD_OBJECT_IDS.ancientSealedDoor;
+  if (id === "eclipseSpire") return WORLD_OBJECT_IDS.darkBossPortal;
+  if (kind === "gate") return WORLD_OBJECT_IDS.ancientSealedDoor;
+  if (kind === "final") return WORLD_OBJECT_IDS.darkBossPortal;
+  if (kind === "dungeon") return WORLD_OBJECT_IDS.mossyCaveEntrance;
+  return undefined;
+}
+
+function landmarkObjectForKind(kind: WorldLandmarkKind, islandId: IslandId, index: number): WorldObjectId {
+  if (kind === "shipwreck") return index % 2 === 0 ? WORLD_OBJECT_IDS.shipwreckDebris : WORLD_OBJECT_IDS.brokenMast;
+  if (kind === "shrine") return islandId === "coralreach" ? WORLD_OBJECT_IDS.jungleIdolShrine : WORLD_OBJECT_IDS.glowingMagicShrine;
+  if (kind === "hiddenChest") return WORLD_OBJECT_IDS.mossyLockedCache;
+  if (kind === "monsterNest") return WORLD_OBJECT_IDS.monsterNest;
+  if (kind === "ruins") return index % 2 === 0 ? WORLD_OBJECT_IDS.ruinedArchway : WORLD_OBJECT_IDS.smallBrokenRuins;
+  if (kind === "cave") return WORLD_OBJECT_IDS.pirateGrottoEntrance;
+  if (kind === "resourceNode") return islandId === "ashfang" ? WORLD_OBJECT_IDS.blackAshRockCluster : WORLD_OBJECT_IDS.oreNode;
+  if (kind === "secretMerchant") return WORLD_OBJECT_IDS.secretMerchantTent;
+  if (kind === "ancientDoor") return WORLD_OBJECT_IDS.ancientSealedDoor;
+  return WORLD_OBJECT_IDS.discoverySparkle;
 }
 
 function dungeonKindForId(id: string): WorldPoiKind {
@@ -859,6 +911,26 @@ function decorateOcean(seed: string, tiles: WorldTileId[][], pois: WorldPoi[], s
     if (hashNoise(`${seed}:reef`, pos.x, pos.y) > 0.34) reefs.push(pos);
   }
   return reefs;
+}
+
+function buildWorldObjectOverlays(seed: string, reefs: WorldVec[]): WorldObjectOverlay[] {
+  return reefs.map((pos, index) => ({
+    id: `ocean-object-${index}-${pos.x}-${pos.y}`,
+    x: pos.x,
+    y: pos.y,
+    objectId: oceanObjectForPosition(seed, pos, index),
+    scale: 1.24
+  }));
+}
+
+function oceanObjectForPosition(seed: string, pos: WorldVec, index: number): WorldObjectId {
+  const noise = hashNoise(`${seed}:world-object-overlay:${index}`, pos.x, pos.y);
+  if (noise > 0.94) return WORLD_OBJECT_IDS.whirlpoolSwirl;
+  if (noise > 0.85) return WORLD_OBJECT_IDS.floatingTreasureBarrel;
+  if (noise > 0.75) return WORLD_OBJECT_IDS.brokenMast;
+  if (noise > 0.61) return WORLD_OBJECT_IDS.shipwreckDebris;
+  if (noise > 0.49) return WORLD_OBJECT_IDS.octopusCache;
+  return WORLD_OBJECT_IDS.coralClusterBlue;
 }
 
 function buildSeaRoutes(pois: WorldPoi[]): WorldVec[][] {
