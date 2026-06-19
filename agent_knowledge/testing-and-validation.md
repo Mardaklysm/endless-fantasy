@@ -42,11 +42,12 @@ This runs `tools/worldgen/test_worldgen.mjs`. It validates the active `atlas_v3`
 - blocked mountain, volcano, and lava tiles are not walkable
 - generated world edges are a deep-water ocean border
 - generated worlds include oriented roads, shallow-water terrain/tracking, pier-atlas docks/bridges, sea routes, beaches/coasts, forest/jungle biome hooks, reefs/ocean details, and no empty-cell references
-- generated worlds do not directly stamp fixed-orientation coast/foam tiles, keep Greenhaven `medium_grass` dominant over grass patch variants, and record unique road positions that still point at road tiles
+- generated worlds do not directly stamp fixed-orientation coast/foam tiles or wet beach sand, keep Greenhaven `medium_grass` dominant over grass patch variants, keep roads out of POI footprints, and record unique road positions that still point at road tiles
+- generated road visuals have exact N/E/S/W masks, source-tile rotations that render those masks, no zero-connection road cells, and every visible connector points into another road or an explicit POI endpoint
 - runtime world object overlay atlas `src/assets/world/world_objects.png` exists as a 1024x1024 transparent PNG with a 64-cell `worldObjectAtlas.manifest.json`
 - generated non-town POIs have valid object overlay IDs, and generated ocean object overlays are deterministic, valid, and placed on water
 - runtime dungeon/city atlas `src/assets/world/dungeon_atlas.png` exists as a 1024x1024 opaque PNG with a 64-cell `dungeonAtlas.manifest.json`
-- dungeon atlas source inset math, tile ID lookup, and runtime references for dungeons/town shop pads, weighted dungeon/town tiles, centered small maps, and dungeon wall-void culling are valid
+- dungeon atlas source inset math, tile ID lookup, and runtime references for dungeons/town shop pads, weighted dungeon/town tiles, centered small maps, dungeon wall-void culling, generated-marker dungeon entry/stair spawning, and invalid dungeon-position recovery are valid
 - same seed reproduces the same world
 - different seeds produce different tile grids
 

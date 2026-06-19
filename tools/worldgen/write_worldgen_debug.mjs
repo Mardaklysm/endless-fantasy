@@ -115,11 +115,14 @@ function cleanupObsoleteBlackSeamOutputs() {
 function renderAtlasTerrain(world, source) {
   const tileSize = TILE_SIZE;
   const image = makeImage(world.width * tileSize, world.height * tileSize, [5, 8, 18, 255]);
+  const roadVisualsByKey = new Map(world.roadVisuals.map((visual) => [`${visual.x},${visual.y}`, visual]));
   for (let y = 0; y < world.height; y += 1) {
     for (let x = 0; x < world.width; x += 1) {
-      const tile = WORLD_TILES[world.tiles[y][x]];
+      const roadVisual = roadVisualsByKey.get(`${x},${y}`);
+      const tile = WORLD_TILES[roadVisual?.sourceTileId ?? world.tiles[y][x]];
       const sourceRect = atlasV3SourceRectWithInset(tile.sourceRect);
-      blitSource(image, source, sourceRect, x * tileSize, y * tileSize, tileSize, tileSize);
+      if (roadVisual?.rotation) blitSourceRotated(image, source, sourceRect, x * tileSize, y * tileSize, tileSize, tileSize, roadVisual.rotation);
+      else blitSource(image, source, sourceRect, x * tileSize, y * tileSize, tileSize, tileSize);
     }
   }
   return image;
@@ -182,6 +185,42 @@ function blitSource(dest, source, rect, dx, dy, displayWidth, displayHeight) {
       blendPixel(dest.data, destOffset, source.data[sourceOffset], source.data[sourceOffset + 1], source.data[sourceOffset + 2], source.data[sourceOffset + 3]);
     }
   }
+}
+
+function blitSourceRotated(dest, source, rect, dx, dy, displayWidth, displayHeight, rotation) {
+  for (let yy = 0; yy < displayHeight; yy += 1) {
+    const targetY = dy + yy;
+    if (targetY < 0 || targetY >= dest.height) continue;
+    for (let xx = 0; xx < displayWidth; xx += 1) {
+      const targetX = dx + xx;
+      if (targetX < 0 || targetX >= dest.width) continue;
+      const sample = rotatedSourceSample(rect, xx, yy, displayWidth, displayHeight, rotation);
+      const sourceOffset = (sample.y * source.width + sample.x) * 4;
+      const destOffset = (targetY * dest.width + targetX) * 4;
+      blendPixel(dest.data, destOffset, source.data[sourceOffset], source.data[sourceOffset + 1], source.data[sourceOffset + 2], source.data[sourceOffset + 3]);
+    }
+  }
+}
+
+function rotatedSourceSample(rect, x, y, displayWidth, displayHeight, rotation) {
+  const maxX = displayWidth - 1;
+  const maxY = displayHeight - 1;
+  let u = x;
+  let v = y;
+  if (rotation === 90) {
+    u = y;
+    v = maxX - x;
+  } else if (rotation === 180) {
+    u = maxX - x;
+    v = maxY - y;
+  } else if (rotation === 270) {
+    u = maxY - y;
+    v = x;
+  }
+  return {
+    x: rect.x + Math.min(rect.width - 1, Math.floor((u / displayWidth) * rect.width)),
+    y: rect.y + Math.min(rect.height - 1, Math.floor((v / displayHeight) * rect.height))
+  };
 }
 
 function blendPixel(data, offset, r, g, b, a) {

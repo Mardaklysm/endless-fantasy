@@ -39,6 +39,8 @@ import {
   getIslandAt,
   type GeneratedWorld,
   type IslandId,
+  type RoadRotation,
+  type WorldRoadVisual,
   type WorldLandmarkKind,
   type WorldPoiKind
 } from "./world/worldGenerator.ts";
@@ -1495,6 +1497,7 @@ class CrystalOathScene extends Phaser.Scene {
   private battle?: BattleState;
   private audio = new SynthAudio();
   private generatedWorld?: GeneratedWorld;
+  private roadVisualsByKey = new Map<string, WorldRoadVisual>();
   private worldSeed = "title-preview";
   private world: Terrain[][] = [];
   private worldTerrainCacheKey = "world_terrain_cache";
@@ -1811,6 +1814,7 @@ class CrystalOathScene extends Phaser.Scene {
     this.generatedWorld = generateWorld({ seed, width: WORLD_W, height: WORLD_H });
     this.worldSeed = this.generatedWorld.seed;
     this.world = this.generatedWorld.tiles;
+    this.roadVisualsByKey = new Map(this.generatedWorld.roadVisuals.map((visual) => [`${visual.x},${visual.y}`, visual]));
     this.rebuildWorldTerrainCache();
     console.info(`Crystal Oath world seed: ${this.worldSeed}`);
   }
@@ -2301,10 +2305,79 @@ class CrystalOathScene extends Phaser.Scene {
       return this.canEnterTerrain(this.world[y][x]) || !!this.locationAt(x, y);
     }
     if (mode === "town") return x >= 1 && x <= 19 && y >= 1 && y <= 13;
-    const dungeon = this.dungeons()[this.currentDungeon];
-    const floor = dungeon.floors[this.dungeonFloor];
+    const floor = this.dungeonFloorRows(this.currentDungeon, this.dungeonFloor);
     const tile = floor[y]?.[x] ?? "#";
-    return !(tile === "#" || (tile === "D" && !this.puzzleFlags.has(`${this.currentDungeon}-switch`)));
+    return this.isDungeonTileWalkable(this.currentDungeon, tile);
+  }
+
+  private dungeonFloorRows(dungeonId = this.currentDungeon, floorIndex = this.dungeonFloor): string[] {
+    const dungeon = this.dungeons()[dungeonId];
+    if (!dungeon) return [];
+    const clampedFloor = Math.max(0, Math.min(floorIndex, dungeon.floors.length - 1));
+    return dungeon.floors[clampedFloor] ?? [];
+  }
+
+  private isDungeonTileWalkable(dungeonId: string, tile?: string): boolean {
+    return !!tile && tile !== "#" && !(tile === "D" && !this.puzzleFlags.has(`${dungeonId}-switch`));
+  }
+
+  private findDungeonTilePosition(floor: string[], values: string[]): Vec | undefined {
+    for (let y = 0; y < floor.length; y += 1) {
+      for (let x = 0; x < floor[y].length; x += 1) {
+        if (values.includes(floor[y][x])) return { x, y };
+      }
+    }
+    return undefined;
+  }
+
+  private nearestDungeonWalkableTile(dungeonId: string, floor: string[], target: Vec): Vec {
+    const width = floor[0]?.length ?? 0;
+    const height = floor.length;
+    const queue = [target];
+    const seen = new Set<string>();
+    while (queue.length) {
+      const current = queue.shift()!;
+      const key = `${current.x},${current.y}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (current.x >= 0 && current.y >= 0 && current.x < width && current.y < height) {
+        const tile = floor[current.y]?.[current.x];
+        if (this.isDungeonTileWalkable(dungeonId, tile)) return current;
+        queue.push({ x: current.x + 1, y: current.y });
+        queue.push({ x: current.x - 1, y: current.y });
+        queue.push({ x: current.x, y: current.y + 1 });
+        queue.push({ x: current.x, y: current.y - 1 });
+      }
+    }
+    return { x: 1, y: 1 };
+  }
+
+  private dungeonMarkerSpawn(dungeonId: string, floorIndex: number, markerTiles: string[], fallback: Vec): Vec {
+    const floor = this.dungeonFloorRows(dungeonId, floorIndex);
+    const marker = this.findDungeonTilePosition(floor, markerTiles) ?? fallback;
+    return this.nearestDungeonWalkableTile(dungeonId, floor, marker);
+  }
+
+  private dungeonEntranceSpawn(dungeonId: string): Vec {
+    return this.dungeonMarkerSpawn(dungeonId, 0, ["E"], { x: 1, y: 1 });
+  }
+
+  private dungeonStairSpawn(dungeonId: string, floorIndex: number): Vec {
+    return this.dungeonMarkerSpawn(dungeonId, floorIndex, ["S"], floorIndex === 0 ? { x: 19, y: 12 } : { x: 2, y: 12 });
+  }
+
+  private ensureValidDungeonPosition() {
+    const dungeon = this.dungeons()[this.currentDungeon];
+    if (!dungeon) {
+      this.currentDungeon = "mossCave";
+      this.dungeonFloor = 0;
+      this.dungeonPos = this.dungeonEntranceSpawn(this.currentDungeon);
+      return;
+    }
+    this.dungeonFloor = Math.max(0, Math.min(this.dungeonFloor, dungeon.floors.length - 1));
+    if (!this.canOccupyExploreTile("dungeon", this.dungeonPos.x, this.dungeonPos.y)) {
+      this.dungeonPos = this.dungeonFloor === 0 ? this.dungeonEntranceSpawn(this.currentDungeon) : this.dungeonStairSpawn(this.currentDungeon, this.dungeonFloor);
+    }
   }
 
   private completeExploreStep(step: ExploreStep) {
@@ -2347,7 +2420,7 @@ class CrystalOathScene extends Phaser.Scene {
     if (dungeonTile === "S") {
       this.clearHeldMovement();
       this.dungeonFloor = this.dungeonFloor === 0 ? 1 : 0;
-      this.dungeonPos = this.dungeonFloor === 0 ? { x: 19, y: 12 } : { x: 2, y: 12 };
+      this.dungeonPos = this.dungeonStairSpawn(this.currentDungeon, this.dungeonFloor);
       this.syncAllVisualPositions();
       return;
     }
@@ -2522,7 +2595,7 @@ class CrystalOathScene extends Phaser.Scene {
     }
     this.currentDungeon = loc.id;
     this.dungeonFloor = 0;
-    this.dungeonPos = { x: 1, y: 1 };
+    this.dungeonPos = this.dungeonEntranceSpawn(this.currentDungeon);
     this.mode = "dungeon";
     this.syncAllVisualPositions();
     this.audio.setMode("dungeon");
@@ -2701,7 +2774,15 @@ class CrystalOathScene extends Phaser.Scene {
   private discoverLandmark(loc: LocationDef) {
     const landmarkKind = loc.landmarkKind ?? "ruins";
     if (this.discoveredPois.has(loc.id)) {
-      this.say([`${loc.name}: You have already searched this place.`]);
+      if (landmarkKind === "secretMerchant") {
+        this.openShop(`${loc.name}`, [
+          { id: "potion", type: "item" },
+          { id: "phoenixAsh", type: "item" },
+          { id: "etherleaf", type: "item" },
+          { id: "smokeBomb", type: "item" },
+          { id: "glassWand", type: "gear" }
+        ]);
+      }
       return;
     }
     this.discoveredPois.add(loc.id);
@@ -4401,6 +4482,7 @@ Statuses: ${statuses}`;
       this.settings = { ...this.settings, ...data.settings };
       this.audio.setMuted(this.settings.muted);
       this.encounterCounter = data.encounterCounter ?? 10;
+      this.ensureValidDungeonPosition();
       if (!this.canOccupyExploreTile("world", this.worldPos.x, this.worldPos.y)) {
         this.worldPos = { ...(this.generatedWorld?.startPosition ?? { x: 10, y: 22 }) };
       }
@@ -4522,17 +4604,21 @@ Statuses: ${statuses}`;
     displayHeight: number,
     depth = LAYER_WORLD_IMAGE,
     alpha = 1,
-    tint?: number
+    tint?: number,
+    rotation: RoadRotation = 0
   ) {
     const frameKey = `${key}:${cropX},${cropY},${cropWidth},${cropHeight}`;
     const texture = this.textures.get(key);
     if (!texture.has(frameKey)) texture.add(frameKey, 0, cropX, cropY, cropWidth, cropHeight);
-    const image = this.add.image(x * PIXEL_ART_SCALE, y * PIXEL_ART_SCALE, key, frameKey);
-    image.setOrigin(0, 0);
+    const originX = rotation ? x + displayWidth / 2 : x;
+    const originY = rotation ? y + displayHeight / 2 : y;
+    const image = this.add.image(originX * PIXEL_ART_SCALE, originY * PIXEL_ART_SCALE, key, frameKey);
+    image.setOrigin(rotation ? 0.5 : 0, rotation ? 0.5 : 0);
     image.setDisplaySize(displayWidth * PIXEL_ART_SCALE, displayHeight * PIXEL_ART_SCALE);
     image.setDepth(depth);
     image.setAlpha(alpha);
     image.setScrollFactor(0);
+    if (rotation) image.setRotation(Phaser.Math.DegToRad(rotation));
     if (tint !== undefined) image.setTint(tint);
     this.images.push(image);
     return image;
@@ -5264,7 +5350,8 @@ Statuses: ${statuses}`;
   }
 
   private drawWorldTile(terrain: Terrain, sx: number, sy: number, x: number, y: number) {
-    const tile = WORLD_TILES[terrain];
+    const roadVisual = this.roadVisualAt(x, y);
+    const tile = WORLD_TILES[roadVisual?.sourceTileId ?? terrain];
     if (tile && this.hasTexture(WORLD_ATLAS.textureKey)) {
       const rect = this.worldTileSourceRect(tile);
       this.drawCroppedTexture(
@@ -5277,7 +5364,10 @@ Statuses: ${statuses}`;
         rect.height,
         TILE,
         TILE,
-        LAYER_WORLD_IMAGE
+        LAYER_WORLD_IMAGE,
+        1,
+        undefined,
+        roadVisual?.rotation ?? 0
       );
       return;
     }
@@ -5290,6 +5380,10 @@ Statuses: ${statuses}`;
     else if (tile?.biome === "desert") this.drawWorldSandTile(sx, sy, x, y);
     else this.drawWorldRoadTile(sx, sy, x, y);
     this.drawWorldCoastEdges(terrain, sx, sy, x, y);
+  }
+
+  private roadVisualAt(x: number, y: number): WorldRoadVisual | undefined {
+    return this.roadVisualsByKey.get(`${x},${y}`);
   }
 
   private drawWorldOverlays(startX: number, endX: number, startY: number, endY: number, tileCam: Vec) {
@@ -5395,10 +5489,12 @@ Statuses: ${statuses}`;
     const atlasSource = this.textures.get(WORLD_ATLAS.textureKey).getSourceImage() as CanvasImageSource & { width: number; height: number };
     for (let y = 0; y < this.world.length; y += 1) {
       for (let x = 0; x < this.world[y].length; x += 1) {
-        const tile = WORLD_TILES[this.world[y][x]];
+        const roadVisual = this.roadVisualAt(x, y);
+        const tile = WORLD_TILES[roadVisual?.sourceTileId ?? this.world[y][x]];
         if (!tile) throw new Error(`Cannot render unknown world tile ${this.world[y][x]} at ${x},${y}.`);
         const rect = this.worldTileSourceRect(tile);
-        ctx.drawImage(atlasSource, rect.x, rect.y, rect.width, rect.height, x * TILE, y * TILE, TILE, TILE);
+        if (roadVisual?.rotation) this.drawRotatedWorldTileToCache(ctx, atlasSource, rect, x * TILE, y * TILE, roadVisual.rotation);
+        else ctx.drawImage(atlasSource, rect.x, rect.y, rect.width, rect.height, x * TILE, y * TILE, TILE, TILE);
       }
     }
 
@@ -5409,6 +5505,21 @@ Statuses: ${statuses}`;
     if (import.meta.env.DEV) {
       console.info(`Atlas v3 terrain cache rendered with source inset ${ATLAS_V3_SOURCE_INSET}; post-placement seam blending disabled.`);
     }
+  }
+
+  private drawRotatedWorldTileToCache(
+    ctx: CanvasRenderingContext2D,
+    atlasSource: CanvasImageSource,
+    rect: { x: number; y: number; width: number; height: number },
+    x: number,
+    y: number,
+    rotation: RoadRotation
+  ) {
+    ctx.save();
+    ctx.translate(x + TILE / 2, y + TILE / 2);
+    ctx.rotate((rotation * Math.PI) / 180);
+    ctx.drawImage(atlasSource, rect.x, rect.y, rect.width, rect.height, -TILE / 2, -TILE / 2, TILE, TILE);
+    ctx.restore();
   }
 
   private drawCachedWorldTerrain(tileCam: Vec): boolean {

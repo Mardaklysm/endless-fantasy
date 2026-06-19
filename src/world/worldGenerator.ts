@@ -65,6 +65,17 @@ export interface WorldBridge extends WorldVec {
   material: "wood" | "stone";
 }
 
+export type RoadRotation = 0 | 90 | 180 | 270;
+
+export interface WorldRoadVisual extends WorldVec {
+  mask: number;
+  roadMask: number;
+  endpointMask: number;
+  sourceMask: number;
+  sourceTileId: WorldTileId;
+  rotation: RoadRotation;
+}
+
 export interface GeneratedIsland {
   id: IslandId;
   name: string;
@@ -97,6 +108,7 @@ export interface GeneratedWorld {
   islandByTile: (IslandId | null)[][];
   pois: WorldPoi[];
   roads: WorldVec[];
+  roadVisuals: WorldRoadVisual[];
   rivers: WorldVec[][];
   bridges: WorldBridge[];
   objectOverlays: WorldObjectOverlay[];
@@ -198,8 +210,12 @@ const GRASS_PATCH_TILES = [
 ];
 const FOREST_TILES = [WORLD_TILE_IDS.lightForest, WORLD_TILE_IDS.denseForest];
 const JUNGLE_TILES = [WORLD_TILE_IDS.jungle, WORLD_TILE_IDS.denseForest];
-const BEACH_TILES = [WORLD_TILE_IDS.beachSand, WORLD_TILE_IDS.wetBeachSand];
+const BEACH_TILES = [WORLD_TILE_IDS.beachSand];
 const ROAD_TILE = WORLD_TILE_IDS.roadHorizontal;
+const ROAD_N = 1;
+const ROAD_E = 2;
+const ROAD_S = 4;
+const ROAD_W = 8;
 const HILL_TILES = [WORLD_TILE_IDS.grassStones, WORLD_TILE_IDS.gravelStoneGround, WORLD_TILE_IDS.rockyHills];
 const ASH_WALKABLE_TILES = [WORLD_TILE_IDS.deadCrackedEarth, WORLD_TILE_IDS.ashBlackGround, WORLD_TILE_IDS.volcanicAshGround, WORLD_TILE_IDS.ashForest];
 const MOUNTAIN_TILE = WORLD_TILE_IDS.rockyMountainGround;
@@ -325,7 +341,49 @@ export function validateGeneratedWorld(world: GeneratedWorld): WorldValidationRe
     })
     .map((poi) => poi.id);
 
+  const roadValidation = validateRoadVisuals(world);
+  errors.push(...roadValidation.errors);
+  warnings.push(...roadValidation.warnings);
+
   return { valid: errors.length === 0, errors, warnings, reachablePoiIds, biomeCounts };
+}
+
+function validateRoadVisuals(world: GeneratedWorld): { errors: string[]; warnings: string[] } {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const roadKeys = new Set(world.roads.map(posKey));
+  const visualByKey = new Map(world.roadVisuals.map((visual) => [posKey(visual), visual]));
+  if (world.roadVisuals.length !== world.roads.length) {
+    errors.push(`Road visual count ${world.roadVisuals.length} does not match road count ${world.roads.length}.`);
+  }
+  for (const road of world.roads) {
+    const key = posKey(road);
+    const visual = visualByKey.get(key);
+    if (!visual) {
+      errors.push(`Road ${key} has no visual mask.`);
+      continue;
+    }
+    const roadMask = roadNeighborMask(roadKeys, road.x, road.y);
+    if (visual.roadMask !== roadMask) errors.push(`Road ${key} road mask ${visual.roadMask} does not match neighbor road mask ${roadMask}.`);
+    if ((visual.roadMask | visual.endpointMask) !== visual.mask) errors.push(`Road ${key} visual mask ${visual.mask} does not equal road+endpoint masks.`);
+    if (rotateRoadMask(visual.sourceMask, visual.rotation) !== visual.mask) {
+      errors.push(`Road ${key} source ${visual.sourceTileId} rotation ${visual.rotation} renders mask ${rotateRoadMask(visual.sourceMask, visual.rotation)}, expected ${visual.mask}.`);
+    }
+    if (visual.mask === 0) warnings.push(`Road ${key} has zero connections.`);
+    for (const bit of [ROAD_N, ROAD_E, ROAD_S, ROAD_W]) {
+      if ((visual.mask & bit) === 0) continue;
+      const next = stepForRoadBit(road, bit);
+      const nextKey = posKey(next);
+      if (roadKeys.has(nextKey)) continue;
+      if ((visual.endpointMask & bit) !== 0 && isPoiFootprintAt(world.pois, next.x, next.y)) continue;
+      errors.push(`Road ${key} visually connects toward ${roadBitName(bit)} into invalid terrain at ${next.x},${next.y}.`);
+    }
+    const connectionCount = roadConnectionCount(visual.mask);
+    if (connectionCount >= 3 && roadConnectionCount(visual.roadMask | visual.endpointMask) !== connectionCount) {
+      errors.push(`Road ${key} uses a branch visual without a real logical branch.`);
+    }
+  }
+  return { errors, warnings };
 }
 
 export function buildWorldDebugReport(world: GeneratedWorld): string {
@@ -401,17 +459,18 @@ function generateWorldAttempt(seed: string, width: number, height: number): Gene
 
   const pois: WorldPoi[] = [];
   const roadKeys = new Set<string>();
+  const roadEndpointMasks = new Map<string, number>();
   const bridges: WorldBridge[] = [];
   for (const state of states) {
     const islandPois = placeIslandPois(seed, tiles, biomes, islandByTile, state, rng.fork(`${state.template.id}:pois`));
     state.pois = islandPois;
     pois.push(...islandPois);
     carvePoiFootprints(tiles, biomes, islandByTile, islandPois);
-    carveIslandRoads(tiles, biomes, islandByTile, state.template.id, islandPois, roadKeys);
+    carveIslandRoads(tiles, biomes, islandByTile, state.template.id, islandPois, roadKeys, roadEndpointMasks);
     bridges.push(...dockTilesForHarbor(tiles, state.template.id, islandPois.find((poi) => poi.kind === "harbor")));
   }
-  orientRoadTiles(tiles, biomes, roadKeys);
-  const roads = [...roadKeys].map(parseKey);
+  const roadVisuals = orientRoadTiles(tiles, biomes, roadKeys, roadEndpointMasks);
+  const roads = roadVisuals.map(({ x, y }) => ({ x, y }));
 
   const shallows = markShallowWater(tiles, biomes);
   const reefs = decorateOcean(seed, tiles, pois, shallows, rng.fork("ocean-details"));
@@ -433,6 +492,7 @@ function generateWorldAttempt(seed: string, width: number, height: number): Gene
     islandByTile,
     pois,
     roads,
+    roadVisuals,
     rivers: [],
     bridges,
     objectOverlays,
@@ -531,7 +591,7 @@ function isCoastalLand(land: Set<string>, x: number, y: number): boolean {
 }
 
 function beachTileFor(seed: string, x: number, y: number): WorldTileId {
-  return hashNoise(`${seed}:beach-wetness`, x, y) > 0.72 ? BEACH_TILES[1] : BEACH_TILES[0];
+  return BEACH_TILES[0];
 }
 
 function grassPatchTileFor(seed: string, x: number, y: number): WorldTileId {
@@ -819,94 +879,296 @@ function carveIslandRoads(
   islandByTile: (IslandId | null)[][],
   islandId: IslandId,
   pois: WorldPoi[],
-  roadKeys: Set<string>
+  roadKeys: Set<string>,
+  roadEndpointMasks: Map<string, number>
 ) {
   const town = pois.find((poi) => poi.kind === "town");
   const harbor = pois.find((poi) => poi.kind === "harbor");
   const important = pois.filter((poi) => poi.kind === "dungeon" || poi.kind === "gate" || poi.kind === "final");
   if (!town || !harbor) return;
-  for (const destination of [harbor, ...important]) {
-    const path = findIslandPath(tiles, islandByTile, islandId, town, destination);
+
+  const footprintKeys = poiFootprintKeySet(pois);
+  const islandRoadKeys = new Set<string>();
+  const destinations = [harbor, ...important].sort((a, b) => {
+    const rank = (poi: WorldPoi) => (poi.kind === "harbor" ? 0 : poi.kind === "dungeon" ? 1 : poi.kind === "gate" ? 2 : 3);
+    return rank(a) - rank(b) || Math.hypot(a.x - town.x, a.y - town.y) - Math.hypot(b.x - town.x, b.y - town.y);
+  });
+  const townApproach = roadApproachPoint(tiles, islandByTile, islandId, town, harbor, footprintKeys);
+  addIslandRoadTile(tiles, biomes, islandByTile, islandId, townApproach, roadKeys, islandRoadKeys, footprintKeys);
+  addRoadEndpointConnection(roadEndpointMasks, townApproach, town);
+
+  for (const destination of destinations) {
+    const destinationApproach = roadApproachPoint(tiles, islandByTile, islandId, destination, townApproach, footprintKeys);
+    const start = nearestRoadAnchor(islandRoadKeys, destinationApproach) ?? townApproach;
+    const path = findIslandRoadPath(tiles, islandByTile, islandId, start, destinationApproach, {
+      roadKeys: islandRoadKeys,
+      blockedKeys: footprintKeys
+    });
     for (const pos of path) {
-      if (isWaterTile(tiles[pos.y][pos.x])) continue;
-      setWorldTile(tiles, biomes, pos.x, pos.y, ROAD_TILE, "grassland");
-      const key = posKey(pos);
-      roadKeys.add(key);
+      addIslandRoadTile(tiles, biomes, islandByTile, islandId, pos, roadKeys, islandRoadKeys, footprintKeys);
     }
+    addRoadEndpointConnection(roadEndpointMasks, destinationApproach, destination);
   }
 }
 
-function orientRoadTiles(tiles: WorldTileId[][], biomes: WorldBiome[][], roadKeys: Set<string>) {
+function poiFootprintKeySet(pois: WorldPoi[]): Set<string> {
+  const keys = new Set<string>();
+  for (const poi of pois) {
+    for (const pos of poiFootprintTiles(poi)) keys.add(posKey(pos));
+  }
+  return keys;
+}
+
+function roadApproachPoint(
+  tiles: WorldTileId[][],
+  islandByTile: (IslandId | null)[][],
+  islandId: IslandId,
+  poi: WorldPoi,
+  anchor: WorldVec,
+  blockedKeys: Set<string>
+): WorldVec {
+  const footprint = poiFootprintTiles(poi);
+  const footprintKeys = new Set(footprint.map(posKey));
+  const candidates: WorldVec[] = [];
+  for (const tile of footprint) {
+    for (const next of neighbors4(tile.x, tile.y)) {
+      const key = posKey(next);
+      if (footprintKeys.has(key) || blockedKeys.has(key)) continue;
+      if (!canRoadUseTile(tiles, islandByTile, islandId, next, key, "", "")) continue;
+      candidates.push(next);
+    }
+  }
+  if (candidates.length) {
+    return candidates.sort((a, b) => {
+      const da = Math.hypot(a.x - anchor.x, a.y - anchor.y);
+      const db = Math.hypot(b.x - anchor.x, b.y - anchor.y);
+      return da - db || a.y - b.y || a.x - b.x;
+    })[0];
+  }
+  return (
+    footprint.find((pos) => {
+      const key = posKey(pos);
+      return canRoadUseTile(tiles, islandByTile, islandId, pos, key, key, key);
+    }) ?? { x: poi.x, y: poi.y }
+  );
+}
+
+function addIslandRoadTile(
+  tiles: WorldTileId[][],
+  biomes: WorldBiome[][],
+  islandByTile: (IslandId | null)[][],
+  islandId: IslandId,
+  pos: WorldVec,
+  roadKeys: Set<string>,
+  islandRoadKeys: Set<string>,
+  blockedKeys: Set<string>
+) {
+  const key = posKey(pos);
+  if (!canRoadUseTile(tiles, islandByTile, islandId, pos, key, "", "")) return;
+  if (blockedKeys.has(key)) return;
+  setWorldTile(tiles, biomes, pos.x, pos.y, ROAD_TILE, "grassland");
+  roadKeys.add(key);
+  islandRoadKeys.add(key);
+}
+
+function nearestRoadAnchor(roadKeys: Set<string>, goal: WorldVec): WorldVec | undefined {
+  return [...roadKeys]
+    .map(parseKey)
+    .sort((a, b) => Math.hypot(a.x - goal.x, a.y - goal.y) - Math.hypot(b.x - goal.x, b.y - goal.y) || a.y - b.y || a.x - b.x)[0];
+}
+
+function addRoadEndpointConnection(roadEndpointMasks: Map<string, number>, roadPos: WorldVec, poi: WorldPoi) {
+  const key = posKey(roadPos);
+  const footprintKeys = new Set(poiFootprintTiles(poi).map(posKey));
+  let mask = roadEndpointMasks.get(key) ?? 0;
+  for (const next of neighbors4(roadPos.x, roadPos.y)) {
+    if (footprintKeys.has(posKey(next))) mask |= directionMask(roadPos, next);
+  }
+  if (mask) roadEndpointMasks.set(key, mask);
+}
+
+function orientRoadTiles(tiles: WorldTileId[][], biomes: WorldBiome[][], roadKeys: Set<string>, roadEndpointMasks: Map<string, number>): WorldRoadVisual[] {
+  const visuals: WorldRoadVisual[] = [];
   for (const key of roadKeys) {
     const pos = parseKey(key);
     if (!worldTileHasTag(tiles[pos.y]?.[pos.x], "road")) continue;
-    const tile = roadTileForConnections(tiles, pos.x, pos.y);
-    setWorldTile(tiles, biomes, pos.x, pos.y, tile, WORLD_TILES[tile].biome);
+    const roadMask = roadNeighborMask(roadKeys, pos.x, pos.y);
+    const endpointMask = roadEndpointMasks.get(key) ?? 0;
+    const mask = roadMask | endpointMask;
+    const visual = roadVisualForMask(mask);
+    setWorldTile(tiles, biomes, pos.x, pos.y, visual.sourceTileId, WORLD_TILES[visual.sourceTileId].biome);
+    visuals.push({ ...pos, mask, roadMask, endpointMask, ...visual });
+  }
+  return visuals.sort((a, b) => a.y - b.y || a.x - b.x);
+}
+
+function roadNeighborMask(roadKeys: Set<string>, x: number, y: number): number {
+  let mask = 0;
+  if (roadKeys.has(posKey({ x, y: y - 1 }))) mask |= ROAD_N;
+  if (roadKeys.has(posKey({ x: x + 1, y }))) mask |= ROAD_E;
+  if (roadKeys.has(posKey({ x, y: y + 1 }))) mask |= ROAD_S;
+  if (roadKeys.has(posKey({ x: x - 1, y }))) mask |= ROAD_W;
+  return mask;
+}
+
+function roadVisualForMask(mask: number): Pick<WorldRoadVisual, "sourceMask" | "sourceTileId" | "rotation"> {
+  switch (mask & 15) {
+    case ROAD_N:
+      return { sourceTileId: WORLD_TILE_IDS.roadDeadEndEast, sourceMask: ROAD_W, rotation: 90 };
+    case ROAD_E:
+      return { sourceTileId: WORLD_TILE_IDS.roadDeadEndEast, sourceMask: ROAD_W, rotation: 180 };
+    case ROAD_S:
+      return { sourceTileId: WORLD_TILE_IDS.roadDeadEndEast, sourceMask: ROAD_W, rotation: 270 };
+    case ROAD_W:
+      return { sourceTileId: WORLD_TILE_IDS.roadDeadEndEast, sourceMask: ROAD_W, rotation: 0 };
+    case ROAD_N | ROAD_S:
+      return { sourceTileId: WORLD_TILE_IDS.roadVertical, sourceMask: ROAD_N | ROAD_S, rotation: 0 };
+    case ROAD_E | ROAD_W:
+      return { sourceTileId: WORLD_TILE_IDS.roadHorizontal, sourceMask: ROAD_E | ROAD_W, rotation: 0 };
+    case ROAD_N | ROAD_E:
+      return { sourceTileId: WORLD_TILE_IDS.roadCornerSw, sourceMask: ROAD_E | ROAD_S, rotation: 270 };
+    case ROAD_E | ROAD_S:
+      return { sourceTileId: WORLD_TILE_IDS.roadCornerSw, sourceMask: ROAD_E | ROAD_S, rotation: 0 };
+    case ROAD_S | ROAD_W:
+      return { sourceTileId: WORLD_TILE_IDS.roadCornerSw, sourceMask: ROAD_E | ROAD_S, rotation: 90 };
+    case ROAD_W | ROAD_N:
+      return { sourceTileId: WORLD_TILE_IDS.roadCornerSw, sourceMask: ROAD_E | ROAD_S, rotation: 180 };
+    case ROAD_N | ROAD_E | ROAD_S:
+      return { sourceTileId: WORLD_TILE_IDS.roadTEast, sourceMask: ROAD_N | ROAD_E | ROAD_S, rotation: 0 };
+    case ROAD_E | ROAD_S | ROAD_W:
+      return { sourceTileId: WORLD_TILE_IDS.roadTEast, sourceMask: ROAD_N | ROAD_E | ROAD_S, rotation: 90 };
+    case ROAD_S | ROAD_W | ROAD_N:
+      return { sourceTileId: WORLD_TILE_IDS.roadTEast, sourceMask: ROAD_N | ROAD_E | ROAD_S, rotation: 180 };
+    case ROAD_W | ROAD_N | ROAD_E:
+      return { sourceTileId: WORLD_TILE_IDS.roadTEast, sourceMask: ROAD_N | ROAD_E | ROAD_S, rotation: 270 };
+    case ROAD_N | ROAD_E | ROAD_S | ROAD_W:
+      return { sourceTileId: WORLD_TILE_IDS.roadCrossroads, sourceMask: ROAD_N | ROAD_E | ROAD_S | ROAD_W, rotation: 0 };
+    default:
+      return { sourceTileId: WORLD_TILE_IDS.roadHorizontal, sourceMask: ROAD_E | ROAD_W, rotation: 0 };
   }
 }
 
-function roadTileForConnections(tiles: WorldTileId[][], x: number, y: number): WorldTileId {
-  const up = isRoadConnection(tiles, x, y - 1);
-  const down = isRoadConnection(tiles, x, y + 1);
-  const left = isRoadConnection(tiles, x - 1, y);
-  const right = isRoadConnection(tiles, x + 1, y);
-  const count = [up, down, left, right].filter(Boolean).length;
-  if (count >= 4) return WORLD_TILE_IDS.roadCrossroads;
-  if (count === 3) {
-    if (!up) return WORLD_TILE_IDS.roadTSouth;
-    if (!down) return WORLD_TILE_IDS.roadTNorth;
-    if (!left) return WORLD_TILE_IDS.roadTEast;
-    return WORLD_TILE_IDS.roadTWest;
+function directionMask(from: WorldVec, to: WorldVec): number {
+  if (to.x === from.x && to.y === from.y - 1) return ROAD_N;
+  if (to.x === from.x + 1 && to.y === from.y) return ROAD_E;
+  if (to.x === from.x && to.y === from.y + 1) return ROAD_S;
+  if (to.x === from.x - 1 && to.y === from.y) return ROAD_W;
+  return 0;
+}
+
+function rotateRoadMask(mask: number, rotation: RoadRotation): number {
+  let rotated = mask;
+  for (let i = 0; i < rotation / 90; i += 1) {
+    let next = 0;
+    if (rotated & ROAD_N) next |= ROAD_E;
+    if (rotated & ROAD_E) next |= ROAD_S;
+    if (rotated & ROAD_S) next |= ROAD_W;
+    if (rotated & ROAD_W) next |= ROAD_N;
+    rotated = next;
   }
-  if (left && right) return WORLD_TILE_IDS.roadHorizontal;
-  if (up && down) return WORLD_TILE_IDS.roadVertical;
-  if (up && right) return WORLD_TILE_IDS.roadCornerNe;
-  if (right && down) return WORLD_TILE_IDS.roadCornerSe;
-  if (down && left) return WORLD_TILE_IDS.roadCornerSw;
-  if (left && up) return WORLD_TILE_IDS.roadCornerNw;
-  if (left) return WORLD_TILE_IDS.roadDeadEndEast;
-  if (right) return WORLD_TILE_IDS.roadDeadEndWest;
-  if (up || down) return WORLD_TILE_IDS.roadVertical;
-  return WORLD_TILE_IDS.softGrassTrail;
+  return rotated;
 }
 
-function isRoadConnection(tiles: WorldTileId[][], x: number, y: number): boolean {
-  return inBounds(tiles[0].length, tiles.length, x, y) && worldTileHasTag(tiles[y][x], "road");
+function stepForRoadBit(pos: WorldVec, bit: number): WorldVec {
+  if (bit === ROAD_N) return { x: pos.x, y: pos.y - 1 };
+  if (bit === ROAD_E) return { x: pos.x + 1, y: pos.y };
+  if (bit === ROAD_S) return { x: pos.x, y: pos.y + 1 };
+  return { x: pos.x - 1, y: pos.y };
 }
 
-function findIslandPath(
+function roadBitName(bit: number): string {
+  if (bit === ROAD_N) return "north";
+  if (bit === ROAD_E) return "east";
+  if (bit === ROAD_S) return "south";
+  return "west";
+}
+
+function roadConnectionCount(mask: number): number {
+  return [ROAD_N, ROAD_E, ROAD_S, ROAD_W].filter((bit) => (mask & bit) !== 0).length;
+}
+
+function isPoiFootprintAt(pois: WorldPoi[], x: number, y: number): boolean {
+  return pois.some((poi) => pointInPoiFootprint(poi, x, y));
+}
+
+function findIslandRoadPath(
   tiles: WorldTileId[][],
   islandByTile: (IslandId | null)[][],
   islandId: IslandId,
   start: WorldVec,
-  goal: WorldVec
+  goal: WorldVec,
+  options: { roadKeys: Set<string>; blockedKeys: Set<string> }
 ): WorldVec[] {
-  const queue: WorldVec[] = [start];
+  const startKey = posKey(start);
+  const goalKey = posKey(goal);
+  const queue: { pos: WorldVec; score: number }[] = [{ pos: start, score: 0 }];
   const cameFrom = new Map<string, string>();
-  const seen = new Set([posKey(start)]);
+  const costByKey = new Map<string, number>([[startKey, 0]]);
+  const seen = new Set<string>();
   while (queue.length) {
-    const current = queue.shift()!;
-    if (current.x === goal.x && current.y === goal.y) break;
+    queue.sort((a, b) => a.score - b.score || a.pos.y - b.pos.y || a.pos.x - b.pos.x);
+    const current = queue.shift()!.pos;
+    const currentKey = posKey(current);
+    if (seen.has(currentKey)) continue;
+    seen.add(currentKey);
+    if (currentKey === goalKey) break;
     const nextSteps = neighbors4(current.x, current.y).sort((a, b) => Math.hypot(a.x - goal.x, a.y - goal.y) - Math.hypot(b.x - goal.x, b.y - goal.y));
     for (const next of nextSteps) {
       const key = posKey(next);
-      if (seen.has(key) || !inBounds(tiles[0].length, tiles.length, next.x, next.y)) continue;
-      if (islandByTile[next.y][next.x] !== islandId || !isWorldTileWalkable(tiles[next.y][next.x])) continue;
-      seen.add(key);
-      cameFrom.set(key, posKey(current));
-      queue.push(next);
+      if (!canRoadUseTile(tiles, islandByTile, islandId, next, key, startKey, goalKey)) continue;
+      if (options.blockedKeys.has(key) && key !== startKey && key !== goalKey) continue;
+      const currentCost = costByKey.get(currentKey) ?? 0;
+      const nextCost = currentCost + roadStepCost(tiles[next.y][next.x], options.roadKeys.has(key)) + roadTurnCost(cameFrom, currentKey, key);
+      if (nextCost >= (costByKey.get(key) ?? Number.POSITIVE_INFINITY)) continue;
+      costByKey.set(key, nextCost);
+      cameFrom.set(key, currentKey);
+      queue.push({ pos: next, score: nextCost + Math.hypot(next.x - goal.x, next.y - goal.y) });
     }
   }
-  const goalKey = posKey(goal);
   if (!cameFrom.has(goalKey)) return carveLinePath(start, goal);
   const path: WorldVec[] = [];
   let current = goalKey;
-  while (current !== posKey(start)) {
+  while (current !== startKey) {
     path.push(parseKey(current));
     current = cameFrom.get(current)!;
   }
   path.push(start);
   return path.reverse();
+}
+
+function canRoadUseTile(
+  tiles: WorldTileId[][],
+  islandByTile: (IslandId | null)[][],
+  islandId: IslandId,
+  pos: WorldVec,
+  key: string,
+  startKey: string,
+  goalKey: string
+): boolean {
+  if (!inBounds(tiles[0].length, tiles.length, pos.x, pos.y)) return false;
+  if (key !== startKey && key !== goalKey && islandByTile[pos.y][pos.x] !== islandId) return false;
+  const tile = tiles[pos.y][pos.x];
+  return !isWaterTile(tile) && isWorldTileWalkable(tile);
+}
+
+function roadStepCost(tile: WorldTileId, existingRoad: boolean): number {
+  if (existingRoad || worldTileHasTag(tile, "road")) return 0.2;
+  if (worldTileHasTag(tile, "forest")) return 3.1;
+  if (worldTileHasTag(tile, "sand")) return 2.6;
+  if (worldTileHasTag(tile, "rock")) return 2.2;
+  if (worldTileHasTag(tile, "grass")) return 1;
+  return 1.45;
+}
+
+function roadTurnCost(cameFrom: Map<string, string>, currentKey: string, nextKey: string): number {
+  const previousKey = cameFrom.get(currentKey);
+  if (!previousKey) return 0;
+  const previous = parseKey(previousKey);
+  const current = parseKey(currentKey);
+  const next = parseKey(nextKey);
+  const dirA = { x: current.x - previous.x, y: current.y - previous.y };
+  const dirB = { x: next.x - current.x, y: next.y - current.y };
+  return dirA.x === dirB.x && dirA.y === dirB.y ? 0 : 0.55;
 }
 
 function dockTilesForHarbor(tiles: WorldTileId[][], islandId: IslandId, harbor?: WorldPoi): WorldBridge[] {
@@ -1020,7 +1282,7 @@ function findStartPosition(
   ];
   for (const pos of candidates) {
     if (!tiles[pos.y]?.[pos.x] || isWaterTile(tiles[pos.y][pos.x])) continue;
-        setWorldTile(tiles, biomes, pos.x, pos.y, MAIN_GRASS_TILE, "grassland");
+    if (!worldTileHasTag(tiles[pos.y][pos.x], "road")) setWorldTile(tiles, biomes, pos.x, pos.y, MAIN_GRASS_TILE, "grassland");
     islandByTile[pos.y][pos.x] = "greenhaven";
     return pos;
   }

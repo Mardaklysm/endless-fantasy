@@ -38,6 +38,11 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PROJECT_ROOT = path.resolve(__dirname, "..", "..");
+const ROAD_N = 1;
+const ROAD_E = 2;
+const ROAD_S = 4;
+const ROAD_W = 8;
+const ROAD_BITS = [ROAD_N, ROAD_E, ROAD_S, ROAD_W];
 
 validateAtlasV3();
 validateWorldObjects();
@@ -246,6 +251,7 @@ function validateRuntimeReferences() {
   assert(packageJson.scripts["import:dungeon-atlas"]?.includes("import_dungeon_atlas.mjs"), "package.json is missing the dungeon atlas import script.");
 
   const mainRuntime = fs.readFileSync(path.join(PROJECT_ROOT, "src/main.ts"), "utf8");
+  const worldGeneratorRuntime = fs.readFileSync(path.join(PROJECT_ROOT, "src/world/worldGenerator.ts"), "utf8");
   assert(mainRuntime.includes("dungeonAtlasImageUrl"), "Runtime does not import the dungeon atlas image URL.");
   assert(mainRuntime.includes("DUNGEON_ATLAS_SOURCE_INSET"), "Runtime does not import/use the shared dungeon atlas source inset.");
   assert(mainRuntime.includes("dungeonAtlasSourceRectWithInset"), "Runtime does not use the dungeon atlas source rect helper.");
@@ -254,6 +260,17 @@ function validateRuntimeReferences() {
   assert(mainRuntime.includes("isDungeonWallEdge"), "Runtime does not cull unused dungeon wall filler into void.");
   assert(mainRuntime.includes("mapPixelW <= WIDTH"), "Runtime camera no longer centers maps smaller than the viewport.");
   assert(mainRuntime.includes("locationVisualSize"), "Runtime does not decouple overworld POI visual size from interaction footprint.");
+  assert(mainRuntime.includes("dungeonEntranceSpawn"), "Runtime does not spawn dungeon entry from generated entrance markers.");
+  assert(mainRuntime.includes("dungeonStairSpawn"), "Runtime does not spawn dungeon stairs from generated stair markers.");
+  assert(mainRuntime.includes("ensureValidDungeonPosition"), "Runtime does not recover invalid dungeon positions.");
+  assert(!mainRuntime.includes("You have already searched this place"), "Runtime still repeats cleared landmark messages.");
+  assert(mainRuntime.includes("roadVisualsByKey"), "Runtime does not use generated road visual masks.");
+  assert(mainRuntime.includes("drawRotatedWorldTileToCache"), "Runtime does not rotate missing road orientations in the terrain cache.");
+  assert(mainRuntime.includes("roadVisual?.rotation"), "Runtime fallback tile drawing does not honor road visual rotation.");
+  assert(worldGeneratorRuntime.includes("roadApproachPoint"), "Worldgen does not keep roads out of POI footprints.");
+  assert(worldGeneratorRuntime.includes("findIslandRoadPath"), "Worldgen does not use the weighted road route finder.");
+  assert(worldGeneratorRuntime.includes("validateRoadVisuals"), "Worldgen does not validate road visual masks.");
+  assert(worldGeneratorRuntime.includes("roadVisualForMask"), "Worldgen does not map road masks through explicit visual specs.");
 }
 
 function validateRuntimeDebugInsetConsistency() {
@@ -316,11 +333,31 @@ function validateWorldgen() {
     }
 
     const roadKeys = new Set(world.roads.map((pos) => `${pos.x},${pos.y}`));
+    const roadVisualsByKey = new Map(world.roadVisuals.map((visual) => [`${visual.x},${visual.y}`, visual]));
     assert(roadKeys.size === world.roads.length, `World ${i} recorded duplicate road tiles.`);
+    assert(world.roadVisuals.length === world.roads.length, `World ${i} road visual count does not match road count.`);
     for (const road of world.roads) {
       const tile = world.tiles[road.y]?.[road.x];
       assert(worldTileHasTag(tile, "road"), `World ${i} road record ${road.x},${road.y} points at non-road tile ${tile}.`);
       assert(!worldTileHasTag(tile, "water"), `World ${i} road record ${road.x},${road.y} points at water.`);
+      const visual = roadVisualsByKey.get(`${road.x},${road.y}`);
+      assert(visual, `World ${i} road ${road.x},${road.y} has no visual.`);
+      assert(visual.mask > 0, `World ${i} road ${road.x},${road.y} has no logical connections.`);
+      assert(visual.roadMask === roadNeighborMask(roadKeys, road.x, road.y), `World ${i} road ${road.x},${road.y} has stale road neighbor mask.`);
+      assert((visual.roadMask | visual.endpointMask) === visual.mask, `World ${i} road ${road.x},${road.y} visual mask is not road+endpoint mask.`);
+      assert(rotateRoadMask(visual.sourceMask, visual.rotation) === visual.mask, `World ${i} road ${road.x},${road.y} source/rotation does not match mask.`);
+      for (const bit of ROAD_BITS) {
+        if ((visual.mask & bit) === 0) continue;
+        const next = roadStep(road, bit);
+        if (roadKeys.has(`${next.x},${next.y}`)) continue;
+        assert((visual.endpointMask & bit) !== 0 && isAnyPoiFootprint(world.pois, next.x, next.y), `World ${i} road ${road.x},${road.y} visually connects into invalid ${roadBitName(bit)} tile ${next.x},${next.y}.`);
+      }
+    }
+    for (const poi of world.pois) {
+      for (const footprint of poiFootprintTiles(poi)) {
+        const tile = world.tiles[footprint.y]?.[footprint.x];
+        assert(!worldTileHasTag(tile, "road"), `World ${i} road was carved inside ${poi.id}'s footprint at ${footprint.x},${footprint.y}.`);
+      }
     }
 
     let sawWater = false;
@@ -330,6 +367,7 @@ function validateWorldgen() {
     let greenhavenGrassBase = 0;
     let greenhavenGrassPatch = 0;
     const directionalCoastTiles = new Set([
+      WORLD_TILE_IDS.wetBeachSand,
       WORLD_TILE_IDS.grassSandCoast,
       WORLD_TILE_IDS.sandWaterEdge,
       WORLD_TILE_IDS.sandWaterCorner,
@@ -409,6 +447,55 @@ function hasAdjacentWater(world, poi) {
     }
   }
   return false;
+}
+
+function poiFootprintTiles(poi) {
+  const radius = Math.floor((poi.footprint ?? 1) / 2);
+  const tiles = [];
+  for (let y = poi.y - radius; y <= poi.y + radius; y += 1) {
+    for (let x = poi.x - radius; x <= poi.x + radius; x += 1) tiles.push({ x, y });
+  }
+  return tiles;
+}
+
+function roadNeighborMask(roadKeys, x, y) {
+  let mask = 0;
+  if (roadKeys.has(`${x},${y - 1}`)) mask |= ROAD_N;
+  if (roadKeys.has(`${x + 1},${y}`)) mask |= ROAD_E;
+  if (roadKeys.has(`${x},${y + 1}`)) mask |= ROAD_S;
+  if (roadKeys.has(`${x - 1},${y}`)) mask |= ROAD_W;
+  return mask;
+}
+
+function rotateRoadMask(mask, rotation) {
+  let rotated = mask;
+  for (let i = 0; i < rotation / 90; i += 1) {
+    let next = 0;
+    if (rotated & ROAD_N) next |= ROAD_E;
+    if (rotated & ROAD_E) next |= ROAD_S;
+    if (rotated & ROAD_S) next |= ROAD_W;
+    if (rotated & ROAD_W) next |= ROAD_N;
+    rotated = next;
+  }
+  return rotated;
+}
+
+function roadStep(pos, bit) {
+  if (bit === ROAD_N) return { x: pos.x, y: pos.y - 1 };
+  if (bit === ROAD_E) return { x: pos.x + 1, y: pos.y };
+  if (bit === ROAD_S) return { x: pos.x, y: pos.y + 1 };
+  return { x: pos.x - 1, y: pos.y };
+}
+
+function roadBitName(bit) {
+  if (bit === ROAD_N) return "north";
+  if (bit === ROAD_E) return "east";
+  if (bit === ROAD_S) return "south";
+  return "west";
+}
+
+function isAnyPoiFootprint(pois, x, y) {
+  return pois.some((poi) => poiFootprintTiles(poi).some((tile) => tile.x === x && tile.y === y));
 }
 
 function assertNoActiveDeprecatedReference(file, text, value) {

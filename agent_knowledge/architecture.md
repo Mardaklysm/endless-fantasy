@@ -73,7 +73,7 @@ Ignored/generated folders:
 - Imported world object overlay manifest from `src/data/worldObjects.ts` for the active `world_objects` atlas, 8x8 source rectangles, object IDs, categories, tags, and source metadata.
 - Imported dungeon/city tile manifest from `src/data/dungeonTiles.ts` for the active `dungeon_atlas`, 8x8 source rectangles, shared source-edge inset, tile IDs, categories, themes, and tags. The current atlas has 64 classified dungeon/city cells.
 - `src/world/seededRng.ts`: deterministic RNG/hash/noise helpers shared by map and dungeon generation.
-- `src/world/worldGenerator.ts`: seeded deterministic `atlas_v3_archipelago_world` generation. It starts from ocean, builds three irregular islands (Greenhaven, Coralreach, Ashfang Isle), tracks island metadata/tile maps, places towns/harbors/dungeons/landmarks, carves deduped oriented roads, paints simple beach and shallow-water rings, records sea routes and dock markers, and validates island-local reachability. Greenhaven/Coralreach use `medium_grass` as the dominant grass with clustered variants instead of per-tile random grass.
+- `src/world/worldGenerator.ts`: seeded deterministic `atlas_v3_archipelago_world` generation. It starts from ocean, builds three irregular islands (Greenhaven, Coralreach, Ashfang Isle), tracks island metadata/tile maps, places towns/harbors/dungeons/landmarks, carves deduped road logic to approach tiles outside POI footprints, emits per-cell N/E/S/W `roadVisuals` masks with source-tile rotation for missing atlas orientations, paints single-tile beach sand and shallow-water rings, records sea routes and dock markers, and validates island-local reachability plus road visual-mask consistency. Greenhaven/Coralreach use `medium_grass` as the dominant grass with clustered variants instead of per-tile random grass.
 - `src/world/dungeonGenerator.ts`: deterministic room-and-corridor dungeon floor generation from `worldSeed + dungeonId + tier`, including entrance/stairs, chests, switch/gate, and boss placement.
 - `SynthAudio`: WebAudio helper for generated music loops and sound effects.
 - `CrystalOathScene`: main Phaser scene containing game state, input handling, map movement, battles, menus, save/load, and rendering.
@@ -137,9 +137,9 @@ Render resolution is split into clear constants: `DESIGN_WIDTH = 1920`, `DESIGN_
 
 Texture filtering is per asset family: battle backgrounds use linear filtering and the canvas CSS uses `image-rendering: auto`; sprites, tiles, UI, icons, enemies, and class sheets use nearest-neighbor texture filtering.
 
-New games call the seeded archipelago generator. The generated world includes the tile grid, island ids per tile, island records, POI coordinates and object IDs, seed-derived ocean object overlays, start position, harbor docks, shallow-water/detail coordinates, sea routes, entry triggers, and validation result. `CrystalOathScene.locations()` adapts generated POIs back into town/dungeon/gate/final entry behavior and also exposes harbor/landmark overworld interactions.
+New games call the seeded archipelago generator. The generated world includes the tile grid, island ids per tile, island records, POI coordinates and object IDs, seed-derived ocean object overlays, start position, harbor docks, shallow-water/detail coordinates, sea routes, road visual masks, entry triggers, and validation result. `CrystalOathScene.locations()` adapts generated POIs back into town/dungeon/gate/final entry behavior and also exposes harbor/landmark overworld interactions.
 
-The terrain cache still draws atlas-v3 base tiles only. Shallow water is now an atlas tile; `drawWorldOverlays` adds route dots, seed-derived `world_objects` ocean overlays, and pier-atlas dock/bridge cells over the cached map without modifying atlas pixels. `drawLocationIcon` prefers POI `objectId` values from `world_objects` for generated dungeons/landmarks/harbors, then falls back to legacy marker textures or generated art.
+The terrain cache still draws atlas-v3 base tiles only, with a road exception: generated `roadVisuals` can draw a known-good road source cell rotated by 90/180/270 degrees so the visual connectors match the logical road mask even when the atlas lacks a dedicated orientation. Shallow water is now an atlas tile; `drawWorldOverlays` adds route dots, seed-derived `world_objects` ocean overlays, and pier-atlas dock/bridge cells over the cached map without modifying atlas pixels. `drawLocationIcon` prefers POI `objectId` values from `world_objects` for generated dungeons/landmarks/harbors, then falls back to legacy marker textures or generated art.
 
 Battle rendering is split into helper sections:
 
@@ -174,7 +174,7 @@ Mouse support is minimal and mainly starts audio/click blips.
 
 `saveGame()` serializes party, inventory, gear, gold, world seed, current island id, positions, current town/dungeon, story/travel flags, discovered POIs, opened chests, puzzle flags, defeated bosses, cleared dungeons, settings, and encounter counter to `localStorage`.
 
-`loadGame()` reads `crystal-oath-save-v1`, rebuilds the generated overworld from the saved `worldSeed`, normalizes older saves with missing travel/discovery/skill fields, restores state, returns to `world`, and marks the scene dirty. There is still no explicit numeric schema version.
+`loadGame()` reads `crystal-oath-save-v1`, rebuilds the generated overworld from the saved `worldSeed`, normalizes older saves with missing travel/discovery/skill fields, snaps invalid dungeon positions back to the generated entrance/stair marker for that dungeon floor, restores state, returns to `world`, and marks the scene dirty. There is still no explicit numeric schema version.
 
 ## Audio Approach
 
