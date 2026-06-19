@@ -30,6 +30,10 @@ This runs `tools/worldgen/test_worldgen.mjs`. It validates the active `atlas_v3`
 - the manifest has 29 non-empty tiles and 35 mostly-black empty cells
 - empty atlas cells are not tile IDs and are not present in worldgen pools
 - every non-empty source rectangle uses exact 8x8 grid math and stays inside bounds
+- `ATLAS_V3_SOURCE_INSET` remains within each 128x128 source cell and is easy to test with values 1 through 4
+- inset source rectangle calculation is covered with an explicit inset-2 sample and with the active runtime inset
+- runtime cache rendering, fallback visible-tile drawing, and debug previews all use the same shared inset source-rect helper
+- runtime source no longer imports or calls the removed map-level seam repair module
 - runtime source files do not actively reference the failed classic tileset, `classicIsland`, old 10x10 atlas, or classic object renderer
 - start tile is walkable grass
 - required POIs are reachable and not on blocked/water terrain
@@ -38,12 +42,6 @@ This runs `tools/worldgen/test_worldgen.mjs`. It validates the active `atlas_v3`
 - generated worlds contain no roads, rivers, bridges, or empty-cell references
 - same seed reproduces the same world
 - different seeds produce different tile grids
-- cached black seam repair replaces only near-black pixels inside narrow expected seam/corner areas
-- non-black terrain pixels remain byte-identical after seam repair
-- seam repair searches for clean local tile-interior samples from `MIN_EDGE_SAMPLE_INSET = 3` through `MAX_EDGE_SAMPLE_INSET = 6`, never from dirty edge pixels
-- repaired seam pixels use `replacementMode: dual-side-mix`, so both adjacent tiles contribute when both sides have valid samples
-- same-tile black seams are repaired without broad terrain blending
-- near-black pixels away from tile seams are not changed
 
 To write a human-readable generation report and PNG minimap preview:
 
@@ -54,15 +52,12 @@ npm run debug:worldgen -- optional-seed
 Outputs:
 
 - `docs/debug/worldgen/latest-worldgen-report.md`
+- `docs/debug/worldgen/atlas-v3-source-inset-report.md`
+- `docs/debug/worldgen/atlas-v3-source-inset-preview.png`
 - `docs/debug/worldgen/atlas-v3-world-preview.png`
 - `docs/debug/worldgen/world-preview-seed-<seed>.png`
-- `docs/debug/worldgen/black-seam-repair-before.png`
-- `docs/debug/worldgen/black-seam-repair-after.png`
-- `docs/debug/worldgen/black-seam-repair-mask.png`
-- `docs/debug/worldgen/black-seam-repair-diff.png`
-- `docs/debug/worldgen/black-seam-repair-report.md`
 
-The black seam repair mask should show only thin repaired grid-line pixels. If it shows broad seam bands or tile interiors, the repair pass is wrong.
+The source-inset report should confirm the runtime cache, fallback draw path, and debug preview all use `ATLAS_V3_SOURCE_INSET`, and that map-level terrain blending/neighbor-pixel mutation is disabled.
 
 ## Asset Import Validation
 

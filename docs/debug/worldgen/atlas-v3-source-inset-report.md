@@ -1,54 +1,3 @@
-# Generated World Debug Report
-
-Worldgen mode: `atlas_v3_tile_world`
-Active world tileset: `atlas_v3`
-Grid: 8x8
-Using empty cells: false
-Using classic special tileset: false
-Using old 10x10 atlas: false
-Seed: `atlas-v3-source-inset-v1`
-Map size: 96x64
-Validation: valid
-Start position: 17,35
-Road tiles carved: 0
-River count: 0
-Bridge count: 0
-
-## POIs
-
-- Dawnford (dawnford, town) at 17,33, footprint 3
-- Brinewick (brinewick, town) at 28,44, footprint 3
-- Elderleaf (elderleaf, town) at 23,16, footprint 3
-- Sunbarrow (sunbarrow, town) at 63,29, footprint 3
-- Starfall Gate (starfallGate, gate) at 79,40, footprint 3
-- Moss Cave (mossCave, dungeon) at 32,21, footprint 3
-- Ashen Keep (ashenKeep, dungeon) at 55,21, footprint 3
-- Tide Shrine (tideShrine, dungeon) at 67,46, footprint 3
-- Skyglass Tower (skyglassTower, dungeon) at 68,12, footprint 3
-- Eclipse Spire (eclipseSpire, final) at 83,14, footprint 3
-
-## Biome Counts
-
-- darkland: 176
-- desert: 236
-- grassland: 5394
-- lava: 2
-- mountain: 173
-- snow: 55
-- water: 108
-
-## Reachability
-
-Reachable POIs: dawnford, brinewick, elderleaf, sunbarrow, starfallGate, mossCave, ashenKeep, tideShrine, skyglassTower, eclipseSpire
-
-## Validation Errors
-
-- none
-
-## Validation Warnings
-
-- none
-
 # Atlas v3 Source Inset Report
 
 Atlas source path: `D:/Projects/new_artwork/atlas_v3.jpeg`
@@ -80,4 +29,3 @@ Worldgen seed: `atlas-v3-source-inset-v1`
 Source-inset preview: `docs/debug/worldgen/atlas-v3-source-inset-preview.png`
 Gameplay-style preview: `docs/debug/worldgen/atlas-v3-world-preview.png`
 Seed preview: `docs/debug/worldgen/world-preview-seed-atlas-v3-source-inset-v1.png`
-

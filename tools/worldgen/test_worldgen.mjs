@@ -7,38 +7,28 @@ import {
   ATLAS_V3_EMPTY_CELLS,
   ATLAS_V3_MANIFEST,
   ATLAS_V3_NON_EMPTY_CELLS,
+  ATLAS_V3_SOURCE_INSET,
   WORLD_ATLAS,
   WORLD_TILE_DEFINITIONS,
   WORLD_TILE_ID_SET,
   WORLD_TILE_IDS,
+  atlasV3SourceRectWithInset,
   isWorldTileWalkable,
-  worldTileBlendGroup,
   worldTileById,
   worldTileHasTag
 } from "../../src/data/worldTiles.ts";
-import {
-  BLACK_SEAM_REPAIR_DEV_OPTIONS,
-  INTERIOR_SAMPLE_INSET,
-  INTERIOR_SAMPLE_JITTER,
-  MAX_FALLBACK_INSET,
-  NEAR_BLACK_LUMINANCE_THRESHOLD,
-  RELATIVE_DARKNESS_THRESHOLD,
-  SEAM_SEARCH_RADIUS,
-  SEAM_TARGET_RADIUS,
-  repairBlackSeamsImageData
-} from "../../src/world/terrainBlending.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PROJECT_ROOT = path.resolve(__dirname, "..", "..");
 
 validateAtlasV3();
-validateBlackSeamRepairMetadata();
+validateAtlasV3SourceInset();
 validateRuntimeReferences();
+validateRuntimeDebugInsetConsistency();
 validateWorldgen();
-validateBlackSeamRepair();
 
-console.log("atlas_v3 atlas, worldgen, and black seam repair validation passed.");
+console.log("atlas_v3 source inset, worldgen, and runtime reference validation passed.");
 
 function validateAtlasV3() {
   const runtimeAtlasPath = path.join(PROJECT_ROOT, WORLD_ATLAS.image);
@@ -50,6 +40,7 @@ function validateAtlasV3() {
   assert(WORLD_ATLAS.id === "atlas_v3", `Active world tileset is ${WORLD_ATLAS.id}, expected atlas_v3.`);
   assert(WORLD_ATLAS.textureKey === "atlas_v3", `Active world texture key is ${WORLD_ATLAS.textureKey}, expected atlas_v3.`);
   assert(WORLD_ATLAS.columns === 8 && WORLD_ATLAS.rows === 8, `World atlas grid is ${WORLD_ATLAS.columns}x${WORLD_ATLAS.rows}, expected 8x8.`);
+  assert(WORLD_ATLAS.sourceInset === ATLAS_V3_SOURCE_INSET, "WORLD_ATLAS source inset does not match the shared inset constant.");
   assert(WORLD_ATLAS.emptyCellsActive === false, "Empty atlas cells are marked active.");
   assert(WORLD_ATLAS.usingClassicSpecialTileset === false, "Classic special tileset is marked active.");
   assert(WORLD_ATLAS.usingOld10x10Atlas === false, "Old 10x10 atlas is marked active.");
@@ -94,20 +85,35 @@ function validateAtlasV3() {
   assert(isWorldTileWalkable(WORLD_TILE_IDS.gravelStoneGround), "gravel_stone_ground must be walkable.");
 }
 
-function validateBlackSeamRepairMetadata() {
-  assert(BLACK_SEAM_REPAIR_DEV_OPTIONS.enabled === true, "Black seam repair should be enabled by default.");
-  assert(BLACK_SEAM_REPAIR_DEV_OPTIONS.debugView === false, "Black seam repair debug view should be off by default.");
-  assert(SEAM_SEARCH_RADIUS === 4, `Expected seam search radius 4, got ${SEAM_SEARCH_RADIUS}.`);
-  assert(SEAM_TARGET_RADIUS === 2, `Expected seam target radius 2, got ${SEAM_TARGET_RADIUS}.`);
-  assert(INTERIOR_SAMPLE_INSET === 4, `Expected interior sample inset 4, got ${INTERIOR_SAMPLE_INSET}.`);
-  assert(MAX_FALLBACK_INSET === 8, `Expected max fallback inset 8, got ${MAX_FALLBACK_INSET}.`);
-  assert(INTERIOR_SAMPLE_JITTER === 2, `Expected interior sample jitter 2, got ${INTERIOR_SAMPLE_JITTER}.`);
-  assert(NEAR_BLACK_LUMINANCE_THRESHOLD === 38, `Expected near-black threshold 38, got ${NEAR_BLACK_LUMINANCE_THRESHOLD}.`);
-  assert(RELATIVE_DARKNESS_THRESHOLD === 26, `Expected relative darkness threshold 26, got ${RELATIVE_DARKNESS_THRESHOLD}.`);
+function validateAtlasV3SourceInset() {
+  assert(ATLAS_V3_SOURCE_INSET >= 0, `atlas_v3 source inset must be non-negative, got ${ATLAS_V3_SOURCE_INSET}.`);
+  assert(ATLAS_V3_SOURCE_INSET * 2 < WORLD_ATLAS.tileWidth, `atlas_v3 source inset ${ATLAS_V3_SOURCE_INSET} is too wide for ${WORLD_ATLAS.tileWidth}px tiles.`);
+  assert(ATLAS_V3_SOURCE_INSET * 2 < WORLD_ATLAS.tileHeight, `atlas_v3 source inset ${ATLAS_V3_SOURCE_INSET} is too tall for ${WORLD_ATLAS.tileHeight}px tiles.`);
+
+  const sample = atlasV3SourceRectWithInset({ x: 128, y: 256, width: 128, height: 128 }, 2);
+  assert(sample.x === 130, `Expected inset sample sx 130, got ${sample.x}.`);
+  assert(sample.y === 258, `Expected inset sample sy 258, got ${sample.y}.`);
+  assert(sample.width === 124, `Expected inset sample width 124, got ${sample.width}.`);
+  assert(sample.height === 124, `Expected inset sample height 124, got ${sample.height}.`);
+
+  for (const testInset of [1, 2, 3, 4]) {
+    const rect = atlasV3SourceRectWithInset({ x: 0, y: 0, width: WORLD_ATLAS.tileWidth, height: WORLD_ATLAS.tileHeight }, testInset);
+    assert(rect.x === testInset && rect.y === testInset, `Inset ${testInset} did not offset x/y correctly.`);
+    assert(rect.width === WORLD_ATLAS.tileWidth - testInset * 2, `Inset ${testInset} did not shrink width correctly.`);
+    assert(rect.height === WORLD_ATLAS.tileHeight - testInset * 2, `Inset ${testInset} did not shrink height correctly.`);
+  }
 
   for (const tile of WORLD_TILE_DEFINITIONS) {
-    assert(worldTileBlendGroup(tile.id), `Tile ${tile.id} has no blend group.`);
-    assert(tile.blendGroup === worldTileBlendGroup(tile.id), `Tile ${tile.id} blend group does not match helper.`);
+    const rect = atlasV3SourceRectWithInset(tile.sourceRect);
+    assert(rect.x === tile.sourceRect.x + ATLAS_V3_SOURCE_INSET, `Tile ${tile.id} inset source x is wrong.`);
+    assert(rect.y === tile.sourceRect.y + ATLAS_V3_SOURCE_INSET, `Tile ${tile.id} inset source y is wrong.`);
+    assert(rect.width === tile.sourceRect.width - ATLAS_V3_SOURCE_INSET * 2, `Tile ${tile.id} inset source width is wrong.`);
+    assert(rect.height === tile.sourceRect.height - ATLAS_V3_SOURCE_INSET * 2, `Tile ${tile.id} inset source height is wrong.`);
+    assert(rect.x >= tile.sourceRect.x && rect.y >= tile.sourceRect.y, `Tile ${tile.id} inset source starts outside the manifest rect.`);
+    assert(rect.x + rect.width <= tile.sourceRect.x + tile.sourceRect.width, `Tile ${tile.id} inset source exceeds manifest width.`);
+    assert(rect.y + rect.height <= tile.sourceRect.y + tile.sourceRect.height, `Tile ${tile.id} inset source exceeds manifest height.`);
+    assert(rect.x + rect.width <= WORLD_ATLAS.sheetWidth, `Tile ${tile.id} inset source exceeds atlas width.`);
+    assert(rect.y + rect.height <= WORLD_ATLAS.sheetHeight, `Tile ${tile.id} inset source exceeds atlas height.`);
   }
 }
 
@@ -126,8 +132,28 @@ function validateRuntimeReferences() {
     for (const value of deprecated) assertNoActiveDeprecatedReference(file, text, value);
   }
 
+  const gameplayRuntime = fs.readFileSync(path.join(PROJECT_ROOT, "src/main.ts"), "utf8");
+  assert(!gameplayRuntime.includes("terrainBlending"), "Runtime still imports or references terrainBlending.");
+  assert(!gameplayRuntime.includes("repairBlackSeamsImageData"), "Runtime still calls map-level black seam repair.");
+  assert(!gameplayRuntime.includes("BLACK_SEAM_REPAIR"), "Runtime still references black seam repair settings.");
+  assert(!fs.existsSync(path.join(PROJECT_ROOT, "src/world/terrainBlending.ts")), "terrainBlending.ts still exists in active runtime source.");
+
   const packageJson = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, "package.json"), "utf8"));
   assert(!packageJson.scripts.test.includes("test_classic_world_tileset"), "npm test still runs the classic world tileset test.");
+}
+
+function validateRuntimeDebugInsetConsistency() {
+  const dataText = fs.readFileSync(path.join(PROJECT_ROOT, "src/data/worldTiles.ts"), "utf8");
+  const runtimeText = fs.readFileSync(path.join(PROJECT_ROOT, "src/main.ts"), "utf8");
+  const debugText = fs.readFileSync(path.join(PROJECT_ROOT, "tools/worldgen/write_worldgen_debug.mjs"), "utf8");
+
+  assert(/export const ATLAS_V3_SOURCE_INSET = [1234]/.test(dataText), "Shared atlas_v3 source inset should stay easy to test with 1, 2, 3, or 4.");
+  assert(runtimeText.includes("ATLAS_V3_SOURCE_INSET"), "Runtime does not import/use the shared atlas_v3 source inset.");
+  assert(runtimeText.includes("atlasV3SourceRectWithInset"), "Runtime does not use the shared inset source rect helper.");
+  assert(debugText.includes("ATLAS_V3_SOURCE_INSET"), "Debug preview writer does not import/use the shared atlas_v3 source inset.");
+  assert(debugText.includes("atlasV3SourceRectWithInset"), "Debug preview writer does not use the shared inset source rect helper.");
+  assert(!debugText.includes("repairBlackSeamsImageData"), "Debug preview writer still runs map-level seam repair.");
+  assert(!debugText.includes("from \"../../src/world/terrainBlending.ts\""), "Debug preview writer still imports terrainBlending.");
 }
 
 function validateWorldgen() {
@@ -158,7 +184,7 @@ function validateWorldgen() {
       for (const tile of row) {
         assert(WORLD_TILE_ID_SET.has(tile), `World ${i} generated unknown or empty tile ID ${tile}.`);
         const def = worldTileById(tile);
-        assert(def && !def.empty, `World ${i} generated an empty atlas cell ${tile}.`);
+        assert(def, `World ${i} generated an atlas cell without a tile definition: ${tile}.`);
         if (worldTileHasTag(tile, "water")) {
           sawWater = true;
           assert(!isWorldTileWalkable(tile), `World ${i} water tile ${tile} is walkable.`);
@@ -186,136 +212,6 @@ function validateWorldgen() {
   assert(sawDifferentWorld, "Generated worlds did not vary across different seeds.");
 }
 
-function validateBlackSeamRepair() {
-  validateOnlyBlackSeamPixelsChange();
-  validateInteriorSampleReplacement();
-  validateNoBroadBandModification();
-  validateSameTileSeamRepair();
-  validateDarkTerrainSafety();
-  validateDisabledRepairIsNoop();
-  validateWaterVerticalLineRepair();
-  validateWaterSameTileSeamRepair();
-  validateOldPixelNotUsedAsSource();
-  validateMaskIsThinLines();
-  validateStrictModeThrows();
-  validateNonStrictModeFallsBack();
-}
-
-function validateOnlyBlackSeamPixelsChange() {
-  const tileSize = 32;
-  const seamX = tileSize;
-  const image = makeTwoTileImage(tileSize, [220, 40, 30, 255], [30, 180, 70, 255]);
-  blackenRect(image, seamX - 1, 0, 3, tileSize);
-  const before = cloneImage(image);
-  const report = repairBlackSeamsImageData(image, [[WORLD_TILE_IDS.brightGrass, WORLD_TILE_IDS.darkGrass]], {
-    seed: "black-seam-only",
-    tileSize,
-    captureMask: true,
-    enabled: true,
-    debugView: false
-  });
-  assert(report.verticalSeamReplacementCount === 3 * tileSize, `Expected exactly the 3px black seam to be repaired, got ${report.verticalSeamReplacementCount}.`);
-  for (let y = 0; y < image.height; y += 1) {
-    for (let x = 0; x < image.width; x += 1) {
-      const wasBlackSeam = x >= seamX - 1 && x <= seamX + 1;
-      if (wasBlackSeam) {
-        assert(report.mask[y * image.width + x] === 1, `Black seam pixel ${x},${y} was not marked repaired.`);
-      } else {
-        assertPixelsEqual(image, before, x, y, `Non-black pixel ${x},${y} was changed.`);
-      }
-    }
-  }
-}
-
-function validateInteriorSampleReplacement() {
-  const tileSize = 32;
-  const seamX = tileSize;
-  const leftInterior = [111, 12, 13, 255];
-  const rightInterior = [17, 122, 19, 255];
-  const image = makeTwoTileImage(tileSize, [200, 80, 70, 255], [50, 210, 90, 255]);
-  fillRect(image, seamX - INTERIOR_SAMPLE_INSET - 1, 0, 3, tileSize, leftInterior);
-  fillRect(image, seamX + INTERIOR_SAMPLE_INSET - 1, 0, 3, tileSize, rightInterior);
-  blackenRect(image, seamX - 1, 0, 3, tileSize);
-  repairBlackSeamsImageData(image, [[WORLD_TILE_IDS.brightGrass, WORLD_TILE_IDS.darkGrass]], { seed: "interior-source", tileSize });
-  // With dither-pick, repaired pixels should be either left or right interior color (not black, not a lerp mix)
-  for (let y = 4; y < tileSize - 4; y += 1) {
-    for (const dx of [-1, 0, 1]) {
-      const color = pixelColor(image, seamX + dx, y);
-      const lum = luminance(color);
-      // Must not be near-black
-      assert(lum > 20, `Seam pixel at dx=${dx},y=${y} still dark: ${color.join(",")} lum=${lum.toFixed(1)}.`);
-      // Should be close to either interior sample (allowing for jitter variation)
-      const leftDist = colorDistance(color, leftInterior);
-      const rightDist = colorDistance(color, rightInterior);
-      assert(leftDist < 120 || rightDist < 120, `Seam pixel at dx=${dx},y=${y} is neither interior: ${color.join(",")} vs ${leftInterior.slice(0,3).join(",")} or ${rightInterior.slice(0,3).join(",")}.`);
-    }
-  }
-}
-
-function validateNoBroadBandModification() {
-  const tileSize = 32;
-  const seamX = tileSize;
-  const image = makeTwoTileImage(tileSize, [160, 120, 80, 255], [70, 150, 210, 255]);
-  blackenRect(image, seamX, 0, 1, tileSize);
-  const before = cloneImage(image);
-  const report = repairBlackSeamsImageData(image, [[WORLD_TILE_IDS.brightGrass, WORLD_TILE_IDS.deepWater]], {
-    seed: "no-broad-band",
-    tileSize,
-    captureMask: true
-  });
-  assert(report.verticalSeamReplacementCount === tileSize, `Expected one black seam column repaired, got ${report.verticalSeamReplacementCount}.`);
-  assert(report.replacedPixelPercent < 2, `Repair changed too many pixels: ${report.replacedPixelPercent.toFixed(2)}%.`);
-  for (let y = 0; y < image.height; y += 1) {
-    for (const x of [seamX - 2, seamX - 1, seamX + 1, seamX + 2]) {
-      assertPixelsEqual(image, before, x, y, `Non-black seam-band pixel ${x},${y} was changed.`);
-    }
-  }
-}
-
-function validateSameTileSeamRepair() {
-  const tileSize = 32;
-  const seamX = tileSize;
-  const image = makeTwoTileImage(tileSize, [84, 166, 70, 255], [84, 166, 70, 255]);
-  blackenRect(image, seamX, 0, 1, tileSize);
-  const report = repairBlackSeamsImageData(image, [[WORLD_TILE_IDS.brightGrass, WORLD_TILE_IDS.brightGrass]], { seed: "same-tile-repair", tileSize });
-  assert(report.verticalSeamReplacementCount === tileSize, "Same-tile black seam was not repaired exactly.");
-  for (let y = 0; y < tileSize; y += 1) {
-    assert(luminance(pixelColor(image, seamX, y)) > NEAR_BLACK_LUMINANCE_THRESHOLD, `Same-tile seam remains near black at y=${y}.`);
-  }
-}
-
-function validateDarkTerrainSafety() {
-  const tileSize = 32;
-  const seamX = tileSize;
-  const darkDetail = [42, 42, 42, 255];
-  const image = makeTwoTileImage(tileSize, [64, 54, 72, 255], [70, 60, 76, 255]);
-  fillRect(image, seamX - 2, 8, 1, 8, darkDetail);
-  blackenRect(image, seamX, 0, 1, tileSize);
-  blackenRect(image, 4, 4, 2, 2);
-  const before = cloneImage(image);
-  repairBlackSeamsImageData(image, [[WORLD_TILE_IDS.ashBlackGround, WORLD_TILE_IDS.cursedPurpleGround]], { seed: "dark-safety", tileSize });
-  for (let y = 8; y < 16; y += 1) {
-    assertPixelsEqual(image, before, seamX - 2, y, `Non-black dark seam detail ${seamX - 2},${y} was changed.`);
-  }
-  for (let y = 4; y < 6; y += 1) {
-    for (let x = 4; x < 6; x += 1) {
-      assertPixelsEqual(image, before, x, y, `Near-black pixel away from a seam ${x},${y} was changed.`);
-    }
-  }
-  assert(luminance(pixelColor(image, seamX, 16)) > NEAR_BLACK_LUMINANCE_THRESHOLD, "Actual black seam on dark terrain was not repaired.");
-}
-
-function validateDisabledRepairIsNoop() {
-  const tileSize = 32;
-  const seamX = tileSize;
-  const image = makeTwoTileImage(tileSize, [100, 120, 80, 255], [80, 120, 160, 255]);
-  blackenRect(image, seamX, 0, 1, tileSize);
-  const before = cloneImage(image);
-  const report = repairBlackSeamsImageData(image, [[WORLD_TILE_IDS.brightGrass, WORLD_TILE_IDS.darkGrass]], { seed: "disabled", tileSize, enabled: false });
-  assert(report.totalReplacedPixels === 0, "Disabled repair should not replace pixels.");
-  assert(Buffer.compare(image.data, before.data) === 0, "Disabled repair changed pixels.");
-}
-
 function assertNoActiveDeprecatedReference(file, text, value) {
   let activeText = text;
   activeText = activeText.replace(`"!./assets/world/${value}"`, "");
@@ -331,324 +227,6 @@ function readPngDimensions(filePath) {
     width: buffer.readUInt32BE(16),
     height: buffer.readUInt32BE(20)
   };
-}
-
-function makeSyntheticTerrainImage(world, tileSize) {
-  const image = {
-    width: world.width * tileSize,
-    height: world.height * tileSize,
-    data: Buffer.alloc(world.width * tileSize * world.height * tileSize * 4)
-  };
-  for (let y = 0; y < world.height; y += 1) {
-    for (let x = 0; x < world.width; x += 1) {
-      const color = colorForBlendGroup(worldTileBlendGroup(world.tiles[y][x]));
-      fillSyntheticTile(image, x * tileSize, y * tileSize, tileSize, color);
-    }
-  }
-  return image;
-}
-
-function fillSyntheticTile(image, x, y, tileSize, color) {
-  for (let yy = 0; yy < tileSize; yy += 1) {
-    for (let xx = 0; xx < tileSize; xx += 1) {
-      const offset = ((y + yy) * image.width + x + xx) * 4;
-      image.data[offset] = color[0] + ((xx + yy) % 2);
-      image.data[offset + 1] = color[1];
-      image.data[offset + 2] = color[2];
-      image.data[offset + 3] = 255;
-    }
-  }
-}
-
-function colorForBlendGroup(group) {
-  if (group === "desert") return [210, 168, 83];
-  if (group === "snow") return [218, 232, 238];
-  if (group === "ice") return [154, 204, 226];
-  if (group === "dark") return [74, 58, 82];
-  if (group === "water") return [40, 112, 190];
-  if (group === "rock") return [102, 101, 92];
-  if (group === "lava") return [210, 76, 42];
-  return [83, 161, 70];
-}
-
-function cloneImage(image) {
-  return { width: image.width, height: image.height, data: Buffer.from(image.data) };
-}
-
-function makeTwoTileImage(tileSize, leftColor, rightColor) {
-  const image = makeSolidImage(tileSize * 2, tileSize, leftColor);
-  fillRect(image, tileSize, 0, tileSize, tileSize, rightColor);
-  return image;
-}
-
-function makeSolidImage(width, height, color) {
-  const image = { width, height, data: Buffer.alloc(width * height * 4) };
-  fillRect(image, 0, 0, width, height, color);
-  return image;
-}
-
-function fillRect(image, x, y, width, height, color) {
-  for (let yy = y; yy < y + height; yy += 1) {
-    for (let xx = x; xx < x + width; xx += 1) {
-      const offset = (yy * image.width + xx) * 4;
-      image.data[offset] = color[0];
-      image.data[offset + 1] = color[1];
-      image.data[offset + 2] = color[2];
-      image.data[offset + 3] = color[3];
-    }
-  }
-}
-
-function blackenRect(image, x, y, width, height) {
-  fillRect(image, x, y, width, height, [0, 0, 0, 255]);
-}
-
-function pixelColor(image, x, y) {
-  const offset = (y * image.width + x) * 4;
-  return [image.data[offset], image.data[offset + 1], image.data[offset + 2]];
-}
-
-function luminance(color) {
-  return color[0] * 0.2126 + color[1] * 0.7152 + color[2] * 0.0722;
-}
-
-function colorDistance(a, b) {
-  return Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
-}
-
-function assertPixelsEqual(a, b, x, y, message) {
-  const offset = (y * a.width + x) * 4;
-  for (let channel = 0; channel < 4; channel += 1) {
-    assert(a.data[offset + channel] === b.data[offset + channel], message);
-  }
-}
-
-function assertColorEquals(actual, expected, message) {
-  assert(actual[0] === expected[0] && actual[1] === expected[1] && actual[2] === expected[2], `${message} Got ${actual.join(",")}, expected ${expected.slice(0, 3).join(",")}.`);
-}
-
-// ─── New tests for improved seam repair ──────────────────────────────────
-
-function validateWaterVerticalLineRepair() {
-  // Simulate water tiles with a dark-but-not-black vertical seam line.
-  // The dark line should be detected via relative darkness, not just near-black.
-  const tileSize = 32;
-  const seamX = tileSize;
-  const waterBase = [30, 90, 150, 255];   // dark blue water
-  const seamDark = [15, 55, 105, 255];     // darker seam line (not pure black)
-  const image = makeTwoTileImage(tileSize, waterBase, waterBase);
-  // Draw a 3px darker vertical line at the seam
-  fillRect(image, seamX - 1, 0, 3, tileSize, seamDark);
-  const before = cloneImage(image);
-
-  const report = repairBlackSeamsImageData(image, [[WORLD_TILE_IDS.deepWater, WORLD_TILE_IDS.deepWater]], {
-    seed: "water-vertical-line",
-    tileSize,
-    captureMask: true,
-    enabled: true
-  });
-
-  // The dark 3px seam line should be repaired
-  assert(report.verticalSeamReplacementCount > 0, "Water vertical seam had no repairs.");
-  assert(report.waterSeamReplacementCount > 0, "Water seam replacement counter not incremented.");
-
-  // Verify the seam pixels were actually changed (not left dark)
-  const repairedSeamLuminances = [];
-  for (let y = 4; y < tileSize - 4; y += 1) {
-    for (let dx = -1; dx <= 1; dx += 1) {
-      const lum = luminance(pixelColor(image, seamX + dx, y));
-      repairedSeamLuminances.push(lum);
-    }
-  }
-  const avgRepairedLuminance = repairedSeamLuminances.reduce((a, b) => a + b, 0) / repairedSeamLuminances.length;
-  const seamDarkLuminance = luminance(seamDark);
-  assert(avgRepairedLuminance > seamDarkLuminance + 5, `Water seam still dark after repair (avg ${avgRepairedLuminance.toFixed(1)} vs dark ${seamDarkLuminance.toFixed(1)}).`);
-
-  // Non-seam water pixels away from seam should be unchanged
-  for (let y = 4; y < tileSize - 4; y += 1) {
-    for (const distX of [5, 10, 20]) {
-      assertPixelsEqual(image, before, seamX - distX, y, `Water pixel ${seamX - distX},${y} was changed away from seam.`);
-      assertPixelsEqual(image, before, seamX + distX, y, `Water pixel ${seamX + distX},${y} was changed away from seam.`);
-    }
-  }
-
-  // Mask should mark repaired pixels
-  const repairedCount = countMaskPixels(report.mask, image.width, image.height);
-  assert(repairedCount > 0, "Mask has no repaired pixels for water seam.");
-  assert(repairedCount <= 5 * tileSize, `Mask has too many repaired pixels: ${repairedCount}.`);
-}
-
-function validateWaterSameTileSeamRepair() {
-  // Same water tile next to itself with a dark seam.
-  // Both sides are identical water, but the atlas edge creates a visible line.
-  const tileSize = 32;
-  const seamX = tileSize;
-  const waterColor = [35, 95, 155, 255];
-  const image = makeTwoTileImage(tileSize, waterColor, waterColor);
-  // Darken the seam line (simulating atlas edge artifact)
-  fillRect(image, seamX, 0, 2, tileSize, [18, 60, 110, 255]);
-  const before = cloneImage(image);
-
-  const report = repairBlackSeamsImageData(image, [[WORLD_TILE_IDS.deepWater, WORLD_TILE_IDS.deepWater]], {
-    seed: "water-same-tile",
-    tileSize,
-    captureMask: true,
-    enabled: true
-  });
-
-  assert(report.sameTileSeamReplacementCount > 0, "Same-tile water seam counter not incremented.");
-  assert(report.waterSeamReplacementCount > 0, "Water seam counter not incremented for same-tile.");
-
-  // Seam should be repaired
-  for (let y = 4; y < tileSize - 4; y += 1) {
-    const seamLuminance = luminance(pixelColor(image, seamX, y));
-    assert(seamLuminance > NEAR_BLACK_LUMINANCE_THRESHOLD, `Same-tile water seam at y=${y} still dark (lum=${seamLuminance.toFixed(1)}).`);
-  }
-
-  // Interior pixels unchanged
-  for (let y = 4; y < tileSize - 4; y += 1) {
-    for (const distX of [8, 16, 24]) {
-      assertPixelsEqual(image, before, seamX - distX, y, `Same-tile water pixel left changed.`);
-      assertPixelsEqual(image, before, seamX + distX, y, `Same-tile water pixel right changed.`);
-    }
-  }
-}
-
-function validateOldPixelNotUsedAsSource() {
-  // The old seam pixel color must never appear in the replacement.
-  // We verify by checking the repaired pixel is NOT a lerp from black.
-  const tileSize = 32;
-  const seamX = tileSize;
-  const leftColor = [200, 50, 50, 255];   // bright red
-  const rightColor = [50, 200, 50, 255];  // bright green
-  const image = makeTwoTileImage(tileSize, leftColor, rightColor);
-  // Pure black seam
-  blackenRect(image, seamX, 0, 1, tileSize);
-
-  repairBlackSeamsImageData(image, [[WORLD_TILE_IDS.brightGrass, WORLD_TILE_IDS.darkGrass]], {
-    seed: "no-old-pixel-source",
-    tileSize,
-    enabled: true
-  });
-
-  // The repaired seam should be a mix of red and green (≈ yellow/brown),
-  // NOT a mix of black with either side (which would be dark red or dark green).
-  for (let y = 4; y < tileSize - 4; y += 1) {
-    const color = pixelColor(image, seamX, y);
-    const lum = luminance(color);
-    // If old black was used, luminance would be low. If clean mix, it should be bright.
-    assert(lum > 60, `Repaired seam pixel at y=${y} appears to mix old black: ${color.join(",")} lum=${lum.toFixed(1)}.`);
-    // The green channel should be significant (from right tile)
-    assert(color[1] > 40, `Repaired seam pixel missing green component at y=${y}: ${color.join(",")}.`);
-    // The red channel should be significant (from left tile)
-    assert(color[0] > 40, `Repaired seam pixel missing red component at y=${y}: ${color.join(",")}.`);
-  }
-}
-
-function validateMaskIsThinLines() {
-  // The repair mask should show only thin seam lines, not broad bands.
-  const tileSize = 32;
-  const image = makeTwoTileImage(tileSize, [100, 160, 80, 255], [80, 120, 200, 255]);
-  blackenRect(image, tileSize, 0, 1, tileSize);
-
-  const report = repairBlackSeamsImageData(image, [[WORLD_TILE_IDS.brightGrass, WORLD_TILE_IDS.deepWater]], {
-    seed: "mask-sanity",
-    tileSize,
-    captureMask: true,
-    enabled: true
-  });
-
-  const maskWidth = image.width;
-  const maskHeight = image.height;
-
-  // Count mask pixels per column — the mask should be concentrated at the seam
-  const colCounts = new Array(maskWidth).fill(0);
-  for (let y = 0; y < maskHeight; y += 1) {
-    for (let x = 0; x < maskWidth; x += 1) {
-      if (report.mask[y * maskWidth + x]) colCounts[x] += 1;
-    }
-  }
-
-  // The seam column should have the most repairs
-  const seamColCount = colCounts[tileSize];
-  assert(seamColCount >= tileSize * 0.8, `Seam column only has ${seamColCount}/${tileSize} mask pixels.`);
-
-  // Columns more than 2px away from seam should have zero repairs
-  for (let x = 0; x < maskWidth; x += 1) {
-    if (Math.abs(x - tileSize) <= 2) continue;
-    assert(colCounts[x] === 0, `Column ${x} has ${colCounts[x]} mask pixels outside seam band.`);
-  }
-
-  // Overall replacement ratio should be small
-  assert(report.replacedPixelPercent < 5, `Repair ratio ${report.replacedPixelPercent.toFixed(2)}% too high (expected < 5%).`);
-}
-
-function countMaskPixels(mask, width, height) {
-  let count = 0;
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      if (mask[y * width + x]) count += 1;
-    }
-  }
-  return count;
-}
-
-function validateStrictModeThrows() {
-  // In strict mode, a repair exceeding the safety limit should throw.
-  // Use a tiny maxReplacementRatio to force the limit.
-  const tileSize = 32;
-  const image = makeTwoTileImage(tileSize, [100, 100, 100, 255], [200, 200, 200, 255]);
-  // Darken the entire seam band — this will be detected and repaired.
-  blackenRect(image, tileSize - 1, 0, 3, tileSize);
-  let threw = false;
-  try {
-    repairBlackSeamsImageData(image, [[WORLD_TILE_IDS.brightGrass, WORLD_TILE_IDS.darkGrass]], {
-      seed: "strict-throw",
-      tileSize,
-      strict: true,
-      maxReplacementRatio: 0.01  // 1% limit, easily exceeded
-    });
-  } catch (e) {
-    threw = true;
-    assert(e.message.includes("too many pixels"), `Unexpected error message: ${e.message}`);
-  }
-  assert(threw, "Strict mode should throw when safety limit exceeded.");
-}
-
-function validateNonStrictModeFallsBack() {
-  // In non-strict (runtime) mode, exceeding the limit should:
-  // - NOT throw
-  // - return safetyExceeded=true, repairApplied=false
-  // - restore original image data
-  const tileSize = 32;
-  const image = makeTwoTileImage(tileSize, [100, 100, 100, 255], [200, 200, 200, 255]);
-  blackenRect(image, tileSize - 1, 0, 3, tileSize);
-  const before = cloneImage(image);
-
-  let report;
-  let threw = false;
-  try {
-    report = repairBlackSeamsImageData(image, [[WORLD_TILE_IDS.brightGrass, WORLD_TILE_IDS.darkGrass]], {
-      seed: "nonstrict-fallback",
-      tileSize,
-      strict: false,
-      maxReplacementRatio: 0.01,  // 1% limit
-      captureMask: true
-    });
-  } catch (e) {
-    threw = true;
-  }
-  assert(!threw, "Non-strict mode must not throw.");
-  assert(report.safetyExceeded === true, "Non-strict mode should report safety exceeded.");
-  assert(report.repairApplied === false, "Non-strict mode should report repair not applied.");
-  assert(report.runtimeFallbackUsed === true, "Non-strict mode should report fallback used.");
-
-  // Original image data must be preserved
-  for (let y = 0; y < tileSize; y += 1) {
-    for (let x = 0; x < tileSize * 2; x += 1) {
-      assertPixelsEqual(image, before, x, y, `Non-strict mode changed pixel ${x},${y} after safety exceeded.`);
-    }
-  }
 }
 
 function assert(condition, message) {

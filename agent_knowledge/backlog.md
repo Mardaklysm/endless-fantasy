@@ -13,6 +13,7 @@ This backlog is practical project memory, not a full design document. Keep it sh
 - Add simple effect rendering only after battle timing can show short animations without slowing commands.
 - Add v2-quality art for later-region normal enemies not covered by the first twelve common roster crops.
 - The current `atlas_v3_tile_world` generator deliberately omits roads, rivers, beaches, and bridges. Future work can add transition/route art only after compatible original atlas tiles exist.
+- If overworld terrain still feels grid-like after the atlas source inset, improve it with real transition tiles or lower-frequency worldgen patches; do not add map-level terrain pixel blending.
 - Consider dynamic loading/code splitting for large JPEG battle backgrounds and large normalized class sheets if bundle size becomes painful.
 
 ## Asset Manifest Follow-Up

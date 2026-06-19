@@ -12,6 +12,8 @@ export interface WorldSourceRect {
   height: number;
 }
 
+export const ATLAS_V3_SOURCE_INSET = 3;
+
 interface AtlasV3BaseCell {
   row: number;
   col: number;
@@ -87,6 +89,7 @@ export const WORLD_ATLAS = {
   image: ATLAS_V3_MANIFEST.runtimeImage,
   manifest: "src/assets/world/atlasV3.manifest.json",
   sourceImage: ATLAS_V3_MANIFEST.sourceImage,
+  sourceInset: ATLAS_V3_SOURCE_INSET,
   columns: ATLAS_V3_MANIFEST.columns,
   rows: ATLAS_V3_MANIFEST.rows,
   tileWidth: ATLAS_V3_MANIFEST.tileWidth,
@@ -230,6 +233,21 @@ export function worldTileEncounterFamily(tileId?: WorldTileId): WorldEncounterFa
 
 export function worldTileIdsMatching(predicate: (tile: WorldTileDefinition) => boolean): WorldTileId[] {
   return WORLD_TILE_DEFINITIONS.filter(predicate).map((tile) => tile.id);
+}
+
+export function atlasV3SourceRectWithInset(sourceRect: WorldSourceRect, inset = ATLAS_V3_SOURCE_INSET): WorldSourceRect {
+  if (!Number.isInteger(inset) || inset < 0) {
+    throw new Error(`atlas_v3 source inset must be a non-negative integer; got ${inset}.`);
+  }
+  if (inset * 2 >= sourceRect.width || inset * 2 >= sourceRect.height) {
+    throw new Error(`atlas_v3 source inset ${inset} is too large for source rect ${sourceRect.width}x${sourceRect.height}.`);
+  }
+  return {
+    x: sourceRect.x + inset,
+    y: sourceRect.y + inset,
+    width: sourceRect.width - inset * 2,
+    height: sourceRect.height - inset * 2
+  };
 }
 
 function cellKey(row: number, col: number): string {

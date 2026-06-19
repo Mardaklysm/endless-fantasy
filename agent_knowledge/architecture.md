@@ -29,7 +29,6 @@ D:\Projects\Endless Fantasy\
       characterSprites.ts
       worldTiles.ts
     world/
-      terrainBlending.ts
       worldGenerator.ts
     main.ts
     style.css
@@ -66,9 +65,8 @@ Ignored/generated folders:
 - Asset texture key/path maps and renderer lookup maps for terrain, locations, dungeons, enemies, portraits, and NPCs.
 - Data tables: `ITEMS`, `SPELLS`, `WEAPONS`, `ARMORS`, `ENEMIES`, `WORLD_TABLES`.
 - Imported class sprite manifest from `src/data/characterSprites.ts` for fighter/priest/wizard frame rectangles, anchors, and source metadata.
-- Imported world tile manifest from `src/data/worldTiles.ts` for the active `atlas_v3` overworld atlas, 8x8 source rectangles, empty-cell exclusion, tile IDs, walkability, movement cost, encounter family, and tags.
+- Imported world tile manifest from `src/data/worldTiles.ts` for the active `atlas_v3` overworld atlas, 8x8 source rectangles, shared source-edge inset, empty-cell exclusion, tile IDs, walkability, movement cost, encounter family, and tags.
 - `src/world/worldGenerator.ts`: seeded deterministic `atlas_v3_tile_world` generation, grass/desert/snow/dark/water/rock/lava patch placement, POI placement, reachability validation, and debug-report formatting. It does not generate roads, rivers, bridges, classic POI objects, or old 10x10 tile IDs.
-- `src/world/terrainBlending.ts`: cached map-level black seam repair for generated overworld terrain. It runs after tile placement/rendering, never edits `atlas_v3.png`, and replaces only near-black pixels found in narrow expected tile-boundary search areas.
 - `SynthAudio`: WebAudio helper for generated music loops and sound effects.
 - `CrystalOathScene`: main Phaser scene containing game state, input handling, map movement, battles, menus, save/load, and rendering.
 - Dungeon generation helpers: `makeDungeonFloors`, `blankDungeon`, `carveRect`, `carveLine`, `setTile`, `floorToStrings`.
@@ -122,9 +120,9 @@ The scene keeps generated fallback drawing for missing textures. It also tracks 
 
 Fighter/priest/wizard class sprites are normalized 5x2 transparent sheets in `assets_v2/characters/classes/`. Runtime rendering selects fixed manifest cells and positions each crop by manifest `bodyCenterX` and `feetBaselineY`, so walk and attack frames share a stable body anchor. The old Arlen/Mira/Kael tiny map/battle PNGs are excluded from the runtime asset glob.
 
-Overworld rendering uses the active `atlas_v3` tileset at `src/assets/world/atlas_v3.png` plus the imported manifest `src/assets/world/atlasV3.manifest.json`. `drawWorldTile` crops exact 8x8 atlas cell rectangles from `src/data/worldTiles.ts` and draws them at 32 layout pixels, scaled to 64 canvas pixels by the Full HD render scale. Black/empty atlas cells are not tile IDs and must not be generated or drawn. The classic special tileset and old generated 10x10 atlas are not active runtime terrain.
+Overworld rendering uses the active `atlas_v3` tileset at `src/assets/world/atlas_v3.png` plus the imported manifest `src/assets/world/atlasV3.manifest.json`. `drawWorldTile` and the terrain cache crop valid 8x8 atlas cell rectangles inward with `ATLAS_V3_SOURCE_INSET = 3` via `atlasV3SourceRectWithInset`, then draw the clean interior into the full 32 layout pixel destination tile, scaled to 64 canvas pixels by the Full HD render scale. Black/empty atlas cells are not tile IDs and must not be generated or drawn. The classic special tileset and old generated 10x10 atlas are not active runtime terrain.
 
-Generated overworld terrain is cached as a Phaser canvas texture when a world seed/layout is built. The cache first draws placed atlas tiles normally, then runs `repairBlackSeamsImageData` over the rendered map. This is not terrain blending: it only inspects narrow seam/corner areas, only replaces original pixels with luminance below 32, and leaves all non-black tile artwork byte-identical. Replacement colors are synthesized from both neighboring tile interiors using the nearest clean local source found 3..6 display pixels inward from the seam. Collision, walkability, POIs, and tile IDs remain unchanged.
+Generated overworld terrain is cached as a Phaser canvas texture when a world seed/layout is built. The cache draws each placed atlas tile with the same inset source rectangle used by the fallback visible-tile path. There is no runtime post-placement seam repair, same-tile softening, water seam blend, intersection/corner softening, or mutation of cached map pixels with neighboring terrain colors. Collision, walkability, POIs, and tile IDs remain unchanged.
 
 Render resolution is split into clear constants: `DESIGN_WIDTH = 1920`, `DESIGN_HEIGHT = 1080`, `PIXEL_ART_SCALE = 2`, `LAYOUT_WIDTH = DESIGN_WIDTH / PIXEL_ART_SCALE`, and `LAYOUT_HEIGHT = DESIGN_HEIGHT / PIXEL_ART_SCALE`. Graphics commands, Phaser images, and live text are scaled by `PIXEL_ART_SCALE` when rendered, so existing 960x540-style layout coordinates fill a true 1920x1080 canvas. Pointer input maps from canvas coordinates back to layout coordinates by dividing by `PIXEL_ART_SCALE`.
 
@@ -192,13 +190,7 @@ Current visuals use PNG assets where Batch 001 has been wired, with generated co
 - `SAVE_KEY = "crystal-oath-save-v1"`
 - `WORLD_W = 96`
 - `WORLD_H = 64`
-- Seam repair uses deterministic dither-pick between clean neighbor samples — no color averaging/blending.
-- `SEAM_TARGET_RADIUS = 3` — only ±3px around tile boundaries are repaired.
-- `INTERIOR_SAMPLE_INSET = 4` — clean samples taken 4px inside each tile (fallback to 8px).
-- `NEAR_BLACK_LUMINANCE_THRESHOLD = 38` — artifact detection.
-- `CLEAN_SAMPLE_MIN_LUMINANCE = 18` — minimum luminance for valid clean sample (separate from detection).
-- `RELATIVE_DARKNESS_THRESHOLD = 20` — relative darkness detection.
-- The old seam pixel is ONLY a destination mask trigger, never a color source. Replacement pixels are chosen from clean interior samples via deterministic dithering.
+- `ATLAS_V3_SOURCE_INSET = 3` crops away dirty source-cell edge pixels before drawing valid atlas tiles into full destination cells.
 - Town interior uses a 21x15 tile area offset at x=144, y=40.
 - Dungeon floors are 22x14 character maps.
 - Battle layout uses enemies on the left, party battlers on the right, and three lower panels for target/log, command, and party status.

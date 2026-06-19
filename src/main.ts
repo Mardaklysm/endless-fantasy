@@ -3,8 +3,10 @@ import { CHARACTER_SPRITES, type CharacterSpriteClass, type CharacterSpriteFrame
 import atlasV3ImageUrl from "./assets/world/atlas_v3.png";
 import atlasV3Manifest from "./assets/world/atlasV3.manifest.json" with { type: "json" };
 import {
+  ATLAS_V3_SOURCE_INSET,
   WORLD_ATLAS,
   WORLD_TILES,
+  atlasV3SourceRectWithInset,
   isWorldTileWalkable,
   worldTileEncounterFamily,
   worldTileHasTag,
@@ -12,12 +14,6 @@ import {
   type WorldTileId
 } from "./data/worldTiles.ts";
 import { ACTIVE_WORLDGEN_MODE, createWorldSeed, generateWorld, type GeneratedWorld } from "./world/worldGenerator.ts";
-import {
-  BLACK_SEAM_REPAIR_DEV_OPTIONS,
-  blackSeamRepairReportMarkdown,
-  repairBlackSeamsImageData,
-  type BlackSeamRepairReport
-} from "./world/terrainBlending.ts";
 import "./style.css";
 
 const DESIGN_WIDTH = 1920;
@@ -1157,7 +1153,6 @@ class CrystalOathScene extends Phaser.Scene {
   private world: Terrain[][] = [];
   private worldTerrainCacheKey = "world_terrain_cache";
   private worldTerrainCacheSeed = "";
-  private worldBlackSeamRepairReport?: BlackSeamRepairReport;
   private party: CharacterState[] = [];
   private inventory: Record<string, number> = {};
   private gearBag: Record<string, number> = {};
@@ -1241,11 +1236,8 @@ class CrystalOathScene extends Phaser.Scene {
         "Using empty cells: false",
         "Using classic special tileset: false",
         "Using old 10x10 atlas: false",
-        `Black Seam Repair Enabled: ${BLACK_SEAM_REPAIR_DEV_OPTIONS.enabled}`,
-        `Black Seam Repair Debug View: ${BLACK_SEAM_REPAIR_DEV_OPTIONS.debugView}`,
-        `Black Seam Repair Search Radius: ${BLACK_SEAM_REPAIR_DEV_OPTIONS.seamSearchRadius}`,
-        `Black Seam Repair Threshold: ${BLACK_SEAM_REPAIR_DEV_OPTIONS.nearBlackThreshold}`,
-        `Black Seam Repair Sample Inset: ${BLACK_SEAM_REPAIR_DEV_OPTIONS.interiorSampleInset} (max fallback ${BLACK_SEAM_REPAIR_DEV_OPTIONS.maxFallbackInset})`,
+        `Atlas v3 source inset: ${ATLAS_V3_SOURCE_INSET}`,
+        "Terrain cache postprocess: disabled",
         `Image: ${WORLD_ATLAS.image}`,
         `Manifest: ${WORLD_ATLAS.manifest}`,
         `Manifest entries: ${Object.keys(atlasV3Manifest.tiles ?? {}).length} non-empty tiles`
@@ -4302,7 +4294,6 @@ Statuses: ${statuses}`;
 
   private rebuildWorldTerrainCache() {
     this.worldTerrainCacheSeed = "";
-    this.worldBlackSeamRepairReport = undefined;
     if (!this.world.length || !this.textures.exists(WORLD_ATLAS.textureKey)) return;
     this.assertWorldTilesetTextureSize();
     const mapWidth = this.world[0].length * TILE;
@@ -4324,26 +4315,12 @@ Statuses: ${statuses}`;
       }
     }
 
-    const imageData = ctx.getImageData(0, 0, mapWidth, mapHeight);
-    this.worldBlackSeamRepairReport = repairBlackSeamsImageData(imageData, this.world, {
-      seed: this.worldSeed,
-      tileSize: TILE,
-      strict: false,
-      ...BLACK_SEAM_REPAIR_DEV_OPTIONS
-    });
-    if (this.worldBlackSeamRepairReport.safetyExceeded) {
-      console.warn(
-        `Black seam repair safety limit exceeded (${this.worldBlackSeamRepairReport.replacedPixelPercent.toFixed(2)}% > ${this.worldBlackSeamRepairReport.maxAllowedPercent.toFixed(2)}%). Using original terrain.`
-      );
-    }
-    ctx.putImageData(imageData, 0, 0);
-
     if (this.textures.exists(this.worldTerrainCacheKey)) this.textures.remove(this.worldTerrainCacheKey);
     this.textures.addCanvas(this.worldTerrainCacheKey, canvas);
     this.textures.get(this.worldTerrainCacheKey).setFilter(Phaser.Textures.FilterMode.NEAREST);
     this.worldTerrainCacheSeed = this.worldSeed;
     if (import.meta.env.DEV) {
-      console.info(blackSeamRepairReportMarkdown(this.worldBlackSeamRepairReport).trim());
+      console.info(`Atlas v3 terrain cache rendered with source inset ${ATLAS_V3_SOURCE_INSET}; post-placement seam blending disabled.`);
     }
   }
 
@@ -4387,7 +4364,9 @@ Statuses: ${statuses}`;
   private worldTileSourceRect(tile: WorldTileDefinition) {
     this.assertWorldTilesetTextureSize();
     this.assertWorldTilesetSourceRect(tile.sourceRect, `World tile ${tile.id}`);
-    return tile.sourceRect;
+    const rect = atlasV3SourceRectWithInset(tile.sourceRect);
+    this.assertWorldTilesetSourceRect(rect, `World tile ${tile.id} inset source rect`);
+    return rect;
   }
 
   private assertWorldTilesetSourceRect(rect: { x: number; y: number; width: number; height: number }, label: string) {

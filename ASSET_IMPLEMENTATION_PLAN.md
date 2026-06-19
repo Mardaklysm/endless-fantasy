@@ -39,7 +39,7 @@ Keep all paths lowercase snake_case. Use PNG for most raster art. Battle/backgro
 
 ## Loading Strategy
 
-Current note: the Phaser scene already has a `preload()` image loader. The active overworld terrain uses the `atlas_v3` texture from `src/assets/world/atlas_v3.png`, imported manifest `src/assets/world/atlasV3.manifest.json`, and tile metadata in `src/data/worldTiles.ts`; individual root `assets/tiles/world/*` files are fallback/legacy references. The terrain cache may run a black seam repair pass that replaces only near-black boundary pixels by mixing clean local samples from both neighboring tiles, searched 3..6px inward; it must not modify the atlas or broadly blend tile artwork.
+Current note: the Phaser scene already has a `preload()` image loader. The active overworld terrain uses the `atlas_v3` texture from `src/assets/world/atlas_v3.png`, imported manifest `src/assets/world/atlasV3.manifest.json`, and tile metadata in `src/data/worldTiles.ts`; individual root `assets/tiles/world/*` files are fallback/legacy references. The terrain cache and fallback draw path use `ATLAS_V3_SOURCE_INSET = 3` to crop dirty source-cell edges while drawing each valid tile into the full destination tile. Runtime must not run map-level seam blending or mutate cached terrain pixels with neighboring terrain colors.
 
 For future asset families, extend the existing loader incrementally:
 
