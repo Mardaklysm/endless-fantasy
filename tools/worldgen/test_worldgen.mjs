@@ -43,6 +43,9 @@ const ROAD_E = 2;
 const ROAD_S = 4;
 const ROAD_W = 8;
 const ROAD_BITS = [ROAD_N, ROAD_E, ROAD_S, ROAD_W];
+const PALM_OBJECT_IDS = new Set(["palm_tree", "dense_jungle_bush"]);
+const NORMAL_TREE_OBJECT_IDS = new Set(["broadleaf_tree", "dark_pine_tree"]);
+const NORMAL_TREE_TILES = new Set([WORLD_TILE_IDS.lightForest, WORLD_TILE_IDS.denseForest, WORLD_TILE_IDS.deadForest, WORLD_TILE_IDS.ashForest]);
 
 validateAtlasV3();
 validateWorldObjects();
@@ -274,6 +277,11 @@ function validateRuntimeReferences() {
   const verticalStraightRoadCase = worldGeneratorRuntime.match(/case ROAD_N \| ROAD_S:[\s\S]*?(?=\n    case |\n    default:)/)?.[0] ?? "";
   assert(verticalStraightRoadCase.includes("WORLD_TILE_IDS.roadHorizontal") && verticalStraightRoadCase.includes("rotation: 90"), "N+S roads must use the clean horizontal road source rotated 90 degrees.");
   assert(!verticalStraightRoadCase.includes("WORLD_TILE_IDS.roadVertical"), "N+S roads still use the visually dirty road_vertical source cell.");
+  assert(worldGeneratorRuntime.includes("normalizeBeachBand"), "Worldgen does not run the hard beach/coast cleanup pass.");
+  assert(worldGeneratorRuntime.includes("validateCoastlineAndBeach"), "Worldgen does not validate coastline/beach invariants.");
+  assert(worldGeneratorRuntime.includes("validatePoiOverlayPlacement"), "Worldgen does not validate POIs as overlays instead of terrain stamps.");
+  assert(worldGeneratorRuntime.includes("validateTreeClustering"), "Worldgen does not validate palm/normal tree clustering.");
+  assert(!worldGeneratorRuntime.includes("carvePoiFootprints("), "Worldgen still calls the old POI terrain-stamping footprint painter.");
 }
 
 function validateRuntimeDebugInsetConsistency() {
@@ -292,11 +300,12 @@ function validateRuntimeDebugInsetConsistency() {
 
 function validateWorldgen() {
   const worldCount = 80;
+  const worldSeeds = ["archipelago-mqlgchkq-1646550", ...Array.from({ length: worldCount }, (_, i) => `atlas-v3-worldgen-test-${i}`)];
   let firstSignature = "";
   let sawDifferentWorld = false;
 
-  for (let i = 0; i < worldCount; i += 1) {
-    const world = generateWorld({ seed: `atlas-v3-worldgen-test-${i}` });
+  for (let i = 0; i < worldSeeds.length; i += 1) {
+    const world = generateWorld({ seed: worldSeeds[i] });
     assert(world.mode === "atlas_v3_archipelago_world", `World ${i} mode is ${world.mode}.`);
     assert(world.validation.valid, `World ${i} failed validation: ${world.validation.errors.join("; ")}`);
     assert(world.islands.length >= 3, `World ${i} generated only ${world.islands.length} islands.`);
@@ -330,10 +339,26 @@ function validateWorldgen() {
       }
     }
 
+    let sawPalmOverlay = false;
+    let sawNormalTreeOverlay = false;
+    const overlayByKey = new Map(world.objectOverlays.map((overlay) => [`${overlay.x},${overlay.y}`, overlay]));
     for (const overlay of world.objectOverlays) {
       assert(WORLD_OBJECT_ID_SET.has(overlay.objectId), `World ${i} object overlay ${overlay.id} has invalid object ${overlay.objectId}.`);
-      assert(worldTileHasTag(world.tiles[overlay.y]?.[overlay.x], "water"), `World ${i} object overlay ${overlay.id} was not placed on water.`);
+      const object = worldObjectById(overlay.objectId);
+      const tile = world.tiles[overlay.y]?.[overlay.x];
+      assert(object, `World ${i} object overlay ${overlay.id} has no object definition.`);
+      if (PALM_OBJECT_IDS.has(overlay.objectId)) sawPalmOverlay = true;
+      if (NORMAL_TREE_OBJECT_IDS.has(overlay.objectId)) sawNormalTreeOverlay = true;
+      if (overlay.id.startsWith("ocean-object-") || object.category === "waterOverlay" || object.tags.includes("water")) {
+        assert(worldTileHasTag(tile, "water"), `World ${i} water object overlay ${overlay.id} was not placed on water.`);
+      } else {
+        assert(!worldTileHasTag(tile, "water"), `World ${i} land object overlay ${overlay.id} was placed on water.`);
+        assert(!worldTileHasTag(tile, "sand"), `World ${i} land object overlay ${overlay.id} was placed on beach/coast.`);
+        assert(isWorldTileWalkable(tile), `World ${i} land object overlay ${overlay.id} was placed on blocked terrain ${tile}.`);
+      }
     }
+    assert(sawPalmOverlay, `World ${i} did not generate grouped palm overlays.`);
+    assert(sawNormalTreeOverlay, `World ${i} did not generate grouped normal tree overlays.`);
 
     const roadKeys = new Set(world.roads.map((pos) => `${pos.x},${pos.y}`));
     const roadVisualsByKey = new Map(world.roadVisuals.map((visual) => [`${visual.x},${visual.y}`, visual]));
@@ -349,6 +374,7 @@ function validateWorldgen() {
       assert(visual.roadMask === roadNeighborMask(roadKeys, road.x, road.y), `World ${i} road ${road.x},${road.y} has stale road neighbor mask.`);
       assert((visual.roadMask | visual.endpointMask) === visual.mask, `World ${i} road ${road.x},${road.y} visual mask is not road+endpoint mask.`);
       assert(rotateRoadMask(visual.sourceMask, visual.rotation) === visual.mask, `World ${i} road ${road.x},${road.y} source/rotation does not match mask.`);
+      assert(visual.sourceTileId !== WORLD_TILE_IDS.roadVertical, `World ${i} road ${road.x},${road.y} uses dirty road_vertical source art.`);
       for (const bit of ROAD_BITS) {
         if ((visual.mask & bit) === 0) continue;
         const next = roadStep(road, bit);
@@ -357,9 +383,14 @@ function validateWorldgen() {
       }
     }
     for (const poi of world.pois) {
+      const isCoastalPoi = poi.kind === "harbor" || poi.landmarkKind === "shipwreck";
       for (const footprint of poiFootprintTiles(poi)) {
         const tile = world.tiles[footprint.y]?.[footprint.x];
         assert(!worldTileHasTag(tile, "road"), `World ${i} road was carved inside ${poi.id}'s footprint at ${footprint.x},${footprint.y}.`);
+        if (!isCoastalPoi) assert(cardinalWaterNeighborCount(world, footprint.x, footprint.y) === 0, `World ${i} inland POI ${poi.id} footprint reaches coastline at ${footprint.x},${footprint.y}.`);
+        if (cardinalWaterNeighborCount(world, footprint.x, footprint.y) > 0 && !worldTileHasTag(tile, "water")) {
+          assert(worldTileHasTag(tile, "sand"), `World ${i} POI ${poi.id} footprint overwrote beach at ${footprint.x},${footprint.y} with ${tile}.`);
+        }
       }
     }
 
@@ -393,6 +424,20 @@ function validateWorldgen() {
         const def = worldTileById(tile);
         assert(def, `World ${i} generated an atlas cell without a tile definition: ${tile}.`);
         assert(!directionalCoastTiles.has(tile), `World ${i} used directional coast/foam tile ${tile} directly in worldgen.`);
+        const waterAdjacent = cardinalWaterNeighborCount(world, x, y) > 0;
+        if (waterAdjacent && !worldTileHasTag(tile, "water")) {
+          assert(worldTileHasTag(tile, "sand"), `World ${i} non-beach land tile ${tile} at ${x},${y} directly touches water.`);
+          assert(!worldTileHasTag(tile, "grass"), `World ${i} grass tile ${tile} at ${x},${y} directly touches water.`);
+          assert(!worldTileHasTag(tile, "forest"), `World ${i} forest tile ${tile} at ${x},${y} directly touches water.`);
+        }
+        assert(tile !== WORLD_TILE_IDS.jungle, `World ${i} still uses palm-looking jungle terrain tile at ${x},${y}; palm trees should be overlays.`);
+        if (NORMAL_TREE_TILES.has(tile)) {
+          for (const neighbor of neighbors8(x, y)) {
+            const overlay = overlayByKey.get(`${neighbor.x},${neighbor.y}`);
+            assert(!overlay || !PALM_OBJECT_IDS.has(overlay.objectId), `World ${i} normal forest tile at ${x},${y} touches palm overlay at ${neighbor.x},${neighbor.y}.`);
+            assert(world.tiles[neighbor.y]?.[neighbor.x] !== WORLD_TILE_IDS.jungle, `World ${i} normal forest tile at ${x},${y} touches palm terrain at ${neighbor.x},${neighbor.y}.`);
+          }
+        }
         if (isWorldEdge) {
           assert(tile === WORLD_TILE_IDS.deepWater, `World ${i} edge ${x},${y} is ${tile}, expected ocean border.`);
           assert(!isWorldTileWalkable(tile), `World ${i} edge ${x},${y} is walkable.`);
@@ -450,6 +495,29 @@ function hasAdjacentWater(world, poi) {
     }
   }
   return false;
+}
+
+function cardinalWaterNeighborCount(world, x, y) {
+  return neighbors4(x, y).filter((pos) => worldTileHasTag(world.tiles[pos.y]?.[pos.x], "water")).length;
+}
+
+function neighbors4(x, y) {
+  return [
+    { x: x + 1, y },
+    { x: x - 1, y },
+    { x, y: y + 1 },
+    { x, y: y - 1 }
+  ];
+}
+
+function neighbors8(x, y) {
+  return [
+    ...neighbors4(x, y),
+    { x: x + 1, y: y + 1 },
+    { x: x - 1, y: y - 1 },
+    { x: x + 1, y: y - 1 },
+    { x: x - 1, y: y + 1 }
+  ];
 }
 
 function poiFootprintTiles(poi) {

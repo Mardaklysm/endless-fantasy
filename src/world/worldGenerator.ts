@@ -209,8 +209,20 @@ const GRASS_PATCH_TILES = [
   WORLD_TILE_IDS.trampledGrass
 ];
 const FOREST_TILES = [WORLD_TILE_IDS.lightForest, WORLD_TILE_IDS.denseForest];
-const JUNGLE_TILES = [WORLD_TILE_IDS.jungle, WORLD_TILE_IDS.denseForest];
 const BEACH_TILES = [WORLD_TILE_IDS.beachSand];
+const NORMAL_TREE_TILES = new Set<WorldTileId>([WORLD_TILE_IDS.lightForest, WORLD_TILE_IDS.denseForest, WORLD_TILE_IDS.deadForest, WORLD_TILE_IDS.ashForest]);
+const PALM_TREE_TILES = new Set<WorldTileId>([WORLD_TILE_IDS.jungle]);
+const PALM_OBJECT_IDS = new Set<WorldObjectId>([WORLD_OBJECT_IDS.palmTree, WORLD_OBJECT_IDS.denseJungleBush]);
+const NORMAL_TREE_OBJECT_IDS = new Set<WorldObjectId>([WORLD_OBJECT_IDS.broadleafTree, WORLD_OBJECT_IDS.darkPineTree]);
+const WATER_OBJECT_IDS = new Set<WorldObjectId>([
+  WORLD_OBJECT_IDS.fishingSpot,
+  WORLD_OBJECT_IDS.octopusCache,
+  WORLD_OBJECT_IDS.coralClusterBlue,
+  WORLD_OBJECT_IDS.shipwreckDebris,
+  WORLD_OBJECT_IDS.brokenMast,
+  WORLD_OBJECT_IDS.floatingTreasureBarrel,
+  WORLD_OBJECT_IDS.whirlpoolSwirl
+]);
 const ROAD_TILE = WORLD_TILE_IDS.roadHorizontal;
 const ROAD_N = 1;
 const ROAD_E = 2;
@@ -344,6 +356,15 @@ export function validateGeneratedWorld(world: GeneratedWorld): WorldValidationRe
   const roadValidation = validateRoadVisuals(world);
   errors.push(...roadValidation.errors);
   warnings.push(...roadValidation.warnings);
+  const coastlineValidation = validateCoastlineAndBeach(world);
+  errors.push(...coastlineValidation.errors);
+  warnings.push(...coastlineValidation.warnings);
+  const poiOverlayValidation = validatePoiOverlayPlacement(world);
+  errors.push(...poiOverlayValidation.errors);
+  warnings.push(...poiOverlayValidation.warnings);
+  const treeValidation = validateTreeClustering(world);
+  errors.push(...treeValidation.errors);
+  warnings.push(...treeValidation.warnings);
 
   return { valid: errors.length === 0, errors, warnings, reachablePoiIds, biomeCounts };
 }
@@ -369,6 +390,7 @@ function validateRoadVisuals(world: GeneratedWorld): { errors: string[]; warning
     if (rotateRoadMask(visual.sourceMask, visual.rotation) !== visual.mask) {
       errors.push(`Road ${key} source ${visual.sourceTileId} rotation ${visual.rotation} renders mask ${rotateRoadMask(visual.sourceMask, visual.rotation)}, expected ${visual.mask}.`);
     }
+    if (visual.sourceTileId === WORLD_TILE_IDS.roadVertical) errors.push(`Road ${key} uses the dirty road_vertical source art.`);
     if (visual.mask === 0) warnings.push(`Road ${key} has zero connections.`);
     for (const bit of [ROAD_N, ROAD_E, ROAD_S, ROAD_W]) {
       if ((visual.mask & bit) === 0) continue;
@@ -384,6 +406,111 @@ function validateRoadVisuals(world: GeneratedWorld): { errors: string[]; warning
     }
   }
   return { errors, warnings };
+}
+
+function validateCoastlineAndBeach(world: GeneratedWorld): { errors: string[]; warnings: string[] } {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  for (let y = 1; y < world.height - 1; y += 1) {
+    for (let x = 1; x < world.width - 1; x += 1) {
+      const tile = world.tiles[y][x];
+      if (isWaterTile(tile)) continue;
+      const waterNeighbors = cardinalWaterNeighborCount(world.tiles, x, y);
+      const sandNeighbors = cardinalSandNeighborCount(world.tiles, x, y);
+      if (waterNeighbors > 0 && !isBeachTile(tile)) {
+        errors.push(`Seed ${world.seed}: land tile ${tile} at ${x},${y} touches water without beach sand.`);
+        if (worldTileHasTag(tile, "grass")) errors.push(`Seed ${world.seed}: grass tile ${tile} at ${x},${y} directly touches water.`);
+        if (worldTileHasTag(tile, "forest")) errors.push(`Seed ${world.seed}: forest tile ${tile} at ${x},${y} directly touches water.`);
+      }
+      if (isBeachTile(tile)) {
+        const diagonalWater = diagonalNeighbors(x, y).some((next) => isWaterTile(world.tiles[next.y]?.[next.x]));
+        const fixableThinBeach = thinBeachExpansionCandidates(world.tiles, x, y).length > 0;
+        if (sandNeighbors === 0 && (waterNeighbors > 0 || diagonalWater) && fixableThinBeach) errors.push(`Seed ${world.seed}: isolated beach tile at ${x},${y} has no cardinal beach neighbors.`);
+        else if (waterNeighbors > 0 && sandNeighbors < 2 && fixableThinBeach) warnings.push(`Seed ${world.seed}: thin beach tile at ${x},${y} has only ${sandNeighbors} cardinal beach neighbor(s).`);
+      }
+    }
+  }
+  return { errors, warnings };
+}
+
+function thinBeachExpansionCandidates(tiles: WorldTileId[][], x: number, y: number): WorldVec[] {
+  return neighbors4(x, y)
+    .filter((next) => inBounds(tiles[0].length, tiles.length, next.x, next.y))
+    .filter((next) => !isWaterTile(tiles[next.y]?.[next.x]) && isBeachCandidate(tiles[next.y]?.[next.x]) && !worldTileHasTag(tiles[next.y]?.[next.x], "road"));
+}
+
+function validatePoiOverlayPlacement(world: GeneratedWorld): { errors: string[]; warnings: string[] } {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const coastalFeatureKinds = new Set<WorldLandmarkKind | undefined>(["shipwreck"]);
+  for (const poi of world.pois) {
+    const isCoastalFeature = poi.kind === "harbor" || coastalFeatureKinds.has(poi.landmarkKind);
+    const footprint = poiFootprintTiles(poi);
+    const coastFootprintTiles = footprint.filter((pos) => cardinalWaterNeighborCount(world.tiles, pos.x, pos.y) > 0);
+    if (!isCoastalFeature && coastFootprintTiles.length) {
+      errors.push(`Seed ${world.seed}: non-coastal POI ${poi.id} footprint reaches coastline at ${coastFootprintTiles[0].x},${coastFootprintTiles[0].y}.`);
+    }
+    for (const pos of footprint) {
+      const tile = world.tiles[pos.y]?.[pos.x];
+      if (!tile) continue;
+      if (isWaterTile(tile) && !isCoastalFeature) errors.push(`Seed ${world.seed}: POI ${poi.id} footprint includes water at ${pos.x},${pos.y}.`);
+      if (cardinalWaterNeighborCount(world.tiles, pos.x, pos.y) > 0 && !isBeachTile(tile) && !isCoastalFeature) {
+        errors.push(`Seed ${world.seed}: POI ${poi.id} footprint terrain ${tile} at ${pos.x},${pos.y} overwrites the beach ring.`);
+      }
+    }
+  }
+  return { errors, warnings };
+}
+
+function validateTreeClustering(world: GeneratedWorld): { errors: string[]; warnings: string[] } {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const overlayByKey = new Map(world.objectOverlays.map((overlay) => [posKey(overlay), overlay]));
+
+  for (let y = 1; y < world.height - 1; y += 1) {
+    for (let x = 1; x < world.width - 1; x += 1) {
+      const tile = world.tiles[y][x];
+      if (PALM_TREE_TILES.has(tile)) errors.push(`Seed ${world.seed}: palm-looking terrain tile ${tile} remains at ${x},${y}; use palm overlays instead.`);
+      if (!NORMAL_TREE_TILES.has(tile)) continue;
+      for (const next of neighbors8(x, y)) {
+        if (PALM_TREE_TILES.has(world.tiles[next.y]?.[next.x])) errors.push(`Seed ${world.seed}: normal forest tile at ${x},${y} touches palm terrain at ${next.x},${next.y}.`);
+        const overlay = overlayByKey.get(posKey(next));
+        if (overlay && isPalmOverlay(overlay)) errors.push(`Seed ${world.seed}: normal forest tile at ${x},${y} touches palm overlay at ${next.x},${next.y}.`);
+      }
+    }
+  }
+
+  for (const overlay of world.objectOverlays) {
+    const tile = world.tiles[overlay.y]?.[overlay.x];
+    if (isWaterObjectOverlay(overlay)) {
+      if (!isWaterTile(tile)) errors.push(`Seed ${world.seed}: water object ${overlay.id} sits on non-water tile ${tile} at ${overlay.x},${overlay.y}.`);
+      continue;
+    }
+    if ((isPalmOverlay(overlay) || isNormalTreeOverlay(overlay)) && (isWaterTile(tile) || isBeachTile(tile))) {
+      errors.push(`Seed ${world.seed}: tree overlay ${overlay.id} sits on coastal/water tile ${tile} at ${overlay.x},${overlay.y}.`);
+    }
+    if (isPalmOverlay(overlay)) {
+      for (const next of neighbors8(overlay.x, overlay.y)) {
+        const neighbor = overlayByKey.get(posKey(next));
+        if (neighbor && isNormalTreeOverlay(neighbor)) errors.push(`Seed ${world.seed}: palm overlay at ${overlay.x},${overlay.y} touches normal tree overlay at ${next.x},${next.y}.`);
+        if (NORMAL_TREE_TILES.has(world.tiles[next.y]?.[next.x])) errors.push(`Seed ${world.seed}: palm overlay at ${overlay.x},${overlay.y} touches normal forest terrain at ${next.x},${next.y}.`);
+      }
+    }
+  }
+
+  return { errors, warnings };
+}
+
+function isWaterObjectOverlay(overlay: Pick<WorldObjectOverlay, "objectId">): boolean {
+  return WATER_OBJECT_IDS.has(overlay.objectId);
+}
+
+function isPalmOverlay(overlay: Pick<WorldObjectOverlay, "objectId">): boolean {
+  return PALM_OBJECT_IDS.has(overlay.objectId);
+}
+
+function isNormalTreeOverlay(overlay: Pick<WorldObjectOverlay, "objectId">): boolean {
+  return NORMAL_TREE_OBJECT_IDS.has(overlay.objectId);
 }
 
 export function buildWorldDebugReport(world: GeneratedWorld): string {
@@ -456,6 +583,7 @@ function generateWorldAttempt(seed: string, width: number, height: number): Gene
 
   for (const state of states) paintIsland(seed, tiles, biomes, islandByTile, state);
   addTinyIslets(seed, tiles, biomes, islandByTile, rng.fork("islets"));
+  normalizeBeachBand(tiles, biomes, islandByTile);
 
   const pois: WorldPoi[] = [];
   const roadKeys = new Set<string>();
@@ -465,16 +593,16 @@ function generateWorldAttempt(seed: string, width: number, height: number): Gene
     const islandPois = placeIslandPois(seed, tiles, biomes, islandByTile, state, rng.fork(`${state.template.id}:pois`));
     state.pois = islandPois;
     pois.push(...islandPois);
-    carvePoiFootprints(tiles, biomes, islandByTile, islandPois);
     carveIslandRoads(tiles, biomes, islandByTile, state.template.id, islandPois, roadKeys, roadEndpointMasks);
     bridges.push(...dockTilesForHarbor(tiles, state.template.id, islandPois.find((poi) => poi.kind === "harbor")));
   }
+  normalizeBeachBand(tiles, biomes, islandByTile, roadKeys);
   const roadVisuals = orientRoadTiles(tiles, biomes, roadKeys, roadEndpointMasks);
   const roads = roadVisuals.map(({ x, y }) => ({ x, y }));
 
   const shallows = markShallowWater(tiles, biomes);
   const reefs = decorateOcean(seed, tiles, pois, shallows, rng.fork("ocean-details"));
-  const objectOverlays = buildWorldObjectOverlays(seed, reefs);
+  const objectOverlays = [...buildWorldObjectOverlays(seed, reefs), ...buildNatureObjectOverlays(seed, tiles, states, pois, rng.fork("nature-overlays"))];
   const seaRoutes = buildSeaRoutes(pois);
   const islands = buildGeneratedIslands(tiles, states, pois);
   const dawnford = pois.find((poi) => poi.id === "dawnford") ?? pois[0];
@@ -570,7 +698,7 @@ function paintIsland(
       else setWorldTile(tiles, biomes, x, y, WORLD_TILE_IDS.volcanicAshGround, "darkland");
     } else if (template.theme === "tropical") {
       if (hill > 0.84) setWorldTile(tiles, biomes, x, y, WORLD_TILE_IDS.gravelStoneGround, "mountain");
-      else if (detail > 0.57) setWorldTile(tiles, biomes, x, y, pickByNoise(JUNGLE_TILES, seed, x, y), "forest");
+      else if (detail > 0.57) setWorldTile(tiles, biomes, x, y, WORLD_TILE_IDS.trampledGrass, "forest");
       else if (detail < 0.22) setWorldTile(tiles, biomes, x, y, grassPatchTileFor(seed, x, y), "grassland");
       else setWorldTile(tiles, biomes, x, y, MAIN_GRASS_TILE, "grassland");
     } else {
@@ -610,7 +738,7 @@ function ensureIslandGrove(seed: string, tiles: WorldTileId[][], biomes: WorldBi
     .map((pos) => ({ pos, score: fbm(`${seed}:${state.template.id}:grove`, pos.x / 7, pos.y / 7, 3, 2) }))
     .sort((a, b) => b.score - a.score);
   const center = candidates[0]?.pos ?? state.center;
-  const pool = state.template.theme === "tropical" ? JUNGLE_TILES : FOREST_TILES;
+  const pool = state.template.theme === "tropical" ? [WORLD_TILE_IDS.trampledGrass, WORLD_TILE_IDS.lushCloverGrass] : FOREST_TILES;
   const radius = state.template.theme === "tropical" ? 3 : 2;
   for (let y = center.y - radius; y <= center.y + radius; y += 1) {
     for (let x = center.x - radius; x <= center.x + radius; x += 1) {
@@ -643,6 +771,114 @@ function addTinyIslets(
       }
     }
   }
+}
+
+function normalizeBeachBand(
+  tiles: WorldTileId[][],
+  biomes: WorldBiome[][],
+  islandByTile: (IslandId | null)[][],
+  roadKeys?: Set<string>
+) {
+  for (let pass = 0; pass < 3; pass += 1) {
+    enforceCoastalBeachTiles(tiles, biomes, islandByTile, roadKeys);
+    fillDiagonalBeachGaps(tiles, biomes, islandByTile, roadKeys);
+    widenThinBeachSegments(tiles, biomes, islandByTile, roadKeys);
+  }
+  enforceCoastalBeachTiles(tiles, biomes, islandByTile, roadKeys);
+}
+
+function enforceCoastalBeachTiles(
+  tiles: WorldTileId[][],
+  biomes: WorldBiome[][],
+  islandByTile: (IslandId | null)[][],
+  roadKeys?: Set<string>
+) {
+  const toBeach: WorldVec[] = [];
+  for (let y = 1; y < tiles.length - 1; y += 1) {
+    for (let x = 1; x < tiles[y].length - 1; x += 1) {
+      const tile = tiles[y][x];
+      if (!isBeachCandidate(tile)) continue;
+      if (neighbors4(x, y).some((next) => isWaterTile(tiles[next.y]?.[next.x]))) toBeach.push({ x, y });
+    }
+  }
+  for (const pos of toBeach) setBeachTile(tiles, biomes, islandByTile, pos, roadKeys);
+}
+
+function fillDiagonalBeachGaps(
+  tiles: WorldTileId[][],
+  biomes: WorldBiome[][],
+  islandByTile: (IslandId | null)[][],
+  roadKeys?: Set<string>
+) {
+  const toBeach: WorldVec[] = [];
+  for (let y = 1; y < tiles.length - 1; y += 1) {
+    for (let x = 1; x < tiles[y].length - 1; x += 1) {
+      const tile = tiles[y][x];
+      if (!isBeachCandidate(tile)) continue;
+      const diagonalWater = diagonalNeighbors(x, y).some((next) => isWaterTile(tiles[next.y]?.[next.x]));
+      if (!diagonalWater) continue;
+      const sandNeighbors = cardinalSandNeighborCount(tiles, x, y);
+      const waterNeighbors = cardinalWaterNeighborCount(tiles, x, y);
+      if (sandNeighbors > 0 || waterNeighbors > 0) toBeach.push({ x, y });
+    }
+  }
+  for (const pos of toBeach) setBeachTile(tiles, biomes, islandByTile, pos, roadKeys);
+}
+
+function widenThinBeachSegments(
+  tiles: WorldTileId[][],
+  biomes: WorldBiome[][],
+  islandByTile: (IslandId | null)[][],
+  roadKeys?: Set<string>
+) {
+  const toBeach: WorldVec[] = [];
+  const queued = new Set<string>();
+  for (let y = 1; y < tiles.length - 1; y += 1) {
+    for (let x = 1; x < tiles[y].length - 1; x += 1) {
+      const tile = tiles[y][x];
+      if (!isBeachTile(tile) || cardinalWaterNeighborCount(tiles, x, y) === 0) continue;
+      let needed = Math.max(0, 2 - cardinalSandNeighborCount(tiles, x, y));
+      if (!needed) continue;
+      const candidates = neighbors4(x, y)
+        .filter((next) => inBounds(tiles[0].length, tiles.length, next.x, next.y))
+        .filter((next) => !isWaterTile(tiles[next.y]?.[next.x]) && isBeachCandidate(tiles[next.y]?.[next.x]))
+        .filter((next) => !roadKeys?.has(posKey(next)))
+        .sort((a, b) => cardinalSandNeighborCount(tiles, b.x, b.y) - cardinalSandNeighborCount(tiles, a.x, a.y) || a.y - b.y || a.x - b.x);
+      for (const candidate of candidates) {
+        if (!needed) break;
+        const key = posKey(candidate);
+        if (queued.has(key)) continue;
+        queued.add(key);
+        toBeach.push(candidate);
+        needed -= 1;
+      }
+    }
+  }
+  for (const pos of toBeach) setBeachTile(tiles, biomes, islandByTile, pos, roadKeys);
+}
+
+function setBeachTile(
+  tiles: WorldTileId[][],
+  biomes: WorldBiome[][],
+  islandByTile: (IslandId | null)[][],
+  pos: WorldVec,
+  roadKeys?: Set<string>
+) {
+  if (!tiles[pos.y]?.[pos.x] || isWaterTile(tiles[pos.y][pos.x])) return;
+  roadKeys?.delete(posKey(pos));
+  setWorldTile(tiles, biomes, pos.x, pos.y, WORLD_TILE_IDS.beachSand, "desert");
+  if (!islandByTile[pos.y][pos.x]) {
+    const neighborIsland = neighbors8(pos.x, pos.y).map((next) => islandByTile[next.y]?.[next.x]).find((id): id is IslandId => !!id);
+    if (neighborIsland) islandByTile[pos.y][pos.x] = neighborIsland;
+  }
+}
+
+function isBeachCandidate(tile?: WorldTileId): boolean {
+  return !!tile && !isWaterTile(tile) && !isBeachTile(tile);
+}
+
+function isBeachTile(tile?: WorldTileId): boolean {
+  return worldTileHasTag(tile, "sand");
 }
 
 function placeIslandPois(
@@ -834,6 +1070,8 @@ function canPlacePoiAt(
     for (let xx = x - radius; xx <= x + radius; xx += 1) {
       if (!inBounds(tiles[0].length, tiles.length, xx, yy)) return false;
       if (isWaterTile(tiles[yy][xx]) || islandByTile[yy][xx] !== islandId) return false;
+      if (!isClearPoiGroundTile(tiles[yy][xx])) return false;
+      if (hasAdjacentWaterAt(tiles, xx, yy, 1)) return false;
     }
   }
   for (const other of placed) {
@@ -842,35 +1080,10 @@ function canPlacePoiAt(
   return true;
 }
 
-function carvePoiFootprints(
-  tiles: WorldTileId[][],
-  biomes: WorldBiome[][],
-  islandByTile: (IslandId | null)[][],
-  pois: WorldPoi[]
-) {
-  for (const poi of pois) {
-    const tile = poiFootprintGroundTile(poi);
-    const biome = WORLD_TILES[tile].biome;
-    for (const pos of poiFootprintTiles(poi)) {
-      if (!tiles[pos.y]?.[pos.x]) continue;
-      if (poi.kind === "harbor" && isWaterTile(tiles[pos.y][pos.x])) continue;
-      setWorldTile(tiles, biomes, pos.x, pos.y, tile, biome);
-      islandByTile[pos.y][pos.x] = poi.islandId;
-    }
-  }
-}
-
-function poiFootprintGroundTile(poi: WorldPoi): WorldTileId {
-  if (poi.kind === "harbor") return WORLD_TILE_IDS.beachSand;
-  if (poi.kind === "town") return poi.islandId === "ashfang" ? WORLD_TILE_IDS.volcanicAshGround : MAIN_GRASS_TILE;
-  if (poi.kind === "final") return WORLD_TILE_IDS.cursedPurpleGround;
-  if (poi.kind === "gate" || poi.kind === "dungeon") return WORLD_TILE_IDS.grassStones;
-  if (poi.landmarkKind === "shipwreck") return WORLD_TILE_IDS.rockySand;
-  if (poi.landmarkKind === "resourceNode") return WORLD_TILE_IDS.gravelStoneGround;
-  if (poi.landmarkKind === "monsterNest") return WORLD_TILE_IDS.weedsGrass;
-  if (poi.landmarkKind === "secretMerchant") return WORLD_TILE_IDS.trampledGrass;
-  if (poi.landmarkKind === "ancientDoor") return WORLD_TILE_IDS.grassStones;
-  return poi.islandId === "ashfang" ? WORLD_TILE_IDS.volcanicAshGround : MAIN_GRASS_TILE;
+function isClearPoiGroundTile(tile?: WorldTileId): boolean {
+  if (!tile || !isWorldTileWalkable(tile)) return false;
+  if (worldTileHasTag(tile, "water") || worldTileHasTag(tile, "forest") || worldTileHasTag(tile, "blocked")) return false;
+  return true;
 }
 
 function carveIslandRoads(
@@ -895,7 +1108,7 @@ function carveIslandRoads(
   });
   const townApproach = roadApproachPoint(tiles, islandByTile, islandId, town, harbor, footprintKeys);
   addIslandRoadTile(tiles, biomes, islandByTile, islandId, townApproach, roadKeys, islandRoadKeys, footprintKeys);
-  addRoadEndpointConnection(roadEndpointMasks, townApproach, town);
+  addRoadEndpointConnection(tiles, roadEndpointMasks, townApproach, town);
 
   for (const destination of destinations) {
     const destinationApproach = roadApproachPoint(tiles, islandByTile, islandId, destination, townApproach, footprintKeys);
@@ -907,7 +1120,7 @@ function carveIslandRoads(
     for (const pos of path) {
       addIslandRoadTile(tiles, biomes, islandByTile, islandId, pos, roadKeys, islandRoadKeys, footprintKeys);
     }
-    addRoadEndpointConnection(roadEndpointMasks, destinationApproach, destination);
+    addRoadEndpointConnection(tiles, roadEndpointMasks, destinationApproach, destination);
   }
 }
 
@@ -930,16 +1143,19 @@ function roadApproachPoint(
   const footprint = poiFootprintTiles(poi);
   const footprintKeys = new Set(footprint.map(posKey));
   const candidates: WorldVec[] = [];
+  const inlandCandidates: WorldVec[] = [];
   for (const tile of footprint) {
     for (const next of neighbors4(tile.x, tile.y)) {
       const key = posKey(next);
       if (footprintKeys.has(key) || blockedKeys.has(key)) continue;
       if (!canRoadUseTile(tiles, islandByTile, islandId, next, key, "", "")) continue;
       candidates.push(next);
+      if (!hasAdjacentWaterAt(tiles, next.x, next.y, 1)) inlandCandidates.push(next);
     }
   }
-  if (candidates.length) {
-    return candidates.sort((a, b) => {
+  const pool = inlandCandidates.length ? inlandCandidates : candidates;
+  if (pool.length) {
+    return pool.sort((a, b) => {
       const da = Math.hypot(a.x - anchor.x, a.y - anchor.y);
       const db = Math.hypot(b.x - anchor.x, b.y - anchor.y);
       return da - db || a.y - b.y || a.x - b.x;
@@ -977,12 +1193,13 @@ function nearestRoadAnchor(roadKeys: Set<string>, goal: WorldVec): WorldVec | un
     .sort((a, b) => Math.hypot(a.x - goal.x, a.y - goal.y) - Math.hypot(b.x - goal.x, b.y - goal.y) || a.y - b.y || a.x - b.x)[0];
 }
 
-function addRoadEndpointConnection(roadEndpointMasks: Map<string, number>, roadPos: WorldVec, poi: WorldPoi) {
+function addRoadEndpointConnection(tiles: WorldTileId[][], roadEndpointMasks: Map<string, number>, roadPos: WorldVec, poi: WorldPoi) {
   const key = posKey(roadPos);
   const footprintKeys = new Set(poiFootprintTiles(poi).map(posKey));
   let mask = roadEndpointMasks.get(key) ?? 0;
   for (const next of neighbors4(roadPos.x, roadPos.y)) {
-    if (footprintKeys.has(posKey(next))) mask |= directionMask(roadPos, next);
+    const nextTile = tiles[next.y]?.[next.x];
+    if (footprintKeys.has(posKey(next)) && nextTile && !isWaterTile(nextTile) && isWorldTileWalkable(nextTile)) mask |= directionMask(roadPos, next);
   }
   if (mask) roadEndpointMasks.set(key, mask);
 }
@@ -1149,6 +1366,7 @@ function canRoadUseTile(
 ): boolean {
   if (!inBounds(tiles[0].length, tiles.length, pos.x, pos.y)) return false;
   if (key !== startKey && key !== goalKey && islandByTile[pos.y][pos.x] !== islandId) return false;
+  if (key !== startKey && key !== goalKey && hasAdjacentWaterAt(tiles, pos.x, pos.y, 1)) return false;
   const tile = tiles[pos.y][pos.x];
   return !isWaterTile(tile) && isWorldTileWalkable(tile);
 }
@@ -1222,6 +1440,87 @@ function buildWorldObjectOverlays(seed: string, reefs: WorldVec[]): WorldObjectO
     objectId: oceanObjectForPosition(seed, pos, index),
     scale: 1.24
   }));
+}
+
+function buildNatureObjectOverlays(
+  seed: string,
+  tiles: WorldTileId[][],
+  states: IslandBuildState[],
+  pois: WorldPoi[],
+  rng: SeededRng
+): WorldObjectOverlay[] {
+  const overlays: WorldObjectOverlay[] = [];
+  const blocked = expandedPoiBlockKeys(pois, 2);
+  const used = new Set<string>();
+
+  for (const state of states) {
+    if (state.template.theme === "volcanic") continue;
+    const isPalmIsland = state.template.theme === "tropical";
+    const clusterCount = isPalmIsland ? 3 : 2;
+    const radius = isPalmIsland ? 3 : 2;
+    const candidates = [...state.land]
+      .map(parseKey)
+      .filter((pos) => canPlaceNatureOverlay(tiles, state, pos, blocked))
+      .map((pos) => ({ pos, score: fbm(`${seed}:${state.template.id}:nature-cluster`, pos.x / 6.5, pos.y / 6.5, 3, 2.05) + rng.float(0, 0.08) }))
+      .sort((a, b) => b.score - a.score);
+
+    const centers: WorldVec[] = [];
+    for (const candidate of candidates) {
+      if (centers.some((center) => Math.hypot(center.x - candidate.pos.x, center.y - candidate.pos.y) < radius * 3.2)) continue;
+      centers.push(candidate.pos);
+      if (centers.length >= clusterCount) break;
+    }
+
+    centers.forEach((center, clusterIndex) => {
+      const clusterStyle = isPalmIsland
+        ? WORLD_OBJECT_IDS.palmTree
+        : hashNoise(`${seed}:${state.template.id}:normal-tree-style`, center.x, center.y) > 0.35
+          ? WORLD_OBJECT_IDS.broadleafTree
+          : WORLD_OBJECT_IDS.darkPineTree;
+      for (let y = center.y - radius; y <= center.y + radius; y += 1) {
+        for (let x = center.x - radius; x <= center.x + radius; x += 1) {
+          const pos = { x, y };
+          const key = posKey(pos);
+          if (used.has(key) || !canPlaceNatureOverlay(tiles, state, pos, blocked)) continue;
+          const distance = Math.hypot(x - center.x, y - center.y);
+          const density = isPalmIsland ? 0.78 : 0.68;
+          if (distance > radius + 0.2 || hashNoise(`${seed}:${state.template.id}:nature-density:${clusterIndex}`, x, y) > density - distance * 0.1) continue;
+          used.add(key);
+          overlays.push({
+            id: `nature-${state.template.id}-${clusterIndex}-${x}-${y}`,
+            x,
+            y,
+            objectId:
+              isPalmIsland && hashNoise(`${seed}:${state.template.id}:jungle-bush:${clusterIndex}`, x, y) > 0.78
+                ? WORLD_OBJECT_IDS.denseJungleBush
+                : clusterStyle,
+            scale: isPalmIsland ? 1.08 : 1
+          });
+        }
+      }
+    });
+  }
+
+  return overlays;
+}
+
+function expandedPoiBlockKeys(pois: WorldPoi[], padding: number): Set<string> {
+  const keys = new Set<string>();
+  for (const poi of pois) {
+    const radius = Math.floor(poi.footprint / 2) + padding;
+    for (let y = poi.y - radius; y <= poi.y + radius; y += 1) {
+      for (let x = poi.x - radius; x <= poi.x + radius; x += 1) keys.add(posKey({ x, y }));
+    }
+  }
+  return keys;
+}
+
+function canPlaceNatureOverlay(tiles: WorldTileId[][], state: IslandBuildState, pos: WorldVec, blocked: Set<string>): boolean {
+  const tile = tiles[pos.y]?.[pos.x];
+  if (!tile || blocked.has(posKey(pos)) || !state.land.has(posKey(pos))) return false;
+  if (!isWorldTileWalkable(tile) || isWaterTile(tile) || isBeachTile(tile) || worldTileHasTag(tile, "road") || worldTileHasTag(tile, "blocked")) return false;
+  if (hasAdjacentWaterAt(tiles, pos.x, pos.y, 2)) return false;
+  return true;
 }
 
 function oceanObjectForPosition(seed: string, pos: WorldVec, index: number): WorldObjectId {
@@ -1395,6 +1694,23 @@ function neighbors8(x: number, y: number): WorldVec[] {
     { x: x + 1, y: y - 1 },
     { x: x - 1, y: y + 1 }
   ];
+}
+
+function diagonalNeighbors(x: number, y: number): WorldVec[] {
+  return [
+    { x: x + 1, y: y + 1 },
+    { x: x - 1, y: y - 1 },
+    { x: x + 1, y: y - 1 },
+    { x: x - 1, y: y + 1 }
+  ];
+}
+
+function cardinalSandNeighborCount(tiles: WorldTileId[][], x: number, y: number): number {
+  return neighbors4(x, y).filter((next) => isBeachTile(tiles[next.y]?.[next.x])).length;
+}
+
+function cardinalWaterNeighborCount(tiles: WorldTileId[][], x: number, y: number): number {
+  return neighbors4(x, y).filter((next) => isWaterTile(tiles[next.y]?.[next.x])).length;
 }
 
 function inBounds(width: number, height: number, x: number, y: number): boolean {
