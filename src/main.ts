@@ -29,6 +29,7 @@ const LAYOUT_HEIGHT = DESIGN_HEIGHT / PIXEL_ART_SCALE;
 const WIDTH = LAYOUT_WIDTH;
 const HEIGHT = LAYOUT_HEIGHT;
 const TILE = 32;
+const DEBUG_WORLD_LAYOUT = false;
 const SAVE_KEY = "crystal-oath-save-v1";
 const WORLD_W = 96;
 const WORLD_H = 64;
@@ -3749,7 +3750,7 @@ Statuses: ${statuses}`;
     this.drawHud("World");
     const loc = this.locationAt(this.worldPos.x, this.worldPos.y);
     if (loc) this.drawPrompt(`Enter ${loc.name}`);
-    if (import.meta.env.DEV) {
+    if (DEBUG_WORLD_LAYOUT) {
       const mapPixelW = this.world[0]?.length ?? 0;
       const mapPixelH = this.world.length;
       this.g.fillStyle(0xffffff, 0.5);
@@ -4349,13 +4350,31 @@ Statuses: ${statuses}`;
     const cropWidth = Math.min(WIDTH, mapWidth - cropX);
     const cropHeight = Math.min(HEIGHT, mapHeight - cropY);
     if (cropWidth <= 0 || cropHeight <= 0) return false;
-    const image = this.add.image(0, 0, this.worldTerrainCacheKey);
+
+    // Use a named sub-frame so setDisplaySize divides by crop size, not full texture size.
+    // setCrop alone leaves frame.realWidth at full texture width, causing thumbnail scaling.
+    const viewFrameKey = `${this.worldTerrainCacheKey}_view`;
+    const texture = this.textures.get(this.worldTerrainCacheKey);
+    if (texture.has(viewFrameKey)) texture.remove(viewFrameKey);
+    texture.add(viewFrameKey, 0, cropX, cropY, cropWidth, cropHeight);
+
+    const image = this.add.image(0, 0, this.worldTerrainCacheKey, viewFrameKey);
     image.setOrigin(0, 0);
-    image.setCrop(cropX, cropY, cropWidth, cropHeight);
     image.setDisplaySize(cropWidth * PIXEL_ART_SCALE, cropHeight * PIXEL_ART_SCALE);
     image.setDepth(LAYER_WORLD_IMAGE);
     image.setScrollFactor(0);
     this.images.push(image);
+
+    if (DEBUG_WORLD_LAYOUT) {
+      const frame = texture.get(viewFrameKey);
+      console.debug(
+        `[world-terrain-cache] tex=${mapWidth}x${mapHeight} crop=${cropX},${cropY} ${cropWidth}x${cropHeight}`,
+        `frame.realWidth=${frame.realWidth} frame.realHeight=${frame.realHeight}`,
+        `image.displayWidth=${image.displayWidth} image.displayHeight=${image.displayHeight}`,
+        `image.scaleX=${image.scaleX} image.scaleY=${image.scaleY}`,
+        `expected display=${cropWidth * PIXEL_ART_SCALE}x${cropHeight * PIXEL_ART_SCALE}`
+      );
+    }
     return true;
   }
 

@@ -1,7 +1,7 @@
 # Black Seam Repair Report
 
 Mode: `black_seam_repair`
-Seed: `viewport-fix-qa-v1`
+Seed: `runtime-alignment-fix-v1`
 Map size: 96x64
 Tile size: 32px
 Seam search radius: 4px
@@ -13,13 +13,13 @@ minEdgeSampleInset: 3px
 maxEdgeSampleInset: 6px
 replacementMode: dual-side-mix
 Pixels inspected: 4217049
-Pixels replaced: 389340
-replacedPixelCount: 389340
-Replacement percentage: 6.1884%
-replacedPixelPercent: 6.1884%
-Vertical seam pixels repaired: 246484
-Horizontal seam pixels repaired: 245214
-Intersection pixels repaired: 126903
+Pixels replaced: 389515
+replacedPixelCount: 389515
+Replacement percentage: 6.1912%
+replacedPixelPercent: 6.1912%
+Vertical seam pixels repaired: 246573
+Horizontal seam pixels repaired: 245304
+Intersection pixels repaired: 126928
 Enabled: true
 Debug view: false
 Max replacement ratio guard: 12.00%

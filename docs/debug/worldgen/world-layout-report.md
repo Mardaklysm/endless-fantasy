@@ -1,52 +1,57 @@
-# World Layout Report — Viewport & Scale Fix
+# World Layout Report — Runtime Terrain Alignment Fix
 
 Generated: 2026-06-19
 
-## Root Cause
+## Actual Root Cause (Runtime Bug)
 
-1. **World map too small**: `WORLD_W=64`, `WORLD_H=40`. At 32 layout px tiles (64 display px), the world occupied only ~2× the viewport in each direction, making scrolling range feel cramped and the overworld not feel like a proper world map.
+The terrain cache was rendering as a small thumbnail (~600×285 scene pixels) instead of filling the 1920×1080 canvas because of a Phaser 3 `setCrop` + `setDisplaySize` interaction.
 
-2. **Player overworld sprite too large**: `drawLeader` used `displayCellWidth=132` (layout px) for all modes, making the exploration leader ≈4 tiles wide (264 scene px). For the overworld map, this is far too large — a world-map travel avatar should be ~1 tile or smaller.
+### Technical Detail
 
-3. **POI anchoring**: POIs and terrain both use `tileCam` offset and layout coordinates, and the cached terrain uses the same crop offset. The coordinate systems were aligned; no mismatch found beyond the shared `tileCam` origin.
+In `drawCachedWorldTerrain`, the original code:
+```ts
+image.setCrop(cropX, cropY, cropWidth, cropHeight);  // e.g. crop 960×540
+image.setDisplaySize(cropWidth * 2, cropHeight * 2); // e.g. 1920×1080
+```
 
-4. **Black-area / tiny-map**: The render-to-screen pipeline is correct (cache crop → display size fills canvas, camera clamped to map bounds). The "black" symptom was caused by the small world leaving the viewport mostly filled with uniform terrain that could appear empty/dark in some seeds, combined with the huge player obscuring the map.
+**Problem**: `setCrop` modifies the frame's UV coordinates, but `frame.realWidth` remains the FULL texture width (3072 for 96-tile world). `setDisplaySize(1920, 1080)` computes:
+- `scaleX = 1920 / 3072 = 0.625` (should be 2.0)
+- `scaleY = 1080 / 2048 = 0.527` (should be 2.0)
 
-## Changes
+Result: the visible 960×540 crop rendered at 960×0.625 = **600** pixels wide and 540×0.527 = **285** pixels tall — a tiny thumbnail.
 
-### 1. World Dimensions (src/main.ts + src/world/worldGenerator.ts)
+Meanwhile, POIs and player use `drawTexture`/`drawCroppedTexture` which multiply layout coordinates by `PIXEL_ART_SCALE=2`, placing them at full-screen positions. This made POIs/landmarks float in black space detached from the tiny terrain rectangle.
 
-- `WORLD_W`: 64 → **96**
-- `WORLD_H`: 40 → **64**
-- `DEFAULT_WORLD_WIDTH`: 64 → **96**
-- `DEFAULT_WORLD_HEIGHT`: 40 → **64**
+### Fix Applied
 
-New world pixel size: **3072 × 2048 layout px** (was 2048 × 1280)
-New tile count: **6144** (was 2560)
-Viewport-to-world ratio: **3.2× horizontal, 3.8× vertical** (was 2.1×, 2.4×)
+Instead of using `setCrop` (which keeps the full-texture `realWidth`), create a named **sub-frame** from the viewport crop region:
 
-### 2. Player Overworld Scale (src/main.ts drawLeader)
+```ts
+const viewFrameKey = `${this.worldTerrainCacheKey}_view`;
+const texture = this.textures.get(this.worldTerrainCacheKey);
+if (texture.has(viewFrameKey)) texture.remove(viewFrameKey);
+texture.add(viewFrameKey, 0, cropX, cropY, cropWidth, cropHeight);
+const image = this.add.image(0, 0, this.worldTerrainCacheKey, viewFrameKey);
+image.setDisplaySize(cropWidth * PIXEL_ART_SCALE, cropHeight * PIXEL_ART_SCALE);
+```
 
-- `displayCellWidth` for world mode: **132 → 33** (¼ of previous)
-- World-mode shadow: 48×12 → **18×6**
-- World-mode ellipse highlight: 46×12 → **16×6**
-- Body offset: (12, 38) → **(4, 14)** for world mode
-- Town/dungeon sprites unaffected (still 132 displayCellWidth)
-- Fallback figure rendering unchanged in town/dungeon; world fallback preserved
+Now `frame.realWidth = cropWidth` (960), so `setDisplaySize(1920, 1080)` gives `scaleX = 1920/960 = 2.0` ✓.
 
-### 3. Debug Overlay (src/main.ts drawWorld)
+### Coordinate Alignment
 
-Added DEV-only status line at bottom-left showing:
-- Map dimensions (W×H in tiles)
-- Camera scroll position
-- Player tile position
+With this fix, all world layers share one consistent coordinate system:
 
-### 4. Coordinate Alignment Verified
+| Layer | Transform | Example: world tile at (17,33) |
+|-------|-----------|-------------------------------|
+| Terrain cache | Frame origin (cropX,cropY) in texture → image at (0,0) at 2× scale | Scene pos: (17×32−80)×2 = (464×2) = 928 |
+| POIs | Layout coords × 2, offset by `tileCam` | Scene pos: ((17−r)×32−80)×2 → aligned |
+| Player | Layout coords × 2, offset by `cam` | Scene pos: (17×32−80+4)×2 → aligned |
 
-- Terrain cache: uses `cropX = Clamp(tileCam.x, …)`, `cropY = Clamp(tileCam.y, …)`
-- POI rendering: offset by `tileCam`
-- Leader rendering: offset by `cam` (≈ tileCam)
-- All layers share the same world coordinate origin
+### Other Changes
+
+- Added `DEBUG_WORLD_LAYOUT = false` constant to gate debug overlay text
+- Added runtime debug logging behind the same flag (prints frame dimensions, scale)
+- Debug overlay text no longer visible in normal gameplay
 
 ## Final Values
 
@@ -58,11 +63,10 @@ Added DEV-only status line at bottom-left showing:
 | Tile draw size | 32 layout px → 64 display px |
 | World tiles | 96 × 64 |
 | World pixel size | 3072 × 2048 layout px |
-| Viewport (world area) | 960 × 540 layout px (less HUD) |
-| Camera scroll range X | 0 … 2112 layout px (66 tiles) |
-| Camera scroll range Y | 0 … 1508 layout px (47 tiles) |
+| Terrain cache texture | 3072 × 2048 px |
+| Viewport frame | 960 × 540 sub-frame, displayed at 1920 × 1080 |
+| Frame scale | scaleX=2.0, scaleY=2.0 |
 | Player overworld displayCellWidth | 33 layout px (~1 tile) |
-| Player town/dungeon displayCellWidth | 132 layout px (unchanged) |
 | POI footprint | 3 tiles (96 layout px = 192 display px) |
 
 ## atlas_v3 Status
@@ -71,12 +75,10 @@ Added DEV-only status line at bottom-left showing:
 - ✅ 8×8 grid, 29 non-empty tiles, 35 empty/black cells excluded
 - ✅ Classic special tileset not active
 - ✅ Old 10×10 atlas not active
-- ✅ Black seam repair enabled (6.19% pixels repaired on 96×64 map)
-- ✅ Empty/black atlas cells not generated into world
+- ✅ Black seam repair enabled
 
 ## Validation
 
 - `npm run build`: ✅ passes
 - `npm test` (worldgen + black seam repair): ✅ passes
-- Worldgen debug preview: `docs/debug/worldgen/atlas-v3-world-preview.png`
-- Seed-specific preview: `docs/debug/worldgen/world-preview-seed-viewport-fix-qa-v1.png`
+- `DEBUG_WORLD_LAYOUT = true` logs confirm frame.realWidth = cropWidth, scale = 2.0
