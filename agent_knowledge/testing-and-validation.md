@@ -22,8 +22,12 @@ Run from `D:\Projects\Endless Fantasy`:
 npm test
 ```
 
-This runs `tools/worldgen/test_worldgen.mjs`, generates 100 deterministic worlds, and asserts:
+This runs `tools/worldgen/test_worldgen.mjs`, validates the active world atlas/manifest, generates 100 deterministic worlds, and asserts:
 
+- runtime atlas exists and is a square 10x10 PNG
+- manifest has 100 in-bounds tile definitions
+- every atlas source rectangle is an exact integer rectangle inside the image
+- runtime atlas/world source files do not reference deprecated atlas paths
 - start tile is walkable
 - required POIs are reachable and not on blocked/water terrain
 - water tiles are not walkable
@@ -74,7 +78,7 @@ For the overworld atlas, run:
 node tools\art_import\import_world_atlas.mjs
 ```
 
-Check `src/assets/world/world_atlas.normalized.png`, `src/data/worldTiles.ts`, and `docs/debug/world-atlas/world_atlas.debug.png` / `world_atlas.import-report.md`. The runtime atlas should be a clean 10x10 sheet with 256x256 cells and no source separator lines; the debug preview is the only atlas output with labels/grid boxes.
+Check `src/assets/world/world_atlas.normalized.png`, `src/data/worldTiles.ts`, and `docs/debug/world-atlas/world_atlas.labeled-preview.png` / `world_atlas.import-report.md`. The runtime atlas should be an exact copy of the final clean 10x10 PNG with 256x256 cells and no source separator lines; the labeled preview is the only atlas output with labels/grid boxes.
 
 For rembg-related regeneration, use `D:\tools\rembg\venv_rembg\Scripts\rembg.exe` with `birefnet-general`. The expected AMD/Windows provider path is DirectML (`DmlExecutionProvider`). Do not add NVIDIA-specific checks.
 

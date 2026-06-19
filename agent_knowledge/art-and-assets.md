@@ -20,9 +20,9 @@ Reusable scripts live in `tools/art_import/`:
 - `apply_rembg_candidates.ps1`: compares color-key and rembg outputs, promoting only approved rembg results.
 - `generate_asset_previews.ps1`: creates contact sheets and `assets_v2/previews/QUALITY_REPORT.md`.
 - `import_character_sprites.mjs`: imports `D:\Tools\rembg\bg_output\fighter.png`, `priest.png`, and `wizard.png` without running rembg, splits them as 5x2 alpha PNG sheets, normalizes fixed cells/anchors, writes `src/data/characterSprites.ts`, and creates debug previews/reports in `docs/debug/sprite-import/`.
-- `import_world_atlas.mjs`: imports `C:\Users\Marku\Downloads\redo_this_please_2K_202606182350.jpeg`, copies the JPEG source to `src/assets/world/source/`, normalizes the corrected 10x10 square source atlas into exact 256x256 PNG cells with small edge cleanup and edge bleed, writes `src/assets/world/world_atlas.normalized.png`, writes `src/data/worldTiles.ts`, and creates debug output in `docs/debug/world-atlas/`.
+- `import_world_atlas.mjs`: imports the final PNG source `C:\Users\Marku\Downloads\master_overworld_tileset_atlas_10x10.png`, copies it exactly to `src/assets/world/world_atlas.normalized.png`, stores a provenance copy in `src/assets/world/source/`, writes the 100-tile manifest in `src/data/worldTiles.ts`, and creates `docs/debug/world-atlas/world_atlas.labeled-preview.png` plus `world_atlas.import-report.md`.
 
-Manual crop maps live in `tools/art_import/crop_maps/`. The world tile crop map includes `postResizeCrop` cleanup to remove source-sheet border pixels after resizing. Keep this when regenerating terrain, or the overworld will look grid/debug-like.
+Manual crop maps live in `tools/art_import/crop_maps/`. The active final world atlas does not use the old crop-map/JPEG normalization path; it is a strict 10x10 PNG with no gutters or grid lines.
 
 The source folder `D:\Projects\new_artwork` contained 63 PNGs and no ZIPs. No extraction into `D:\Projects\new_artwork_extracted` was needed.
 
@@ -77,7 +77,7 @@ Still fallback or older assets:
 - Dawnford/town service markers render as one clean horizontal row of five image-only icons. Do not add always-visible text labels such as Items/Arms/Magic/Clinic back onto those markers.
 - The town south exit uses the gate art only; there is no floating "Exit" label or persistent bottom-right interaction hint in normal town exploration.
 - Overworld locations render as larger 3x3-ish landmarks with matching entry footprints. Keep terrain tiles small/repeating, but landmarks should remain visually important.
-- The overworld atlas source is a corrected 2048x2048 JPEG with 10 columns x 10 rows. Because 2048 does not divide evenly by 10, `import_world_atlas.mjs` normalizes proportional source cells into a 2560x2560 PNG before runtime slicing.
+- The overworld atlas source is a final 2560x2560 PNG with 10 columns x 10 rows. Runtime slicing uses exact integer source rectangles: `sx = col * 256`, `sy = row * 256`, `sw = 256`, `sh = 256`. Do not reintroduce proportional slicing, JPEG cleanup, gutters, edge bleed, or debug-grid art for runtime terrain.
 - Battle backgrounds are full 16:9 opaque JPEG images and are assigned linear texture filtering. Pixel sprites, tiles, UI, and icons remain nearest-neighbor filtered. The canvas itself uses `image-rendering: auto` so high-resolution artwork is not globally pixelated.
 - Battle party presentation uses the normalized fighter/priest/wizard class sheets only on the battlefield; redundant small head portraits/icons and old standalone party battle PNGs are intentionally not drawn there.
 

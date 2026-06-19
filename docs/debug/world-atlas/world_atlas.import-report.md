@@ -1,157 +1,154 @@
 # World Atlas Import Report
 
-Source: `C:/Users/Marku/Downloads/redo_this_please_2K_202606182350.jpeg`
-Copied source: `src/assets/world/source/redo_this_please_2K_202606182350.jpeg`
-Source dimensions: 2048x2048
-Source color: JPEG RGB converted through Windows imaging
-Detected source grid: 10 columns x 10 rows
-Runtime grid: 10 columns x 10 rows
-Normalized tile size: 256x256
-Normalized atlas: `src/assets/world/world_atlas.normalized.png`
-Debug preview: `docs/debug/world-atlas/world_atlas.debug.png`
-Embedded border crop: 2px per tile edge
-Output edge bleed: 2px
+Source: `C:/Users/Marku/Downloads/master_overworld_tileset_atlas_10x10.png`
+Copied source: `src/assets/world/source/master_overworld_tileset_atlas_10x10.png`
+Source SHA-256: `4207EB1592727AD045649CD916367D585174EF311B457EDC55BCB3FF2858A3A9`
+Source dimensions: 2560x2560
+Source color: RGB
+Grid size: 10 columns x 10 rows
+Tile size: 256x256
+Runtime atlas path: `src/assets/world/world_atlas.normalized.png`
+Manifest path: `src/data/worldTiles.ts`
+Labeled preview: `docs/debug/world-atlas/world_atlas.labeled-preview.png`
 
-## Grid Detection
+## Import Method
 
-The source is the corrected square 10x10 JPEG atlas. It is 2048x2048, so 10-way source cells are fractional and cannot be sliced directly in runtime code. The importer uses proportional source cell edges, crops 2px from each tile edge to remove residual JPEG boundary artifacts, normalizes every tile to 256x256, then applies a 2px interior edge bleed to prevent atlas sampling seams.
+The source PNG is already a clean 10x10 square atlas with no gutters, borders, or grid lines. The importer copies it exactly to the runtime atlas path and slices it with integer rectangles only:
 
-The game uses the full corrected 10x10 terrain model. Source rows 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 map one-to-one to runtime rows 0-9.
+```ts
+sx = col * tileWidth;
+sy = row * tileHeight;
+sw = tileWidth;
+sh = tileHeight;
+```
 
-Column edges:
+No proportional slicing, border cleanup, scaling, padding, or edge bleed is applied.
 
-- 0: expected 0, edge 0, avg 99.9
-- 1: expected 204.8, edge 205, avg 100.8
-- 2: expected 409.6, edge 410, avg 87.8
-- 3: expected 614.4, edge 614, avg 87.4
-- 4: expected 819.2, edge 819, avg 80.8
-- 5: expected 1024, edge 1024, avg 85.3
-- 6: expected 1228.8, edge 1229, avg 84.4
-- 7: expected 1433.6, edge 1434, avg 71.1
-- 8: expected 1638.4, edge 1638, avg 72
-- 9: expected 1843.2, edge 1843, avg 81.1
-- 10: expected 2048, edge 2048, avg 73.7
+## Row Families
 
-Row edges:
+- Row 0: grassland / meadow
+- Row 1: woodland / forest
+- Row 2: desert / dryland
+- Row 3: snow / ice
+- Row 4: darkland / swamp / cursed land
+- Row 5: water / shore / bridge
+- Row 6: mountain / hill / rock / cliff
+- Row 7: road / special / extra biomes
+- Row 8: transitions / edges / natural blends
+- Row 9: roads / rivers / connectors / map utility
 
-- 0: expected 0, edge 0, avg 62.5
-- 1: expected 204.8, edge 205, avg 68.1
-- 2: expected 409.6, edge 410, avg 42.8
-- 3: expected 614.4, edge 614, avg 110.5
-- 4: expected 819.2, edge 819, avg 188.4
-- 5: expected 1024, edge 1024, avg 51.1
-- 6: expected 1228.8, edge 1229, avg 45.2
-- 7: expected 1433.6, edge 1434, avg 82.8
-- 8: expected 1638.4, edge 1638, avg 66.4
-- 9: expected 1843.2, edge 1843, avg 63.4
-- 10: expected 2048, edge 2048, avg 62.3
+## Walkability Summary
 
-Source crop widths: 204-205
-Source crop heights: 204-205
-Clean crop widths: 200-201
-Clean crop heights: 200-201
+- Walkable tiles: 81
+- Blocked tiles: 19
+- Water-family blocked tiles: 12
+- Bridge tiles: 4, all walkable
+
+## Visual Interpretation Deviations
+
+None. Visual inspection matched the requested 10-row interpretation.
 
 ## Cells
 
-| Runtime Row | Source Row | Col | Tile ID | Raw Source Rect | Clean Source Rect | Normalized Rect |
-|---:|---:|---:|---|---|---|---|
-| 0 | 0 | 0 | `bright_grass` | 0,0,205,205 | 2,2,201,201 | 0,0,256,256 |
-| 0 | 0 | 1 | `medium_grass` | 205,0,205,205 | 207,2,201,201 | 256,0,256,256 |
-| 0 | 0 | 2 | `dark_grass` | 410,0,204,205 | 412,2,200,201 | 512,0,256,256 |
-| 0 | 0 | 3 | `flower_meadow` | 614,0,205,205 | 616,2,201,201 | 768,0,256,256 |
-| 0 | 0 | 4 | `clover_lush_grass` | 819,0,205,205 | 821,2,201,201 | 1024,0,256,256 |
-| 0 | 0 | 5 | `trampled_grass` | 1024,0,205,205 | 1026,2,201,201 | 1280,0,256,256 |
-| 0 | 0 | 6 | `weeds_grass` | 1229,0,205,205 | 1231,2,201,201 | 1536,0,256,256 |
-| 0 | 0 | 7 | `dirt_patch` | 1434,0,204,205 | 1436,2,200,201 | 1792,0,256,256 |
-| 0 | 0 | 8 | `grass_stones` | 1638,0,205,205 | 1640,2,201,201 | 2048,0,256,256 |
-| 0 | 0 | 9 | `yellow_flower_grass` | 1843,0,205,205 | 1845,2,201,201 | 2304,0,256,256 |
-| 1 | 1 | 0 | `forest_floor` | 0,205,205,205 | 2,207,201,201 | 0,256,256,256 |
-| 1 | 1 | 1 | `dark_forest_floor` | 205,205,205,205 | 207,207,201,201 | 256,256,256,256 |
-| 1 | 1 | 2 | `mossy_forest_ground` | 410,205,204,205 | 412,207,200,201 | 512,256,256,256 |
-| 1 | 1 | 3 | `dense_leafy_woodland` | 614,205,205,205 | 616,207,201,201 | 768,256,256,256 |
-| 1 | 1 | 4 | `bush_hedge` | 819,205,205,205 | 821,207,201,201 | 1024,256,256,256 |
-| 1 | 1 | 5 | `tree_covered_green` | 1024,205,205,205 | 1026,207,201,201 | 1280,256,256,256 |
-| 1 | 1 | 6 | `rooty_forest_earth` | 1229,205,205,205 | 1231,207,201,201 | 1536,256,256,256 |
-| 1 | 1 | 7 | `autumn_woodland` | 1434,205,204,205 | 1436,207,200,201 | 1792,256,256,256 |
-| 1 | 1 | 8 | `enchanted_forest_ground` | 1638,205,205,205 | 1640,207,201,201 | 2048,256,256,256 |
-| 1 | 1 | 9 | `forest_path` | 1843,205,205,205 | 1845,207,201,201 | 2304,256,256,256 |
-| 2 | 2 | 0 | `bright_sand` | 0,410,205,204 | 2,412,201,200 | 0,512,256,256 |
-| 2 | 2 | 1 | `golden_sand` | 205,410,205,204 | 207,412,201,200 | 256,512,256,256 |
-| 2 | 2 | 2 | `dune_sand` | 410,410,204,204 | 412,412,200,200 | 512,512,256,256 |
-| 2 | 2 | 3 | `rocky_sand` | 614,410,205,204 | 616,412,201,200 | 768,512,256,256 |
-| 2 | 2 | 4 | `cracked_dry_earth` | 819,410,205,204 | 821,412,201,200 | 1024,512,256,256 |
-| 2 | 2 | 5 | `reddish_desert_soil` | 1024,410,205,204 | 1026,412,201,200 | 1280,512,256,256 |
-| 2 | 2 | 6 | `cactus_scrub` | 1229,410,205,204 | 1231,412,201,200 | 1536,512,256,256 |
-| 2 | 2 | 7 | `oasis` | 1434,410,204,204 | 1436,412,200,200 | 1792,512,256,256 |
-| 2 | 2 | 8 | `sandstone_floor` | 1638,410,205,204 | 1640,412,201,200 | 2048,512,256,256 |
-| 2 | 2 | 9 | `desert_scrub_path` | 1843,410,205,204 | 1845,412,201,200 | 2304,512,256,256 |
-| 3 | 3 | 0 | `clean_snow` | 0,614,205,205 | 2,616,201,201 | 0,768,256,256 |
-| 3 | 3 | 1 | `packed_snow` | 205,614,205,205 | 207,616,201,201 | 256,768,256,256 |
-| 3 | 3 | 2 | `icy_snow` | 410,614,204,205 | 412,616,200,201 | 512,768,256,256 |
-| 3 | 3 | 3 | `frozen_ground` | 614,614,205,205 | 616,616,201,201 | 768,768,256,256 |
-| 3 | 3 | 4 | `frosty_sparkle_snow` | 819,614,205,205 | 821,616,201,201 | 1024,768,256,256 |
-| 3 | 3 | 5 | `snow_rock` | 1024,614,205,205 | 1026,616,201,201 | 1280,768,256,256 |
-| 3 | 3 | 6 | `frozen_lake_ice` | 1229,614,205,205 | 1231,616,201,201 | 1536,768,256,256 |
-| 3 | 3 | 7 | `cracked_ice` | 1434,614,204,205 | 1436,616,200,201 | 1792,768,256,256 |
-| 3 | 3 | 8 | `glacier_ice` | 1638,614,205,205 | 1640,616,201,201 | 2048,768,256,256 |
-| 3 | 3 | 9 | `snowy_path` | 1843,614,205,205 | 1845,616,201,201 | 2304,768,256,256 |
-| 4 | 4 | 0 | `darkland_grass` | 0,819,205,205 | 2,821,201,201 | 0,1024,256,256 |
-| 4 | 4 | 1 | `dead_earth` | 205,819,205,205 | 207,821,201,201 | 256,1024,256,256 |
-| 4 | 4 | 2 | `muddy_swamp` | 410,819,204,205 | 412,821,200,201 | 512,1024,256,256 |
-| 4 | 4 | 3 | `boggy_wetland` | 614,819,205,205 | 616,821,201,201 | 768,1024,256,256 |
-| 4 | 4 | 4 | `toxic_marsh` | 819,819,205,205 | 821,821,201,201 | 1024,1024,256,256 |
-| 4 | 4 | 5 | `ash_ground` | 1024,819,205,205 | 1026,821,201,201 | 1280,1024,256,256 |
-| 4 | 4 | 6 | `cursed_purple_soil` | 1229,819,205,205 | 1231,821,201,201 | 1536,1024,256,256 |
-| 4 | 4 | 7 | `blackened_wasteland` | 1434,819,204,205 | 1436,821,200,201 | 1792,1024,256,256 |
-| 4 | 4 | 8 | `sickly_corrupted_ground` | 1638,819,205,205 | 1640,821,201,201 | 2048,1024,256,256 |
-| 4 | 4 | 9 | `haunted_dead_forest_floor` | 1843,819,205,205 | 1845,821,201,201 | 2304,1024,256,256 |
-| 5 | 5 | 0 | `deep_ocean_water` | 0,1024,205,205 | 2,1026,201,201 | 0,1280,256,256 |
-| 5 | 5 | 1 | `light_water` | 205,1024,205,205 | 207,1026,201,201 | 256,1280,256,256 |
-| 5 | 5 | 2 | `river_water` | 410,1024,204,205 | 412,1026,200,201 | 512,1280,256,256 |
-| 5 | 5 | 3 | `shallow_water` | 614,1024,205,205 | 616,1026,201,201 | 768,1280,256,256 |
-| 5 | 5 | 4 | `swamp_water` | 819,1024,205,205 | 821,1026,201,201 | 1024,1280,256,256 |
-| 5 | 5 | 5 | `beach_shore` | 1024,1024,205,205 | 1026,1026,201,201 | 1280,1280,256,256 |
-| 5 | 5 | 6 | `wooden_bridge_horizontal` | 1229,1024,205,205 | 1231,1026,201,201 | 1536,1280,256,256 |
-| 5 | 5 | 7 | `wooden_bridge_vertical` | 1434,1024,204,205 | 1436,1026,200,201 | 1792,1280,256,256 |
-| 5 | 5 | 8 | `stone_bridge_horizontal` | 1638,1024,205,205 | 1640,1026,201,201 | 2048,1280,256,256 |
-| 5 | 5 | 9 | `stone_bridge_vertical` | 1843,1024,205,205 | 1845,1026,201,201 | 2304,1280,256,256 |
-| 6 | 6 | 0 | `deep_ocean_water_variant` | 0,1229,205,205 | 2,1231,201,201 | 0,1536,256,256 |
-| 6 | 6 | 1 | `rocky_ocean_water` | 205,1229,205,205 | 207,1231,201,201 | 256,1536,256,256 |
-| 6 | 6 | 2 | `clear_shallow_water` | 410,1229,204,205 | 412,1231,200,201 | 512,1536,256,256 |
-| 6 | 6 | 3 | `lily_swamp_water` | 614,1229,205,205 | 616,1231,201,201 | 768,1536,256,256 |
-| 6 | 6 | 4 | `foamy_beach_shore` | 819,1229,205,205 | 821,1231,201,201 | 1024,1536,256,256 |
-| 6 | 6 | 5 | `sandy_rock_shore` | 1024,1229,205,205 | 1026,1231,201,201 | 1280,1536,256,256 |
-| 6 | 6 | 6 | `wooden_bridge_horizontal_variant` | 1229,1229,205,205 | 1231,1231,201,201 | 1536,1536,256,256 |
-| 6 | 6 | 7 | `wooden_bridge_vertical_variant` | 1434,1229,204,205 | 1436,1231,200,201 | 1792,1536,256,256 |
-| 6 | 6 | 8 | `stone_bridge_horizontal_variant` | 1638,1229,205,205 | 1640,1231,201,201 | 2048,1536,256,256 |
-| 6 | 6 | 9 | `stone_bridge_vertical_variant` | 1843,1229,205,205 | 1845,1231,201,201 | 2304,1536,256,256 |
-| 7 | 7 | 0 | `rocky_hill_ground` | 0,1434,205,204 | 2,1436,201,200 | 0,1792,256,256 |
-| 7 | 7 | 1 | `mountain_foothill` | 205,1434,205,204 | 207,1436,201,200 | 256,1792,256,256 |
-| 7 | 7 | 2 | `dark_mountain_ground` | 410,1434,204,204 | 412,1436,200,200 | 512,1792,256,256 |
-| 7 | 7 | 3 | `gravel_stone_ground` | 614,1434,205,204 | 616,1436,201,200 | 768,1792,256,256 |
-| 7 | 7 | 4 | `cliff_top_rock` | 819,1434,205,204 | 821,1436,201,200 | 1024,1792,256,256 |
-| 7 | 7 | 5 | `canyon_stone` | 1024,1434,205,204 | 1026,1436,201,200 | 1280,1792,256,256 |
-| 7 | 7 | 6 | `mossy_rock` | 1229,1434,205,204 | 1231,1436,201,200 | 1536,1792,256,256 |
-| 7 | 7 | 7 | `volcanic_stone` | 1434,1434,204,204 | 1436,1436,200,200 | 1792,1792,256,256 |
-| 7 | 7 | 8 | `crystal_rock` | 1638,1434,205,204 | 1640,1436,201,200 | 2048,1792,256,256 |
-| 7 | 7 | 9 | `cave_rock` | 1843,1434,205,204 | 1845,1436,201,200 | 2304,1792,256,256 |
-| 8 | 8 | 0 | `mossy_mountain_variant` | 0,1638,205,205 | 2,1640,201,201 | 0,2048,256,256 |
-| 8 | 8 | 1 | `dark_mountain_variant` | 205,1638,205,205 | 207,1640,201,201 | 256,2048,256,256 |
-| 8 | 8 | 2 | `rocky_ground_variant` | 410,1638,204,205 | 412,1640,200,201 | 512,2048,256,256 |
-| 8 | 8 | 3 | `tan_rocky_ground_variant` | 614,1638,205,205 | 616,1640,201,201 | 768,2048,256,256 |
-| 8 | 8 | 4 | `canyon_cliff_variant` | 819,1638,205,205 | 821,1640,201,201 | 1024,2048,256,256 |
-| 8 | 8 | 5 | `mossy_ruin_rock_variant` | 1024,1638,205,205 | 1026,1640,201,201 | 1280,2048,256,256 |
-| 8 | 8 | 6 | `crystal_rock_variant` | 1229,1638,205,205 | 1231,1640,201,201 | 1536,2048,256,256 |
-| 8 | 8 | 7 | `cave_entrance_variant` | 1434,1638,204,205 | 1436,1640,200,201 | 1792,2048,256,256 |
-| 8 | 8 | 8 | `stone_ruin_wall_variant` | 1638,1638,205,205 | 1640,1640,201,201 | 2048,2048,256,256 |
-| 8 | 8 | 9 | `rocky_path_variant` | 1843,1638,205,205 | 1845,1640,201,201 | 2304,2048,256,256 |
-| 9 | 9 | 0 | `dirt_road` | 0,1843,205,205 | 2,1845,201,201 | 0,2304,256,256 |
-| 9 | 9 | 1 | `worn_path` | 205,1843,205,205 | 207,1845,201,201 | 256,2304,256,256 |
-| 9 | 9 | 2 | `cobblestone_road` | 410,1843,204,205 | 412,1845,200,201 | 512,2304,256,256 |
-| 9 | 9 | 3 | `ancient_ruin_floor` | 614,1843,205,205 | 616,1845,201,201 | 768,2304,256,256 |
-| 9 | 9 | 4 | `lava_cracked_ground` | 819,1843,205,205 | 821,1845,201,201 | 1024,2304,256,256 |
-| 9 | 9 | 5 | `tropical_lush_ground` | 1024,1843,205,205 | 1026,1845,201,201 | 1280,2304,256,256 |
-| 9 | 9 | 6 | `tropical_beach_sand` | 1229,1843,205,205 | 1231,1845,201,201 | 1536,2304,256,256 |
-| 9 | 9 | 7 | `magical_crystal_field` | 1434,1843,204,205 | 1436,1845,200,201 | 1792,2304,256,256 |
-| 9 | 9 | 8 | `graveyard_earth` | 1638,1843,205,205 | 1640,1845,201,201 | 2048,2304,256,256 |
-| 9 | 9 | 9 | `mixed_utility_terrain` | 1843,1843,205,205 | 1845,1845,201,201 | 2304,2304,256,256 |
+| ID | Row | Col | Biome | Tags | Walkable | Movement Cost | Source Rect | Notes |
+|---|---:|---:|---|---|---:|---:|---|---|
+| `bright_grass` | 0 | 0 | grassland | grass, land | true | 1 | 0,0,256,256 |  |
+| `medium_grass` | 0 | 1 | grassland | grass, land | true | 1 | 256,0,256,256 |  |
+| `dark_grass` | 0 | 2 | grassland | grass, land | true | 1 | 512,0,256,256 |  |
+| `flower_meadow` | 0 | 3 | grassland | grass, flowers, land | true | 1 | 768,0,256,256 |  |
+| `clover_lush_grass` | 0 | 4 | grassland | grass, lush, land | true | 1 | 1024,0,256,256 |  |
+| `trampled_grass` | 0 | 5 | grassland | grass, worn, land | true | 1 | 1280,0,256,256 |  |
+| `weeds_grass` | 0 | 6 | grassland | grass, weeds, land | true | 1.1 | 1536,0,256,256 |  |
+| `dirt_patch` | 0 | 7 | grassland | dirt, grass, land | true | 1 | 1792,0,256,256 |  |
+| `grass_stones` | 0 | 8 | grassland | grass, rocks, land | true | 1.2 | 2048,0,256,256 |  |
+| `fertile_field_grass` | 0 | 9 | grassland | grass, field, land | true | 1 | 2304,0,256,256 |  |
+| `forest_floor` | 1 | 0 | forest | forest, land | true | 1.4 | 0,256,256,256 |  |
+| `dark_forest_floor` | 1 | 1 | forest | forest, dark, land | true | 1.6 | 256,256,256,256 |  |
+| `mossy_forest_ground` | 1 | 2 | forest | forest, moss, land | true | 1.4 | 512,256,256,256 |  |
+| `dense_leafy_woodland` | 1 | 3 | forest | forest, dense, land | true | 2.1 | 768,256,256,256 |  |
+| `bush_hedge` | 1 | 4 | forest | forest, bush, land | true | 1.8 | 1024,256,256,256 |  |
+| `tree_covered_green` | 1 | 5 | forest | forest, dense, land | true | 2.2 | 1280,256,256,256 |  |
+| `rooty_forest_earth` | 1 | 6 | forest | forest, roots, land | true | 1.7 | 1536,256,256,256 |  |
+| `autumn_woodland` | 1 | 7 | forest | forest, autumn, land | true | 1.5 | 1792,256,256,256 |  |
+| `enchanted_forest_ground` | 1 | 8 | forest | forest, magic, land | true | 1.5 | 2048,256,256,256 |  |
+| `forest_path` | 1 | 9 | forest | forest, road, path, land | true | 0.75 | 2304,256,256,256 |  |
+| `bright_sand` | 2 | 0 | desert | sand, desert, land | true | 1.35 | 0,512,256,256 |  |
+| `golden_sand` | 2 | 1 | desert | sand, desert, land | true | 1.35 | 256,512,256,256 |  |
+| `dune_sand` | 2 | 2 | desert | sand, desert, dune, land | true | 1.55 | 512,512,256,256 |  |
+| `rocky_sand` | 2 | 3 | desert | sand, desert, rocks, land | true | 1.65 | 768,512,256,256 |  |
+| `cracked_dry_earth` | 2 | 4 | desert | desert, dry, land | true | 1.45 | 1024,512,256,256 |  |
+| `reddish_desert_soil` | 2 | 5 | desert | desert, red, land | true | 1.45 | 1280,512,256,256 |  |
+| `cactus_scrub` | 2 | 6 | desert | desert, scrub, land | true | 1.8 | 1536,512,256,256 |  |
+| `oasis_edge` | 2 | 7 | desert | desert, oasis, shore, land | true | 1.3 | 1792,512,256,256 |  |
+| `sandstone_floor` | 2 | 8 | desert | desert, stone, land | true | 1.2 | 2048,512,256,256 |  |
+| `desert_path` | 2 | 9 | desert | desert, road, path, land | true | 0.85 | 2304,512,256,256 |  |
+| `clean_snow` | 3 | 0 | snow | snow, land | true | 1.45 | 0,768,256,256 |  |
+| `packed_snow` | 3 | 1 | snow | snow, packed, land | true | 1.3 | 256,768,256,256 |  |
+| `icy_snow` | 3 | 2 | snow | snow, ice, land | true | 1.55 | 512,768,256,256 |  |
+| `frozen_ground` | 3 | 3 | snow | snow, frozen, land | true | 1.5 | 768,768,256,256 |  |
+| `frosty_sparkle_snow` | 3 | 4 | snow | snow, sparkle, land | true | 1.45 | 1024,768,256,256 |  |
+| `snow_rock` | 3 | 5 | snow | snow, rocks, land | true | 1.9 | 1280,768,256,256 |  |
+| `frozen_lake_ice` | 3 | 6 | snow | water, ice | false | 99 | 1536,768,256,256 | Blocked ice by current movement rules. |
+| `cracked_ice` | 3 | 7 | snow | water, ice, cracked | false | 99 | 1792,768,256,256 | Blocked ice by current movement rules. |
+| `glacier_ice` | 3 | 8 | snow | water, ice, glacier | false | 99 | 2048,768,256,256 | Blocked ice by current movement rules. |
+| `snowy_path` | 3 | 9 | snow | snow, road, path, land | true | 0.9 | 2304,768,256,256 |  |
+| `dark_grassland` | 4 | 0 | darkland | darkland, grass, land | true | 1.5 | 0,1024,256,256 |  |
+| `dead_earth` | 4 | 1 | darkland | darkland, dead, land | true | 1.45 | 256,1024,256,256 |  |
+| `muddy_swamp` | 4 | 2 | darkland | darkland, swamp, mud, land | true | 1.9 | 512,1024,256,256 |  |
+| `boggy_wetland` | 4 | 3 | darkland | darkland, swamp, bog, land | true | 2.1 | 768,1024,256,256 |  |
+| `toxic_marsh` | 4 | 4 | darkland | water, toxic, swamp | false | 99 | 1024,1024,256,256 | Blocked toxic water. |
+| `ash_ground` | 4 | 5 | darkland | darkland, ash, land | true | 1.55 | 1280,1024,256,256 |  |
+| `cursed_purple_soil` | 4 | 6 | darkland | darkland, cursed, land | true | 1.6 | 1536,1024,256,256 |  |
+| `blackened_wasteland` | 4 | 7 | darkland | darkland, wasteland, land | true | 1.7 | 1792,1024,256,256 |  |
+| `sickly_corrupted_ground` | 4 | 8 | darkland | darkland, corrupt, land | true | 1.8 | 2048,1024,256,256 |  |
+| `haunted_dead_forest_floor` | 4 | 9 | darkland | darkland, forest, land | true | 1.9 | 2304,1024,256,256 |  |
+| `deep_ocean_water` | 5 | 0 | water | water, ocean, deep | false | 99 | 0,1280,256,256 |  |
+| `light_water` | 5 | 1 | water | water | false | 99 | 256,1280,256,256 |  |
+| `river_water` | 5 | 2 | water | water, river | false | 99 | 512,1280,256,256 |  |
+| `shallow_water` | 5 | 3 | water | water, shallow | false | 99 | 768,1280,256,256 |  |
+| `swamp_water` | 5 | 4 | water | water, swamp | false | 99 | 1024,1280,256,256 |  |
+| `beach_shore` | 5 | 5 | water | shore, beach, land | true | 1.15 | 1280,1280,256,256 |  |
+| `wooden_bridge_horizontal` | 5 | 6 | water | bridge, road, land | true | 0.7 | 1536,1280,256,256 |  |
+| `wooden_bridge_vertical` | 5 | 7 | water | bridge, road, land | true | 0.7 | 1792,1280,256,256 |  |
+| `stone_bridge_horizontal` | 5 | 8 | water | bridge, road, land | true | 0.65 | 2048,1280,256,256 |  |
+| `stone_bridge_vertical` | 5 | 9 | water | bridge, road, land | true | 0.65 | 2304,1280,256,256 |  |
+| `rocky_hill_ground` | 6 | 0 | mountain | rock, hill, land | true | 2.1 | 0,1536,256,256 |  |
+| `mountain_foothill` | 6 | 1 | mountain | mountain, foothill, land | true | 2.4 | 256,1536,256,256 |  |
+| `dark_mountain_ground` | 6 | 2 | mountain | mountain, blocked | false | 99 | 512,1536,256,256 |  |
+| `gravel_stone_ground` | 6 | 3 | mountain | rock, gravel, land | true | 1.8 | 768,1536,256,256 |  |
+| `cliff_top_rock` | 6 | 4 | mountain | cliff, blocked | false | 99 | 1024,1536,256,256 |  |
+| `canyon_stone` | 6 | 5 | mountain | canyon, cliff, blocked | false | 99 | 1280,1536,256,256 |  |
+| `mossy_rock` | 6 | 6 | mountain | rock, moss, land | true | 2 | 1536,1536,256,256 |  |
+| `volcanic_stone` | 6 | 7 | mountain | lava, volcanic, blocked | false | 99 | 1792,1536,256,256 |  |
+| `crystal_rock` | 6 | 8 | mountain | crystal, blocked | false | 99 | 2048,1536,256,256 |  |
+| `cave_rock_entrance` | 6 | 9 | mountain | cave, entrance, blocked | false | 99 | 2304,1536,256,256 | Blocked unless a POI trigger overlays it. |
+| `dirt_road` | 7 | 0 | road | road, land | true | 0.65 | 0,1792,256,256 |  |
+| `worn_path` | 7 | 1 | road | road, path, land | true | 0.75 | 256,1792,256,256 |  |
+| `cobblestone_road` | 7 | 2 | road | road, stone, land | true | 0.55 | 512,1792,256,256 |  |
+| `ancient_ruin_floor` | 7 | 3 | road | road, ruin, land | true | 0.9 | 768,1792,256,256 |  |
+| `lava_cracked_ground` | 7 | 4 | road | lava, blocked | false | 99 | 1024,1792,256,256 |  |
+| `tropical_lush_ground` | 7 | 5 | road | grass, tropical, land | true | 1.2 | 1280,1792,256,256 |  |
+| `tropical_beach_sand` | 7 | 6 | road | beach, tropical, land | true | 1.15 | 1536,1792,256,256 |  |
+| `magical_crystal_field` | 7 | 7 | road | magic, crystal, land | true | 1.6 | 1792,1792,256,256 |  |
+| `graveyard_earth` | 7 | 8 | road | darkland, graveyard, land | true | 1.45 | 2048,1792,256,256 |  |
+| `mixed_utility_terrain` | 7 | 9 | road | mixed, land | true | 1.3 | 2304,1792,256,256 |  |
+| `grass_to_dirt_transition` | 8 | 0 | transition | grass, dirt, transition, land | true | 1.05 | 0,2048,256,256 |  |
+| `grass_to_forest_transition` | 8 | 1 | transition | grass, forest, transition, land | true | 1.2 | 256,2048,256,256 |  |
+| `grass_to_sand_transition` | 8 | 2 | transition | grass, sand, transition, land | true | 1.15 | 512,2048,256,256 |  |
+| `grass_to_snow_transition` | 8 | 3 | transition | grass, snow, transition, land | true | 1.2 | 768,2048,256,256 |  |
+| `grass_to_darkland_transition` | 8 | 4 | transition | grass, darkland, transition, land | true | 1.25 | 1024,2048,256,256 |  |
+| `beach_to_water_transition` | 8 | 5 | transition | shore, beach, transition, land | true | 1.15 | 1280,2048,256,256 |  |
+| `rocky_shore_to_water_transition` | 8 | 6 | transition | shore, rock, transition, land | true | 1.25 | 1536,2048,256,256 |  |
+| `riverbank_grass_edge` | 8 | 7 | transition | riverbank, grass, transition, land | true | 1.1 | 1792,2048,256,256 |  |
+| `riverbank_dirt_edge` | 8 | 8 | transition | riverbank, dirt, transition, land | true | 1.1 | 2048,2048,256,256 |  |
+| `snow_to_ice_transition` | 8 | 9 | transition | snow, ice, transition, land | true | 1.25 | 2304,2048,256,256 |  |
+| `dirt_road_horizontal` | 9 | 0 | road | road, connector, horizontal, land | true | 0.6 | 0,2304,256,256 |  |
+| `dirt_road_vertical` | 9 | 1 | road | road, connector, vertical, land | true | 0.6 | 256,2304,256,256 |  |
+| `dirt_road_corner` | 9 | 2 | road | road, connector, corner, land | true | 0.65 | 512,2304,256,256 |  |
+| `dirt_road_t_junction` | 9 | 3 | road | road, connector, junction, land | true | 0.6 | 768,2304,256,256 |  |
+| `dirt_road_crossroads` | 9 | 4 | road | road, connector, crossroads, land | true | 0.55 | 1024,2304,256,256 |  |
+| `river_straight` | 9 | 5 | water | water, river, connector | false | 99 | 1280,2304,256,256 |  |
+| `river_bend` | 9 | 6 | water | water, river, connector | false | 99 | 1536,2304,256,256 |  |
+| `river_t_junction` | 9 | 7 | water | water, river, connector, junction | false | 99 | 1792,2304,256,256 |  |
+| `shallow_ford_stepping_stones` | 9 | 8 | road | ford, river, road, land | true | 0.9 | 2048,2304,256,256 |  |
+| `ruined_stone_entrance_ground` | 9 | 9 | road | ruin, entrance, land | true | 1 | 2304,2304,256,256 |  |

@@ -6,6 +6,7 @@ import {
   isWorldTileWalkable,
   worldTileEncounterFamily,
   worldTileHasTag,
+  type WorldTileDefinition,
   type WorldTileId
 } from "./data/worldTiles.ts";
 import { createWorldSeed, generateWorld, type GeneratedWorld } from "./world/worldGenerator.ts";
@@ -1178,6 +1179,7 @@ class CrystalOathScene extends Phaser.Scene {
   private blockedMoveCooldown = 0;
   private walkAnimElapsed = 0;
   private playerMoving = false;
+  private worldAtlasValidated = false;
 
   constructor() {
     super("CrystalOathScene");
@@ -4221,14 +4223,15 @@ Statuses: ${statuses}`;
   private drawWorldTile(terrain: Terrain, sx: number, sy: number, x: number, y: number) {
     const tile = WORLD_TILES[terrain];
     if (tile && this.hasTexture("world_atlas")) {
+      const rect = this.worldAtlasSourceRect(tile);
       this.drawCroppedTexture(
         "world_atlas",
         sx,
         sy,
-        tile.col * WORLD_ATLAS.tileWidth,
-        tile.row * WORLD_ATLAS.tileHeight,
-        WORLD_ATLAS.tileWidth,
-        WORLD_ATLAS.tileHeight,
+        rect.x,
+        rect.y,
+        rect.width,
+        rect.height,
         TILE,
         TILE,
         LAYER_WORLD_IMAGE
@@ -4244,6 +4247,42 @@ Statuses: ${statuses}`;
     else if (tile?.biome === "desert") this.drawWorldSandTile(sx, sy, x, y);
     else this.drawWorldRoadTile(sx, sy, x, y);
     this.drawWorldCoastEdges(terrain, sx, sy, x, y);
+  }
+
+  private worldAtlasSourceRect(tile: WorldTileDefinition) {
+    this.assertWorldAtlasTextureSize();
+    if (!Number.isInteger(WORLD_ATLAS.tileWidth) || !Number.isInteger(WORLD_ATLAS.tileHeight)) {
+      throw new Error(`World atlas tile size must be integer; got ${WORLD_ATLAS.tileWidth}x${WORLD_ATLAS.tileHeight}.`);
+    }
+    if (tile.row < 0 || tile.row >= WORLD_ATLAS.rows || tile.col < 0 || tile.col >= WORLD_ATLAS.columns) {
+      throw new Error(`World tile ${tile.id} points outside the ${WORLD_ATLAS.columns}x${WORLD_ATLAS.rows} atlas at row ${tile.row}, col ${tile.col}.`);
+    }
+    const rect = {
+      x: tile.col * WORLD_ATLAS.tileWidth,
+      y: tile.row * WORLD_ATLAS.tileHeight,
+      width: WORLD_ATLAS.tileWidth,
+      height: WORLD_ATLAS.tileHeight
+    };
+    if (rect.x + rect.width > WORLD_ATLAS.sheetWidth || rect.y + rect.height > WORLD_ATLAS.sheetHeight) {
+      throw new Error(
+        `World tile ${tile.id} source rect ${rect.x},${rect.y},${rect.width},${rect.height} exceeds atlas ${WORLD_ATLAS.sheetWidth}x${WORLD_ATLAS.sheetHeight}.`
+      );
+    }
+    return rect;
+  }
+
+  private assertWorldAtlasTextureSize() {
+    if (this.worldAtlasValidated) return;
+    const source = this.textures.get("world_atlas").getSourceImage() as { width: number; height: number };
+    const expectedWidth = WORLD_ATLAS.columns * WORLD_ATLAS.tileWidth;
+    const expectedHeight = WORLD_ATLAS.rows * WORLD_ATLAS.tileHeight;
+    if (source.width !== expectedWidth || source.height !== expectedHeight) {
+      throw new Error(`World atlas image size mismatch: loaded ${source.width}x${source.height}, expected ${expectedWidth}x${expectedHeight}.`);
+    }
+    if (source.width !== WORLD_ATLAS.sheetWidth || source.height !== WORLD_ATLAS.sheetHeight) {
+      throw new Error(`World atlas manifest size mismatch: image ${source.width}x${source.height}, manifest ${WORLD_ATLAS.sheetWidth}x${WORLD_ATLAS.sheetHeight}.`);
+    }
+    this.worldAtlasValidated = true;
   }
 
   private worldTerrainAt(x: number, y: number): Terrain | undefined {

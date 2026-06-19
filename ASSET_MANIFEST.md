@@ -23,7 +23,7 @@ Note: the individual `assets/tiles/world/*` entries below remain fallback/legacy
 
 | Asset ID | Filename | Category | Size | Req | Priority | Used In | Tint/Recolor | Artist Notes | Replacement Target |
 |---|---|---:|---:|---|---|---|---|---|---|
-| world_atlas | src/assets/world/world_atlas.normalized.png | World terrain atlas | 10x10 grid, 256x256 cells | Required | P1 | Generated overworld terrain, roads, bridges, water, mountains, special terrain | No | Imported from the corrected square JPEG source with proportional cell slicing, small edge cleanup, and edge bleed; metadata lives in `src/data/worldTiles.ts`. | `drawWorldTile(tileId)` |
+| world_atlas | src/assets/world/world_atlas.normalized.png | World terrain atlas | 10x10 grid, 256x256 cells | Required | P1 | Generated overworld terrain, roads, bridges, water, mountains, special terrain | No | Exact copy of the final `master_overworld_tileset_atlas_10x10.png` PNG; runtime slicing uses integer 256x256 source rectangles from `src/data/worldTiles.ts`. | `drawWorldTile(tileId)` |
 
 | Asset ID | Filename | Category | Size | Req | Priority | Used In | Tint/Recolor | Artist Notes | Replacement Target |
 |---|---|---:|---:|---|---|---|---|---|---|

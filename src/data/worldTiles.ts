@@ -1,12 +1,9 @@
 export const WORLD_ATLAS = {
   textureKey: "world_atlas",
   image: "src/assets/world/world_atlas.normalized.png",
-  sourceCopy: "src/assets/world/source/redo_this_please_2K_202606182350.jpeg",
+  sourceCopy: "src/assets/world/source/master_overworld_tileset_atlas_10x10.png",
   columns: 10,
   rows: 10,
-  sourceColumns: 10,
-  sourceRows: 10,
-  selectedSourceRows: [0,1,2,3,4,5,6,7,8,9],
   tileWidth: 256,
   tileHeight: 256,
   sheetWidth: 2560,
@@ -21,7 +18,8 @@ export type WorldBiome =
   | "darkland"
   | "water"
   | "mountain"
-  | "road";
+  | "road"
+  | "transition";
 
 export type WorldEncounterFamily = "plains" | "forest" | "hills" | "sand" | "water" | "final" | "road";
 
@@ -33,7 +31,8 @@ export interface WorldTileDefinition {
   encounterFamily: WorldEncounterFamily;
   walkable: boolean;
   movementCost: number;
-  tags: string[];
+  tags: readonly string[];
+  notes?: string;
 }
 
 export const WORLD_TILE_DEFINITIONS = [
@@ -142,6 +141,7 @@ export const WORLD_TILE_DEFINITIONS = [
     "movementCost": 1,
     "tags": [
       "dirt",
+      "grass",
       "land"
     ]
   },
@@ -160,7 +160,7 @@ export const WORLD_TILE_DEFINITIONS = [
     ]
   },
   {
-    "id": "yellow_flower_grass",
+    "id": "fertile_field_grass",
     "row": 0,
     "col": 9,
     "biome": "grassland",
@@ -169,7 +169,7 @@ export const WORLD_TILE_DEFINITIONS = [
     "movementCost": 1,
     "tags": [
       "grass",
-      "flowers",
+      "field",
       "land"
     ]
   },
@@ -303,7 +303,7 @@ export const WORLD_TILE_DEFINITIONS = [
     "row": 1,
     "col": 9,
     "biome": "forest",
-    "encounterFamily": "forest",
+    "encounterFamily": "road",
     "walkable": true,
     "movementCost": 0.75,
     "tags": [
@@ -414,16 +414,18 @@ export const WORLD_TILE_DEFINITIONS = [
     ]
   },
   {
-    "id": "oasis",
+    "id": "oasis_edge",
     "row": 2,
     "col": 7,
     "biome": "desert",
     "encounterFamily": "sand",
-    "walkable": false,
-    "movementCost": 99,
+    "walkable": true,
+    "movementCost": 1.3,
     "tags": [
-      "water",
-      "oasis"
+      "desert",
+      "oasis",
+      "shore",
+      "land"
     ]
   },
   {
@@ -441,11 +443,11 @@ export const WORLD_TILE_DEFINITIONS = [
     ]
   },
   {
-    "id": "desert_scrub_path",
+    "id": "desert_path",
     "row": 2,
     "col": 9,
     "biome": "desert",
-    "encounterFamily": "sand",
+    "encounterFamily": "road",
     "walkable": true,
     "movementCost": 0.85,
     "tags": [
@@ -543,47 +545,51 @@ export const WORLD_TILE_DEFINITIONS = [
     "row": 3,
     "col": 6,
     "biome": "snow",
-    "encounterFamily": "hills",
+    "encounterFamily": "water",
     "walkable": false,
     "movementCost": 99,
     "tags": [
       "water",
       "ice"
-    ]
+    ],
+    "notes": "Blocked ice by current movement rules."
   },
   {
     "id": "cracked_ice",
     "row": 3,
     "col": 7,
     "biome": "snow",
-    "encounterFamily": "hills",
+    "encounterFamily": "water",
     "walkable": false,
     "movementCost": 99,
     "tags": [
       "water",
-      "ice"
-    ]
+      "ice",
+      "cracked"
+    ],
+    "notes": "Blocked ice by current movement rules."
   },
   {
     "id": "glacier_ice",
     "row": 3,
     "col": 8,
     "biome": "snow",
-    "encounterFamily": "hills",
+    "encounterFamily": "water",
     "walkable": false,
     "movementCost": 99,
     "tags": [
       "water",
       "ice",
       "glacier"
-    ]
+    ],
+    "notes": "Blocked ice by current movement rules."
   },
   {
     "id": "snowy_path",
     "row": 3,
     "col": 9,
     "biome": "snow",
-    "encounterFamily": "hills",
+    "encounterFamily": "road",
     "walkable": true,
     "movementCost": 0.9,
     "tags": [
@@ -594,7 +600,7 @@ export const WORLD_TILE_DEFINITIONS = [
     ]
   },
   {
-    "id": "darkland_grass",
+    "id": "dark_grassland",
     "row": 4,
     "col": 0,
     "biome": "darkland",
@@ -632,6 +638,7 @@ export const WORLD_TILE_DEFINITIONS = [
     "tags": [
       "darkland",
       "swamp",
+      "mud",
       "land"
     ]
   },
@@ -646,6 +653,7 @@ export const WORLD_TILE_DEFINITIONS = [
     "tags": [
       "darkland",
       "swamp",
+      "bog",
       "land"
     ]
   },
@@ -654,14 +662,15 @@ export const WORLD_TILE_DEFINITIONS = [
     "row": 4,
     "col": 4,
     "biome": "darkland",
-    "encounterFamily": "final",
+    "encounterFamily": "water",
     "walkable": false,
     "movementCost": 99,
     "tags": [
       "water",
       "toxic",
       "swamp"
-    ]
+    ],
+    "notes": "Blocked toxic water."
   },
   {
     "id": "ash_ground",
@@ -803,7 +812,7 @@ export const WORLD_TILE_DEFINITIONS = [
     "row": 5,
     "col": 5,
     "biome": "water",
-    "encounterFamily": "water",
+    "encounterFamily": "road",
     "walkable": true,
     "movementCost": 1.15,
     "tags": [
@@ -817,7 +826,7 @@ export const WORLD_TILE_DEFINITIONS = [
     "row": 5,
     "col": 6,
     "biome": "water",
-    "encounterFamily": "water",
+    "encounterFamily": "road",
     "walkable": true,
     "movementCost": 0.7,
     "tags": [
@@ -831,7 +840,7 @@ export const WORLD_TILE_DEFINITIONS = [
     "row": 5,
     "col": 7,
     "biome": "water",
-    "encounterFamily": "water",
+    "encounterFamily": "road",
     "walkable": true,
     "movementCost": 0.7,
     "tags": [
@@ -845,7 +854,7 @@ export const WORLD_TILE_DEFINITIONS = [
     "row": 5,
     "col": 8,
     "biome": "water",
-    "encounterFamily": "water",
+    "encounterFamily": "road",
     "walkable": true,
     "movementCost": 0.65,
     "tags": [
@@ -859,7 +868,7 @@ export const WORLD_TILE_DEFINITIONS = [
     "row": 5,
     "col": 9,
     "biome": "water",
-    "encounterFamily": "water",
+    "encounterFamily": "road",
     "walkable": true,
     "movementCost": 0.65,
     "tags": [
@@ -869,157 +878,8 @@ export const WORLD_TILE_DEFINITIONS = [
     ]
   },
   {
-    "id": "deep_ocean_water_variant",
-    "row": 6,
-    "col": 0,
-    "biome": "water",
-    "encounterFamily": "water",
-    "walkable": false,
-    "movementCost": 99,
-    "tags": [
-      "water",
-      "ocean",
-      "deep",
-      "variant"
-    ]
-  },
-  {
-    "id": "rocky_ocean_water",
-    "row": 6,
-    "col": 1,
-    "biome": "water",
-    "encounterFamily": "water",
-    "walkable": false,
-    "movementCost": 99,
-    "tags": [
-      "water",
-      "ocean",
-      "rocks",
-      "variant"
-    ]
-  },
-  {
-    "id": "clear_shallow_water",
-    "row": 6,
-    "col": 2,
-    "biome": "water",
-    "encounterFamily": "water",
-    "walkable": false,
-    "movementCost": 99,
-    "tags": [
-      "water",
-      "shallow",
-      "variant"
-    ]
-  },
-  {
-    "id": "lily_swamp_water",
-    "row": 6,
-    "col": 3,
-    "biome": "water",
-    "encounterFamily": "water",
-    "walkable": false,
-    "movementCost": 99,
-    "tags": [
-      "water",
-      "swamp",
-      "variant"
-    ]
-  },
-  {
-    "id": "foamy_beach_shore",
-    "row": 6,
-    "col": 4,
-    "biome": "water",
-    "encounterFamily": "water",
-    "walkable": true,
-    "movementCost": 1.15,
-    "tags": [
-      "shore",
-      "beach",
-      "land",
-      "variant"
-    ]
-  },
-  {
-    "id": "sandy_rock_shore",
-    "row": 6,
-    "col": 5,
-    "biome": "water",
-    "encounterFamily": "water",
-    "walkable": true,
-    "movementCost": 1.2,
-    "tags": [
-      "shore",
-      "beach",
-      "rocks",
-      "land",
-      "variant"
-    ]
-  },
-  {
-    "id": "wooden_bridge_horizontal_variant",
-    "row": 6,
-    "col": 6,
-    "biome": "water",
-    "encounterFamily": "water",
-    "walkable": true,
-    "movementCost": 0.7,
-    "tags": [
-      "bridge",
-      "road",
-      "land",
-      "variant"
-    ]
-  },
-  {
-    "id": "wooden_bridge_vertical_variant",
-    "row": 6,
-    "col": 7,
-    "biome": "water",
-    "encounterFamily": "water",
-    "walkable": true,
-    "movementCost": 0.7,
-    "tags": [
-      "bridge",
-      "road",
-      "land",
-      "variant"
-    ]
-  },
-  {
-    "id": "stone_bridge_horizontal_variant",
-    "row": 6,
-    "col": 8,
-    "biome": "water",
-    "encounterFamily": "water",
-    "walkable": true,
-    "movementCost": 0.65,
-    "tags": [
-      "bridge",
-      "road",
-      "land",
-      "variant"
-    ]
-  },
-  {
-    "id": "stone_bridge_vertical_variant",
-    "row": 6,
-    "col": 9,
-    "biome": "water",
-    "encounterFamily": "water",
-    "walkable": true,
-    "movementCost": 0.65,
-    "tags": [
-      "bridge",
-      "road",
-      "land",
-      "variant"
-    ]
-  },
-  {
     "id": "rocky_hill_ground",
-    "row": 7,
+    "row": 6,
     "col": 0,
     "biome": "mountain",
     "encounterFamily": "hills",
@@ -1033,7 +893,7 @@ export const WORLD_TILE_DEFINITIONS = [
   },
   {
     "id": "mountain_foothill",
-    "row": 7,
+    "row": 6,
     "col": 1,
     "biome": "mountain",
     "encounterFamily": "hills",
@@ -1047,7 +907,7 @@ export const WORLD_TILE_DEFINITIONS = [
   },
   {
     "id": "dark_mountain_ground",
-    "row": 7,
+    "row": 6,
     "col": 2,
     "biome": "mountain",
     "encounterFamily": "hills",
@@ -1060,7 +920,7 @@ export const WORLD_TILE_DEFINITIONS = [
   },
   {
     "id": "gravel_stone_ground",
-    "row": 7,
+    "row": 6,
     "col": 3,
     "biome": "mountain",
     "encounterFamily": "hills",
@@ -1074,7 +934,7 @@ export const WORLD_TILE_DEFINITIONS = [
   },
   {
     "id": "cliff_top_rock",
-    "row": 7,
+    "row": 6,
     "col": 4,
     "biome": "mountain",
     "encounterFamily": "hills",
@@ -1087,7 +947,7 @@ export const WORLD_TILE_DEFINITIONS = [
   },
   {
     "id": "canyon_stone",
-    "row": 7,
+    "row": 6,
     "col": 5,
     "biome": "mountain",
     "encounterFamily": "hills",
@@ -1095,12 +955,13 @@ export const WORLD_TILE_DEFINITIONS = [
     "movementCost": 99,
     "tags": [
       "canyon",
+      "cliff",
       "blocked"
     ]
   },
   {
     "id": "mossy_rock",
-    "row": 7,
+    "row": 6,
     "col": 6,
     "biome": "mountain",
     "encounterFamily": "hills",
@@ -1114,10 +975,10 @@ export const WORLD_TILE_DEFINITIONS = [
   },
   {
     "id": "volcanic_stone",
-    "row": 7,
+    "row": 6,
     "col": 7,
     "biome": "mountain",
-    "encounterFamily": "hills",
+    "encounterFamily": "final",
     "walkable": false,
     "movementCost": 99,
     "tags": [
@@ -1128,7 +989,7 @@ export const WORLD_TILE_DEFINITIONS = [
   },
   {
     "id": "crystal_rock",
-    "row": 7,
+    "row": 6,
     "col": 8,
     "biome": "mountain",
     "encounterFamily": "hills",
@@ -1140,170 +1001,23 @@ export const WORLD_TILE_DEFINITIONS = [
     ]
   },
   {
-    "id": "cave_rock",
-    "row": 7,
+    "id": "cave_rock_entrance",
+    "row": 6,
     "col": 9,
     "biome": "mountain",
     "encounterFamily": "hills",
-    "walkable": true,
-    "movementCost": 2.2,
+    "walkable": false,
+    "movementCost": 99,
     "tags": [
       "cave",
-      "rock",
-      "land"
-    ]
-  },
-  {
-    "id": "mossy_mountain_variant",
-    "row": 8,
-    "col": 0,
-    "biome": "mountain",
-    "encounterFamily": "hills",
-    "walkable": false,
-    "movementCost": 99,
-    "tags": [
-      "mountain",
-      "blocked",
-      "variant"
-    ]
-  },
-  {
-    "id": "dark_mountain_variant",
-    "row": 8,
-    "col": 1,
-    "biome": "mountain",
-    "encounterFamily": "hills",
-    "walkable": false,
-    "movementCost": 99,
-    "tags": [
-      "mountain",
-      "blocked",
-      "variant"
-    ]
-  },
-  {
-    "id": "rocky_ground_variant",
-    "row": 8,
-    "col": 2,
-    "biome": "mountain",
-    "encounterFamily": "hills",
-    "walkable": true,
-    "movementCost": 2,
-    "tags": [
-      "rock",
-      "land",
-      "variant"
-    ]
-  },
-  {
-    "id": "tan_rocky_ground_variant",
-    "row": 8,
-    "col": 3,
-    "biome": "mountain",
-    "encounterFamily": "hills",
-    "walkable": true,
-    "movementCost": 1.9,
-    "tags": [
-      "rock",
-      "dry",
-      "land",
-      "variant"
-    ]
-  },
-  {
-    "id": "canyon_cliff_variant",
-    "row": 8,
-    "col": 4,
-    "biome": "mountain",
-    "encounterFamily": "hills",
-    "walkable": false,
-    "movementCost": 99,
-    "tags": [
-      "canyon",
-      "cliff",
-      "blocked",
-      "variant"
-    ]
-  },
-  {
-    "id": "mossy_ruin_rock_variant",
-    "row": 8,
-    "col": 5,
-    "biome": "mountain",
-    "encounterFamily": "hills",
-    "walkable": true,
-    "movementCost": 2.1,
-    "tags": [
-      "rock",
-      "ruin",
-      "moss",
-      "land",
-      "variant"
-    ]
-  },
-  {
-    "id": "crystal_rock_variant",
-    "row": 8,
-    "col": 6,
-    "biome": "mountain",
-    "encounterFamily": "hills",
-    "walkable": false,
-    "movementCost": 99,
-    "tags": [
-      "crystal",
-      "blocked",
-      "variant"
-    ]
-  },
-  {
-    "id": "cave_entrance_variant",
-    "row": 8,
-    "col": 7,
-    "biome": "mountain",
-    "encounterFamily": "hills",
-    "walkable": true,
-    "movementCost": 2.2,
-    "tags": [
-      "cave",
-      "rock",
-      "land",
-      "variant"
-    ]
-  },
-  {
-    "id": "stone_ruin_wall_variant",
-    "row": 8,
-    "col": 8,
-    "biome": "mountain",
-    "encounterFamily": "hills",
-    "walkable": false,
-    "movementCost": 99,
-    "tags": [
-      "stone",
-      "ruin",
-      "blocked",
-      "variant"
-    ]
-  },
-  {
-    "id": "rocky_path_variant",
-    "row": 8,
-    "col": 9,
-    "biome": "mountain",
-    "encounterFamily": "hills",
-    "walkable": true,
-    "movementCost": 1.4,
-    "tags": [
-      "rock",
-      "road",
-      "path",
-      "land",
-      "variant"
-    ]
+      "entrance",
+      "blocked"
+    ],
+    "notes": "Blocked unless a POI trigger overlays it."
   },
   {
     "id": "dirt_road",
-    "row": 9,
+    "row": 7,
     "col": 0,
     "biome": "road",
     "encounterFamily": "road",
@@ -1316,7 +1030,7 @@ export const WORLD_TILE_DEFINITIONS = [
   },
   {
     "id": "worn_path",
-    "row": 9,
+    "row": 7,
     "col": 1,
     "biome": "road",
     "encounterFamily": "road",
@@ -1330,7 +1044,7 @@ export const WORLD_TILE_DEFINITIONS = [
   },
   {
     "id": "cobblestone_road",
-    "row": 9,
+    "row": 7,
     "col": 2,
     "biome": "road",
     "encounterFamily": "road",
@@ -1344,7 +1058,7 @@ export const WORLD_TILE_DEFINITIONS = [
   },
   {
     "id": "ancient_ruin_floor",
-    "row": 9,
+    "row": 7,
     "col": 3,
     "biome": "road",
     "encounterFamily": "road",
@@ -1358,10 +1072,10 @@ export const WORLD_TILE_DEFINITIONS = [
   },
   {
     "id": "lava_cracked_ground",
-    "row": 9,
+    "row": 7,
     "col": 4,
     "biome": "road",
-    "encounterFamily": "road",
+    "encounterFamily": "final",
     "walkable": false,
     "movementCost": 99,
     "tags": [
@@ -1371,10 +1085,10 @@ export const WORLD_TILE_DEFINITIONS = [
   },
   {
     "id": "tropical_lush_ground",
-    "row": 9,
+    "row": 7,
     "col": 5,
     "biome": "road",
-    "encounterFamily": "road",
+    "encounterFamily": "plains",
     "walkable": true,
     "movementCost": 1.2,
     "tags": [
@@ -1385,10 +1099,10 @@ export const WORLD_TILE_DEFINITIONS = [
   },
   {
     "id": "tropical_beach_sand",
-    "row": 9,
+    "row": 7,
     "col": 6,
     "biome": "road",
-    "encounterFamily": "road",
+    "encounterFamily": "sand",
     "walkable": true,
     "movementCost": 1.15,
     "tags": [
@@ -1399,10 +1113,10 @@ export const WORLD_TILE_DEFINITIONS = [
   },
   {
     "id": "magical_crystal_field",
-    "row": 9,
+    "row": 7,
     "col": 7,
     "biome": "road",
-    "encounterFamily": "road",
+    "encounterFamily": "final",
     "walkable": true,
     "movementCost": 1.6,
     "tags": [
@@ -1413,10 +1127,10 @@ export const WORLD_TILE_DEFINITIONS = [
   },
   {
     "id": "graveyard_earth",
-    "row": 9,
+    "row": 7,
     "col": 8,
     "biome": "road",
-    "encounterFamily": "road",
+    "encounterFamily": "final",
     "walkable": true,
     "movementCost": 1.45,
     "tags": [
@@ -1427,7 +1141,7 @@ export const WORLD_TILE_DEFINITIONS = [
   },
   {
     "id": "mixed_utility_terrain",
-    "row": 9,
+    "row": 7,
     "col": 9,
     "biome": "road",
     "encounterFamily": "road",
@@ -1435,6 +1149,303 @@ export const WORLD_TILE_DEFINITIONS = [
     "movementCost": 1.3,
     "tags": [
       "mixed",
+      "land"
+    ]
+  },
+  {
+    "id": "grass_to_dirt_transition",
+    "row": 8,
+    "col": 0,
+    "biome": "transition",
+    "encounterFamily": "plains",
+    "walkable": true,
+    "movementCost": 1.05,
+    "tags": [
+      "grass",
+      "dirt",
+      "transition",
+      "land"
+    ]
+  },
+  {
+    "id": "grass_to_forest_transition",
+    "row": 8,
+    "col": 1,
+    "biome": "transition",
+    "encounterFamily": "forest",
+    "walkable": true,
+    "movementCost": 1.2,
+    "tags": [
+      "grass",
+      "forest",
+      "transition",
+      "land"
+    ]
+  },
+  {
+    "id": "grass_to_sand_transition",
+    "row": 8,
+    "col": 2,
+    "biome": "transition",
+    "encounterFamily": "sand",
+    "walkable": true,
+    "movementCost": 1.15,
+    "tags": [
+      "grass",
+      "sand",
+      "transition",
+      "land"
+    ]
+  },
+  {
+    "id": "grass_to_snow_transition",
+    "row": 8,
+    "col": 3,
+    "biome": "transition",
+    "encounterFamily": "hills",
+    "walkable": true,
+    "movementCost": 1.2,
+    "tags": [
+      "grass",
+      "snow",
+      "transition",
+      "land"
+    ]
+  },
+  {
+    "id": "grass_to_darkland_transition",
+    "row": 8,
+    "col": 4,
+    "biome": "transition",
+    "encounterFamily": "final",
+    "walkable": true,
+    "movementCost": 1.25,
+    "tags": [
+      "grass",
+      "darkland",
+      "transition",
+      "land"
+    ]
+  },
+  {
+    "id": "beach_to_water_transition",
+    "row": 8,
+    "col": 5,
+    "biome": "transition",
+    "encounterFamily": "water",
+    "walkable": true,
+    "movementCost": 1.15,
+    "tags": [
+      "shore",
+      "beach",
+      "transition",
+      "land"
+    ]
+  },
+  {
+    "id": "rocky_shore_to_water_transition",
+    "row": 8,
+    "col": 6,
+    "biome": "transition",
+    "encounterFamily": "water",
+    "walkable": true,
+    "movementCost": 1.25,
+    "tags": [
+      "shore",
+      "rock",
+      "transition",
+      "land"
+    ]
+  },
+  {
+    "id": "riverbank_grass_edge",
+    "row": 8,
+    "col": 7,
+    "biome": "transition",
+    "encounterFamily": "plains",
+    "walkable": true,
+    "movementCost": 1.1,
+    "tags": [
+      "riverbank",
+      "grass",
+      "transition",
+      "land"
+    ]
+  },
+  {
+    "id": "riverbank_dirt_edge",
+    "row": 8,
+    "col": 8,
+    "biome": "transition",
+    "encounterFamily": "plains",
+    "walkable": true,
+    "movementCost": 1.1,
+    "tags": [
+      "riverbank",
+      "dirt",
+      "transition",
+      "land"
+    ]
+  },
+  {
+    "id": "snow_to_ice_transition",
+    "row": 8,
+    "col": 9,
+    "biome": "transition",
+    "encounterFamily": "hills",
+    "walkable": true,
+    "movementCost": 1.25,
+    "tags": [
+      "snow",
+      "ice",
+      "transition",
+      "land"
+    ]
+  },
+  {
+    "id": "dirt_road_horizontal",
+    "row": 9,
+    "col": 0,
+    "biome": "road",
+    "encounterFamily": "road",
+    "walkable": true,
+    "movementCost": 0.6,
+    "tags": [
+      "road",
+      "connector",
+      "horizontal",
+      "land"
+    ]
+  },
+  {
+    "id": "dirt_road_vertical",
+    "row": 9,
+    "col": 1,
+    "biome": "road",
+    "encounterFamily": "road",
+    "walkable": true,
+    "movementCost": 0.6,
+    "tags": [
+      "road",
+      "connector",
+      "vertical",
+      "land"
+    ]
+  },
+  {
+    "id": "dirt_road_corner",
+    "row": 9,
+    "col": 2,
+    "biome": "road",
+    "encounterFamily": "road",
+    "walkable": true,
+    "movementCost": 0.65,
+    "tags": [
+      "road",
+      "connector",
+      "corner",
+      "land"
+    ]
+  },
+  {
+    "id": "dirt_road_t_junction",
+    "row": 9,
+    "col": 3,
+    "biome": "road",
+    "encounterFamily": "road",
+    "walkable": true,
+    "movementCost": 0.6,
+    "tags": [
+      "road",
+      "connector",
+      "junction",
+      "land"
+    ]
+  },
+  {
+    "id": "dirt_road_crossroads",
+    "row": 9,
+    "col": 4,
+    "biome": "road",
+    "encounterFamily": "road",
+    "walkable": true,
+    "movementCost": 0.55,
+    "tags": [
+      "road",
+      "connector",
+      "crossroads",
+      "land"
+    ]
+  },
+  {
+    "id": "river_straight",
+    "row": 9,
+    "col": 5,
+    "biome": "water",
+    "encounterFamily": "water",
+    "walkable": false,
+    "movementCost": 99,
+    "tags": [
+      "water",
+      "river",
+      "connector"
+    ]
+  },
+  {
+    "id": "river_bend",
+    "row": 9,
+    "col": 6,
+    "biome": "water",
+    "encounterFamily": "water",
+    "walkable": false,
+    "movementCost": 99,
+    "tags": [
+      "water",
+      "river",
+      "connector"
+    ]
+  },
+  {
+    "id": "river_t_junction",
+    "row": 9,
+    "col": 7,
+    "biome": "water",
+    "encounterFamily": "water",
+    "walkable": false,
+    "movementCost": 99,
+    "tags": [
+      "water",
+      "river",
+      "connector",
+      "junction"
+    ]
+  },
+  {
+    "id": "shallow_ford_stepping_stones",
+    "row": 9,
+    "col": 8,
+    "biome": "road",
+    "encounterFamily": "road",
+    "walkable": true,
+    "movementCost": 0.9,
+    "tags": [
+      "ford",
+      "river",
+      "road",
+      "land"
+    ]
+  },
+  {
+    "id": "ruined_stone_entrance_ground",
+    "row": 9,
+    "col": 9,
+    "biome": "road",
+    "encounterFamily": "road",
+    "walkable": true,
+    "movementCost": 1,
+    "tags": [
+      "ruin",
+      "entrance",
       "land"
     ]
   }
@@ -1465,4 +1476,8 @@ export function worldTileHasTag(tileId: WorldTileId | undefined, tag: string): b
 export function worldTileEncounterFamily(tileId: WorldTileId): WorldEncounterFamily | undefined {
   const family = WORLD_TILES[tileId]?.encounterFamily;
   return family === "road" ? undefined : family;
+}
+
+export function worldTileIdsMatching(predicate: (tile: WorldTileDefinition) => boolean): WorldTileId[] {
+  return WORLD_TILE_DEFINITIONS.filter((tile) => predicate(tile)).map((tile) => tile.id);
 }

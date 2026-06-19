@@ -3,6 +3,7 @@ import {
   isWorldTileWalkable,
   worldTileEncounterFamily,
   worldTileHasTag,
+  worldTileIdsMatching,
   worldTileMovementCost,
   type WorldBiome,
   type WorldEncounterFamily,
@@ -93,64 +94,22 @@ const POI_BLUEPRINTS: PoiBlueprint[] = [
   { id: "eclipseSpire", name: "Eclipse Spire", kind: "final", target: { x: 0.9, y: 0.18 }, footprint: 3, preferredBiomes: ["darkland", "mountain"], nearMountain: true }
 ];
 
-const GRASSLAND_TILES: WorldTileId[] = [
-  "bright_grass",
-  "medium_grass",
-  "dark_grass",
-  "flower_meadow",
-  "clover_lush_grass",
-  "weeds_grass",
-  "grass_stones",
-  "yellow_flower_grass"
-];
+const GRASSLAND_TILES = manifestTilePool("grassland", (tile) => tile.biome === "grassland" && tile.walkable);
+const FOREST_TILES = manifestTilePool("forest", (tile) => tile.biome === "forest" && tile.walkable && !tile.tags.includes("road"));
+const DESERT_TILES = manifestTilePool("desert", (tile) => tile.biome === "desert" && tile.walkable && !tile.tags.includes("road"));
+const SNOW_TILES = manifestTilePool("snow", (tile) => tile.biome === "snow" && tile.walkable && !tile.tags.includes("road"));
+const DARKLAND_TILES = manifestTilePool("darkland", (tile) => tile.biome === "darkland" && tile.walkable);
+const MOUNTAIN_TILES = manifestTilePool("mountain", (tile) => tile.biome === "mountain" && tile.walkable);
+const WATER_TILES = manifestTilePool(
+  "water",
+  (tile) => tile.biome === "water" && tile.tags.includes("water") && !tile.tags.includes("river") && !tile.tags.includes("swamp") && !tile.walkable
+);
 
-const FOREST_TILES: WorldTileId[] = [
-  "forest_floor",
-  "dark_forest_floor",
-  "mossy_forest_ground",
-  "dense_leafy_woodland",
-  "bush_hedge",
-  "tree_covered_green",
-  "rooty_forest_earth",
-  "autumn_woodland",
-  "enchanted_forest_ground"
-];
-
-const DESERT_TILES: WorldTileId[] = [
-  "bright_sand",
-  "golden_sand",
-  "dune_sand",
-  "rocky_sand",
-  "cracked_dry_earth",
-  "reddish_desert_soil",
-  "cactus_scrub",
-  "sandstone_floor"
-];
-
-const SNOW_TILES: WorldTileId[] = ["clean_snow", "packed_snow", "icy_snow", "frozen_ground", "frosty_sparkle_snow", "snow_rock"];
-const DARKLAND_TILES: WorldTileId[] = [
-  "darkland_grass",
-  "dead_earth",
-  "muddy_swamp",
-  "boggy_wetland",
-  "ash_ground",
-  "cursed_purple_soil",
-  "blackened_wasteland",
-  "sickly_corrupted_ground",
-  "haunted_dead_forest_floor"
-];
-const MOUNTAIN_TILES: WorldTileId[] = [
-  "rocky_hill_ground",
-  "mountain_foothill",
-  "dark_mountain_ground",
-  "gravel_stone_ground",
-  "cliff_top_rock",
-  "canyon_stone",
-  "mossy_rock",
-  "cave_rock"
-];
-
-const WATER_TILES: WorldTileId[] = ["deep_ocean_water", "light_water", "shallow_water"];
+function manifestTilePool(label: string, predicate: Parameters<typeof worldTileIdsMatching>[0]): WorldTileId[] {
+  const ids = worldTileIdsMatching(predicate);
+  if (!ids.length) throw new Error(`World tile manifest has no usable ${label} tiles.`);
+  return ids;
+}
 
 export function createWorldSeed(): string {
   return `asterra-${Date.now().toString(36)}-${Math.floor(Math.random() * 0xffffffff).toString(36)}`;
@@ -522,7 +481,7 @@ function canPlacePoiAt(tiles: WorldTileId[][], x: number, y: number, radius: num
 
 function carvePoiFootprints(tiles: WorldTileId[][], pois: WorldPoi[]) {
   for (const poi of pois) {
-    const tile: WorldTileId = poi.kind === "town" || poi.kind === "gate" ? "cobblestone_road" : "ancient_ruin_floor";
+    const tile: WorldTileId = poi.kind === "town" || poi.kind === "gate" ? "dirt_road_crossroads" : "ancient_ruin_floor";
     for (const pos of poiFootprintTiles(poi)) {
       if (tiles[pos.y]?.[pos.x]) tiles[pos.y][pos.x] = tile;
     }
@@ -675,11 +634,12 @@ function ensureAtLeastOneRoadBridge(
 }
 
 function roadTileForBiome(biome: WorldBiome, main: boolean): WorldTileId {
-  if (main) return "cobblestone_road";
   if (biome === "forest") return "forest_path";
-  if (biome === "desert") return "desert_scrub_path";
+  if (biome === "desert") return "desert_path";
   if (biome === "snow") return "snowy_path";
-  return "worn_path";
+  if (biome === "mountain") return "gravel_stone_ground";
+  if (biome === "darkland") return main ? "graveyard_earth" : "worn_path";
+  return main ? "dirt_road" : "worn_path";
 }
 
 function poiHasWalkableApproach(world: GeneratedWorld, poi: WorldPoi): boolean {
