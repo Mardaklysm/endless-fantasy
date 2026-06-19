@@ -24,7 +24,7 @@ This backlog is practical project memory, not a full design document. Keep it sh
 - `tile_bridge` exists in `assets_v2` but no bridge/route terrain overlay is implemented yet.
 - Reference-only UI window crops in `assets_v2/ui` are intentionally not loaded at runtime because they contain sample text.
 - Normalized fighter/priest/wizard class sheets are wired; keep old standalone party map/battle PNGs out of runtime glob loading unless intentionally reintroduced.
-- Review the inactive `classic_world_tileset` manifest before runtime use: confirm source rights/provenance, rename low-confidence generated entries where needed, and select a smaller set of terrain/object pools for procedural generation instead of loading the whole candidate pack blindly.
+- Continue semantic cleanup of the active `classic_world_tileset` manifest/catalog over time: rename low-confidence generated entries where useful, add more curated transition/object variants deliberately, and avoid loading the whole extracted pack blindly into worldgen.
 
 ## Gameplay Gaps
 

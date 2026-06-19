@@ -96,18 +96,20 @@ for (const file of [
   assert(fs.existsSync(path.join(DEBUG_DIR, file)), `Missing debug output: docs/debug/world-tileset-import/${file}`);
 }
 
-assertRuntimeDoesNotLoadClassicTileset();
+assertRuntimeLoadsClassicTileset();
 
 console.log(`Classic world tileset validation passed: ${tileEntries.length} unique tiles, ${objectEntries.length} objects/landmarks.`);
 
-function assertRuntimeDoesNotLoadClassicTileset() {
+function assertRuntimeLoadsClassicTileset() {
   const runtimeFiles = ["src/main.ts", "src/world/worldGenerator.ts", "src/data/worldTiles.ts"];
-  const forbidden = ["57105.png", "classic_world_tileset.cleaned.png", "classicWorldTileset.manifest.json"];
+  const mainSource = fs.readFileSync(path.join(PROJECT_ROOT, "src/main.ts"), "utf8");
+  assert(mainSource.includes("classic_world_tileset.cleaned.png"), "src/main.ts must explicitly load the active classic tileset image.");
+  assert(mainSource.includes("classicWorldTileset.manifest.json"), "src/main.ts must explicitly load the active classic tileset manifest.");
+  assert(mainSource.includes("classic_world_tileset"), "src/main.ts must use the classic texture key.");
   for (const file of runtimeFiles) {
     const text = fs.readFileSync(path.join(PROJECT_ROOT, file), "utf8");
-    for (const value of forbidden) {
-      assert(!text.includes(value), `${file} should not load the candidate classic tileset yet (${value}).`);
-    }
+    assert(!text.includes("57105.png"), `${file} must not load the raw source tileset.`);
+    assert(!text.replace("!./assets/world/world_atlas.normalized.png", "").includes("world_atlas.normalized.png"), `${file} must not load the old generated atlas.`);
   }
 }
 

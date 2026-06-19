@@ -1,4 +1,5 @@
 import {
+  CLASSIC_WORLD_TILE_IDS,
   WORLD_TILES,
   isWorldTileWalkable,
   worldTileEncounterFamily,
@@ -99,10 +100,10 @@ const FOREST_TILES = manifestTilePool("forest", (tile) => tile.biome === "forest
 const DESERT_TILES = manifestTilePool("desert", (tile) => tile.biome === "desert" && tile.walkable && !tile.tags.includes("road"));
 const SNOW_TILES = manifestTilePool("snow", (tile) => tile.biome === "snow" && tile.walkable && !tile.tags.includes("road"));
 const DARKLAND_TILES = manifestTilePool("darkland", (tile) => tile.biome === "darkland" && tile.walkable);
-const MOUNTAIN_TILES = manifestTilePool("mountain", (tile) => tile.biome === "mountain" && tile.walkable);
+const MOUNTAIN_TILES = manifestTilePool("mountain", (tile) => tile.biome === "mountain");
 const WATER_TILES = manifestTilePool(
   "water",
-  (tile) => tile.biome === "water" && tile.tags.includes("water") && !tile.tags.includes("river") && !tile.tags.includes("swamp") && !tile.walkable
+  (tile) => tile.biome === "water" && tile.tags.includes("water") && !tile.tags.includes("river") && !tile.walkable
 );
 
 function manifestTilePool(label: string, predicate: Parameters<typeof worldTileIdsMatching>[0]): WorldTileId[] {
@@ -345,7 +346,11 @@ function classifyBiome(fields: FieldMap, width: number, height: number, x: numbe
 }
 
 function pickBiomeTile(biome: WorldBiome, detail: number, rng: () => number): WorldTileId {
-  if (biome === "water") return detail < 0.48 ? "deep_ocean_water" : detail < 0.72 ? "light_water" : "shallow_water";
+  if (biome === "water") {
+    if (detail < 0.42) return CLASSIC_WORLD_TILE_IDS.deepWater;
+    if (detail < 0.68) return CLASSIC_WORLD_TILE_IDS.lightWater;
+    return CLASSIC_WORLD_TILE_IDS.shallowWater;
+  }
   if (biome === "forest") return pickWeighted(FOREST_TILES, detail, rng);
   if (biome === "desert") return pickWeighted(DESERT_TILES, detail, rng);
   if (biome === "snow") return pickWeighted(SNOW_TILES, detail, rng);
@@ -367,9 +372,9 @@ function smoothIsolatedWater(tiles: WorldTileId[][], biomes: WorldBiome[][]) {
     for (let x = 1; x < width - 1; x += 1) {
       const waterNeighbors = neighbors4(x, y).filter((p) => worldTileHasTag(tiles[p.y][p.x], "water")).length;
       if (worldTileHasTag(tiles[y][x], "water") && waterNeighbors <= 1) {
-        next[y][x] = biomes[y][x] === "desert" ? "bright_sand" : "medium_grass";
+        next[y][x] = biomes[y][x] === "desert" ? CLASSIC_WORLD_TILE_IDS.desertFallback : CLASSIC_WORLD_TILE_IDS.grassFallback;
       }
-      if (!worldTileHasTag(tiles[y][x], "water") && waterNeighbors >= 4) next[y][x] = "light_water";
+      if (!worldTileHasTag(tiles[y][x], "water") && waterNeighbors >= 4) next[y][x] = CLASSIC_WORLD_TILE_IDS.lightWater;
     }
   }
   for (let y = 0; y < height; y += 1) tiles[y] = next[y];
@@ -393,8 +398,8 @@ function carveRivers(seed: string, tiles: WorldTileId[][], biomes: WorldBiome[][
     const river = traceRiver(start, tiles, fields, rng);
     if (river.length < 8) continue;
     for (const tile of river) {
-      if (worldTileHasTag(tiles[tile.y][tile.x], "water") && tiles[tile.y][tile.x] !== "river_water") continue;
-      tiles[tile.y][tile.x] = "river_water";
+      if (worldTileHasTag(tiles[tile.y][tile.x], "water") && tiles[tile.y][tile.x] !== CLASSIC_WORLD_TILE_IDS.riverWater) continue;
+      tiles[tile.y][tile.x] = CLASSIC_WORLD_TILE_IDS.riverWater;
       biomes[tile.y][tile.x] = "water";
     }
     rivers.push(river);
@@ -481,7 +486,7 @@ function canPlacePoiAt(tiles: WorldTileId[][], x: number, y: number, radius: num
 
 function carvePoiFootprints(tiles: WorldTileId[][], pois: WorldPoi[]) {
   for (const poi of pois) {
-    const tile: WorldTileId = poi.kind === "town" || poi.kind === "gate" ? "dirt_road_crossroads" : "ancient_ruin_floor";
+    const tile: WorldTileId = poi.kind === "town" || poi.kind === "gate" ? CLASSIC_WORLD_TILE_IDS.townGround : CLASSIC_WORLD_TILE_IDS.ruinGround;
     for (const pos of poiFootprintTiles(poi)) {
       if (tiles[pos.y]?.[pos.x]) tiles[pos.y][pos.x] = tile;
     }
@@ -498,7 +503,7 @@ function findStartPosition(tiles: WorldTileId[][], dawnford: WorldPoi): WorldVec
   ];
   for (const pos of candidates) {
     if (tiles[pos.y]?.[pos.x]) {
-      tiles[pos.y][pos.x] = "dirt_road";
+      tiles[pos.y][pos.x] = CLASSIC_WORLD_TILE_IDS.mainRoad;
       return pos;
     }
   }
@@ -534,7 +539,7 @@ function findRoadPath(seed: string, tiles: WorldTileId[][], start: WorldVec, end
       if (!inBounds(width, height, next.x, next.y)) continue;
       if (!roadCanCrossTile(tiles[next.y][next.x], next, end)) continue;
       const tile = tiles[next.y][next.x];
-      const bridgeCost = tile === "river_water" ? 9 : 0;
+      const bridgeCost = tile === CLASSIC_WORLD_TILE_IDS.riverWater ? 9 : 0;
       const noiseCost = hashNoise(`${seed}:road:${index}`, next.x, next.y) * 1.2;
       const tentative = (gScore.get(posKey(current)) ?? Infinity) + worldTileMovementCost(tile) + bridgeCost + noiseCost;
       const key = posKey(next);
@@ -550,7 +555,7 @@ function findRoadPath(seed: string, tiles: WorldTileId[][], start: WorldVec, end
 
 function roadCanCrossTile(tile: WorldTileId, pos: WorldVec, end: WorldVec): boolean {
   if (pos.x === end.x && pos.y === end.y) return true;
-  if (tile === "river_water") return true;
+  if (tile === CLASSIC_WORLD_TILE_IDS.riverWater) return true;
   if (worldTileHasTag(tile, "water")) return false;
   if (worldTileHasTag(tile, "lava") || worldTileHasTag(tile, "cliff")) return false;
   return isWorldTileWalkable(tile);
@@ -576,7 +581,7 @@ function carveRoadPath(
   for (let i = 0; i < path.length; i += 1) {
     const pos = path[i];
     const original = tiles[pos.y][pos.x];
-    if (original === "river_water") {
+    if (original === CLASSIC_WORLD_TILE_IDS.riverWater) {
       const prev = path[Math.max(0, i - 1)];
       const next = path[Math.min(path.length - 1, i + 1)];
       const orientation = Math.abs(next.x - prev.x) >= Math.abs(next.y - prev.y) ? "horizontal" : "vertical";
@@ -584,11 +589,11 @@ function carveRoadPath(
       tiles[pos.y][pos.x] =
         material === "stone"
           ? orientation === "horizontal"
-            ? "stone_bridge_horizontal"
-            : "stone_bridge_vertical"
+            ? CLASSIC_WORLD_TILE_IDS.stoneBridgeHorizontal
+            : CLASSIC_WORLD_TILE_IDS.stoneBridgeVertical
           : orientation === "horizontal"
-            ? "wooden_bridge_horizontal"
-            : "wooden_bridge_vertical";
+            ? CLASSIC_WORLD_TILE_IDS.woodBridgeHorizontal
+            : CLASSIC_WORLD_TILE_IDS.woodBridgeVertical;
       bridges.push({ ...pos, orientation, material });
     } else if (!worldTileHasTag(original, "bridge")) {
       tiles[pos.y][pos.x] = roadTileForBiome(biomes[pos.y][pos.x], main);
@@ -624,9 +629,9 @@ function ensureAtLeastOneRoadBridge(
     if (protectedTiles.has(posKey(up)) || protectedTiles.has(posKey(down))) continue;
     if (worldTileHasTag(tiles[up.y][up.x], "bridge") || worldTileHasTag(tiles[down.y][down.x], "bridge")) continue;
     if (worldTileHasTag(tiles[up.y][up.x], "water") || worldTileHasTag(tiles[down.y][down.x], "water")) continue;
-    tiles[road.y][road.x] = "stone_bridge_horizontal";
-    tiles[up.y][up.x] = "river_water";
-    tiles[down.y][down.x] = "river_water";
+    tiles[road.y][road.x] = CLASSIC_WORLD_TILE_IDS.stoneBridgeHorizontal;
+    tiles[up.y][up.x] = CLASSIC_WORLD_TILE_IDS.riverWater;
+    tiles[down.y][down.x] = CLASSIC_WORLD_TILE_IDS.riverWater;
     bridges.push({ ...road, orientation: "horizontal", material: "stone" });
     rivers.push([up, road, down]);
     return;
@@ -634,12 +639,12 @@ function ensureAtLeastOneRoadBridge(
 }
 
 function roadTileForBiome(biome: WorldBiome, main: boolean): WorldTileId {
-  if (biome === "forest") return "forest_path";
-  if (biome === "desert") return "desert_path";
-  if (biome === "snow") return "snowy_path";
-  if (biome === "mountain") return "gravel_stone_ground";
-  if (biome === "darkland") return main ? "graveyard_earth" : "worn_path";
-  return main ? "dirt_road" : "worn_path";
+  if (biome === "forest") return CLASSIC_WORLD_TILE_IDS.forestPath;
+  if (biome === "desert") return CLASSIC_WORLD_TILE_IDS.desertPath;
+  if (biome === "snow") return CLASSIC_WORLD_TILE_IDS.snowPath;
+  if (biome === "mountain") return CLASSIC_WORLD_TILE_IDS.mountainPath;
+  if (biome === "darkland") return main ? CLASSIC_WORLD_TILE_IDS.darklandPath : CLASSIC_WORLD_TILE_IDS.wornRoad;
+  return main ? CLASSIC_WORLD_TILE_IDS.mainRoad : CLASSIC_WORLD_TILE_IDS.wornRoad;
 }
 
 function poiHasWalkableApproach(world: GeneratedWorld, poi: WorldPoi): boolean {

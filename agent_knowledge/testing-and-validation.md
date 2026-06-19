@@ -22,12 +22,13 @@ Run from `D:\Projects\Endless Fantasy`:
 npm test
 ```
 
-This runs `tools/worldgen/test_worldgen.mjs` and `tools/art_import/test_classic_world_tileset.mjs`. The worldgen portion validates the active world atlas/manifest, generates 100 deterministic worlds, and asserts:
+This runs `tools/worldgen/test_worldgen.mjs` and `tools/art_import/test_classic_world_tileset.mjs`. The worldgen portion validates the active classic tileset/manifest/catalog, generates 100 deterministic worlds, and asserts:
 
-- runtime atlas exists and is a square 10x10 PNG
-- manifest has 100 in-bounds tile definitions
-- every atlas source rectangle is an exact integer rectangle inside the image
-- runtime atlas/world source files do not reference deprecated atlas paths
+- runtime classic tileset exists and is a PNG
+- active runtime metadata points to `classic_world_tileset`
+- the curated gameplay catalog uses manifest entries instead of all extracted crops
+- every active source rectangle is an exact integer rectangle inside the 832x1072 classic sheet
+- runtime atlas/world source files do not actively reference deprecated atlas paths
 - start tile is walkable
 - required POIs are reachable and not on blocked/water terrain
 - water tiles are not walkable
@@ -36,7 +37,7 @@ This runs `tools/worldgen/test_worldgen.mjs` and `tools/art_import/test_classic_
 - same seed reproduces the same world
 - different seeds produce different tile grids
 
-The classic tileset portion validates the inactive `classic_world_tileset` pack: cleaned/source PNGs exist, exact `#00B100` matte pixels are transparent, 12 groups and all 16px tile occurrences are represented in the manifest, extracted tile/object PNGs exist, source rectangles are in bounds, and current runtime files do not load the candidate pack.
+The classic tileset portion validates the active `classic_world_tileset` pack: cleaned/source PNGs exist, exact `#00B100` matte pixels are transparent, 12 groups and all 16px tile occurrences are represented in the manifest, extracted tile/object PNGs exist, source rectangles are in bounds, and current runtime files explicitly load the active classic image and manifest.
 
 To write a human-readable generation report and PNG minimap preview:
 
@@ -48,6 +49,7 @@ Outputs:
 
 - `docs/debug/worldgen/latest-worldgen-report.md`
 - `docs/debug/worldgen/world-preview-seed-<seed>.png`
+- `docs/debug/worldgen/classic-active-world-preview.png`
 
 ## Asset Import Validation
 
@@ -74,22 +76,22 @@ node tools\art_import\import_character_sprites.mjs
 
 Check `assets_v2/characters/classes/*_normalized.png`, `src/data/characterSprites.ts`, and `docs/debug/sprite-import/*.debug.png` / `*.import-report.md`. The normalized runtime sheets should be transparent 5x2 sheets with identical 704x512 cells; debug previews are the only files with labels, grid boxes, anchor crosses, and baseline lines.
 
-For the overworld atlas, run:
+For the legacy 10x10 overworld atlas, run only if intentionally regenerating that archived asset:
 
 ```powershell
 node tools\art_import\import_world_atlas.mjs
 ```
 
-Check `src/assets/world/world_atlas.normalized.png`, `src/data/worldTiles.ts`, and `docs/debug/world-atlas/world_atlas.labeled-preview.png` / `world_atlas.import-report.md`. The runtime atlas should be an exact copy of the final clean 10x10 PNG with 256x256 cells and no source separator lines; the labeled preview is the only atlas output with labels/grid boxes.
+Check `src/assets/world/world_atlas.normalized.png` and `docs/debug/world-atlas/world_atlas.labeled-preview.png` / `world_atlas.import-report.md`. This should not replace the active classic runtime catalog without a deliberate follow-up task.
 
-For the inactive classic world tileset pack, run:
+For the active classic world tileset pack, run:
 
 ```powershell
 npm run import:classic-world-tileset
 npm run test:classic-world-tileset
 ```
 
-Check `src/assets/world/tilesets/classic_world_tileset.cleaned.png`, `src/assets/world/tilesets/classicWorldTileset.manifest.json`, `src/assets/world/tilesets/classic/extracted/`, and `docs/debug/world-tileset-import/`. The cleaned PNG should remove only exact `#00B100` matte pixels; the debug contact sheets and group-detection image are review outputs only and are not runtime assets.
+Check `src/assets/world/tilesets/classic_world_tileset.cleaned.png`, `src/assets/world/tilesets/classicWorldTileset.manifest.json`, `src/assets/world/tilesets/classic/extracted/`, and `docs/debug/world-tileset-import/`. The cleaned PNG should remove only exact `#00B100` matte pixels; the debug contact sheets and group-detection image are review outputs only and are not runtime assets. Runtime terrain selection should stay curated through `src/world/classicWorldTileCatalog.ts`.
 
 For rembg-related regeneration, use `D:\tools\rembg\venv_rembg\Scripts\rembg.exe` with `birefnet-general`. The expected AMD/Windows provider path is DirectML (`DmlExecutionProvider`). Do not add NVIDIA-specific checks.
 

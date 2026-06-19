@@ -20,10 +20,10 @@ Reusable scripts live in `tools/art_import/`:
 - `apply_rembg_candidates.ps1`: compares color-key and rembg outputs, promoting only approved rembg results.
 - `generate_asset_previews.ps1`: creates contact sheets and `assets_v2/previews/QUALITY_REPORT.md`.
 - `import_character_sprites.mjs`: imports `D:\Tools\rembg\bg_output\fighter.png`, `priest.png`, and `wizard.png` without running rembg, splits them as 5x2 alpha PNG sheets, normalizes fixed cells/anchors, writes `src/data/characterSprites.ts`, and creates debug previews/reports in `docs/debug/sprite-import/`.
-- `import_world_atlas.mjs`: imports the final PNG source `C:\Users\Marku\Downloads\master_overworld_tileset_atlas_10x10.png`, copies it exactly to `src/assets/world/world_atlas.normalized.png`, stores a provenance copy in `src/assets/world/source/`, writes the 100-tile manifest in `src/data/worldTiles.ts`, and creates `docs/debug/world-atlas/world_atlas.labeled-preview.png` plus `world_atlas.import-report.md`.
-- `import_classic_world_tileset.mjs`: imports the complex candidate sheet `C:\Users\Marku\Downloads\57105.png` as an inactive `classic_world_tileset` pack. The PNG has an RGBA color type but no meaningful alpha, so the importer removes only exact `#00B100` pixels, writes `src/assets/world/tilesets/classic_world_tileset.cleaned.png`, `classicWorldTileset.manifest.json`, extracted tile/object/landmark PNGs, and debug reports/contact sheets in `docs/debug/world-tileset-import/`.
+- `import_world_atlas.mjs`: legacy importer for the older final PNG source `C:\Users\Marku\Downloads\master_overworld_tileset_atlas_10x10.png`. It can still recreate `src/assets/world/world_atlas.normalized.png` and debug atlas outputs, but that 10x10 generated atlas is no longer active runtime terrain.
+- `import_classic_world_tileset.mjs`: imports the complex classic sheet `C:\Users\Marku\Downloads\57105.png`. The PNG has an RGBA color type but no meaningful alpha, so the importer removes only exact `#00B100` pixels, writes `src/assets/world/tilesets/classic_world_tileset.cleaned.png`, `classicWorldTileset.manifest.json`, extracted tile/object/landmark PNGs, and debug reports/contact sheets in `docs/debug/world-tileset-import/`.
 
-Manual crop maps live in `tools/art_import/crop_maps/`. The active final world atlas does not use the old crop-map/JPEG normalization path; it is a strict 10x10 PNG with no gutters or grid lines.
+Manual crop maps live in `tools/art_import/crop_maps/`. The active overworld no longer uses the old crop-map/JPEG normalization path or the legacy 10x10 atlas.
 
 The source folder `D:\Projects\new_artwork` contained 63 PNGs and no ZIPs. No extraction into `D:\Projects\new_artwork_extracted` was needed.
 
@@ -45,7 +45,7 @@ In the current pass, 73 rembg candidates were generated. rembg was promoted only
 
 Rendered now from `assets_v2`:
 
-- Overworld terrain: generated worlds render from `src/assets/world/world_atlas.normalized.png` through `src/data/worldTiles.ts`.
+- Overworld terrain: generated worlds render from the active classic sheet `src/assets/world/tilesets/classic_world_tileset.cleaned.png` through `src/data/worldTiles.ts` and the curated catalog in `src/world/classicWorldTileCatalog.ts`.
 - Location markers: town, castle, cave, keep, shrine, tower, port, gate, eclipse spire.
 - Town/interior: stone floor/walls, exit gate, service signs, table/rug, crate, barrel, lamps.
 - Characters: Arlen/Mira/Kael portraits; fighter/priest/wizard normalized class sheets drive Arlen/Mira/Kael battle sprites, and the fighter sheet drives the visible exploration leader.
@@ -60,17 +60,17 @@ Still fallback or older assets:
 - Dungeon tiles/objects, vehicles, inventory/equipment/relic icons, title art, and effects still use Batch 001 or generated fallbacks.
 - `command_window.png`, `target_window.png`, `party_status_window.png`, and `message_window.png` are reference/source-only because they include sample text or baked layout.
 
-Inactive candidate packs:
+Legacy/reference world atlas:
 
-- `src/assets/world/tilesets/classic_world_tileset.cleaned.png` and `src/assets/world/tilesets/classicWorldTileset.manifest.json` describe the imported classic overworld tileset sheet. This pack is not loaded by `src/main.ts` and should not replace the active 10x10 overworld atlas until the manifest has been human-reviewed and asset rights/provenance are confirmed.
+- `src/assets/world/world_atlas.normalized.png` may remain in the repository as an archived/generated atlas asset, but `src/main.ts` excludes it from active eager loading and runtime gameplay should not use it unless a future task intentionally reactivates it.
 
 ## Current Sizes
 
 - Canvas/backing render target: 1920x1080 by default.
 - Layout grid: 960x540-equivalent coordinates derived from the Full HD design size with `PIXEL_ART_SCALE = 2`.
 - Display tile grid: 32x32 layout pixels, rendered as 64x64 canvas pixels at the default Full HD target.
-- World atlas: 10 columns x 10 rows, 256x256 cells, 2560x2560 opaque PNG, displayed as 32x32 layout-pixel map tiles and 64x64 canvas pixels at Full HD.
-- Classic candidate world tileset: 832x1072 source/cleaned PNG, 52x67 cells at a 16px base grid, 12 manually verified major groups, 1885 deduplicated 16x16 tile crops, and 122 object/landmark component crops. It is prepared for later world-building use only.
+- Active classic world tileset: 832x1072 source/cleaned PNG, 52x67 cells at a 16px base grid, 12 manually verified major groups, 1885 deduplicated 16x16 tile crops, and 122 object/landmark component crops. Runtime worldgen uses only the curated subset in `src/world/classicWorldTileCatalog.ts`.
+- Legacy world atlas: 10 columns x 10 rows, 256x256 cells, 2560x2560 opaque PNG. It is not active gameplay terrain.
 - V2 town tiles: 32x32 opaque PNGs.
 - Class character sheets: 5 columns x 2 rows, 704x512 cells, 3520x1024 sheet size, transparent PNG. Manifest anchor is bodyCenterX=352 and feetBaselineY=464.
 - V2 portraits: 32x40 transparent PNGs.
@@ -83,7 +83,7 @@ Inactive candidate packs:
 - Dawnford/town service markers render as one clean horizontal row of five image-only icons. Do not add always-visible text labels such as Items/Arms/Magic/Clinic back onto those markers.
 - The town south exit uses the gate art only; there is no floating "Exit" label or persistent bottom-right interaction hint in normal town exploration.
 - Overworld locations render as larger 3x3-ish landmarks with matching entry footprints. Keep terrain tiles small/repeating, but landmarks should remain visually important.
-- The overworld atlas source is a final 2560x2560 PNG with 10 columns x 10 rows. Runtime slicing uses exact integer source rectangles: `sx = col * 256`, `sy = row * 256`, `sw = 256`, `sh = 256`. Do not reintroduce proportional slicing, JPEG cleanup, gutters, edge bleed, or debug-grid art for runtime terrain.
+- Active overworld slicing uses exact manifest source rectangles from the classic manifest: `source.x`, `source.y`, `source.width`, and `source.height`. Do not reintroduce 10x10 row/column assumptions, proportional slicing, JPEG cleanup, gutters, edge bleed, or debug-grid art for runtime terrain.
 - Battle backgrounds are full 16:9 opaque JPEG images and are assigned linear texture filtering. Pixel sprites, tiles, UI, and icons remain nearest-neighbor filtered. The canvas itself uses `image-rendering: auto` so high-resolution artwork is not globally pixelated.
 - Battle party presentation uses the normalized fighter/priest/wizard class sheets only on the battlefield; redundant small head portraits/icons and old standalone party battle PNGs are intentionally not drawn there.
 

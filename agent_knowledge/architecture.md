@@ -65,7 +65,7 @@ Ignored/generated folders:
 - Asset texture key/path maps and renderer lookup maps for terrain, locations, dungeons, enemies, portraits, and NPCs.
 - Data tables: `ITEMS`, `SPELLS`, `WEAPONS`, `ARMORS`, `ENEMIES`, `WORLD_TABLES`.
 - Imported class sprite manifest from `src/data/characterSprites.ts` for fighter/priest/wizard frame rectangles, anchors, and source metadata.
-- Imported world tile manifest from `src/data/worldTiles.ts` for the normalized overworld atlas grid, tile IDs, walkability, movement cost, encounter family, and tags.
+- Imported world tile manifest from `src/data/worldTiles.ts` for the active classic overworld tileset catalog, manifest source rectangles, tile IDs, walkability, movement cost, encounter family, and tags.
 - `src/world/worldGenerator.ts`: seeded deterministic overworld generation, biome fields, river/bridge/road/POI placement, reachability validation, and debug-report formatting.
 - `SynthAudio`: WebAudio helper for generated music loops and sound effects.
 - `CrystalOathScene`: main Phaser scene containing game state, input handling, map movement, battles, menus, save/load, and rendering.
@@ -120,7 +120,7 @@ The scene keeps generated fallback drawing for missing textures. It also tracks 
 
 Fighter/priest/wizard class sprites are normalized 5x2 transparent sheets in `assets_v2/characters/classes/`. Runtime rendering selects fixed manifest cells and positions each crop by manifest `bodyCenterX` and `feetBaselineY`, so walk and attack frames share a stable body anchor. The old Arlen/Mira/Kael tiny map/battle PNGs are excluded from the runtime asset glob.
 
-Overworld rendering uses `src/assets/world/world_atlas.normalized.png`, an exact copied final 10x10 PNG atlas with 256x256 cells. `drawWorldTile` crops atlas cells using `WORLD_TILES` metadata and exact integer source rectangles, then draws them at 32 layout pixels, which are scaled to 64 canvas pixels by the Full HD render scale. Terrain drawing is snapped to integer camera pixels to avoid atlas sampling seams; procedural terrain drawing remains fallback only if the atlas texture is unavailable.
+Overworld rendering uses the active classic tileset at `src/assets/world/tilesets/classic_world_tileset.cleaned.png` plus the imported manifest `src/assets/world/tilesets/classicWorldTileset.manifest.json`. `src/world/classicWorldTileCatalog.ts` curates high-confidence manifest entries into gameplay terrain and landmark pools so worldgen does not randomly consume all extracted crops. `drawWorldTile` crops exact manifest `source.x/y/width/height` rectangles from the classic sheet and draws them at 32 layout pixels, scaled to 64 canvas pixels by the Full HD render scale. The old generated 10x10 atlas is not active.
 
 Render resolution is split into clear constants: `DESIGN_WIDTH = 1920`, `DESIGN_HEIGHT = 1080`, `PIXEL_ART_SCALE = 2`, `LAYOUT_WIDTH = DESIGN_WIDTH / PIXEL_ART_SCALE`, and `LAYOUT_HEIGHT = DESIGN_HEIGHT / PIXEL_ART_SCALE`. Graphics commands, Phaser images, and live text are scaled by `PIXEL_ART_SCALE` when rendered, so existing 960x540-style layout coordinates fill a true 1920x1080 canvas. Pointer input maps from canvas coordinates back to layout coordinates by dividing by `PIXEL_ART_SCALE`.
 

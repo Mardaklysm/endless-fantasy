@@ -1,5 +1,7 @@
 import Phaser from "phaser";
 import { CHARACTER_SPRITES, type CharacterSpriteClass, type CharacterSpriteFrameName } from "./data/characterSprites";
+import classicTilesetImageUrl from "./assets/world/tilesets/classic_world_tileset.cleaned.png";
+import classicTilesetManifest from "./assets/world/tilesets/classicWorldTileset.manifest.json" with { type: "json" };
 import {
   WORLD_ATLAS,
   WORLD_TILES,
@@ -9,6 +11,7 @@ import {
   type WorldTileDefinition,
   type WorldTileId
 } from "./data/worldTiles.ts";
+import { classicLocationObjectFor, type ClassicWorldObjectDefinition } from "./world/classicWorldTileCatalog.ts";
 import { createWorldSeed, generateWorld, type GeneratedWorld } from "./world/worldGenerator.ts";
 import "./style.css";
 
@@ -296,7 +299,7 @@ const TOWN_SERVICES: TownServiceDef[] = [
 ];
 
 const ASSET_PATHS = [
-  ["world_atlas", "world/world_atlas.normalized.png"],
+  ["classic_world_tileset", "world/tilesets/classic_world_tileset.cleaned.png"],
   ["tile_plains", "tiles/world/plains.png"],
   ["tile_forest", "tiles/world/forest.png"],
   ["tile_hills", "tiles/world/hills.png"],
@@ -440,6 +443,7 @@ const SRC_ASSET_MODULES = import.meta.glob(
   [
     "./assets/**/*.{png,jpeg,jpg}",
     "!./assets/world/source/**/*.{png,jpeg,jpg}",
+    "!./assets/world/world_atlas.normalized.png",
     "!./assets/world/tilesets/**/*.{png,jpeg,jpg}"
   ],
   {
@@ -501,16 +505,15 @@ const ASSET_V2_PATH_OVERRIDES: Partial<Record<AssetKey, string>> = {
   ui_hp_bar: "ui/hp_bar.png"
 };
 
-const ASSET_SRC_PATH_OVERRIDES: Partial<Record<AssetKey, string>> = {
-  world_atlas: "world/world_atlas.normalized.png"
+const EXPLICIT_ASSET_URLS: Partial<Record<AssetKey, string>> = {
+  classic_world_tileset: classicTilesetImageUrl
 };
 
 const ASSET_URLS = Object.fromEntries(
   ASSET_PATHS.map(([key, path]) => {
-    const srcPath = ASSET_SRC_PATH_OVERRIDES[key];
     return [
       key,
-      (srcPath ? SRC_ASSET_MODULES[`./assets/${srcPath}`] : undefined) ??
+      EXPLICIT_ASSET_URLS[key] ??
         ASSET_V2_MODULES[`../assets_v2/${ASSET_V2_PATH_OVERRIDES[key] ?? path}`] ??
         ASSET_MODULES[`../assets/${path}`]
     ];
@@ -1186,7 +1189,7 @@ class CrystalOathScene extends Phaser.Scene {
   private blockedMoveCooldown = 0;
   private walkAnimElapsed = 0;
   private playerMoving = false;
-  private worldAtlasValidated = false;
+  private worldTilesetValidated = false;
 
   constructor() {
     super("CrystalOathScene");
@@ -1204,6 +1207,7 @@ class CrystalOathScene extends Phaser.Scene {
     this.ui = this.add.graphics();
     this.ui.setDepth(LAYER_UI_GRAPHICS);
     this.configureRenderResolution();
+    this.logActiveWorldTileset();
     this.buildWorldFromSeed(this.worldSeed);
     this.configureTextureFiltering();
     this.input.keyboard?.on("keydown", (event: KeyboardEvent) => this.handleKey(event));
@@ -1216,6 +1220,19 @@ class CrystalOathScene extends Phaser.Scene {
     this.cameras.main.roundPixels = true;
     this.g.setScale(PIXEL_ART_SCALE);
     this.ui.setScale(PIXEL_ART_SCALE);
+  }
+
+  private logActiveWorldTileset() {
+    if (!import.meta.env.DEV) return;
+    console.info(
+      [
+        "Active world tileset: classic_world_tileset",
+        "Image: classic_world_tileset.cleaned.png",
+        "Manifest: classicWorldTileset.manifest.json",
+        `Manifest entries: ${Object.keys(classicTilesetManifest.tiles ?? {}).length} tiles, ${Object.keys(classicTilesetManifest.objects ?? {}).length} objects`,
+        "Old generated atlas active: false"
+      ].join("\n")
+    );
   }
 
   update(_time: number, delta: number) {
@@ -4229,10 +4246,10 @@ Statuses: ${statuses}`;
 
   private drawWorldTile(terrain: Terrain, sx: number, sy: number, x: number, y: number) {
     const tile = WORLD_TILES[terrain];
-    if (tile && this.hasTexture("world_atlas")) {
-      const rect = this.worldAtlasSourceRect(tile);
+    if (tile && this.hasTexture(WORLD_ATLAS.textureKey)) {
+      const rect = this.worldTileSourceRect(tile);
       this.drawCroppedTexture(
-        "world_atlas",
+        WORLD_ATLAS.textureKey,
         sx,
         sy,
         rect.x,
@@ -4250,46 +4267,43 @@ Statuses: ${statuses}`;
     else if (tile?.biome === "mountain") {
       if (worldTileHasTag(terrain, "blocked") || worldTileHasTag(terrain, "cliff")) this.drawWorldMountainTile(sx, sy, x, y);
       else this.drawWorldHillsTile(sx, sy, x, y);
-    } else if (tile?.biome === "water") this.drawWorldWaterTile(terrain === "deep_ocean_water", sx, sy, x, y);
+    } else if (tile?.biome === "water") this.drawWorldWaterTile(worldTileHasTag(terrain, "deep"), sx, sy, x, y);
     else if (tile?.biome === "desert") this.drawWorldSandTile(sx, sy, x, y);
     else this.drawWorldRoadTile(sx, sy, x, y);
     this.drawWorldCoastEdges(terrain, sx, sy, x, y);
   }
 
-  private worldAtlasSourceRect(tile: WorldTileDefinition) {
-    this.assertWorldAtlasTextureSize();
-    if (!Number.isInteger(WORLD_ATLAS.tileWidth) || !Number.isInteger(WORLD_ATLAS.tileHeight)) {
-      throw new Error(`World atlas tile size must be integer; got ${WORLD_ATLAS.tileWidth}x${WORLD_ATLAS.tileHeight}.`);
-    }
-    if (tile.row < 0 || tile.row >= WORLD_ATLAS.rows || tile.col < 0 || tile.col >= WORLD_ATLAS.columns) {
-      throw new Error(`World tile ${tile.id} points outside the ${WORLD_ATLAS.columns}x${WORLD_ATLAS.rows} atlas at row ${tile.row}, col ${tile.col}.`);
-    }
-    const rect = {
-      x: tile.col * WORLD_ATLAS.tileWidth,
-      y: tile.row * WORLD_ATLAS.tileHeight,
-      width: WORLD_ATLAS.tileWidth,
-      height: WORLD_ATLAS.tileHeight
-    };
-    if (rect.x + rect.width > WORLD_ATLAS.sheetWidth || rect.y + rect.height > WORLD_ATLAS.sheetHeight) {
-      throw new Error(
-        `World tile ${tile.id} source rect ${rect.x},${rect.y},${rect.width},${rect.height} exceeds atlas ${WORLD_ATLAS.sheetWidth}x${WORLD_ATLAS.sheetHeight}.`
-      );
-    }
-    return rect;
+  private worldTileSourceRect(tile: WorldTileDefinition) {
+    this.assertWorldTilesetTextureSize();
+    this.assertWorldTilesetSourceRect(tile.sourceRect, `World tile ${tile.id}`);
+    return tile.sourceRect;
   }
 
-  private assertWorldAtlasTextureSize() {
-    if (this.worldAtlasValidated) return;
-    const source = this.textures.get("world_atlas").getSourceImage() as { width: number; height: number };
-    const expectedWidth = WORLD_ATLAS.columns * WORLD_ATLAS.tileWidth;
-    const expectedHeight = WORLD_ATLAS.rows * WORLD_ATLAS.tileHeight;
-    if (source.width !== expectedWidth || source.height !== expectedHeight) {
-      throw new Error(`World atlas image size mismatch: loaded ${source.width}x${source.height}, expected ${expectedWidth}x${expectedHeight}.`);
+  private worldObjectSourceRect(object: ClassicWorldObjectDefinition) {
+    this.assertWorldTilesetTextureSize();
+    this.assertWorldTilesetSourceRect(object.sourceRect, `World object ${object.id}`);
+    return object.sourceRect;
+  }
+
+  private assertWorldTilesetSourceRect(rect: { x: number; y: number; width: number; height: number }, label: string) {
+    if (!Number.isInteger(rect.x) || !Number.isInteger(rect.y) || !Number.isInteger(rect.width) || !Number.isInteger(rect.height)) {
+      throw new Error(`${label} source rect must use exact integers; got ${rect.x},${rect.y},${rect.width},${rect.height}.`);
     }
+    if (rect.x < 0 || rect.y < 0 || rect.width <= 0 || rect.height <= 0) {
+      throw new Error(`${label} source rect must be positive and in-bounds; got ${rect.x},${rect.y},${rect.width},${rect.height}.`);
+    }
+    if (rect.x + rect.width > WORLD_ATLAS.sheetWidth || rect.y + rect.height > WORLD_ATLAS.sheetHeight) {
+      throw new Error(`${label} source rect ${rect.x},${rect.y},${rect.width},${rect.height} exceeds classic tileset ${WORLD_ATLAS.sheetWidth}x${WORLD_ATLAS.sheetHeight}.`);
+    }
+  }
+
+  private assertWorldTilesetTextureSize() {
+    if (this.worldTilesetValidated) return;
+    const source = this.textures.get(WORLD_ATLAS.textureKey).getSourceImage() as { width: number; height: number };
     if (source.width !== WORLD_ATLAS.sheetWidth || source.height !== WORLD_ATLAS.sheetHeight) {
-      throw new Error(`World atlas manifest size mismatch: image ${source.width}x${source.height}, manifest ${WORLD_ATLAS.sheetWidth}x${WORLD_ATLAS.sheetHeight}.`);
+      throw new Error(`Classic world tileset manifest size mismatch: image ${source.width}x${source.height}, manifest ${WORLD_ATLAS.sheetWidth}x${WORLD_ATLAS.sheetHeight}.`);
     }
-    this.worldAtlasValidated = true;
+    this.worldTilesetValidated = true;
   }
 
   private worldTerrainAt(x: number, y: number): Terrain | undefined {
@@ -4476,6 +4490,11 @@ Statuses: ${statuses}`;
     const cx = sx + size / 2;
     const bottom = sy + size - 8;
     this.drawActorShadow(cx, bottom, size * 0.72, 18);
+    const classicObject = classicLocationObjectFor(loc.id);
+    if (classicObject && this.hasTexture(WORLD_ATLAS.textureKey)) {
+      this.drawClassicLocationObject(classicObject, sx, sy, size);
+      return;
+    }
     const locationTexture = LOCATION_TEXTURES[loc.id];
     if (locationTexture && this.hasTexture(locationTexture)) {
       this.drawTexture(locationTexture, sx, sy - 4, size, size, LAYER_OBJECT_IMAGE);
@@ -4528,6 +4547,20 @@ Statuses: ${statuses}`;
     this.g.fillStyle(0x2a1d3d, 1).fillTriangle(sx + 20 * u, sy + 80 * u, cx, sy + 12 * u, sx + 76 * u, sy + 80 * u);
     this.g.fillStyle(0xb388ff, 1).fillRect(cx - 8 * u, sy + 28 * u, 16 * u, 44 * u);
     this.g.fillStyle(0xffdf78, 1).fillRect(cx - 14 * u, sy + 18 * u, 28 * u, 10 * u);
+  }
+
+  private drawClassicLocationObject(object: ClassicWorldObjectDefinition, sx: number, sy: number, footprintSize: number) {
+    const rect = this.worldObjectSourceRect(object);
+    const availableWidth = footprintSize;
+    const availableHeight = footprintSize;
+    const aspect = rect.width / rect.height;
+    let displayWidth = availableWidth;
+    let displayHeight = availableHeight;
+    if (aspect > 1) displayHeight = availableWidth / aspect;
+    else displayWidth = availableHeight * aspect;
+    const drawX = sx + availableWidth * object.anchor.x - displayWidth * object.anchor.x;
+    const drawY = sy + availableHeight * object.anchor.y - displayHeight * object.anchor.y;
+    this.drawCroppedTexture(WORLD_ATLAS.textureKey, drawX, drawY, rect.x, rect.y, rect.width, rect.height, displayWidth, displayHeight, LAYER_OBJECT_IMAGE);
   }
 
   private drawActorShadow(x: number, y: number, width = 26, height = 8) {
