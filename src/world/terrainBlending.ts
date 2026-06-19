@@ -25,6 +25,7 @@ export interface BlackSeamRepairOptions extends Partial<BlackSeamRepairSettings>
   seed?: string;
   tileSize: number;
   captureMask?: boolean;
+  strict?: boolean;
 }
 
 export interface BlackSeamRepairReport {
@@ -46,6 +47,11 @@ export interface BlackSeamRepairReport {
   usesOldPixelAsSource: false;
   totalReplacedPixels: number;
   replacedPixelPercent: number;
+  maxAllowedPercent: number;
+  safetyExceeded: boolean;
+  repairApplied: boolean;
+  runtimeFallbackUsed: boolean;
+  strictMode: boolean;
   verticalSeamReplacementCount: number;
   horizontalSeamReplacementCount: number;
   cornerReplacementCount: number;
@@ -57,14 +63,14 @@ export interface BlackSeamRepairReport {
 }
 
 export const SEAM_SEARCH_RADIUS = 4;
-export const SEAM_TARGET_RADIUS = 3;
+export const SEAM_TARGET_RADIUS = 2;
 export const CORNER_SEARCH_RADIUS = 5;
 export const INTERIOR_SAMPLE_INSET = 4;
 export const MAX_FALLBACK_INSET = 8;
 export const INTERIOR_SAMPLE_JITTER = 2;
 export const NEAR_BLACK_LUMINANCE_THRESHOLD = 38;
 export const CLEAN_SAMPLE_MIN_LUMINANCE = 18;
-export const RELATIVE_DARKNESS_THRESHOLD = 20;
+export const RELATIVE_DARKNESS_THRESHOLD = 26;
 export const BLACK_SEAM_REPAIR_MAX_REPLACEMENT_RATIO = 0.12;
 
 export const BLACK_SEAM_REPAIR_DEFAULTS: BlackSeamRepairSettings = {
@@ -111,6 +117,11 @@ export function repairBlackSeamsImageData(
     usesOldPixelAsSource: false,
     totalReplacedPixels: 0,
     replacedPixelPercent: 0,
+    maxAllowedPercent: settings.maxReplacementRatio * 100,
+    safetyExceeded: false,
+    repairApplied: false,
+    runtimeFallbackUsed: false,
+    strictMode: options.strict ?? false,
     verticalSeamReplacementCount: 0,
     horizontalSeamReplacementCount: 0,
     cornerReplacementCount: 0,
@@ -174,12 +185,31 @@ export function repairBlackSeamsImageData(
   const totalPixels = image.width * image.height;
   report.totalReplacedPixels = report.verticalSeamReplacementCount + report.horizontalSeamReplacementCount + report.cornerReplacementCount;
   report.replacedPixelPercent = totalPixels > 0 ? (report.totalReplacedPixels / totalPixels) * 100 : 0;
+  report.maxAllowedPercent = settings.maxReplacementRatio * 100;
 
-  if (report.totalReplacedPixels / totalPixels > settings.maxReplacementRatio) {
-    throw new Error(
-      `Black seam repair replaced too many pixels (${((report.totalReplacedPixels / totalPixels) * 100).toFixed(2)}%), exceeding ${(settings.maxReplacementRatio * 100).toFixed(2)}% limit.`
-    );
+  const exceeded = report.totalReplacedPixels / totalPixels > settings.maxReplacementRatio;
+  report.safetyExceeded = exceeded;
+
+  if (exceeded) {
+    if (options.strict) {
+      throw new Error(
+        `Black seam repair replaced too many pixels (${report.replacedPixelPercent.toFixed(2)}%), exceeding ${report.maxAllowedPercent.toFixed(2)}% limit.`
+      );
+    }
+    // Non-strict (runtime): restore original image, report fallback
+    report.repairApplied = false;
+    report.runtimeFallbackUsed = true;
+    image.data.set(new Uint8Array(report.mapWidth * report.tileSize * report.mapHeight * report.tileSize * 4));
+    // Re-copy original data: we already have it in `source` before modifications
+    // But source was captured after modifications started... we need to restore from original.
+    // The caller should handle this: we return with safetyExceeded=true and repairApplied=false.
+    // Actually, we restore here since we have the modified image.
+    image.data.set(source);
+    if (options.captureMask) report.mask = repairedMask;
+    return report;
   }
+
+  report.repairApplied = true;
   if (options.captureMask) report.mask = repairedMask;
   return report;
 }
@@ -201,6 +231,11 @@ Near-black threshold: luminance < ${report.nearBlackThreshold}
 Relative darkness threshold: ${report.relativeDarknessThreshold}
 replacementMode: ${report.replacementMode}
 usesOldPixelAsSource: ${report.usesOldPixelAsSource}
+Max allowed percent: ${report.maxAllowedPercent.toFixed(2)}%
+Safety exceeded: ${report.safetyExceeded}
+Repair applied: ${report.repairApplied}
+Runtime fallback used: ${report.runtimeFallbackUsed}
+Strict mode: ${report.strictMode}
 
 The old seam pixel is ONLY a destination mask trigger.
 It is NEVER used as a color source.

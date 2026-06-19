@@ -4328,8 +4328,14 @@ Statuses: ${statuses}`;
     this.worldBlackSeamRepairReport = repairBlackSeamsImageData(imageData, this.world, {
       seed: this.worldSeed,
       tileSize: TILE,
+      strict: false,
       ...BLACK_SEAM_REPAIR_DEV_OPTIONS
     });
+    if (this.worldBlackSeamRepairReport.safetyExceeded) {
+      console.warn(
+        `Black seam repair safety limit exceeded (${this.worldBlackSeamRepairReport.replacedPixelPercent.toFixed(2)}% > ${this.worldBlackSeamRepairReport.maxAllowedPercent.toFixed(2)}%). Using original terrain.`
+      );
+    }
     ctx.putImageData(imageData, 0, 0);
 
     if (this.textures.exists(this.worldTerrainCacheKey)) this.textures.remove(this.worldTerrainCacheKey);

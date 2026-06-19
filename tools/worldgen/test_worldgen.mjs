@@ -98,12 +98,12 @@ function validateBlackSeamRepairMetadata() {
   assert(BLACK_SEAM_REPAIR_DEV_OPTIONS.enabled === true, "Black seam repair should be enabled by default.");
   assert(BLACK_SEAM_REPAIR_DEV_OPTIONS.debugView === false, "Black seam repair debug view should be off by default.");
   assert(SEAM_SEARCH_RADIUS === 4, `Expected seam search radius 4, got ${SEAM_SEARCH_RADIUS}.`);
-  assert(SEAM_TARGET_RADIUS === 3, `Expected seam target radius 3, got ${SEAM_TARGET_RADIUS}.`);
+  assert(SEAM_TARGET_RADIUS === 2, `Expected seam target radius 2, got ${SEAM_TARGET_RADIUS}.`);
   assert(INTERIOR_SAMPLE_INSET === 4, `Expected interior sample inset 4, got ${INTERIOR_SAMPLE_INSET}.`);
   assert(MAX_FALLBACK_INSET === 8, `Expected max fallback inset 8, got ${MAX_FALLBACK_INSET}.`);
   assert(INTERIOR_SAMPLE_JITTER === 2, `Expected interior sample jitter 2, got ${INTERIOR_SAMPLE_JITTER}.`);
   assert(NEAR_BLACK_LUMINANCE_THRESHOLD === 38, `Expected near-black threshold 38, got ${NEAR_BLACK_LUMINANCE_THRESHOLD}.`);
-  assert(RELATIVE_DARKNESS_THRESHOLD === 20, `Expected relative darkness threshold 20, got ${RELATIVE_DARKNESS_THRESHOLD}.`);
+  assert(RELATIVE_DARKNESS_THRESHOLD === 26, `Expected relative darkness threshold 26, got ${RELATIVE_DARKNESS_THRESHOLD}.`);
 
   for (const tile of WORLD_TILE_DEFINITIONS) {
     assert(worldTileBlendGroup(tile.id), `Tile ${tile.id} has no blend group.`);
@@ -197,6 +197,8 @@ function validateBlackSeamRepair() {
   validateWaterSameTileSeamRepair();
   validateOldPixelNotUsedAsSource();
   validateMaskIsThinLines();
+  validateStrictModeThrows();
+  validateNonStrictModeFallsBack();
 }
 
 function validateOnlyBlackSeamPixelsChange() {
@@ -589,6 +591,64 @@ function countMaskPixels(mask, width, height) {
     }
   }
   return count;
+}
+
+function validateStrictModeThrows() {
+  // In strict mode, a repair exceeding the safety limit should throw.
+  // Use a tiny maxReplacementRatio to force the limit.
+  const tileSize = 32;
+  const image = makeTwoTileImage(tileSize, [100, 100, 100, 255], [200, 200, 200, 255]);
+  // Darken the entire seam band — this will be detected and repaired.
+  blackenRect(image, tileSize - 1, 0, 3, tileSize);
+  let threw = false;
+  try {
+    repairBlackSeamsImageData(image, [[WORLD_TILE_IDS.brightGrass, WORLD_TILE_IDS.darkGrass]], {
+      seed: "strict-throw",
+      tileSize,
+      strict: true,
+      maxReplacementRatio: 0.01  // 1% limit, easily exceeded
+    });
+  } catch (e) {
+    threw = true;
+    assert(e.message.includes("too many pixels"), `Unexpected error message: ${e.message}`);
+  }
+  assert(threw, "Strict mode should throw when safety limit exceeded.");
+}
+
+function validateNonStrictModeFallsBack() {
+  // In non-strict (runtime) mode, exceeding the limit should:
+  // - NOT throw
+  // - return safetyExceeded=true, repairApplied=false
+  // - restore original image data
+  const tileSize = 32;
+  const image = makeTwoTileImage(tileSize, [100, 100, 100, 255], [200, 200, 200, 255]);
+  blackenRect(image, tileSize - 1, 0, 3, tileSize);
+  const before = cloneImage(image);
+
+  let report;
+  let threw = false;
+  try {
+    report = repairBlackSeamsImageData(image, [[WORLD_TILE_IDS.brightGrass, WORLD_TILE_IDS.darkGrass]], {
+      seed: "nonstrict-fallback",
+      tileSize,
+      strict: false,
+      maxReplacementRatio: 0.01,  // 1% limit
+      captureMask: true
+    });
+  } catch (e) {
+    threw = true;
+  }
+  assert(!threw, "Non-strict mode must not throw.");
+  assert(report.safetyExceeded === true, "Non-strict mode should report safety exceeded.");
+  assert(report.repairApplied === false, "Non-strict mode should report repair not applied.");
+  assert(report.runtimeFallbackUsed === true, "Non-strict mode should report fallback used.");
+
+  // Original image data must be preserved
+  for (let y = 0; y < tileSize; y += 1) {
+    for (let x = 0; x < tileSize * 2; x += 1) {
+      assertPixelsEqual(image, before, x, y, `Non-strict mode changed pixel ${x},${y} after safety exceeded.`);
+    }
+  }
 }
 
 function assert(condition, message) {
