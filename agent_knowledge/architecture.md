@@ -27,6 +27,7 @@ D:\Projects\Endless Fantasy\
   src/
     data/
       characterSprites.ts
+      dungeonTiles.ts
       worldObjects.ts
       worldTiles.ts
     world/
@@ -70,6 +71,7 @@ Ignored/generated folders:
 - Imported class sprite manifest from `src/data/characterSprites.ts` for fighter/priest/wizard frame rectangles, anchors, and source metadata.
 - Imported world tile manifest from `src/data/worldTiles.ts` for the active `atlas_v3` overworld atlas, 8x8 source rectangles, shared source-edge inset, tile IDs, walkability, movement cost, encounter family, and tags. The current atlas has 64 classified terrain cells.
 - Imported world object overlay manifest from `src/data/worldObjects.ts` for the active `world_objects` atlas, 8x8 source rectangles, object IDs, categories, tags, and source metadata.
+- Imported dungeon/city tile manifest from `src/data/dungeonTiles.ts` for the active `dungeon_atlas`, 8x8 source rectangles, shared source-edge inset, tile IDs, categories, themes, and tags. The current atlas has 64 classified dungeon/city cells.
 - `src/world/seededRng.ts`: deterministic RNG/hash/noise helpers shared by map and dungeon generation.
 - `src/world/worldGenerator.ts`: seeded deterministic `atlas_v3_archipelago_world` generation. It starts from ocean, builds three irregular islands (Greenhaven, Coralreach, Ashfang Isle), tracks island metadata/tile maps, places towns/harbors/dungeons/landmarks, carves oriented roads, paints beach/coast and shallow-water terrain, records sea routes and dock markers, and validates island-local reachability.
 - `src/world/dungeonGenerator.ts`: deterministic room-and-corridor dungeon floor generation from `worldSeed + dungeonId + tier`, including entrance/stairs, chests, switch/gate, and boss placement.
@@ -126,6 +128,8 @@ The scene keeps generated fallback drawing for missing textures. It also tracks 
 Fighter/priest/wizard class sprites are normalized 5x2 transparent sheets in `assets_v2/characters/classes/`. Runtime rendering selects fixed manifest cells and positions each crop by manifest `bodyCenterX` and `feetBaselineY`, so walk and attack frames share a stable body anchor. The old Arlen/Mira/Kael tiny map/battle PNGs are excluded from the runtime asset glob.
 
 Overworld rendering uses the active `atlas_v3` tileset at `src/assets/world/atlas_v3.png` plus the imported manifest `src/assets/world/atlasV3.manifest.json`. `drawWorldTile` and the terrain cache crop valid 8x8 atlas cell rectangles inward with `ATLAS_V3_SOURCE_INSET = 3` via `atlasV3SourceRectWithInset`, then draw the clean interior into the full 32 layout pixel destination tile, scaled to 64 canvas pixels by the Full HD render scale. All 64 atlas cells are active terrain IDs. The classic special tileset and old generated 10x10 atlas are not active runtime terrain.
+
+Dungeon and city/town rendering uses the active `dungeon_atlas` sheet at `src/assets/world/dungeon_atlas.png` plus `src/assets/world/dungeonAtlas.manifest.json`. `drawDungeonTile`, `drawTownFloorTile`, `drawTownWallTile`, and `drawTownServicePad` crop 8x8 atlas cells inward with `DUNGEON_ATLAS_SOURCE_INSET = 3` via `dungeonAtlasSourceRectWithInset`. Dungeons choose theme-specific floor/wall/object cells by dungeon id, while towns use medieval stone floor/wall cells and atlas-backed shop pads under the existing service icon sprites.
 
 Generated overworld terrain is cached as a Phaser canvas texture when a world seed/layout is built. The cache draws each placed atlas tile with the same inset source rectangle used by the fallback visible-tile path. There is no runtime post-placement seam repair, same-tile softening, water seam blend, intersection/corner softening, or mutation of cached map pixels with neighboring terrain colors. Collision, walkability, POIs, and tile IDs remain unchanged.
 
@@ -198,6 +202,7 @@ Current visuals use PNG assets where Batch 001 has been wired, with generated co
 - `WORLD_W = 96`
 - `WORLD_H = 64`
 - `ATLAS_V3_SOURCE_INSET = 3` crops away dirty source-cell edge pixels before drawing valid atlas tiles into full destination cells.
+- `DUNGEON_ATLAS_SOURCE_INSET = 3` crops away dirty source-cell edge pixels before drawing valid dungeon/city atlas tiles into full destination cells.
 - Town interior uses a 21x15 tile area offset at x=144, y=40.
 - Dungeon floors are 22x14 character maps.
 - Battle layout uses enemies on the left, party battlers on the right, and three lower panels for target/log, command, and party status.

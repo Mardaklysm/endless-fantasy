@@ -25,6 +25,7 @@ This backlog is practical project memory, not a full design document. Keep it sh
 - `tile_bridge` exists in `assets_v2`, but current harbor route/dock visuals use the active `src/assets/world/pier_atlas.png` sheet with generated Graphics fallback.
 - Reference-only UI window crops in `assets_v2/ui` are intentionally not loaded at runtime because they contain sample text.
 - Normalized fighter/priest/wizard class sheets are wired; keep old standalone party map/battle PNGs out of runtime glob loading unless intentionally reintroduced.
+- Dungeon/city tiles are wired through the active `src/assets/world/dungeon_atlas.png` sheet; older individual dungeon PNGs remain fallback only.
 - Keep the archived classic tileset pack out of active runtime unless a future task explicitly reopens that direction. Active terrain should continue to use only non-empty `atlas_v3` cells.
 
 ## Gameplay Gaps
@@ -46,7 +47,7 @@ This backlog is practical project memory, not a full design document. Keep it sh
 - Battle enemies use PNGs now; future larger boss art still needs overlap checks when progression reaches each boss.
 - Battle actions now have short lunge/step movement; future effect-sheet rendering can layer spell/item VFX on top of the timing path.
 - Battle backdrops now use v2 region panels; later tuning can reduce bundle weight with dynamic loading/code splitting.
-- Town service blocks now use v2 icon signs in one unlabeled five-marker row.
+- Town service blocks now use v2 icon signs in one unlabeled five-marker row, with atlas-backed shop pads from `dungeon_atlas`.
 - Title logo and four-star decoration render; title background remains generated.
 - Audio is simple oscillator loops; no composed music assets are planned unless approved.
 

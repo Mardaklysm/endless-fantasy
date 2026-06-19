@@ -44,6 +44,8 @@ This runs `tools/worldgen/test_worldgen.mjs`. It validates the active `atlas_v3`
 - generated worlds include oriented roads, shallow-water terrain/tracking, pier-atlas docks/bridges, sea routes, beaches/coasts, forest/jungle biome hooks, reefs/ocean details, and no empty-cell references
 - runtime world object overlay atlas `src/assets/world/world_objects.png` exists as a 1024x1024 transparent PNG with a 64-cell `worldObjectAtlas.manifest.json`
 - generated non-town POIs have valid object overlay IDs, and generated ocean object overlays are deterministic, valid, and placed on water
+- runtime dungeon/city atlas `src/assets/world/dungeon_atlas.png` exists as a 1024x1024 opaque PNG with a 64-cell `dungeonAtlas.manifest.json`
+- dungeon atlas source inset math, tile ID lookup, and runtime references for dungeons/town shop pads are valid
 - same seed reproduces the same world
 - different seeds produce different tile grids
 
@@ -104,6 +106,14 @@ npm run import:world-objects
 
 Check `src/assets/world/world_objects.png`, `src/assets/world/worldObjectAtlas.manifest.json`, and `docs/debug/world-objects/world-objects-import-report.md`. The current importer uses ImageMagick resize plus edge flood-fill transparency from the magenta matte. Do not use global magenta removal because the atlas intentionally contains purple portal, crystal, and gem pixels.
 
+For the active `dungeon_atlas` dungeon/city tile atlas, run after changing `D:\Projects\new_artwork\dungeon_atlas.jpeg` or the classification rules:
+
+```powershell
+npm run import:dungeon-atlas
+```
+
+Check `src/assets/world/dungeon_atlas.png`, `src/assets/world/dungeonAtlas.manifest.json`, and `docs/debug/dungeon-atlas/dungeon-atlas-import-report.md`. The current importer uses ImageMagick resize only and keeps the sheet opaque. Do not run rembg or transparency removal on this atlas.
+
 For the legacy 10x10 overworld atlas, run only if intentionally regenerating that archived asset:
 
 ```powershell
@@ -148,7 +158,7 @@ Expected:
 - Intro dialogue appears in Greenhaven.
 - Advance dialogue with Enter/Z.
 - Player ends in Greenhaven town interior.
-- Greenhaven should show v2 stone floors/walls, service signs, lamps, table/rug, crates/barrels, and exit gate.
+- Greenhaven should show atlas-backed stone floors/walls and shop pads, plus service signs, lamps, table/rug, crates/barrels, and exit gate.
 
 ## Load/Save Test
 
@@ -229,6 +239,7 @@ Expected:
 
 - Enter a dungeon.
 - Confirm dungeon layout is room-and-corridor procedural and deterministic for a seed.
+- Confirm dungeon floors, walls, chests, switches, gates, stairs, exits, and boss seals render from the active `dungeon_atlas`.
 - Confirm random encounters occur.
 - Open chest.
 - Activate switch.

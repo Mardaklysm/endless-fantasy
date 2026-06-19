@@ -39,7 +39,7 @@ Keep all paths lowercase snake_case. Use PNG for most raster art. Battle/backgro
 
 ## Loading Strategy
 
-Current note: the Phaser scene already has a `preload()` image loader. The active overworld terrain uses the `atlas_v3` texture from `src/assets/world/atlas_v3.png`, imported manifest `src/assets/world/atlasV3.manifest.json`, and tile metadata in `src/data/worldTiles.ts`; individual root `assets/tiles/world/*` files are fallback/legacy references. The terrain cache and fallback draw path use `ATLAS_V3_SOURCE_INSET = 3` to crop dirty source-cell edges while drawing each valid tile into the full destination tile. Harbor dock overlays use `src/assets/world/pier_atlas.png`. Generated POI and ocean-detail object overlays use the transparent `src/assets/world/world_objects.png` sheet plus `src/data/worldObjects.ts`. Runtime must not run map-level seam blending or mutate cached terrain pixels with neighboring terrain colors.
+Current note: the Phaser scene already has a `preload()` image loader. The active overworld terrain uses the `atlas_v3` texture from `src/assets/world/atlas_v3.png`, imported manifest `src/assets/world/atlasV3.manifest.json`, and tile metadata in `src/data/worldTiles.ts`; individual root `assets/tiles/world/*` files are fallback/legacy references. The terrain cache and fallback draw path use `ATLAS_V3_SOURCE_INSET = 3` to crop dirty source-cell edges while drawing each valid tile into the full destination tile. Harbor dock overlays use `src/assets/world/pier_atlas.png`. Generated POI and ocean-detail object overlays use the transparent `src/assets/world/world_objects.png` sheet plus `src/data/worldObjects.ts`. Dungeon/city tiles use the opaque `src/assets/world/dungeon_atlas.png` sheet plus `src/data/dungeonTiles.ts`, cropped with `DUNGEON_ATLAS_SOURCE_INSET = 3`. Runtime must not run map-level seam blending or mutate cached terrain pixels with neighboring terrain colors.
 
 For future asset families, extend the existing loader incrementally:
 
@@ -86,8 +86,8 @@ This lets the game remain playable after every partial art import.
 | Harbor docks | `drawPierDockTile` | `src/assets/world/pier_atlas.png` | Low; 4x4 atlas cells are cropped into generated harbor dock markers with generated fallback |
 | World object overlays | `drawWorldObjectCell`, `drawLocationIcon`, `drawWorldOverlays` | `src/assets/world/world_objects.png` + `src/assets/world/worldObjectAtlas.manifest.json` + `src/data/worldObjects.ts` | Active path; generated POIs carry object IDs and ocean detail overlays are seed-derived from reef positions; generated marker fallback remains |
 | Location markers | `drawLocationIcon` | `assets/tiles/markers/*` | Low; town markers and missing object-overlay assets still use this/fallback path |
-| Town floor/services | `drawTown` and service blocks | Town floor/service marker assets | Medium, because service text is currently drawn directly |
-| Dungeon tiles | `drawDungeonTile` | `assets/tiles/dungeons/*`, `assets/tiles/objects/*` | Low for base tiles, medium for opened chest state |
+| Town floor/services | `drawTownFloorTile`, `drawTownWallTile`, `drawTownServicePad`, and service blocks | `src/assets/world/dungeon_atlas.png` plus existing service marker assets | Active path for floor/wall/shop pads; service icons remain separate image assets with generated fallback |
+| Dungeon tiles | `drawDungeonTile` | `src/assets/world/dungeon_atlas.png` + `src/assets/world/dungeonAtlas.manifest.json` + `src/data/dungeonTiles.ts` | Active path for floors, walls, chests, gates, stairs, exits, switches, and boss seals; older individual dungeon PNGs remain fallback |
 | Player/class sprite sheets | `drawLeader`, `drawCharacterSpriteFrame`, `drawPartyBattler` | `assets_v2/characters/classes/*_normalized.png` plus `src/data/characterSprites.ts` | Medium, requires stable crop/anchor metadata |
 | NPC sprites | `drawNpc` | `assets/characters/npc_*.png` | Medium, needs NPC type data or deterministic mapping |
 | Battle portraits | `drawPortrait` | `assets/portraits/battle_*.png` | Low, current layout already reserves portrait slots |
@@ -147,7 +147,7 @@ This lets the game remain playable after every partial art import.
 4. Replace or extend class sprite rendering through `src/data/characterSprites.ts` and `drawCharacterSpriteFrame`.
 5. Replace `drawPanel` and menu cursor with UI assets.
 6. Replace normal enemy rendering by adding an enemy-id-to-texture map. Keep generated shapes if missing.
-7. Replace dungeon tiles and objects.
+7. Replace dungeon tiles and objects. Done for `dungeon_atlas`; generated/individual PNG fallback remains.
 8. Replace location markers by adding location/dungeon id-specific marker selection.
 9. Replace battle portraits.
 10. Add item/equipment/relic icons to menus and HUD.

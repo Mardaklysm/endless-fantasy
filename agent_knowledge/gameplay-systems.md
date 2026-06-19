@@ -191,6 +191,7 @@ Each town has item stock, weapon stock, armor stock, spell stock, inn price, cli
 - Inns restore HP/spell charges and save.
 - Clinics revive fallen characters for gold.
 - Shops buy items, gear, and spells.
+- Town/city interiors render floor and wall tiles from the opaque `dungeon_atlas`, with atlas-backed shop pads under the existing service icon sprites.
 
 Shop UI is menu-based text only.
 
@@ -206,7 +207,7 @@ Dungeons are data-driven in `dungeons()` but their floors come from `src/world/d
 
 Each dungeon has two deterministic procedural 22x14 floors generated from `worldSeed + dungeonId + tier`, with rooms, corridors, chests, stairs, a switch/gate puzzle, a boss tile, boss intro text, and reward text.
 
-Dungeon floors, walls, gates, stairs, exits, chests, switches, and boss relic seals render from Batch 001 PNG tiles when available. Town floors/walls/service props now render from `assets_v2`. Opened chest art is wired through `openedChests`.
+Dungeon floors, walls, gates, stairs, exits, chests, switches, and boss relic seals render from the active opaque `dungeon_atlas` sheet with theme-specific cells for Mossy Cave, Coralreach Ruins/Tide Shrine, Ashfang Keep, Skyglass Tower, and Eclipse Spire. Older individual dungeon PNGs and generated drawing remain fallback paths. Opened chest art is wired through `openedChests`.
 
 Progression flags:
 

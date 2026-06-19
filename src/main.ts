@@ -1,9 +1,19 @@
 import Phaser from "phaser";
 import { CHARACTER_SPRITES, type CharacterSpriteClass, type CharacterSpriteFrameName } from "./data/characterSprites";
 import atlasV3ImageUrl from "./assets/world/atlas_v3.png";
+import dungeonAtlasImageUrl from "./assets/world/dungeon_atlas.png";
 import pierAtlasImageUrl from "./assets/world/pier_atlas.png";
 import worldObjectsImageUrl from "./assets/world/world_objects.png";
 import atlasV3Manifest from "./assets/world/atlasV3.manifest.json" with { type: "json" };
+import {
+  DUNGEON_ATLAS,
+  DUNGEON_ATLAS_SOURCE_INSET,
+  DUNGEON_TILE_ID_SET,
+  DUNGEON_TILE_IDS,
+  dungeonAtlasSourceRectWithInset,
+  dungeonTileById,
+  type DungeonTileId
+} from "./data/dungeonTiles.ts";
 import {
   WORLD_OBJECT_ATLAS,
   WORLD_OBJECTS,
@@ -367,6 +377,7 @@ const TOWN_SERVICES: TownServiceDef[] = [
 
 const ASSET_PATHS = [
   ["atlas_v3", "world/atlas_v3.png"],
+  ["dungeon_atlas", "world/dungeon_atlas.png"],
   ["pier_atlas", "world/pier_atlas.png"],
   ["world_objects", "world/world_objects.png"],
   ["tile_plains", "tiles/world/plains.png"],
@@ -576,6 +587,7 @@ const ASSET_V2_PATH_OVERRIDES: Partial<Record<AssetKey, string>> = {
 
 const EXPLICIT_ASSET_URLS: Partial<Record<AssetKey, string>> = {
   atlas_v3: atlasV3ImageUrl,
+  dungeon_atlas: dungeonAtlasImageUrl,
   pier_atlas: pierAtlasImageUrl,
   world_objects: worldObjectsImageUrl
 };
@@ -603,12 +615,180 @@ const PIER_ATLAS = {
   }
 } as const;
 
+interface DungeonThemeTiles {
+  floors: DungeonTileId[];
+  walls: DungeonTileId[];
+  exit: DungeonTileId;
+  gateClosed: DungeonTileId;
+  gateOpen: DungeonTileId;
+  stairsDown: DungeonTileId;
+  stairsUp: DungeonTileId;
+  chestClosed: DungeonTileId;
+  chestOpen: DungeonTileId;
+  switch: DungeonTileId;
+  bossSeal: DungeonTileId;
+}
+
 const DUNGEON_FLOOR_TEXTURES: Record<string, AssetKey> = {
   mossCave: "dungeon_floor_moss",
   ashenKeep: "dungeon_floor_fire",
   tideShrine: "dungeon_floor_tide",
   skyglassTower: "dungeon_floor_gale",
   eclipseSpire: "dungeon_floor_eclipse"
+};
+
+const DUNGEON_THEME_TILES: Record<string, DungeonThemeTiles> = {
+  mossCave: {
+    floors: [
+      DUNGEON_TILE_IDS.dirtCaveFloor,
+      DUNGEON_TILE_IDS.rockyCaveFloor,
+      DUNGEON_TILE_IDS.mossyCaveFloor,
+      DUNGEON_TILE_IDS.caveFloorPebbles,
+      DUNGEON_TILE_IDS.caveFloorRoots,
+      DUNGEON_TILE_IDS.glowingMushroomCaveFloor
+    ],
+    walls: [
+      DUNGEON_TILE_IDS.roughCaveWall,
+      DUNGEON_TILE_IDS.darkCaveWall,
+      DUNGEON_TILE_IDS.mossyCaveWall,
+      DUNGEON_TILE_IDS.rootCaveWall,
+      DUNGEON_TILE_IDS.caveRubbleBlocker
+    ],
+    exit: DUNGEON_TILE_IDS.caveEntranceExit,
+    gateClosed: DUNGEON_TILE_IDS.lockedIronGateClosed,
+    gateOpen: DUNGEON_TILE_IDS.openIronGate,
+    stairsDown: DUNGEON_TILE_IDS.stairwayDown,
+    stairsUp: DUNGEON_TILE_IDS.stairwayUp,
+    chestClosed: DUNGEON_TILE_IDS.closedTreasureChestTile,
+    chestOpen: DUNGEON_TILE_IDS.openTreasureChestTile,
+    switch: DUNGEON_TILE_IDS.floorSwitchPressurePlate,
+    bossSeal: DUNGEON_TILE_IDS.glowingBossRelicSeal
+  },
+  tideShrine: {
+    floors: [
+      DUNGEON_TILE_IDS.ancientRuinFloor,
+      DUNGEON_TILE_IDS.mossyStoneFloor,
+      DUNGEON_TILE_IDS.stoneFloorDebris,
+      DUNGEON_TILE_IDS.dampCaveFloor,
+      DUNGEON_TILE_IDS.stoneFloorMagicMarks
+    ],
+    walls: [
+      DUNGEON_TILE_IDS.ancientRuinWall,
+      DUNGEON_TILE_IDS.mossyStoneWall,
+      DUNGEON_TILE_IDS.brokenStoneRubbleWall,
+      DUNGEON_TILE_IDS.crackedStoneWall,
+      DUNGEON_TILE_IDS.crystalCaveWall
+    ],
+    exit: DUNGEON_TILE_IDS.magicPortalExit,
+    gateClosed: DUNGEON_TILE_IDS.lockedIronGateClosed,
+    gateOpen: DUNGEON_TILE_IDS.openIronGate,
+    stairsDown: DUNGEON_TILE_IDS.stairwayDown,
+    stairsUp: DUNGEON_TILE_IDS.stairwayUp,
+    chestClosed: DUNGEON_TILE_IDS.closedTreasureChestTile,
+    chestOpen: DUNGEON_TILE_IDS.openTreasureChestTile,
+    switch: DUNGEON_TILE_IDS.floorSwitchPressurePlate,
+    bossSeal: DUNGEON_TILE_IDS.glowingBossRelicSeal
+  },
+  ashenKeep: {
+    floors: [
+      DUNGEON_TILE_IDS.lavaCrackedStoneFloor,
+      DUNGEON_TILE_IDS.darkWornStoneFloor,
+      DUNGEON_TILE_IDS.stoneFloorShadow,
+      DUNGEON_TILE_IDS.cursedPurpleStoneFloor
+    ],
+    walls: [
+      DUNGEON_TILE_IDS.volcanicStoneWall,
+      DUNGEON_TILE_IDS.darkStoneWall,
+      DUNGEON_TILE_IDS.ironBarWall,
+      DUNGEON_TILE_IDS.heavyStonePillar
+    ],
+    exit: DUNGEON_TILE_IDS.magicPortalExit,
+    gateClosed: DUNGEON_TILE_IDS.ornateBossDoorGate,
+    gateOpen: DUNGEON_TILE_IDS.openIronGate,
+    stairsDown: DUNGEON_TILE_IDS.stairwayDown,
+    stairsUp: DUNGEON_TILE_IDS.stairwayUp,
+    chestClosed: DUNGEON_TILE_IDS.closedTreasureChestTile,
+    chestOpen: DUNGEON_TILE_IDS.openTreasureChestTile,
+    switch: DUNGEON_TILE_IDS.floorSwitchPressurePlate,
+    bossSeal: DUNGEON_TILE_IDS.glowingBossRelicSeal
+  },
+  skyglassTower: {
+    floors: [
+      DUNGEON_TILE_IDS.paleIceFloor,
+      DUNGEON_TILE_IDS.crackedIceFloor,
+      DUNGEON_TILE_IDS.frostyStoneFloor,
+      DUNGEON_TILE_IDS.slipperyBlueIceFloor,
+      DUNGEON_TILE_IDS.frozenCrackIceFloor,
+      DUNGEON_TILE_IDS.snowDriftIceFloor
+    ],
+    walls: [
+      DUNGEON_TILE_IDS.iceWallBlock,
+      DUNGEON_TILE_IDS.crackedIceWall,
+      DUNGEON_TILE_IDS.frostedStoneWall,
+      DUNGEON_TILE_IDS.darkBlueIceWall,
+      DUNGEON_TILE_IDS.frozenCrystalWall,
+      DUNGEON_TILE_IDS.icePillarBlocker
+    ],
+    exit: DUNGEON_TILE_IDS.frozenDoorwayExit,
+    gateClosed: DUNGEON_TILE_IDS.lockedIronGateClosed,
+    gateOpen: DUNGEON_TILE_IDS.openIronGate,
+    stairsDown: DUNGEON_TILE_IDS.stairwayDown,
+    stairsUp: DUNGEON_TILE_IDS.stairwayUp,
+    chestClosed: DUNGEON_TILE_IDS.closedTreasureChestTile,
+    chestOpen: DUNGEON_TILE_IDS.openTreasureChestTile,
+    switch: DUNGEON_TILE_IDS.floorSwitchPressurePlate,
+    bossSeal: DUNGEON_TILE_IDS.glowingBossRelicSeal
+  },
+  eclipseSpire: {
+    floors: [
+      DUNGEON_TILE_IDS.cursedPurpleStoneFloor,
+      DUNGEON_TILE_IDS.darkWornStoneFloor,
+      DUNGEON_TILE_IDS.stoneFloorMagicMarks,
+      DUNGEON_TILE_IDS.stoneFloorShadow,
+      DUNGEON_TILE_IDS.lavaCrackedStoneFloor
+    ],
+    walls: [
+      DUNGEON_TILE_IDS.cursedPurpleWall,
+      DUNGEON_TILE_IDS.darkStoneWall,
+      DUNGEON_TILE_IDS.ironBarWall,
+      DUNGEON_TILE_IDS.heavyStonePillar,
+      DUNGEON_TILE_IDS.volcanicStoneWall
+    ],
+    exit: DUNGEON_TILE_IDS.magicPortalExit,
+    gateClosed: DUNGEON_TILE_IDS.ornateBossDoorGate,
+    gateOpen: DUNGEON_TILE_IDS.openIronGate,
+    stairsDown: DUNGEON_TILE_IDS.stairwayDown,
+    stairsUp: DUNGEON_TILE_IDS.stairwayUp,
+    chestClosed: DUNGEON_TILE_IDS.closedTreasureChestTile,
+    chestOpen: DUNGEON_TILE_IDS.openTreasureChestTile,
+    switch: DUNGEON_TILE_IDS.floorSwitchPressurePlate,
+    bossSeal: DUNGEON_TILE_IDS.glowingBossRelicSeal
+  }
+};
+
+const DEFAULT_DUNGEON_THEME_TILES: DungeonThemeTiles = DUNGEON_THEME_TILES.mossCave;
+
+const TOWN_ATLAS_FLOOR_TILES: DungeonTileId[] = [
+  DUNGEON_TILE_IDS.plainGrayStoneFloor,
+  DUNGEON_TILE_IDS.crackedGrayStoneFloor,
+  DUNGEON_TILE_IDS.mossyStoneFloor,
+  DUNGEON_TILE_IDS.stoneFloorDebris,
+  DUNGEON_TILE_IDS.stoneFloorDrainageCracks
+];
+
+const TOWN_ATLAS_WALL_TILES: DungeonTileId[] = [
+  DUNGEON_TILE_IDS.grayStoneWall,
+  DUNGEON_TILE_IDS.crackedStoneWall,
+  DUNGEON_TILE_IDS.mossyStoneWall,
+  DUNGEON_TILE_IDS.torchStoneWall
+];
+
+const TOWN_SHOP_PAD_TILES: Record<ServiceKind, DungeonTileId> = {
+  inn: DUNGEON_TILE_IDS.mossyStoneFloor,
+  item: DUNGEON_TILE_IDS.stoneFloorDebris,
+  arms: DUNGEON_TILE_IDS.stoneFloorDrainageCracks,
+  magic: DUNGEON_TILE_IDS.stoneFloorMagicMarks,
+  clinic: DUNGEON_TILE_IDS.plainGrayStoneFloor
 };
 
 const LOCATION_TEXTURES: Record<string, AssetKey> = {
@@ -1418,7 +1598,10 @@ class CrystalOathScene extends Phaser.Scene {
         `Manifest: ${WORLD_ATLAS.manifest}`,
         `Manifest entries: ${Object.keys(atlasV3Manifest.tiles ?? {}).length} non-empty tiles`,
         `Object overlay atlas: ${WORLD_OBJECT_ATLAS.image}`,
-        `Object overlay entries: ${Object.keys(WORLD_OBJECTS).length}`
+        `Object overlay entries: ${Object.keys(WORLD_OBJECTS).length}`,
+        `Dungeon atlas: ${DUNGEON_ATLAS.image}`,
+        `Dungeon atlas source inset: ${DUNGEON_ATLAS_SOURCE_INSET}`,
+        `Dungeon atlas entries: ${DUNGEON_TILE_ID_SET.size}`
       ].join("\n")
     );
   }
@@ -4414,6 +4597,55 @@ Statuses: ${statuses}`;
     return true;
   }
 
+  private drawDungeonAtlasTile(tileId: DungeonTileId | undefined, x: number, y: number, depth = LAYER_WORLD_IMAGE, alpha = 1): boolean {
+    if (!tileId || !this.hasTexture(DUNGEON_ATLAS.textureKey)) return false;
+    const tile = dungeonTileById(tileId);
+    if (!tile) return false;
+    const rect = dungeonAtlasSourceRectWithInset(tile.source);
+    this.drawCroppedTexture(
+      DUNGEON_ATLAS.textureKey,
+      x,
+      y,
+      rect.x,
+      rect.y,
+      rect.width,
+      rect.height,
+      TILE,
+      TILE,
+      depth,
+      alpha
+    );
+    return true;
+  }
+
+  private dungeonThemeTiles(dungeon: DungeonDef): DungeonThemeTiles {
+    return DUNGEON_THEME_TILES[dungeon.id] ?? DEFAULT_DUNGEON_THEME_TILES;
+  }
+
+  private pickDungeonAtlasTile(ids: DungeonTileId[], dungeon: DungeonDef, tileX: number, tileY: number, salt = 0): DungeonTileId {
+    const hash = this.dungeonTileHash(dungeon.id, tileX, tileY, this.dungeonFloor + salt);
+    return ids[hash % ids.length];
+  }
+
+  private dungeonTileHash(dungeonId: string, tileX: number, tileY: number, salt: number): number {
+    let hash = Math.imul(tileX + 1, 73856093) ^ Math.imul(tileY + 1, 19349663) ^ Math.imul(salt + 1, 83492791);
+    for (let i = 0; i < dungeonId.length; i += 1) {
+      hash = Math.imul(hash ^ dungeonId.charCodeAt(i), 16777619);
+    }
+    return hash >>> 0;
+  }
+
+  private dungeonAtlasObjectTile(tile: string, dungeon: DungeonDef, tileX: number, tileY: number): DungeonTileId | undefined {
+    const theme = this.dungeonThemeTiles(dungeon);
+    if (tile === "C") return this.isDungeonChestOpen(dungeon, this.dungeonFloor, tileX, tileY) ? theme.chestOpen : theme.chestClosed;
+    if (tile === "K") return theme.switch;
+    if (tile === "D") return this.puzzleFlags.has(`${this.currentDungeon}-switch`) ? theme.gateOpen : theme.gateClosed;
+    if (tile === "S") return this.dungeonFloor === 0 ? theme.stairsDown : theme.stairsUp;
+    if (tile === "E") return theme.exit;
+    if (tile === "B") return theme.bossSeal;
+    return undefined;
+  }
+
   private drawCursor(x: number, y: number): boolean {
     if (!this.hasTexture("ui_cursor_arrow")) return false;
     this.drawTexture("ui_cursor_arrow", x, y, 16, 16, LAYER_UI_IMAGE);
@@ -4481,6 +4713,8 @@ Statuses: ${statuses}`;
   }
 
   private drawTownFloorTile(px: number, py: number, x: number, y: number) {
+    const atlasTile = TOWN_ATLAS_FLOOR_TILES[this.dungeonTileHash("town-floor", x, y, 0) % TOWN_ATLAS_FLOOR_TILES.length];
+    if (this.drawDungeonAtlasTile(atlasTile, px, py)) return;
     if (this.drawTileTexture("town_floor", px, py)) return;
     const base = (x + y) % 2 === 0 ? 0x40506c : 0x384762;
     this.g.fillStyle(base, 1).fillRect(px, py, TILE, TILE);
@@ -4490,6 +4724,8 @@ Statuses: ${statuses}`;
   }
 
   private drawTownWallTile(px: number, py: number, x: number, y: number) {
+    const atlasTile = TOWN_ATLAS_WALL_TILES[this.dungeonTileHash("town-wall", x, y, 1) % TOWN_ATLAS_WALL_TILES.length];
+    if (this.drawDungeonAtlasTile(atlasTile, px, py)) return;
     if (this.drawTileTexture("town_wall", px, py)) return;
     this.g.fillStyle(0x536b94, 1).fillRect(px, py, TILE, TILE);
     this.g.fillStyle(0x344762, 1).fillRect(px, py + TILE - 7, TILE, 7);
@@ -4587,12 +4823,25 @@ Statuses: ${statuses}`;
     }
   }
 
+  private drawTownServicePad(service: TownServiceDef, ox: number, oy: number) {
+    const tileId = TOWN_SHOP_PAD_TILES[service.kind];
+    const centerX = ox + service.x * TILE + TILE / 2;
+    const startX = centerX - TILE * 1.5;
+    const startY = oy + service.y * TILE - 2;
+    for (let y = 0; y < 2; y += 1) {
+      for (let x = 0; x < 3; x += 1) {
+        this.drawDungeonAtlasTile(tileId, startX + x * TILE, startY + y * TILE, LAYER_WORLD_IMAGE, 0.97);
+      }
+    }
+  }
+
   private drawTownService(service: TownServiceDef, ox: number, oy: number) {
     const cx = ox + service.x * TILE + TILE / 2;
     const kioskW = 66;
     const kioskH = 72;
     const kioskX = cx - kioskW / 2;
     const kioskY = oy + service.y * TILE - 31;
+    this.drawTownServicePad(service, ox, oy);
     this.g.fillStyle(0x07101f, 0.35).fillEllipse(cx, kioskY + kioskH - 7, kioskW + 10, 15);
     this.g.fillStyle(0x111827, 0.94).fillRect(kioskX, kioskY + 10, kioskW, kioskH - 14);
     this.g.fillStyle(service.color, 0.92).fillRect(kioskX + 5, kioskY + 15, kioskW - 10, kioskH - 24);
@@ -5368,17 +5617,25 @@ Statuses: ${statuses}`;
   }
 
   private drawDungeonTile(tile: string, sx: number, sy: number, dungeon: DungeonDef, tileX: number, tileY: number) {
+    const theme = this.dungeonThemeTiles(dungeon);
     if (tile === "#") {
+      const wallTile = this.pickDungeonAtlasTile(theme.walls, dungeon, tileX, tileY, 19);
+      if (this.drawDungeonAtlasTile(wallTile, sx, sy)) return;
       if (this.drawTileTexture("dungeon_wall_base", sx, sy)) return;
       this.g.fillStyle(dungeon.palette.wall, 1).fillRect(sx, sy, TILE, TILE);
       this.g.fillStyle(dungeon.palette.accent, 0.25).fillRect(sx + 4, sy + 4, 7, 7);
       return;
     }
-    const drewFloor = this.drawTileTexture(DUNGEON_FLOOR_TEXTURES[dungeon.id] ?? "dungeon_floor_moss", sx, sy);
+    const floorTile = this.pickDungeonAtlasTile(theme.floors, dungeon, tileX, tileY, 7);
+    const drewFloor =
+      this.drawDungeonAtlasTile(floorTile, sx, sy) ||
+      this.drawTileTexture(DUNGEON_FLOOR_TEXTURES[dungeon.id] ?? "dungeon_floor_moss", sx, sy);
     if (!drewFloor) {
       this.g.fillStyle(dungeon.palette.floor, 1).fillRect(sx, sy, TILE, TILE);
       this.g.fillStyle(0xffffff, 0.05).fillRect(sx + 4, sy + 4, TILE - 8, TILE - 8);
     }
+    const atlasObjectTile = this.dungeonAtlasObjectTile(tile, dungeon, tileX, tileY);
+    if (this.drawDungeonAtlasTile(atlasObjectTile, sx, sy, LAYER_OBJECT_IMAGE)) return;
     const objectKey = this.dungeonObjectTexture(tile, dungeon, tileX, tileY);
     if (this.drawTileTexture(objectKey, sx, sy, LAYER_OBJECT_IMAGE, false, tile === "S")) return;
     if (tile === "C") {

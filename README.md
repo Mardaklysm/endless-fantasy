@@ -6,7 +6,7 @@ An original retro 2D top-down turn-based fantasy RPG set in Asterra. Three trave
 
 This project uses Phaser 3 with TypeScript and Vite. Phaser handles the browser game loop, canvas rendering, keyboard input, scaling, and pixel-art presentation cleanly, while TypeScript keeps the RPG data tables and battle state safer to evolve. Vite provides a small local dev/build workflow.
 
-Final/generated-first art assets now live under `assets/` and `assets_v2/` and are loaded by Phaser at startup. The game renders PNG/JPEG assets for dungeon tiles/objects, town props, overworld markers, battle backgrounds, portraits, enemies, title decoration/logo, UI cursors, HP bars, and normalized fighter/priest/wizard class sprite sheets. Code-generated fallback art remains in place so the game stays playable if an image is missing or fails to load.
+Final/generated-first art assets now live under `assets/`, `assets_v2/`, and checked-in runtime atlases under `src/assets/world/`, and are loaded by Phaser at startup. The game renders PNG/JPEG assets for overworld terrain, world object overlays, dungeon tiles/objects, city/town floors and shop pads, town props, markers, battle backgrounds, portraits, enemies, title decoration/logo, UI cursors, HP bars, and normalized fighter/priest/wizard class sprite sheets. Code-generated fallback art remains in place so the game stays playable if an image is missing or fails to load.
 
 No external sound, fonts, maps, music, asset packs, or copyrighted material are used. Audio is still synthesized in code.
 
@@ -60,6 +60,7 @@ The game saves to `localStorage`. You can save from the menu on the overworld or
 
 - Three-character party: Arlen, Mira, and Kael
 - Seeded procedural archipelago overworld using the 8x8 `atlas_v3` terrain atlas plus a transparent object overlay atlas for dungeons, landmarks, reefs, wrecks, harbor signs, beaches, shallow water, roads, harbors, pier overlays, and random encounters
+- Atlas-backed city/town interiors and dungeons using `dungeon_atlas` for medieval stone, cave, ice, ruin, volcanic, cursed, chest, gate, switch, stair, and boss-seal tiles
 - Three major islands: Greenhaven, Coralreach, and Ashfang Isle, with 10 gold harbor passage and deterministic world seeds
 - Procedural room-and-corridor dungeons derived from the world seed and dungeon id
 - Turn-based battles with Attack, Skill, Magic, Item, Defend, and Run commands

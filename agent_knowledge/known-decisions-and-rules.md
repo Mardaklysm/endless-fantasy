@@ -14,6 +14,7 @@
 - Fighter/priest/wizard class sprite sheets are imported from `D:\Tools\rembg\bg_output` by copying the alpha PNG sources into `assets_v2/source_sheets/class_sprites/`, normalizing to 5x2 transparent sheets in `assets_v2/characters/classes/`, and writing frame/anchor metadata to `src/data/characterSprites.ts`.
 - The active overworld terrain uses `src/assets/world/atlas_v3.png` and `src/assets/world/atlasV3.manifest.json`. The source is `D:\Projects\new_artwork\atlas_v3.jpeg`, imported once to PNG for runtime.
 - The active overworld object overlay layer uses `src/assets/world/world_objects.png` and `src/assets/world/worldObjectAtlas.manifest.json`. The source is `D:\Projects\new_artwork\world_objects_atlas.jpeg`, imported to transparent PNG by `tools/art_import/import_world_objects.mjs`.
+- The active dungeon/city tile layer uses `src/assets/world/dungeon_atlas.png` and `src/assets/world/dungeonAtlas.manifest.json`. The source is `D:\Projects\new_artwork\dungeon_atlas.jpeg`, imported to an opaque PNG by `tools/art_import/import_dungeon_atlas.mjs`.
 - `atlas_v3` is exactly an 8x8 logical grid with 64 cells. The current image is 1024x1024, so each tile is 128x128. All current cells are classified terrain; do not treat black pixels as transparency if future sources contain black margins.
 - Do not modify, crop, or heal the `atlas_v3.png` asset file to remove seams. Runtime terrain draws should crop valid source cells inward with `ATLAS_V3_SOURCE_INSET = 3` and draw that clean interior into the full destination tile.
 - Do not reintroduce runtime map-level seam blending, same-tile seam softening, water seam blending, intersection/corner softening, or cached-pixel mutation using neighboring terrain colors. Future biome transitions should use real transition tiles or lower-frequency worldgen, not post-placement color mixing.
@@ -76,6 +77,7 @@ The current generated art fallback is still required for missing textures and fo
 - Do not re-enable weak first-pass world terrain/marker PNGs as the primary overworld renderer. Keep the v2 pass or a future visually verified replacement.
 - Do not run terrain tiles, opaque battle backgrounds, source sheets, or full collages through rembg.
 - For the `world_objects` magenta-matte sheet, prefer the deterministic edge flood-fill importer over rembg/global chroma-keying unless a future transparent PNG source replaces the JPG. Rembg remains okay for ordinary single-object cutouts when needed.
+- For the `dungeon_atlas` sheet, do not use rembg, chroma-keying, or transparency removal. It is an opaque terrain/interior atlas and runtime handles source-grid seams with `DUNGEON_ATLAS_SOURCE_INSET = 3`.
 
 ## Current Content Rules
 

@@ -12,6 +12,7 @@ This manifest covers the art needed by the current playable implementation. It i
 - Active overworld terrain now uses the fixed-grid 8x8 atlas `src/assets/world/atlas_v3.png` plus `src/assets/world/atlasV3.manifest.json`. The current atlas has 64 usable terrain cells; empty black cells are no longer part of the active sheet.
 - Atlas source-cell edge cleanup is handled by drawing valid `atlas_v3` tiles with `ATLAS_V3_SOURCE_INSET = 3`: the source rect is cropped inward, then drawn into the full destination tile. Runtime must not blend or mutate placed-map pixels with neighboring terrain colors.
 - Generated overworld POIs and ocean details can render a second object layer from `src/assets/world/world_objects.png` plus `worldObjectAtlas.manifest.json`. The object atlas is transparent PNG output from a magenta-matte source sheet and should not replace base terrain.
+- Active dungeon/city terrain now uses the fixed-grid 8x8 atlas `src/assets/world/dungeon_atlas.png` plus `src/assets/world/dungeonAtlas.manifest.json` and `src/data/dungeonTiles.ts`. Runtime draws it with `DUNGEON_ATLAS_SOURCE_INSET = 3`; the atlas is opaque rectangular art and must not be run through rembg.
 - Dungeon floors are 22x14 tiles.
 - Current drawing functions to refine later: `drawWorldTile`, `drawDungeonTile`, `drawLocationIcon`, `drawTown`, `drawLeader`, `drawCharacterSpriteFrame`, `drawNpc`, `drawPortrait`, `drawEnemySprite`, `drawPixelCrystal`, `drawPanel`, and `drawBar` in `src/main.ts`.
 - Phaser preloads the current PNG/JPEG assets in `src/main.ts`. All generated placeholders should remain as fallback paths for missing textures and unfinished asset families.
@@ -28,6 +29,7 @@ Note: the individual `assets/tiles/world/*` entries below remain fallback/legacy
 | atlas_v3 | src/assets/world/atlas_v3.png + atlasV3.manifest.json | World terrain atlas | 1024x1024 sheet, 8x8 grid, 128px cells | Required | P1 | Generated overworld terrain only | No | Runtime uses exact 8x8 cell rectangles. All 64 cells are classified as terrain. POIs render from separate marker/object art. | `drawWorldTile(tileId)` |
 | pier_atlas | src/assets/world/pier_atlas.png | Harbor/dock atlas | 1024x1024 sheet, 4x4 grid, 256px cells | Required | P2 | Generated harbor dock overlays | Partial | Runtime currently uses horizontal and vertical pier cells for harbor dock/bridge markers, with generated fallback if missing. | `drawPierDockTile` |
 | world_objects | src/assets/world/world_objects.png + worldObjectAtlas.manifest.json | World object overlay atlas | 1024x1024 sheet, 8x8 grid, 128px cells | Required | P2 | Generated dungeons, landmarks, harbors, ocean details | No | Transparent object layer imported from `D:\Projects\new_artwork\world_objects_atlas.jpeg` using edge flood-fill matte removal. Contains cave/ruin/dungeon entrances, chests, shrines, wrecks, coral, harbor signs, trees, rocks, volcanoes, and crystals. | `drawWorldObjectCell`, `drawLocationIcon`, `drawWorldOverlays` |
+| dungeon_atlas | src/assets/world/dungeon_atlas.png + dungeonAtlas.manifest.json | Dungeon/city tile atlas | 1024x1024 sheet, 8x8 grid, 128px cells | Required | P1 | Procedural dungeons, town/city floors/walls, shop pads | No | Opaque atlas imported from `D:\Projects\new_artwork\dungeon_atlas.jpeg`. Contains medieval stone, cave, ice, volcanic, cursed, ruin, chest, gate, stairs, switch, portal, and boss-seal cells. | `drawDungeonTile`, `drawTownFloorTile`, `drawTownWallTile`, `drawTownServicePad` |
 
 | Asset ID | Filename | Category | Size | Req | Priority | Used In | Tint/Recolor | Artist Notes | Replacement Target |
 |---|---|---:|---:|---|---|---|---|---|---|
@@ -51,6 +53,9 @@ Note: the individual `assets/tiles/world/*` entries below remain fallback/legacy
 | marker_port | assets/tiles/markers/port.png | Map marker | 16x16 | Optional | P3 | Brinewick/boat unlock | Yes | Dock/anchor icon if port identity gets separate marker. | Future location marker variant |
 | marker_gate | assets/tiles/markers/starfall_gate.png | Map marker | 16x16 | Required | P3 | Starfall Gate | Partial | Ancient gate/star arch; bright gold accent. | `drawLocationIcon(kind: "gate")` |
 | marker_final_spire | assets/tiles/markers/eclipse_spire.png | Map marker | 16x16 | Required | P3 | Eclipse Spire | No | Dark spire with violet/gold crown accent. | `drawLocationIcon(kind: "final")` |
+
+Note: the individual dungeon tile rows below are retained as fallback/legacy asset targets. Active dungeon and city/interior tile rendering now prefers `dungeon_atlas`.
+
 | dungeon_floor_moss | assets/tiles/dungeons/floor_moss.png | Dungeon floor | 16x16 | Required | P1 | Moss Cave | Yes | Stone/soil with moss accent. | `drawDungeonTile(".")`, Moss palette |
 | dungeon_floor_fire | assets/tiles/dungeons/floor_fire.png | Dungeon floor | 16x16 | Required | P2 | Ashen Keep | Yes | Dark charred stone, small ember cracks. | `drawDungeonTile(".")`, Ashen palette |
 | dungeon_floor_tide | assets/tiles/dungeons/floor_tide.png | Dungeon floor | 16x16 | Required | P2 | Tide Shrine | Yes | Wet teal stone, light edge. | `drawDungeonTile(".")`, Tide palette |

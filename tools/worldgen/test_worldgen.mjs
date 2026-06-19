@@ -24,6 +24,16 @@ import {
   WORLD_OBJECTS,
   worldObjectById
 } from "../../src/data/worldObjects.ts";
+import {
+  DUNGEON_ATLAS,
+  DUNGEON_ATLAS_SOURCE_INSET,
+  DUNGEON_TILE_CELLS,
+  DUNGEON_TILE_ID_SET,
+  DUNGEON_TILE_IDS,
+  DUNGEON_TILES,
+  dungeonAtlasSourceRectWithInset,
+  dungeonTileById
+} from "../../src/data/dungeonTiles.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,12 +41,13 @@ const PROJECT_ROOT = path.resolve(__dirname, "..", "..");
 
 validateAtlasV3();
 validateWorldObjects();
+validateDungeonAtlas();
 validateAtlasV3SourceInset();
 validateRuntimeReferences();
 validateRuntimeDebugInsetConsistency();
 validateWorldgen();
 
-console.log("atlas_v3, world object overlays, worldgen, and runtime reference validation passed.");
+console.log("atlas_v3, world object overlays, dungeon atlas, worldgen, and runtime reference validation passed.");
 
 function validateAtlasV3() {
   const runtimeAtlasPath = path.join(PROJECT_ROOT, WORLD_ATLAS.image);
@@ -128,6 +139,55 @@ function validateWorldObjects() {
   }
 }
 
+function validateDungeonAtlas() {
+  const runtimeAtlasPath = path.join(PROJECT_ROOT, DUNGEON_ATLAS.image);
+  const manifestPath = path.join(PROJECT_ROOT, DUNGEON_ATLAS.manifest);
+  assert(fs.existsSync(runtimeAtlasPath), `Runtime dungeon atlas does not exist: ${DUNGEON_ATLAS.image}`);
+  assert(fs.existsSync(manifestPath), `Runtime dungeon manifest does not exist: ${DUNGEON_ATLAS.manifest}`);
+
+  const dimensions = readPngDimensions(runtimeAtlasPath);
+  assert(DUNGEON_ATLAS.id === "dungeon_atlas", `Active dungeon atlas is ${DUNGEON_ATLAS.id}, expected dungeon_atlas.`);
+  assert(DUNGEON_ATLAS.textureKey === "dungeon_atlas", `Dungeon texture key is ${DUNGEON_ATLAS.textureKey}, expected dungeon_atlas.`);
+  assert(DUNGEON_ATLAS.columns === 8 && DUNGEON_ATLAS.rows === 8, `Dungeon grid is ${DUNGEON_ATLAS.columns}x${DUNGEON_ATLAS.rows}, expected 8x8.`);
+  assert(DUNGEON_ATLAS.tileWidth === 128 && DUNGEON_ATLAS.tileHeight === 128, `Dungeon atlas cells are ${DUNGEON_ATLAS.tileWidth}x${DUNGEON_ATLAS.tileHeight}, expected 128x128.`);
+  assert(DUNGEON_ATLAS.sourceInset === DUNGEON_ATLAS_SOURCE_INSET, "DUNGEON_ATLAS source inset does not match the shared inset constant.");
+  assert(dimensions.width === 1024 && dimensions.height === 1024, `dungeon_atlas dimensions changed unexpectedly: ${dimensions.width}x${dimensions.height}.`);
+  assert(dimensions.colorType === 2 || dimensions.colorType === 6, `dungeon_atlas PNG color type ${dimensions.colorType} should be opaque RGB or RGBA.`);
+  assert(DUNGEON_TILE_CELLS.length === 64, `Dungeon atlas manifest has ${DUNGEON_TILE_CELLS.length} cells, expected 64.`);
+  assert(Object.keys(DUNGEON_TILES).length === 64, `Dungeon atlas manifest has ${Object.keys(DUNGEON_TILES).length} tiles, expected 64.`);
+
+  const required = [
+    DUNGEON_TILE_IDS.plainGrayStoneFloor,
+    DUNGEON_TILE_IDS.roughCaveWall,
+    DUNGEON_TILE_IDS.paleIceFloor,
+    DUNGEON_TILE_IDS.closedTreasureChestTile,
+    DUNGEON_TILE_IDS.lockedIronGateClosed,
+    DUNGEON_TILE_IDS.stairwayDown,
+    DUNGEON_TILE_IDS.glowingBossRelicSeal,
+    DUNGEON_TILE_IDS.lavaCrackedStoneFloor,
+    DUNGEON_TILE_IDS.magicPortalExit
+  ];
+  for (const id of required) assert(DUNGEON_TILE_ID_SET.has(id), `Dungeon atlas is missing required tile ${id}.`);
+
+  const seenIds = new Set();
+  for (const cell of DUNGEON_TILE_CELLS) {
+    assert(cell.row >= 0 && cell.row < 8 && cell.col >= 0 && cell.col < 8, `Dungeon tile ${cell.id} is outside the 8x8 grid.`);
+    assert(cell.source.x === cell.col * DUNGEON_ATLAS.tileWidth, `Dungeon tile ${cell.id} source x is not col * tileWidth.`);
+    assert(cell.source.y === cell.row * DUNGEON_ATLAS.tileHeight, `Dungeon tile ${cell.id} source y is not row * tileHeight.`);
+    assert(cell.source.width === DUNGEON_ATLAS.tileWidth && cell.source.height === DUNGEON_ATLAS.tileHeight, `Dungeon tile ${cell.id} source size is not 128x128.`);
+    assert(!seenIds.has(cell.id), `Duplicate dungeon tile id: ${cell.id}`);
+    seenIds.add(cell.id);
+    assert(DUNGEON_TILE_ID_SET.has(cell.id), `Dungeon tile ID set is missing ${cell.id}.`);
+    assert(dungeonTileById(cell.id), `Dungeon tile lookup is missing ${cell.id}.`);
+    assert(Array.isArray(cell.tags) && cell.tags.length > 0, `Dungeon tile ${cell.id} has no tags.`);
+    const rect = dungeonAtlasSourceRectWithInset(cell.source);
+    assert(rect.x === cell.source.x + DUNGEON_ATLAS_SOURCE_INSET, `Dungeon tile ${cell.id} inset source x is wrong.`);
+    assert(rect.y === cell.source.y + DUNGEON_ATLAS_SOURCE_INSET, `Dungeon tile ${cell.id} inset source y is wrong.`);
+    assert(rect.width === cell.source.width - DUNGEON_ATLAS_SOURCE_INSET * 2, `Dungeon tile ${cell.id} inset source width is wrong.`);
+    assert(rect.height === cell.source.height - DUNGEON_ATLAS_SOURCE_INSET * 2, `Dungeon tile ${cell.id} inset source height is wrong.`);
+  }
+}
+
 function validateAtlasV3SourceInset() {
   assert(ATLAS_V3_SOURCE_INSET >= 0, `atlas_v3 source inset must be non-negative, got ${ATLAS_V3_SOURCE_INSET}.`);
   assert(ATLAS_V3_SOURCE_INSET * 2 < WORLD_ATLAS.tileWidth, `atlas_v3 source inset ${ATLAS_V3_SOURCE_INSET} is too wide for ${WORLD_ATLAS.tileWidth}px tiles.`);
@@ -161,7 +221,7 @@ function validateAtlasV3SourceInset() {
 }
 
 function validateRuntimeReferences() {
-  const runtimeFiles = ["src/main.ts", "src/data/worldTiles.ts", "src/data/worldObjects.ts", "src/world/worldGenerator.ts"];
+  const runtimeFiles = ["src/main.ts", "src/data/worldTiles.ts", "src/data/worldObjects.ts", "src/data/dungeonTiles.ts", "src/world/worldGenerator.ts"];
   const deprecated = [
     "classic_world_tileset.cleaned.png",
     "classicWorldTileset.manifest.json",
@@ -183,6 +243,14 @@ function validateRuntimeReferences() {
 
   const packageJson = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, "package.json"), "utf8"));
   assert(!packageJson.scripts.test.includes("test_classic_world_tileset"), "npm test still runs the classic world tileset test.");
+  assert(packageJson.scripts["import:dungeon-atlas"]?.includes("import_dungeon_atlas.mjs"), "package.json is missing the dungeon atlas import script.");
+
+  const mainRuntime = fs.readFileSync(path.join(PROJECT_ROOT, "src/main.ts"), "utf8");
+  assert(mainRuntime.includes("dungeonAtlasImageUrl"), "Runtime does not import the dungeon atlas image URL.");
+  assert(mainRuntime.includes("DUNGEON_ATLAS_SOURCE_INSET"), "Runtime does not import/use the shared dungeon atlas source inset.");
+  assert(mainRuntime.includes("dungeonAtlasSourceRectWithInset"), "Runtime does not use the dungeon atlas source rect helper.");
+  assert(mainRuntime.includes("drawDungeonAtlasTile"), "Runtime does not have the dungeon atlas draw path.");
+  assert(mainRuntime.includes("TOWN_SHOP_PAD_TILES"), "Runtime does not use dungeon atlas shop pads in towns.");
 }
 
 function validateRuntimeDebugInsetConsistency() {

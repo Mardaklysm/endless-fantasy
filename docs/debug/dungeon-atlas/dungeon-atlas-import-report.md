@@ -1,0 +1,86 @@
+# Dungeon Atlas Import Report
+
+- Source: `D:/Projects/new_artwork/dungeon_atlas.jpeg`
+- Source SHA-256: `B0EC22F18D87A8376D7179D64886912B5F1142C49507C72B0D8F820B7A347B7D`
+- Runtime PNG: `src/assets/world/dungeon_atlas.png`
+- Manifest: `src/assets/world/dungeonAtlas.manifest.json`
+- Grid: 8x8, 128x128px cells
+- Background handling: opaque rectangular terrain/interior atlas; no rembg, no color-key transparency
+- Runtime note: source cells are cropped inward by 3px when rendered to avoid visible generator grid seams.
+
+## Theme Counts
+
+- medieval: 17
+- cave: 16
+- ice: 16
+- object: 8
+- volcanic: 2
+- cursed: 3
+- ruin: 2
+
+## Cells
+
+- 0,0: plain_gray_stone_floor (floor/medieval) - Plain gray stone floor.
+- 0,1: cracked_gray_stone_floor (floor/medieval) - Cracked gray stone floor.
+- 0,2: mossy_stone_floor (floor/medieval) - Mossy stone floor.
+- 0,3: dark_worn_stone_floor (floor/medieval) - Dark worn stone floor.
+- 0,4: stone_floor_debris (floor/medieval) - Stone floor with small debris.
+- 0,5: stone_floor_drainage_cracks (floor/medieval) - Stone floor with drainage cracks.
+- 0,6: stone_floor_magic_marks (floor/medieval) - Stone floor with magic markings.
+- 0,7: stone_floor_shadow (floor/medieval) - Dark shadowed stone floor.
+- 1,0: gray_stone_wall (wall/medieval) - Gray stone wall.
+- 1,1: cracked_stone_wall (wall/medieval) - Cracked stone wall.
+- 1,2: mossy_stone_wall (wall/medieval) - Mossy stone wall.
+- 1,3: dark_stone_wall (wall/medieval) - Dark stone wall.
+- 1,4: torch_stone_wall (wall/medieval) - Stone wall with torch.
+- 1,5: iron_bar_wall (wall/medieval) - Iron bar wall.
+- 1,6: broken_stone_rubble_wall (wall/medieval) - Broken stone rubble wall.
+- 1,7: heavy_stone_pillar (wall/medieval) - Heavy stone pillar.
+- 2,0: dirt_cave_floor (floor/cave) - Dirt cave floor.
+- 2,1: rocky_cave_floor (floor/cave) - Rocky cave floor.
+- 2,2: mossy_cave_floor (floor/cave) - Mossy cave floor.
+- 2,3: damp_cave_floor (floor/cave) - Damp cave floor.
+- 2,4: cave_floor_pebbles (floor/cave) - Cave floor with pebbles.
+- 2,5: cave_floor_roots (floor/cave) - Cave floor with roots.
+- 2,6: glowing_mushroom_cave_floor (floor/cave) - Glowing mushroom cave floor.
+- 2,7: cave_floor_shadow (floor/cave) - Shadowed cave floor.
+- 3,0: rough_cave_wall (wall/cave) - Rough cave wall.
+- 3,1: dark_cave_wall (wall/cave) - Dark cave wall.
+- 3,2: mossy_cave_wall (wall/cave) - Mossy cave wall.
+- 3,3: wet_cave_wall (wall/cave) - Wet cave wall.
+- 3,4: root_cave_wall (wall/cave) - Root-covered cave wall.
+- 3,5: crystal_cave_wall (wall/cave) - Crystal cave wall.
+- 3,6: cave_rubble_blocker (wall/cave) - Cave rubble blocker.
+- 3,7: cave_entrance_exit (exit/cave) - Cave entrance or exit.
+- 4,0: pale_ice_floor (floor/ice) - Pale ice floor.
+- 4,1: cracked_ice_floor (floor/ice) - Cracked ice floor.
+- 4,2: frosty_stone_floor (floor/ice) - Frosted stone floor.
+- 4,3: snowy_ice_floor (floor/ice) - Snowy ice floor.
+- 4,4: slippery_blue_ice_floor (floor/ice) - Slippery blue ice floor.
+- 4,5: frozen_crack_ice_floor (floor/ice) - Frozen cracked ice floor.
+- 4,6: snow_drift_ice_floor (floor/ice) - Snow drift ice floor.
+- 4,7: ice_floor_shadow (floor/ice) - Shadowed ice floor.
+- 5,0: ice_wall_block (wall/ice) - Ice wall block.
+- 5,1: cracked_ice_wall (wall/ice) - Cracked ice wall.
+- 5,2: frosted_stone_wall (wall/ice) - Frosted stone wall.
+- 5,3: dark_blue_ice_wall (wall/ice) - Dark blue ice wall.
+- 5,4: frozen_crystal_wall (wall/ice) - Frozen crystal wall.
+- 5,5: snow_covered_wall (wall/ice) - Snow-covered ice wall.
+- 5,6: ice_pillar_blocker (wall/ice) - Ice pillar blocker.
+- 5,7: frozen_doorway_exit (exit/ice) - Frozen doorway exit.
+- 6,0: closed_treasure_chest_tile (object/object) - Closed treasure chest tile.
+- 6,1: open_treasure_chest_tile (object/object) - Open treasure chest tile.
+- 6,2: locked_iron_gate_closed (gate/object) - Locked iron gate closed.
+- 6,3: open_iron_gate (gate/object) - Open iron gate.
+- 6,4: stairway_down (stairs/object) - Stairway down.
+- 6,5: stairway_up (stairs/object) - Stairway up.
+- 6,6: floor_switch_pressure_plate (object/object) - Floor switch pressure plate.
+- 6,7: glowing_boss_relic_seal (seal/object) - Glowing boss relic seal.
+- 7,0: lava_cracked_stone_floor (floor/volcanic) - Lava-cracked stone floor.
+- 7,1: volcanic_stone_wall (wall/volcanic) - Volcanic stone wall.
+- 7,2: cursed_purple_stone_floor (floor/cursed) - Cursed purple stone floor.
+- 7,3: cursed_purple_wall (wall/cursed) - Cursed purple wall.
+- 7,4: ancient_ruin_floor (floor/ruin) - Ancient ruin floor.
+- 7,5: ancient_ruin_wall (wall/ruin) - Ancient ruin wall.
+- 7,6: magic_portal_exit (exit/cursed) - Magic portal exit.
+- 7,7: ornate_boss_door_gate (gate/medieval) - Ornate boss door gate.
