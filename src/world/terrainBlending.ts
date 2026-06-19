@@ -1,5 +1,5 @@
 import type { WorldTileId } from "../data/worldTiles.ts";
-import { WORLD_TILES, worldTileHasTag } from "../data/worldTiles.ts";
+import { worldTileHasTag } from "../data/worldTiles.ts";
 
 export interface TerrainImageDataLike {
   width: number;
@@ -11,12 +11,13 @@ export interface BlackSeamRepairSettings {
   enabled: boolean;
   debugView: boolean;
   seamSearchRadius: number;
-  intersectionSearchRadius: number;
+  seamTargetRadius: number;
+  cornerSearchRadius: number;
+  interiorSampleInset: number;
+  maxFallbackInset: number;
+  interiorSampleJitter: number;
   nearBlackThreshold: number;
-  cleanSampleMinLuminance: number;
   relativeDarknessThreshold: number;
-  minEdgeSampleInset: number;
-  maxEdgeSampleInset: number;
   maxReplacementRatio: number;
 }
 
@@ -34,49 +35,49 @@ export interface BlackSeamRepairReport {
   mapHeight: number;
   tileSize: number;
   seamSearchRadius: number;
-  seamSearchWidth: number;
-  seamWriteWidth: number;
-  intersectionSearchRadius: number;
+  seamTargetRadius: number;
+  cornerSearchRadius: number;
+  interiorSampleInset: number;
+  maxFallbackInset: number;
+  interiorSampleJitter: number;
   nearBlackThreshold: number;
-  cleanSampleMinLuminance: number;
   relativeDarknessThreshold: number;
-  minEdgeSampleInset: number;
-  maxEdgeSampleInset: number;
-  replacementMode: "clean-neighbor-dual-mix";
-  pixelsInspected: number;
-  pixelsReplaced: number;
-  replacedPixelCount: number;
-  replacementRatio: number;
+  replacementMode: "deterministic-neighbor-dither";
+  usesOldPixelAsSource: false;
+  totalReplacedPixels: number;
   replacedPixelPercent: number;
   verticalSeamReplacementCount: number;
   horizontalSeamReplacementCount: number;
   cornerReplacementCount: number;
-  oneSidedFallbackCount: number;
   waterSeamReplacementCount: number;
   sameTileSeamReplacementCount: number;
+  oneSidedFallbackCount: number;
   settings: BlackSeamRepairSettings;
   mask?: Uint8Array;
 }
 
 export const SEAM_SEARCH_RADIUS = 4;
-export const INTERSECTION_SEARCH_RADIUS = 5;
-export const MIN_EDGE_SAMPLE_INSET = 3;
-export const MAX_EDGE_SAMPLE_INSET = 8;
+export const SEAM_TARGET_RADIUS = 3;
+export const CORNER_SEARCH_RADIUS = 5;
+export const INTERIOR_SAMPLE_INSET = 4;
+export const MAX_FALLBACK_INSET = 8;
+export const INTERIOR_SAMPLE_JITTER = 2;
 export const NEAR_BLACK_LUMINANCE_THRESHOLD = 38;
-export const CLEAN_SAMPLE_MIN_LUMINANCE = 20;
-export const RELATIVE_DARKNESS_THRESHOLD = 26;
+export const CLEAN_SAMPLE_MIN_LUMINANCE = 18;
+export const RELATIVE_DARKNESS_THRESHOLD = 20;
 export const BLACK_SEAM_REPAIR_MAX_REPLACEMENT_RATIO = 0.12;
 
 export const BLACK_SEAM_REPAIR_DEFAULTS: BlackSeamRepairSettings = {
   enabled: true,
   debugView: false,
   seamSearchRadius: SEAM_SEARCH_RADIUS,
-  intersectionSearchRadius: INTERSECTION_SEARCH_RADIUS,
+  seamTargetRadius: SEAM_TARGET_RADIUS,
+  cornerSearchRadius: CORNER_SEARCH_RADIUS,
+  interiorSampleInset: INTERIOR_SAMPLE_INSET,
+  maxFallbackInset: MAX_FALLBACK_INSET,
+  interiorSampleJitter: INTERIOR_SAMPLE_JITTER,
   nearBlackThreshold: NEAR_BLACK_LUMINANCE_THRESHOLD,
-  cleanSampleMinLuminance: CLEAN_SAMPLE_MIN_LUMINANCE,
   relativeDarknessThreshold: RELATIVE_DARKNESS_THRESHOLD,
-  minEdgeSampleInset: MIN_EDGE_SAMPLE_INSET,
-  maxEdgeSampleInset: MAX_EDGE_SAMPLE_INSET,
   maxReplacementRatio: BLACK_SEAM_REPAIR_MAX_REPLACEMENT_RATIO
 };
 
@@ -90,6 +91,7 @@ export function repairBlackSeamsImageData(
   const settings = resolveSettings(options);
   const mapHeight = tiles.length;
   const mapWidth = tiles[0]?.length ?? 0;
+
   const report: BlackSeamRepairReport = {
     mode: "black_seam_repair",
     enabled: settings.enabled,
@@ -98,78 +100,84 @@ export function repairBlackSeamsImageData(
     mapHeight,
     tileSize: options.tileSize,
     seamSearchRadius: settings.seamSearchRadius,
-    seamSearchWidth: settings.seamSearchRadius * 2 + 1,
-    seamWriteWidth: settings.seamSearchRadius * 2 + 1,
-    intersectionSearchRadius: settings.intersectionSearchRadius,
+    seamTargetRadius: settings.seamTargetRadius,
+    cornerSearchRadius: settings.cornerSearchRadius,
+    interiorSampleInset: settings.interiorSampleInset,
+    maxFallbackInset: settings.maxFallbackInset,
+    interiorSampleJitter: settings.interiorSampleJitter,
     nearBlackThreshold: settings.nearBlackThreshold,
-    cleanSampleMinLuminance: settings.cleanSampleMinLuminance,
     relativeDarknessThreshold: settings.relativeDarknessThreshold,
-    minEdgeSampleInset: settings.minEdgeSampleInset,
-    maxEdgeSampleInset: settings.maxEdgeSampleInset,
-    replacementMode: "clean-neighbor-dual-mix",
-    pixelsInspected: 0,
-    pixelsReplaced: 0,
-    replacedPixelCount: 0,
-    replacementRatio: 0,
+    replacementMode: "deterministic-neighbor-dither",
+    usesOldPixelAsSource: false,
+    totalReplacedPixels: 0,
     replacedPixelPercent: 0,
     verticalSeamReplacementCount: 0,
     horizontalSeamReplacementCount: 0,
     cornerReplacementCount: 0,
-    oneSidedFallbackCount: 0,
     waterSeamReplacementCount: 0,
     sameTileSeamReplacementCount: 0,
+    oneSidedFallbackCount: 0,
     settings
   };
 
   if (!settings.enabled || !mapWidth || !mapHeight) return report;
-  if (image.width < mapWidth * options.tileSize || image.height < mapHeight * options.tileSize) {
-    throw new Error(`Black seam repair image ${image.width}x${image.height} is smaller than map ${mapWidth}x${mapHeight} at ${options.tileSize}px.`);
+  const tileSize = options.tileSize;
+  if (image.width < mapWidth * tileSize || image.height < mapHeight * tileSize) {
+    throw new Error(`Black seam repair image ${image.width}x${image.height} is smaller than map ${mapWidth}x${mapHeight} at ${tileSize}px.`);
   }
-  if (settings.minEdgeSampleInset < 1 || settings.maxEdgeSampleInset < settings.minEdgeSampleInset) {
-    throw new Error(`Black seam repair sample insets are invalid: ${settings.minEdgeSampleInset}..${settings.maxEdgeSampleInset}.`);
-  }
-  if (options.tileSize <= settings.maxEdgeSampleInset * 2) {
-    throw new Error(`Black seam repair tile size ${options.tileSize}px is too small for ${settings.maxEdgeSampleInset}px interior sampling.`);
+  if (tileSize <= settings.interiorSampleInset * 2) {
+    throw new Error(`Black seam repair tile size ${tileSize}px is too small for ${settings.interiorSampleInset}px interior sampling.`);
   }
 
   const source = new Uint8Array(image.data);
   const repairedMask = new Uint8Array(image.width * image.height);
+  const seed = options.seed ?? "black-seam-repair";
 
-  // Phase 1: Vertical seams
+  // Process each tile Y: repair its seams with neighbors above, right, below, left.
+  // Vertical seams: tile Y with tile right of it
   for (let tileY = 0; tileY < mapHeight; tileY += 1) {
     for (let tileX = 1; tileX < mapWidth; tileX += 1) {
-      const leftTileId = tiles[tileY]?.[tileX - 1];
-      const rightTileId = tiles[tileY]?.[tileX];
-      repairVerticalSeam(image, source, repairedMask, tileX, tileY, leftTileId, rightTileId, options.tileSize, settings, report);
+      repairVerticalSeam(
+        image, source, repairedMask,
+        tileX, tileY,
+        tiles[tileY]?.[tileX - 1], tiles[tileY]?.[tileX],
+        tileSize, settings, seed, report
+      );
     }
   }
 
-  // Phase 2: Horizontal seams
+  // Horizontal seams: tile Y with tile below it
   for (let tileY = 1; tileY < mapHeight; tileY += 1) {
     for (let tileX = 0; tileX < mapWidth; tileX += 1) {
-      const topTileId = tiles[tileY - 1]?.[tileX];
-      const bottomTileId = tiles[tileY]?.[tileX];
-      repairHorizontalSeam(image, source, repairedMask, tileX, tileY, topTileId, bottomTileId, options.tileSize, settings, report);
+      repairHorizontalSeam(
+        image, source, repairedMask,
+        tileX, tileY,
+        tiles[tileY - 1]?.[tileX], tiles[tileY]?.[tileX],
+        tileSize, settings, seed, report
+      );
     }
   }
 
-  // Phase 3: Intersections (corners)
+  // Corner intersections
   for (let tileY = 1; tileY < mapHeight; tileY += 1) {
     for (let tileX = 1; tileX < mapWidth; tileX += 1) {
-      const nw = tiles[tileY - 1]?.[tileX - 1];
-      const ne = tiles[tileY - 1]?.[tileX];
-      const sw = tiles[tileY]?.[tileX - 1];
-      const se = tiles[tileY]?.[tileX];
-      repairIntersection(image, source, repairedMask, tileX, tileY, nw, ne, sw, se, options.tileSize, settings, report);
+      repairCornerIntersection(
+        image, source, repairedMask,
+        tileX, tileY,
+        tiles[tileY - 1]?.[tileX - 1], tiles[tileY - 1]?.[tileX],
+        tiles[tileY]?.[tileX - 1], tiles[tileY]?.[tileX],
+        tileSize, settings, seed, report
+      );
     }
   }
 
-  report.replacementRatio = report.pixelsReplaced / (image.width * image.height);
-  report.replacedPixelCount = report.pixelsReplaced;
-  report.replacedPixelPercent = report.replacementRatio * 100;
-  if (report.replacementRatio > settings.maxReplacementRatio) {
+  const totalPixels = image.width * image.height;
+  report.totalReplacedPixels = report.verticalSeamReplacementCount + report.horizontalSeamReplacementCount + report.cornerReplacementCount;
+  report.replacedPixelPercent = totalPixels > 0 ? (report.totalReplacedPixels / totalPixels) * 100 : 0;
+
+  if (report.totalReplacedPixels / totalPixels > settings.maxReplacementRatio) {
     throw new Error(
-      `Black seam repair replaced ${(report.replacementRatio * 100).toFixed(2)}% of pixels, exceeding the ${(settings.maxReplacementRatio * 100).toFixed(2)}% safety limit.`
+      `Black seam repair replaced too many pixels (${((report.totalReplacedPixels / totalPixels) * 100).toFixed(2)}%), exceeding ${(settings.maxReplacementRatio * 100).toFixed(2)}% limit.`
     );
   }
   if (options.captureMask) report.mask = repairedMask;
@@ -177,7 +185,6 @@ export function repairBlackSeamsImageData(
 }
 
 export function blackSeamRepairReportMarkdown(report: BlackSeamRepairReport): string {
-  const percent = (report.replacementRatio * 100).toFixed(4);
   return `# Black Seam Repair Report
 
 Mode: \`${report.mode}\`
@@ -185,29 +192,29 @@ Seed: \`${report.seed || "none"}\`
 Map size: ${report.mapWidth}x${report.mapHeight}
 Tile size: ${report.tileSize}px
 Seam search radius: ${report.seamSearchRadius}px
-seamSearchWidth: ${report.seamSearchWidth}px
-seamWriteWidth: ${report.seamWriteWidth}px
-Intersection search radius: ${report.intersectionSearchRadius}px
+Seam target radius: ${report.seamTargetRadius}px
+Corner search radius: ${report.cornerSearchRadius}px
+Interior sample inset: ${report.interiorSampleInset}px
+Max fallback inset: ${report.maxFallbackInset}px
+Interior sample jitter: ${report.interiorSampleJitter}px
 Near-black threshold: luminance < ${report.nearBlackThreshold}
-Clean sample min luminance: ${report.cleanSampleMinLuminance}
 Relative darkness threshold: ${report.relativeDarknessThreshold}
-minEdgeSampleInset: ${report.minEdgeSampleInset}px
-maxEdgeSampleInset: ${report.maxEdgeSampleInset}px
 replacementMode: ${report.replacementMode}
-Pixels inspected: ${report.pixelsInspected}
-Pixels replaced: ${report.pixelsReplaced}
-replacedPixelCount: ${report.replacedPixelCount}
-Replacement percentage: ${percent}%
-replacedPixelPercent: ${percent}%
+usesOldPixelAsSource: ${report.usesOldPixelAsSource}
+
+The old seam pixel is ONLY a destination mask trigger.
+It is NEVER used as a color source.
+Replacement pixels are chosen from clean interior samples using deterministic dithering.
+No color averaging/blending is performed.
+
 Vertical seam pixels repaired: ${report.verticalSeamReplacementCount}
 Horizontal seam pixels repaired: ${report.horizontalSeamReplacementCount}
 Corner pixels repaired: ${report.cornerReplacementCount}
 Water seam pixels repaired: ${report.waterSeamReplacementCount}
 Same-tile seam pixels repaired: ${report.sameTileSeamReplacementCount}
 One-sided fallbacks: ${report.oneSidedFallbackCount}
-
-The old seam pixel is only used for candidate detection and never as a color source.
-Replacement colors are always mixed from clean interior samples of neighboring tiles.
+Total replaced pixels: ${report.totalReplacedPixels}
+Replaced pixel percent: ${report.replacedPixelPercent.toFixed(4)}%
 
 Enabled: ${report.enabled}
 Debug view: ${report.settings.debugView}
@@ -227,54 +234,54 @@ function repairVerticalSeam(
   rightTileId: WorldTileId | undefined,
   tileSize: number,
   settings: BlackSeamRepairSettings,
+  seed: string,
   report: BlackSeamRepairReport
 ) {
   const seamX = tileX * tileSize;
   const y0 = tileY * tileSize;
   const y1 = y0 + tileSize - 1;
-  const sampleYMin = y0 + settings.minEdgeSampleInset;
-  const sampleYMax = y1 - settings.minEdgeSampleInset;
-  const leftBounds = bounds(seamX - tileSize, seamX - 1, y0, y1);
-  const rightBounds = bounds(seamX, seamX + tileSize - 1, y0, y1);
+  const yMin = y0 + settings.interiorSampleInset;
+  const yMax = y1 - settings.interiorSampleInset;
   const isWater = hasWaterTile(leftTileId) || hasWaterTile(rightTileId);
   const isSameTile = leftTileId === rightTileId;
 
   for (let y = y0; y <= y1; y += 1) {
-    const sampleY = clampInt(y, sampleYMin, sampleYMax);
+    const sampleY = clampInt(y, yMin, yMax);
+    const jitterY = jitter(sampleY, settings.interiorSampleJitter, yMin, yMax, seed, y);
 
-    // Pre-sample clean interiors once per row for relative darkness check
-    let avgInteriorLum = -1;
-    let leftCleanCache: ReturnType<typeof sampleCleanPatch> | undefined;
-    let rightCleanCache: ReturnType<typeof sampleCleanPatch> | undefined;
+    // Get clean samples from both tile interiors (4px inset, with jitter)
+    const leftX = seamX - settings.interiorSampleInset;
+    const rightX = seamX + settings.interiorSampleInset;
+    let leftColor = sampleCleanPoint(source, image.width, leftX, jitterY, CLEAN_SAMPLE_MIN_LUMINANCE);
+    let rightColor = sampleCleanPoint(source, image.width, rightX, jitterY, CLEAN_SAMPLE_MIN_LUMINANCE);
 
-    for (let dx = -settings.seamSearchRadius; dx <= settings.seamSearchRadius; dx += 1) {
+    // Fallback: try deeper insets if needed
+    if (!leftColor) leftColor = sampleFallbackDeep(source, image.width, seamX, -1, jitterY, settings);
+    if (!rightColor) rightColor = sampleFallbackDeep(source, image.width, seamX, 1, jitterY, settings);
+
+    // Compute interior luminances for relative darkness detection
+    const leftLum = leftColor ? luminance(leftColor[0], leftColor[1], leftColor[2]) : -1;
+    const rightLum = rightColor ? luminance(rightColor[0], rightColor[1], rightColor[2]) : -1;
+    const minInteriorLum = (leftLum > 0 && rightLum > 0) ? Math.min(leftLum, rightLum) : Math.max(leftLum, rightLum);
+
+    for (let dx = -settings.seamTargetRadius; dx <= settings.seamTargetRadius; dx += 1) {
       const x = seamX + dx;
       if (x < 0 || x >= image.width) continue;
-      report.pixelsInspected += 1;
+      if (!isArtifactAt(source, image.width, x, y, settings, minInteriorLum)) continue;
 
-      if (!isSeamArtifactPixel(source, image.width, x, y, settings, sewVerticalRepairContext(
-        source, image.width, sampleY, seamX, leftBounds, rightBounds, settings
-      ))) continue;
-
-      // Get clean samples (cache per row)
-      if (!leftCleanCache) leftCleanCache = findVerticalSource(source, image.width, seamX, sampleY, -1, leftBounds, settings);
-      if (!rightCleanCache) rightCleanCache = findVerticalSource(source, image.width, seamX, sampleY, 1, rightBounds, settings);
-
-      const leftClean = leftCleanCache;
-      const rightClean = rightCleanCache;
-      const bothSides = leftClean && rightClean;
-
-      let replacement: readonly [number, number, number];
-      if (leftClean && rightClean) {
-        replacement = mixColor(leftClean, rightClean, sideWeight(dx, settings.seamSearchRadius));
-      } else if (leftClean || rightClean) {
-        replacement = leftClean || rightClean || [48, 48, 48];
+      // Dither-pick: choose left or right clean color based on position hash
+      const pickRight = ditherPick(x, y, dx, settings.seamTargetRadius, seed);
+      const chosen = pickRight ? rightColor : leftColor;
+      if (!chosen) {
+        // One-sided fallback
+        const fallback = leftColor || rightColor;
+        if (!fallback) continue;
+        setPixel(image, repairedMask, x, y, fallback);
         report.oneSidedFallbackCount += 1;
       } else {
-        continue;
+        setPixel(image, repairedMask, x, y, chosen);
       }
 
-      if (writeRepairPixel(image, repairedMask, x, y, replacement)) report.pixelsReplaced += 1;
       report.verticalSeamReplacementCount += 1;
       if (isWater) report.waterSeamReplacementCount += 1;
       if (isSameTile) report.sameTileSeamReplacementCount += 1;
@@ -294,50 +301,49 @@ function repairHorizontalSeam(
   bottomTileId: WorldTileId | undefined,
   tileSize: number,
   settings: BlackSeamRepairSettings,
+  seed: string,
   report: BlackSeamRepairReport
 ) {
   const seamY = tileY * tileSize;
   const x0 = tileX * tileSize;
   const x1 = x0 + tileSize - 1;
-  const sampleXMin = x0 + settings.minEdgeSampleInset;
-  const sampleXMax = x1 - settings.minEdgeSampleInset;
-  const topBounds = bounds(x0, x1, seamY - tileSize, seamY - 1);
-  const bottomBounds = bounds(x0, x1, seamY, seamY + tileSize - 1);
+  const xMin = x0 + settings.interiorSampleInset;
+  const xMax = x1 - settings.interiorSampleInset;
   const isWater = hasWaterTile(topTileId) || hasWaterTile(bottomTileId);
   const isSameTile = topTileId === bottomTileId;
 
   for (let x = x0; x <= x1; x += 1) {
-    const sampleX = clampInt(x, sampleXMin, sampleXMax);
+    const sampleX = clampInt(x, xMin, xMax);
+    const jitterX = jitter(sampleX, settings.interiorSampleJitter, xMin, xMax, seed, x + 10000);
 
-    let topCleanCache: ReturnType<typeof sampleCleanPatch> | undefined;
-    let bottomCleanCache: ReturnType<typeof sampleCleanPatch> | undefined;
+    const topY = seamY - settings.interiorSampleInset;
+    const bottomY = seamY + settings.interiorSampleInset;
+    let topColor = sampleCleanPoint(source, image.width, jitterX, topY, CLEAN_SAMPLE_MIN_LUMINANCE);
+    let bottomColor = sampleCleanPoint(source, image.width, jitterX, bottomY, CLEAN_SAMPLE_MIN_LUMINANCE);
 
-    for (let dy = -settings.seamSearchRadius; dy <= settings.seamSearchRadius; dy += 1) {
+    if (!topColor) topColor = sampleFallbackDeepH(source, image.width, jitterX, seamY, -1, settings);
+    if (!bottomColor) bottomColor = sampleFallbackDeepH(source, image.width, jitterX, seamY, 1, settings);
+
+    const topLum = topColor ? luminance(topColor[0], topColor[1], topColor[2]) : -1;
+    const bottomLum = bottomColor ? luminance(bottomColor[0], bottomColor[1], bottomColor[2]) : -1;
+    const minInteriorLum = (topLum > 0 && bottomLum > 0) ? Math.min(topLum, bottomLum) : Math.max(topLum, bottomLum);
+
+    for (let dy = -settings.seamTargetRadius; dy <= settings.seamTargetRadius; dy += 1) {
       const y = seamY + dy;
       if (y < 0 || y >= image.height) continue;
-      report.pixelsInspected += 1;
+      if (!isArtifactAt(source, image.width, x, y, settings, minInteriorLum)) continue;
 
-      if (!isSeamArtifactPixel(source, image.width, x, y, settings, sewHorizontalRepairContext(
-        source, image.width, sampleX, seamY, topBounds, bottomBounds, settings
-      ))) continue;
-
-      if (!topCleanCache) topCleanCache = findHorizontalSource(source, image.width, sampleX, seamY, -1, topBounds, settings);
-      if (!bottomCleanCache) bottomCleanCache = findHorizontalSource(source, image.width, sampleX, seamY, 1, bottomBounds, settings);
-
-      const topClean = topCleanCache;
-      const bottomClean = bottomCleanCache;
-
-      let replacement: readonly [number, number, number];
-      if (topClean && bottomClean) {
-        replacement = mixColor(topClean, bottomClean, sideWeight(dy, settings.seamSearchRadius));
-      } else if (topClean || bottomClean) {
-        replacement = topClean || bottomClean || [48, 48, 48];
+      const pickBottom = ditherPick(x, y, dy, settings.seamTargetRadius, seed + ":h");
+      const chosen = pickBottom ? bottomColor : topColor;
+      if (!chosen) {
+        const fallback = topColor || bottomColor;
+        if (!fallback) continue;
+        setPixel(image, repairedMask, x, y, fallback);
         report.oneSidedFallbackCount += 1;
       } else {
-        continue;
+        setPixel(image, repairedMask, x, y, chosen);
       }
 
-      if (writeRepairPixel(image, repairedMask, x, y, replacement)) report.pixelsReplaced += 1;
       report.horizontalSeamReplacementCount += 1;
       if (isWater) report.waterSeamReplacementCount += 1;
       if (isSameTile) report.sameTileSeamReplacementCount += 1;
@@ -345,9 +351,9 @@ function repairHorizontalSeam(
   }
 }
 
-// ─── Intersection repair ─────────────────────────────────────────────────
+// ─── Corner intersection repair ──────────────────────────────────────────
 
-function repairIntersection(
+function repairCornerIntersection(
   image: TerrainImageDataLike,
   source: Uint8Array,
   repairedMask: Uint8Array,
@@ -359,44 +365,39 @@ function repairIntersection(
   seTileId: WorldTileId | undefined,
   tileSize: number,
   settings: BlackSeamRepairSettings,
+  seed: string,
   report: BlackSeamRepairReport
 ) {
   const cornerX = tileX * tileSize;
   const cornerY = tileY * tileSize;
-  const nwBounds = bounds(cornerX - tileSize, cornerX - 1, cornerY - tileSize, cornerY - 1);
-  const neBounds = bounds(cornerX, cornerX + tileSize - 1, cornerY - tileSize, cornerY - 1);
-  const swBounds = bounds(cornerX - tileSize, cornerX - 1, cornerY, cornerY + tileSize - 1);
-  const seBounds = bounds(cornerX, cornerX + tileSize - 1, cornerY, cornerY + tileSize - 1);
-
   const isWater = hasWaterTile(nwTileId) || hasWaterTile(neTileId) || hasWaterTile(swTileId) || hasWaterTile(seTileId);
   const allSame = nwTileId === neTileId && neTileId === swTileId && swTileId === seTileId;
+  const inset = settings.interiorSampleInset;
+  const jit = settings.interiorSampleJitter;
 
-  for (let dy = -settings.intersectionSearchRadius; dy <= settings.intersectionSearchRadius; dy += 1) {
-    for (let dx = -settings.intersectionSearchRadius; dx <= settings.intersectionSearchRadius; dx += 1) {
+  // Sample clean colors from each of the four corner tiles
+  const nw = sampleCleanPoint(source, image.width, cornerX - inset, cornerY - inset, CLEAN_SAMPLE_MIN_LUMINANCE);
+  const ne = sampleCleanPoint(source, image.width, cornerX + inset, cornerY - inset, CLEAN_SAMPLE_MIN_LUMINANCE);
+  const sw = sampleCleanPoint(source, image.width, cornerX - inset, cornerY + inset, CLEAN_SAMPLE_MIN_LUMINANCE);
+  const se = sampleCleanPoint(source, image.width, cornerX + inset, cornerY + inset, CLEAN_SAMPLE_MIN_LUMINANCE);
+
+  const samples: (readonly [number, number, number] | undefined)[] = [nw, ne, sw, se];
+  const validSamples = samples.filter(Boolean) as ([number, number, number])[];
+  if (!validSamples.length) return;
+
+  const minLum = validSamples.reduce((m, s) => Math.min(m, luminance(s[0], s[1], s[2])), 255);
+
+  for (let dy = -settings.cornerSearchRadius; dy <= settings.cornerSearchRadius; dy += 1) {
+    for (let dx = -settings.cornerSearchRadius; dx <= settings.cornerSearchRadius; dx += 1) {
       const x = cornerX + dx;
       const y = cornerY + dy;
       if (x < 0 || y < 0 || x >= image.width || y >= image.height) continue;
-      report.pixelsInspected += 1;
+      if (!isArtifactAt(source, image.width, x, y, settings, minLum)) continue;
 
-      if (!isIntersectionArtifact(source, image.width, x, y, cornerX, cornerY, settings, nwBounds, neBounds, swBounds, seBounds)) continue;
+      // Dither-pick among the valid corner samples
+      const idx = deterministicIndex(x, y, validSamples.length, seed + ":corner");
+      setPixel(image, repairedMask, x, y, validSamples[idx]);
 
-      const nw = findCornerSource(source, image.width, cornerX, cornerY, -1, -1, nwBounds, settings);
-      const ne = findCornerSource(source, image.width, cornerX, cornerY, 1, -1, neBounds, settings);
-      const sw = findCornerSource(source, image.width, cornerX, cornerY, -1, 1, swBounds, settings);
-      const se = findCornerSource(source, image.width, cornerX, cornerY, 1, 1, seBounds, settings);
-
-      const validCount = [nw, ne, sw, se].filter(Boolean).length;
-      let replacement: readonly [number, number, number];
-      if (validCount >= 2) {
-        replacement = cornerReplacement(dx, dy, settings.intersectionSearchRadius, nw, ne, sw, se);
-      } else if (validCount === 1) {
-        replacement = nw || ne || sw || se || [48, 48, 48];
-        report.oneSidedFallbackCount += 1;
-      } else {
-        continue;
-      }
-
-      if (writeRepairPixel(image, repairedMask, x, y, replacement)) report.pixelsReplaced += 1;
       report.cornerReplacementCount += 1;
       if (isWater) report.waterSeamReplacementCount += 1;
       if (allSame) report.sameTileSeamReplacementCount += 1;
@@ -406,75 +407,13 @@ function repairIntersection(
 
 // ─── Artifact detection ──────────────────────────────────────────────────
 
-interface SeamArtifactContext {
-  getOwnSideInteriorLuminance(x: number, y: number): number;
-}
-
-function sewVerticalRepairContext(
-  source: Uint8Array,
-  imageWidth: number,
-  sampleY: number,
-  seamX: number,
-  leftBounds: PixelBounds,
-  rightBounds: PixelBounds,
-  settings: BlackSeamRepairSettings
-): () => SeamArtifactContext {
-  let cachedLeftLuminance = -1;
-  let cachedRightLuminance = -1;
-  return () => {
-    if (cachedLeftLuminance < 0) {
-      cachedLeftLuminance = avgLuminance3x3(source, imageWidth, seamX - settings.minEdgeSampleInset, sampleY, leftBounds);
-    }
-    if (cachedRightLuminance < 0) {
-      cachedRightLuminance = avgLuminance3x3(source, imageWidth, seamX + settings.minEdgeSampleInset, sampleY, rightBounds);
-    }
-    return {
-      getOwnSideInteriorLuminance: (x: number, _y: number) => (x < seamX) ? cachedLeftLuminance : cachedRightLuminance
-    };
-  };
-}
-
-function sewHorizontalRepairContext(
-  source: Uint8Array,
-  imageWidth: number,
-  sampleX: number,
-  seamY: number,
-  topBounds: PixelBounds,
-  bottomBounds: PixelBounds,
-  settings: BlackSeamRepairSettings
-): () => SeamArtifactContext {
-  let cachedTopLuminance = -1;
-  let cachedBottomLuminance = -1;
-  return () => {
-    if (cachedTopLuminance < 0) {
-      cachedTopLuminance = avgLuminance3x3(source, imageWidth, sampleX, seamY - settings.minEdgeSampleInset, topBounds);
-    }
-    if (cachedBottomLuminance < 0) {
-      cachedBottomLuminance = avgLuminance3x3(source, imageWidth, sampleX, seamY + settings.minEdgeSampleInset, bottomBounds);
-    }
-    return {
-      getOwnSideInteriorLuminance: (_x: number, y: number) => (y < seamY) ? cachedTopLuminance : cachedBottomLuminance
-    };
-  };
-}
-
-/**
- * Check if a pixel is a seam artifact candidate.
- *
- * Detection criteria (any one is sufficient):
- * 1. Near-black: luminance < nearBlackThreshold (38)
- * 2. Relative darkness: pixel is significantly darker than the clean interior
- *    of the tile it belongs to (not the average of both).
- *
- * The old seam pixel is NEVER used as a color source — only for detection.
- */
-function isSeamArtifactPixel(
+function isArtifactAt(
   source: Uint8Array,
   imageWidth: number,
   x: number,
   y: number,
   settings: BlackSeamRepairSettings,
-  contextFactory: () => SeamArtifactContext
+  minInteriorLuminance: number
 ): boolean {
   const offset = pixelOffset(imageWidth, x, y);
   const r = source[offset];
@@ -485,267 +424,169 @@ function isSeamArtifactPixel(
   // Criterion 1: Near-black
   if (pixelLuminance < settings.nearBlackThreshold) return true;
 
-  // Criterion 2: Relative darkness — compare against own side's interior
-  const context = contextFactory();
-  const ownSideLuminance = context.getOwnSideInteriorLuminance(x, y);
-  if (ownSideLuminance > 0 && pixelLuminance < ownSideLuminance - settings.relativeDarknessThreshold) return true;
+  // Criterion 2: Significantly darker than both neighbors
+  if (minInteriorLuminance > 0 && pixelLuminance < minInteriorLuminance - settings.relativeDarknessThreshold) return true;
 
   return false;
 }
 
-/**
- * Intersection artifact detection.
- * Corners often have dark cross-shaped artifacts.
- */
-function isIntersectionArtifact(
+// ─── Clean point sampling ────────────────────────────────────────────────
+
+function sampleCleanPoint(
   source: Uint8Array,
   imageWidth: number,
   x: number,
   y: number,
-  cornerX: number,
-  cornerY: number,
-  settings: BlackSeamRepairSettings,
-  nwBounds: PixelBounds,
-  neBounds: PixelBounds,
-  swBounds: PixelBounds,
-  seBounds: PixelBounds
-): boolean {
+  minLuminance: number
+): readonly [number, number, number] | undefined {
+  if (x < 0 || y < 0 || x >= imageWidth) return undefined;
+  // Check the source image bounds via the data length
   const offset = pixelOffset(imageWidth, x, y);
+  if (offset + 2 >= source.length) return undefined;
   const r = source[offset];
   const g = source[offset + 1];
   const b = source[offset + 2];
-  const pixelLuminance = luminance(r, g, b);
-
-  // Near-black at corner
-  if (pixelLuminance < settings.nearBlackThreshold) return true;
-
-  // Relative darkness vs surrounding tiles at this corner
-  const samples: number[] = [];
-  const nw = findCornerSource(source, imageWidth, cornerX, cornerY, -1, -1, nwBounds, settings);
-  const ne = findCornerSource(source, imageWidth, cornerX, cornerY, 1, -1, neBounds, settings);
-  const sw = findCornerSource(source, imageWidth, cornerX, cornerY, -1, 1, swBounds, settings);
-  const se = findCornerSource(source, imageWidth, cornerX, cornerY, 1, 1, seBounds, settings);
-  for (const sample of [nw, ne, sw, se]) {
-    if (sample) samples.push(luminance(sample[0], sample[1], sample[2]));
-  }
-  if (samples.length > 0) {
-    const avgLuminance = samples.reduce((a, b) => a + b, 0) / samples.length;
-    if (pixelLuminance < avgLuminance - settings.relativeDarknessThreshold) return true;
-  }
-
-  return false;
+  if (luminance(r, g, b) < minLuminance) return undefined;
+  return [r, g, b];
 }
 
-// ─── Clean interior sampling ─────────────────────────────────────────────
-
-interface PixelBounds {
-  minX: number;
-  maxX: number;
-  minY: number;
-  maxY: number;
-}
-
-function bounds(minX: number, maxX: number, minY: number, maxY: number): PixelBounds {
-  return { minX, maxX, minY, maxY };
-}
-
-function findVerticalSource(
+function sampleFallbackDeep(
   source: Uint8Array,
   imageWidth: number,
   seamX: number,
-  y: number,
   direction: -1 | 1,
-  sourceBounds: PixelBounds,
+  y: number,
   settings: BlackSeamRepairSettings
 ): readonly [number, number, number] | undefined {
-  for (let inset = settings.minEdgeSampleInset; inset <= settings.maxEdgeSampleInset; inset += 1) {
+  for (let inset = settings.interiorSampleInset + 1; inset <= settings.maxFallbackInset; inset += 1) {
     const x = seamX + direction * inset;
-    const sample = sampleCleanPatch(source, imageWidth, x, y, sourceBounds, settings.cleanSampleMinLuminance);
-    if (sample) return sample;
+    const color = sampleCleanPoint(source, imageWidth, x, y, CLEAN_SAMPLE_MIN_LUMINANCE);
+    if (color) return color;
   }
   return undefined;
 }
 
-function findHorizontalSource(
+function sampleFallbackDeepH(
   source: Uint8Array,
   imageWidth: number,
   x: number,
   seamY: number,
   direction: -1 | 1,
-  sourceBounds: PixelBounds,
   settings: BlackSeamRepairSettings
 ): readonly [number, number, number] | undefined {
-  for (let inset = settings.minEdgeSampleInset; inset <= settings.maxEdgeSampleInset; inset += 1) {
+  for (let inset = settings.interiorSampleInset + 1; inset <= settings.maxFallbackInset; inset += 1) {
     const y = seamY + direction * inset;
-    const sample = sampleCleanPatch(source, imageWidth, x, y, sourceBounds, settings.cleanSampleMinLuminance);
-    if (sample) return sample;
+    const color = sampleCleanPoint(source, imageWidth, x, y, CLEAN_SAMPLE_MIN_LUMINANCE);
+    if (color) return color;
   }
   return undefined;
 }
 
-function findCornerSource(
-  source: Uint8Array,
-  imageWidth: number,
-  cornerX: number,
-  cornerY: number,
-  directionX: -1 | 1,
-  directionY: -1 | 1,
-  sourceBounds: PixelBounds,
-  settings: BlackSeamRepairSettings
-): readonly [number, number, number] | undefined {
-  for (let inset = settings.minEdgeSampleInset; inset <= settings.maxEdgeSampleInset; inset += 1) {
-    const x = cornerX + directionX * inset;
-    const y = cornerY + directionY * inset;
-    const sample = sampleCleanPatch(source, imageWidth, x, y, sourceBounds, settings.cleanSampleMinLuminance);
-    if (sample) return sample;
-  }
-  return undefined;
-}
+// ─── Dither-pick logic ───────────────────────────────────────────────────
 
 /**
- * Sample a small 3×3 patch around (centerX, centerY) within sourceBounds.
- * Excludes near-black pixels. Returns the median color, or undefined if no clean pixels found.
+ * Deterministic dither-pick: returns true to pick the right/bottom side,
+ * false to pick the left/top side.
+ *
+ * Uses a hash of (x, y, seed) to produce a stable 0..1 value,
+ * then applies a position-based weight so pixels closer to a side
+ * are more likely to pick that side's clean sample.
  */
-function sampleCleanPatch(
-  source: Uint8Array,
-  imageWidth: number,
-  centerX: number,
-  centerY: number,
-  sourceBounds: PixelBounds,
-  minLuminance: number
-): readonly [number, number, number] | undefined {
-  const colors: [number, number, number][] = [];
-  for (let y = centerY - 1; y <= centerY + 1; y += 1) {
-    if (y < sourceBounds.minY || y > sourceBounds.maxY) continue;
-    for (let x = centerX - 1; x <= centerX + 1; x += 1) {
-      if (x < sourceBounds.minX || x > sourceBounds.maxX) continue;
-      const offset = pixelOffset(imageWidth, x, y);
-      const color: [number, number, number] = [source[offset], source[offset + 1], source[offset + 2]];
-      if (luminance(color[0], color[1], color[2]) < minLuminance) continue;
-      colors.push(color);
-    }
-  }
-  if (!colors.length) return undefined;
-  return medianColor(colors);
+function ditherPick(x: number, y: number, offset: number, radius: number, seed: string): boolean {
+  const h = hash01(x, y, seed);
+  // Weight: pixels closer to right (offset > 0) are more likely to pick right
+  const threshold = pickThreshold(offset, radius);
+  return h < threshold;
 }
 
-/**
- * Compute average luminance of a 3×3 patch for relative darkness comparison.
- */
-function avgLuminance3x3(
-  source: Uint8Array,
-  imageWidth: number,
-  centerX: number,
-  centerY: number,
-  sourceBounds: PixelBounds
-): number {
-  const luminances: number[] = [];
-  for (let y = centerY - 1; y <= centerY + 1; y += 1) {
-    if (y < sourceBounds.minY || y > sourceBounds.maxY) continue;
-    for (let x = centerX - 1; x <= centerX + 1; x += 1) {
-      if (x < sourceBounds.minX || x > sourceBounds.maxX) continue;
-      const offset = pixelOffset(imageWidth, x, y);
-      luminances.push(luminance(source[offset], source[offset + 1], source[offset + 2]));
-    }
-  }
-  if (!luminances.length) return -1;
-  return luminances.reduce((a, b) => a + b, 0) / luminances.length;
-}
-
-// ─── Color math ──────────────────────────────────────────────────────────
-
-function medianColor(colors: readonly (readonly [number, number, number])[]): readonly [number, number, number] {
-  return [
-    channelMedian(colors, 0),
-    channelMedian(colors, 1),
-    channelMedian(colors, 2)
-  ];
-}
-
-function channelMedian(colors: readonly (readonly [number, number, number])[], channel: 0 | 1 | 2): number {
-  const values = colors.map((color) => color[channel]).sort((a, b) => a - b);
-  return values[Math.floor(values.length / 2)];
-}
-
-function mixColor(a: readonly [number, number, number], b: readonly [number, number, number], t: number): readonly [number, number, number] {
-  return [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
-}
-
-function cornerReplacement(
-  dx: number,
-  dy: number,
-  radius: number,
-  nw?: readonly [number, number, number],
-  ne?: readonly [number, number, number],
-  sw?: readonly [number, number, number],
-  se?: readonly [number, number, number]
-): readonly [number, number, number] {
-  const top = mixedReplacement(nw, ne, sideWeight(dx, radius));
-  const bottom = mixedReplacement(sw, se, sideWeight(dx, radius));
-  return mixedReplacement(top, bottom, sideWeight(dy, radius));
-}
-
-function mixedReplacement(
-  a: readonly [number, number, number] | undefined,
-  b: readonly [number, number, number] | undefined,
-  secondWeight: number
-): readonly [number, number, number] {
-  if (a && b) return mixColor(a, b, secondWeight);
-  if (a) return a;
-  if (b) return b;
-  return [48, 48, 48];
-}
-
-function sideWeight(offset: number, radius: number): number {
+function pickThreshold(offset: number, radius: number): number {
+  // offset in [-radius, +radius]: -radius = far left, +radius = far right
+  // Returns 0..1 probability of picking the right side
   if (radius <= 0) return 0.5;
-  const normalized = clamp((offset + radius) / (radius * 2), 0, 1);
-  return lerp(0.3, 0.7, normalized);
+  const normalized = (offset + radius) / (radius * 2); // 0 at far left, 1 at far right
+  return 0.3 + 0.4 * normalized; // 0.3 at far left, 0.7 at far right
 }
 
-function writeRepairPixel(
+function deterministicIndex(x: number, y: number, count: number, seed: string): number {
+  return Math.floor(hash01(x, y, seed) * count) % count;
+}
+
+// ─── Hash functions ──────────────────────────────────────────────────────
+
+function hash01(x: number, y: number, seed: string): number {
+  let h = hashString(seed);
+  h ^= Math.imul(x + 0x9e3779b9, 0x85ebca6b);
+  h ^= Math.imul(y + 0xc2b2ae35, 0x27d4eb2f);
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x7feb352d);
+  h ^= h >>> 15;
+  h = Math.imul(h, 0x846ca68b);
+  h ^= h >>> 16;
+  return (h >>> 0) / 0xffffffff;
+}
+
+function hashString(value: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+// ─── Pixel write ─────────────────────────────────────────────────────────
+
+function setPixel(
   image: TerrainImageDataLike,
   repairedMask: Uint8Array,
   x: number,
   y: number,
   color: readonly [number, number, number]
-): boolean {
+) {
   const maskOffset = y * image.width + x;
-  const isFirstRepair = repairedMask[maskOffset] === 0;
   repairedMask[maskOffset] = 1;
   const offset = pixelOffset(image.width, x, y);
   image.data[offset] = clampByte(color[0]);
   image.data[offset + 1] = clampByte(color[1]);
   image.data[offset + 2] = clampByte(color[2]);
   image.data[offset + 3] = 255;
-  return isFirstRepair;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────
+// ─── Jitter ──────────────────────────────────────────────────────────────
+
+function jitter(base: number, maxJitter: number, min: number, max: number, seed: string, idx: number): number {
+  if (maxJitter <= 0) return base;
+  const h = hash01(idx, 0, seed + ":jitter");
+  const offset = Math.round((h - 0.5) * 2 * maxJitter);
+  return clampInt(base + offset, min, max);
+}
+
+// ─── Water helper ────────────────────────────────────────────────────────
 
 function hasWaterTile(tileId?: WorldTileId): boolean {
   if (!tileId) return false;
-  return !!WORLD_TILES[tileId] && worldTileHasTag(tileId, "water");
+  return worldTileHasTag(tileId, "water");
 }
 
-function isNearBlack(source: Uint8Array, width: number, x: number, y: number, threshold: number): boolean {
-  const offset = pixelOffset(width, x, y);
-  return luminance(source[offset], source[offset + 1], source[offset + 2]) < threshold;
-}
+// ─── Settings ────────────────────────────────────────────────────────────
 
 function resolveSettings(options: BlackSeamRepairOptions): BlackSeamRepairSettings {
   return {
     enabled: options.enabled ?? BLACK_SEAM_REPAIR_DEFAULTS.enabled,
     debugView: options.debugView ?? BLACK_SEAM_REPAIR_DEFAULTS.debugView,
     seamSearchRadius: options.seamSearchRadius ?? BLACK_SEAM_REPAIR_DEFAULTS.seamSearchRadius,
-    intersectionSearchRadius: options.intersectionSearchRadius ?? BLACK_SEAM_REPAIR_DEFAULTS.intersectionSearchRadius,
+    seamTargetRadius: options.seamTargetRadius ?? BLACK_SEAM_REPAIR_DEFAULTS.seamTargetRadius,
+    cornerSearchRadius: options.cornerSearchRadius ?? BLACK_SEAM_REPAIR_DEFAULTS.cornerSearchRadius,
+    interiorSampleInset: options.interiorSampleInset ?? BLACK_SEAM_REPAIR_DEFAULTS.interiorSampleInset,
+    maxFallbackInset: options.maxFallbackInset ?? BLACK_SEAM_REPAIR_DEFAULTS.maxFallbackInset,
+    interiorSampleJitter: options.interiorSampleJitter ?? BLACK_SEAM_REPAIR_DEFAULTS.interiorSampleJitter,
     nearBlackThreshold: options.nearBlackThreshold ?? BLACK_SEAM_REPAIR_DEFAULTS.nearBlackThreshold,
-    cleanSampleMinLuminance: options.cleanSampleMinLuminance ?? BLACK_SEAM_REPAIR_DEFAULTS.cleanSampleMinLuminance,
     relativeDarknessThreshold: options.relativeDarknessThreshold ?? BLACK_SEAM_REPAIR_DEFAULTS.relativeDarknessThreshold,
-    minEdgeSampleInset: options.minEdgeSampleInset ?? BLACK_SEAM_REPAIR_DEFAULTS.minEdgeSampleInset,
-    maxEdgeSampleInset: options.maxEdgeSampleInset ?? BLACK_SEAM_REPAIR_DEFAULTS.maxEdgeSampleInset,
     maxReplacementRatio: options.maxReplacementRatio ?? BLACK_SEAM_REPAIR_DEFAULTS.maxReplacementRatio
   };
 }
+
+// ─── Math helpers ────────────────────────────────────────────────────────
 
 function pixelOffset(width: number, x: number, y: number): number {
   return (y * width + x) * 4;
@@ -755,18 +596,10 @@ function luminance(r: number, g: number, b: number): number {
   return r * 0.2126 + g * 0.7152 + b * 0.0722;
 }
 
-function lerp(a: number, b: number, t: number): number {
-  return a + (b - a) * t;
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
-
 function clampInt(value: number, min: number, max: number): number {
-  return Math.round(clamp(value, min, max));
+  return Math.round(Math.max(min, Math.min(max, value)));
 }
 
 function clampByte(value: number): number {
-  return Math.round(clamp(value, 0, 255));
+  return Math.round(Math.max(0, Math.min(255, value)));
 }

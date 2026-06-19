@@ -1,89 +1,74 @@
-# World Layout Report — Seam Repair Algorithm Fix
+# World Layout Report — Dither-Pick Seam Repair
 
 Generated: 2026-06-19
 
-## Root Cause of Visible Grid/Raster
+## Algorithm Replacement
 
-The original seam repair algorithm had three problems:
+The previous seam repair algorithm used color averaging (lerp/blend) to mix clean neighbor colors. This created visible gradient bands and sometimes mixed old black seam pixels into results.
 
-1. **Detection limited to pure near-black** (luminance < 32). Dark water vertical lines and other dark-but-not-black seam artifacts were not detected, so they remained visible.
+The new algorithm uses **deterministic dithering** instead of color blending:
 
-2. **Detection threshold used for both detection AND clean-sample exclusion.** When the threshold was raised to catch more artifacts, it started excluding valid tile colors (like dark red grass tiles with luminance ~33) from clean interior sampling.
+1. **Detect** artifact pixels in a narrow band (±3px around tile boundaries)
+2. **Sample** one clean pixel from each neighboring tile's interior (4px inset, with ±2px jitter)
+3. **Dither-pick**: use a seeded hash of (x, y, seed) to choose either the left or right clean sample
+4. **Write** the chosen clean color to the destination pixel
 
-3. **No relative darkness detection.** Seam pixels that are darker than their neighbors but not pure black went unrepaired.
+The old seam pixel is **never** a color source — it is only a detection trigger.
 
-## Fixes Applied
+## Key Principles
 
-### 1. Dual-threshold system
-- **Detection thresholds** (higher, to catch artifacts):
-  - `NEAR_BLACK_LUMINANCE_THRESHOLD = 38` — pure black or nearly so
-  - `RELATIVE_DARKNESS_THRESHOLD = 26` — pixel is 26 luminance units darker than its OWN tile's clean interior
-- **Clean sample exclusion** (lower, to keep valid tile colors):
-  - `CLEAN_SAMPLE_MIN_LUMINANCE = 20` — only extremely dark pixels excluded from being clean source samples
+- **No color averaging/lerp** — pixels are assigned clean neighbor colors directly
+- **Narrow band** — only ±3px around tile boundaries are modified
+- **Local sampling** — clean samples from 4px inside each tile, fallback to 8px max
+- **Deterministic** — same seed produces same dither pattern (no randomness at runtime)
+- **Per-side detection** — artifact compared against own tile's interior, not average
+- **Same-tile supported** — repeated tile seams still repaired from both interior copies
 
-### 2. Per-side relative darkness comparison
-Each candidate pixel is compared against the luminance of the tile it belongs to (left vs right, top vs bottom), not the average of both. This prevents dark-colored tiles (like dark grass or shadowed areas) from being falsely detected as artifacts.
+## Constants
 
-### 3. Wider sample search
-`MAX_EDGE_SAMPLE_INSET` increased from 6 to 8 pixels. Dark water and grass tile edges can extend further in; a wider search finds actual clean interior colors.
+| Constant | Value | Purpose |
+|----------|-------|---------|
+| `SEAM_SEARCH_RADIUS` | 4 | Band inspected around seam |
+| `SEAM_TARGET_RADIUS` | 3 | Band actually repaired |
+| `CORNER_SEARCH_RADIUS` | 5 | Corner intersection square |
+| `INTERIOR_SAMPLE_INSET` | 4 | Clean sample distance from seam |
+| `MAX_FALLBACK_INSET` | 8 | Max depth for fallback sampling |
+| `INTERIOR_SAMPLE_JITTER` | 2 | ±2px deterministic jitter |
+| `NEAR_BLACK_LUMINANCE_THRESHOLD` | 38 | Artifact detection (pure dark) |
+| `CLEAN_SAMPLE_MIN_LUMINANCE` | 18 | Minimum luminance for a valid clean sample |
+| `RELATIVE_DARKNESS_THRESHOLD` | 20 | Darker than neighbors = artifact |
 
-### 4. Old seam pixel excluded from color mixing (already correct)
-The algorithm has always used only clean interior samples for replacement colors:
+## Dither-Pick Model
+
 ```
-replacement = mix(cleanSampleFromTileA, cleanSampleFromTileB)
+For each seam pixel at (x, y) with offset dx from seam center:
+  h = hash01(x, y, seed)
+  threshold = 0.3 + 0.4 * (dx + 3) / 6  // 0.3..0.7
+  if h < threshold: use right/bottom color
+  else: use left/top color
 ```
-The old seam pixel is only read for detection, never included in the output color.
 
-## Algorithm Summary
+This creates a natural-looking mixed seam at the pixel level without any color averaging.
 
-For each visible seam artifact pixel:
-1. **Detect**: Near-black OR significantly darker than own tile's interior
-2. **Sample clean**: Search 3-8px inward from seam for valid non-dark pixels
-3. **Mix**: Weighted combination of both neighboring tiles' clean samples
-4. **Replace**: Completely overwrite the artifact pixel
+## Test Coverage (10 tests)
 
-## New Constants
+| Test | Validates |
+|------|-----------|
+| `validateOnlyBlackSeamPixelsChange` | Only black seam pixels repaired |
+| `validateInteriorSampleReplacement` | Repaired pixels are clean neighbor colors, not black |
+| `validateNoBroadBandModification` | No broad band changes |
+| `validateSameTileSeamRepair` | Same-tile seams repaired |
+| `validateDarkTerrainSafety` | Dark details preserved |
+| `validateDisabledRepairIsNoop` | Disabled = no change |
+| `validateWaterVerticalLineRepair` | Water seams detected/repaired |
+| `validateWaterSameTileSeamRepair` | Same-tile water seams |
+| `validateOldPixelNotUsedAsSource` | Old black never in result |
+| `validateMaskIsThinLines` | Mask is thin seam lines only |
 
-| Constant | Old Value | New Value |
-|----------|-----------|-----------|
-| `NEAR_BLACK_LUMINANCE_THRESHOLD` | 32 | 38 |
-| `CLEAN_SAMPLE_MIN_LUMINANCE` | (same as above) | 20 |
-| `RELATIVE_DARKNESS_THRESHOLD` | (not present) | 26 |
-| `MAX_EDGE_SAMPLE_INSET` | 6 | 8 |
+## Debug Outputs
 
-## Report Statistics Added
-
-- `oneSidedFallbackCount` — repairs where only one side had a clean sample
-- `waterSeamReplacementCount` — repairs on water tile seams
-- `sameTileSeamReplacementCount` — repairs where identical tiles meet
-- `cleanSampleMinLuminance` — separate threshold documented in report
-
-## Test Coverage
-
-| Test | What it validates |
-|------|-------------------|
-| `validateOnlyBlackSeamPixelsChange` | Only black seam pixels repaired, non-seam pixels unchanged |
-| `validateInteriorSampleReplacement` | Replacement color is weighted mix of both neighbors |
-| `validateNoBroadBandModification` | Mask is narrow (seam only, not broad bands) |
-| `validateSameTileSeamRepair` | Same-tile seams repaired using both copies |
-| `validateDarkTerrainSafety` | Dark interior details not falsely modified |
-| `validateDisabledRepairIsNoop` | Disabled repair changes nothing |
-| `validateWaterVerticalLineRepair` | **NEW** Dark (non-black) water vertical seams detected and repaired via relative darkness |
-| `validateWaterSameTileSeamRepair` | **NEW** Same water tile seam line repaired |
-| `validateOldPixelNotUsedAsSource` | **NEW** Repaired color is bright mix of neighbors, not dark mix with old black |
-| `validateMaskIsThinLines` | **NEW** Mask contains only thin seam lines, not broad bands |
-
-## atlas_v3 Status
-
-- ✅ Active world terrain source
-- ✅ 8×8 grid, 29 non-empty tiles, 35 empty/black cells excluded
-- ✅ Classic special tileset not active
-- ✅ Old 10×10 atlas not active
-- ✅ Black seam repair now catches dark-but-not-black artifacts
-- ✅ Clean samples separated from detection thresholds
-
-## Validation
-
-- `npm run build`: ✅ passes
-- `npm test`: ✅ passes (10 seam repair tests)
-- Debug preview: `docs/debug/worldgen/atlas-v3-world-preview.png`
+- `docs/debug/worldgen/black-seam-repair-before.png`
+- `docs/debug/worldgen/black-seam-repair-after.png`
+- `docs/debug/worldgen/black-seam-repair-mask.png`
+- `docs/debug/worldgen/black-seam-repair-diff.png`
+- `docs/debug/worldgen/black-seam-repair-report.md`

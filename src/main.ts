@@ -1245,7 +1245,7 @@ class CrystalOathScene extends Phaser.Scene {
         `Black Seam Repair Debug View: ${BLACK_SEAM_REPAIR_DEV_OPTIONS.debugView}`,
         `Black Seam Repair Search Radius: ${BLACK_SEAM_REPAIR_DEV_OPTIONS.seamSearchRadius}`,
         `Black Seam Repair Threshold: ${BLACK_SEAM_REPAIR_DEV_OPTIONS.nearBlackThreshold}`,
-        `Black Seam Repair Sample Inset: ${BLACK_SEAM_REPAIR_DEV_OPTIONS.minEdgeSampleInset}-${BLACK_SEAM_REPAIR_DEV_OPTIONS.maxEdgeSampleInset}`,
+        `Black Seam Repair Sample Inset: ${BLACK_SEAM_REPAIR_DEV_OPTIONS.interiorSampleInset} (max fallback ${BLACK_SEAM_REPAIR_DEV_OPTIONS.maxFallbackInset})`,
         `Image: ${WORLD_ATLAS.image}`,
         `Manifest: ${WORLD_ATLAS.manifest}`,
         `Manifest entries: ${Object.keys(atlasV3Manifest.tiles ?? {}).length} non-empty tiles`

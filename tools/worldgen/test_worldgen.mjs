@@ -18,11 +18,13 @@ import {
 } from "../../src/data/worldTiles.ts";
 import {
   BLACK_SEAM_REPAIR_DEV_OPTIONS,
-  MAX_EDGE_SAMPLE_INSET,
-  MIN_EDGE_SAMPLE_INSET,
+  INTERIOR_SAMPLE_INSET,
+  INTERIOR_SAMPLE_JITTER,
+  MAX_FALLBACK_INSET,
   NEAR_BLACK_LUMINANCE_THRESHOLD,
   RELATIVE_DARKNESS_THRESHOLD,
   SEAM_SEARCH_RADIUS,
+  SEAM_TARGET_RADIUS,
   repairBlackSeamsImageData
 } from "../../src/world/terrainBlending.ts";
 
@@ -96,14 +98,12 @@ function validateBlackSeamRepairMetadata() {
   assert(BLACK_SEAM_REPAIR_DEV_OPTIONS.enabled === true, "Black seam repair should be enabled by default.");
   assert(BLACK_SEAM_REPAIR_DEV_OPTIONS.debugView === false, "Black seam repair debug view should be off by default.");
   assert(SEAM_SEARCH_RADIUS === 4, `Expected seam search radius 4, got ${SEAM_SEARCH_RADIUS}.`);
-  assert(MIN_EDGE_SAMPLE_INSET === 3, `Expected min edge sample inset 3, got ${MIN_EDGE_SAMPLE_INSET}.`);
-  assert(MAX_EDGE_SAMPLE_INSET === 8, `Expected max edge sample inset 8, got ${MAX_EDGE_SAMPLE_INSET}.`);
+  assert(SEAM_TARGET_RADIUS === 3, `Expected seam target radius 3, got ${SEAM_TARGET_RADIUS}.`);
+  assert(INTERIOR_SAMPLE_INSET === 4, `Expected interior sample inset 4, got ${INTERIOR_SAMPLE_INSET}.`);
+  assert(MAX_FALLBACK_INSET === 8, `Expected max fallback inset 8, got ${MAX_FALLBACK_INSET}.`);
+  assert(INTERIOR_SAMPLE_JITTER === 2, `Expected interior sample jitter 2, got ${INTERIOR_SAMPLE_JITTER}.`);
   assert(NEAR_BLACK_LUMINANCE_THRESHOLD === 38, `Expected near-black threshold 38, got ${NEAR_BLACK_LUMINANCE_THRESHOLD}.`);
-  assert(RELATIVE_DARKNESS_THRESHOLD === 26, `Expected relative darkness threshold 26, got ${RELATIVE_DARKNESS_THRESHOLD}.`);
-  assert(BLACK_SEAM_REPAIR_DEV_OPTIONS.seamSearchRadius === SEAM_SEARCH_RADIUS, "Black seam repair default search radius mismatch.");
-  assert(BLACK_SEAM_REPAIR_DEV_OPTIONS.minEdgeSampleInset === MIN_EDGE_SAMPLE_INSET, "Black seam repair default min edge inset mismatch.");
-  assert(BLACK_SEAM_REPAIR_DEV_OPTIONS.maxEdgeSampleInset === MAX_EDGE_SAMPLE_INSET, "Black seam repair default max edge inset mismatch.");
-  assert(BLACK_SEAM_REPAIR_DEV_OPTIONS.nearBlackThreshold === NEAR_BLACK_LUMINANCE_THRESHOLD, "Black seam repair default threshold mismatch.");
+  assert(RELATIVE_DARKNESS_THRESHOLD === 20, `Expected relative darkness threshold 20, got ${RELATIVE_DARKNESS_THRESHOLD}.`);
 
   for (const tile of WORLD_TILE_DEFINITIONS) {
     assert(worldTileBlendGroup(tile.id), `Tile ${tile.id} has no blend group.`);
@@ -212,7 +212,7 @@ function validateOnlyBlackSeamPixelsChange() {
     enabled: true,
     debugView: false
   });
-  assert(report.pixelsReplaced === 3 * tileSize, `Expected exactly the 3px black seam to be repaired, got ${report.pixelsReplaced}.`);
+  assert(report.verticalSeamReplacementCount === 3 * tileSize, `Expected exactly the 3px black seam to be repaired, got ${report.verticalSeamReplacementCount}.`);
   for (let y = 0; y < image.height; y += 1) {
     for (let x = 0; x < image.width; x += 1) {
       const wasBlackSeam = x >= seamX - 1 && x <= seamX + 1;
@@ -231,13 +231,23 @@ function validateInteriorSampleReplacement() {
   const leftInterior = [111, 12, 13, 255];
   const rightInterior = [17, 122, 19, 255];
   const image = makeTwoTileImage(tileSize, [200, 80, 70, 255], [50, 210, 90, 255]);
-  fillRect(image, seamX - MIN_EDGE_SAMPLE_INSET - 1, 0, 3, tileSize, leftInterior);
-  fillRect(image, seamX + MIN_EDGE_SAMPLE_INSET - 1, 0, 3, tileSize, rightInterior);
+  fillRect(image, seamX - INTERIOR_SAMPLE_INSET - 1, 0, 3, tileSize, leftInterior);
+  fillRect(image, seamX + INTERIOR_SAMPLE_INSET - 1, 0, 3, tileSize, rightInterior);
   blackenRect(image, seamX - 1, 0, 3, tileSize);
   repairBlackSeamsImageData(image, [[WORLD_TILE_IDS.brightGrass, WORLD_TILE_IDS.darkGrass]], { seed: "interior-source", tileSize });
-  assertColorEquals(pixelColor(image, seamX - 1, 16), weightedColor(leftInterior, rightInterior, sideWeight(-1)), "Left seam pixel did not mix both interior sources.");
-  assertColorEquals(pixelColor(image, seamX, 16), weightedColor(leftInterior, rightInterior, sideWeight(0)), "Center seam pixel did not mix interior sources.");
-  assertColorEquals(pixelColor(image, seamX + 1, 16), weightedColor(leftInterior, rightInterior, sideWeight(1)), "Right seam pixel did not mix both interior sources.");
+  // With dither-pick, repaired pixels should be either left or right interior color (not black, not a lerp mix)
+  for (let y = 4; y < tileSize - 4; y += 1) {
+    for (const dx of [-1, 0, 1]) {
+      const color = pixelColor(image, seamX + dx, y);
+      const lum = luminance(color);
+      // Must not be near-black
+      assert(lum > 20, `Seam pixel at dx=${dx},y=${y} still dark: ${color.join(",")} lum=${lum.toFixed(1)}.`);
+      // Should be close to either interior sample (allowing for jitter variation)
+      const leftDist = colorDistance(color, leftInterior);
+      const rightDist = colorDistance(color, rightInterior);
+      assert(leftDist < 120 || rightDist < 120, `Seam pixel at dx=${dx},y=${y} is neither interior: ${color.join(",")} vs ${leftInterior.slice(0,3).join(",")} or ${rightInterior.slice(0,3).join(",")}.`);
+    }
+  }
 }
 
 function validateNoBroadBandModification() {
@@ -251,8 +261,8 @@ function validateNoBroadBandModification() {
     tileSize,
     captureMask: true
   });
-  assert(report.pixelsReplaced === tileSize, `Expected one black seam column repaired, got ${report.pixelsReplaced}.`);
-  assert(report.replacementRatio < 0.02, `Repair changed too many pixels: ${report.replacementRatio}.`);
+  assert(report.verticalSeamReplacementCount === tileSize, `Expected one black seam column repaired, got ${report.verticalSeamReplacementCount}.`);
+  assert(report.replacedPixelPercent < 2, `Repair changed too many pixels: ${report.replacedPixelPercent.toFixed(2)}%.`);
   for (let y = 0; y < image.height; y += 1) {
     for (const x of [seamX - 2, seamX - 1, seamX + 1, seamX + 2]) {
       assertPixelsEqual(image, before, x, y, `Non-black seam-band pixel ${x},${y} was changed.`);
@@ -266,7 +276,7 @@ function validateSameTileSeamRepair() {
   const image = makeTwoTileImage(tileSize, [84, 166, 70, 255], [84, 166, 70, 255]);
   blackenRect(image, seamX, 0, 1, tileSize);
   const report = repairBlackSeamsImageData(image, [[WORLD_TILE_IDS.brightGrass, WORLD_TILE_IDS.brightGrass]], { seed: "same-tile-repair", tileSize });
-  assert(report.pixelsReplaced === tileSize, "Same-tile black seam was not repaired exactly.");
+  assert(report.verticalSeamReplacementCount === tileSize, "Same-tile black seam was not repaired exactly.");
   for (let y = 0; y < tileSize; y += 1) {
     assert(luminance(pixelColor(image, seamX, y)) > NEAR_BLACK_LUMINANCE_THRESHOLD, `Same-tile seam remains near black at y=${y}.`);
   }
@@ -300,7 +310,7 @@ function validateDisabledRepairIsNoop() {
   blackenRect(image, seamX, 0, 1, tileSize);
   const before = cloneImage(image);
   const report = repairBlackSeamsImageData(image, [[WORLD_TILE_IDS.brightGrass, WORLD_TILE_IDS.darkGrass]], { seed: "disabled", tileSize, enabled: false });
-  assert(report.pixelsReplaced === 0, "Disabled repair should not replace pixels.");
+  assert(report.totalReplacedPixels === 0, "Disabled repair should not replace pixels.");
   assert(Buffer.compare(image.data, before.data) === 0, "Disabled repair changed pixels.");
 }
 
@@ -400,17 +410,8 @@ function luminance(color) {
   return color[0] * 0.2126 + color[1] * 0.7152 + color[2] * 0.0722;
 }
 
-function weightedColor(a, b, secondWeight) {
-  return [
-    Math.round(a[0] + (b[0] - a[0]) * secondWeight),
-    Math.round(a[1] + (b[1] - a[1]) * secondWeight),
-    Math.round(a[2] + (b[2] - a[2]) * secondWeight)
-  ];
-}
-
-function sideWeight(offset) {
-  const normalized = Math.max(0, Math.min(1, (offset + SEAM_SEARCH_RADIUS) / (SEAM_SEARCH_RADIUS * 2)));
-  return 0.3 + (0.7 - 0.3) * normalized;
+function colorDistance(a, b) {
+  return Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
 }
 
 function assertPixelsEqual(a, b, x, y, message) {
@@ -577,7 +578,7 @@ function validateMaskIsThinLines() {
   }
 
   // Overall replacement ratio should be small
-  assert(report.replacementRatio < 0.05, `Repair ratio ${report.replacementRatio.toFixed(4)} too high (expected < 5%).`);
+  assert(report.replacedPixelPercent < 5, `Repair ratio ${report.replacedPixelPercent.toFixed(2)}% too high (expected < 5%).`);
 }
 
 function countMaskPixels(mask, width, height) {

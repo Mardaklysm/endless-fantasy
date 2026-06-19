@@ -192,12 +192,13 @@ Current visuals use PNG assets where Batch 001 has been wired, with generated co
 - `SAVE_KEY = "crystal-oath-save-v1"`
 - `WORLD_W = 96`
 - `WORLD_H = 64`
-- `MIN_EDGE_SAMPLE_INSET = 3` and `MAX_EDGE_SAMPLE_INSET = 8` in `src/world/terrainBlending.ts`; seam repair searches this range for clean interior samples.
-- `SEAM_SEARCH_RADIUS = 4` and `INTERSECTION_SEARCH_RADIUS = 5` in `src/world/terrainBlending.ts`; seam artifact candidates are inspected in these bands.
-- `NEAR_BLACK_LUMINANCE_THRESHOLD = 38` — pixels below this are always candidates for repair.
-- `CLEAN_SAMPLE_MIN_LUMINANCE = 20` — separate threshold for excluding dark pixels from clean interior samples.
-- `RELATIVE_DARKNESS_THRESHOLD = 26` — pixels darker than their own tile's interior by this amount are also candidates.
-- The old seam pixel is only used for detection, never as a color source. Replacement colors mix clean samples from both neighboring tiles.
+- Seam repair uses deterministic dither-pick between clean neighbor samples — no color averaging/blending.
+- `SEAM_TARGET_RADIUS = 3` — only ±3px around tile boundaries are repaired.
+- `INTERIOR_SAMPLE_INSET = 4` — clean samples taken 4px inside each tile (fallback to 8px).
+- `NEAR_BLACK_LUMINANCE_THRESHOLD = 38` — artifact detection.
+- `CLEAN_SAMPLE_MIN_LUMINANCE = 18` — minimum luminance for valid clean sample (separate from detection).
+- `RELATIVE_DARKNESS_THRESHOLD = 20` — relative darkness detection.
+- The old seam pixel is ONLY a destination mask trigger, never a color source. Replacement pixels are chosen from clean interior samples via deterministic dithering.
 - Town interior uses a 21x15 tile area offset at x=144, y=40.
 - Dungeon floors are 22x14 character maps.
 - Battle layout uses enemies on the left, party battlers on the right, and three lower panels for target/log, command, and party status.
