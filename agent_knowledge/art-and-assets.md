@@ -20,10 +20,11 @@ Reusable scripts live in `tools/art_import/`:
 - `apply_rembg_candidates.ps1`: compares color-key and rembg outputs, promoting only approved rembg results.
 - `generate_asset_previews.ps1`: creates contact sheets and `assets_v2/previews/QUALITY_REPORT.md`.
 - `import_character_sprites.mjs`: imports `D:\Tools\rembg\bg_output\fighter.png`, `priest.png`, and `wizard.png` without running rembg, splits them as 5x2 alpha PNG sheets, normalizes fixed cells/anchors, writes `src/data/characterSprites.ts`, and creates debug previews/reports in `docs/debug/sprite-import/`.
-- `import_world_atlas.mjs`: importer for the older final PNG source `C:\Users\Marku\Downloads\master_overworld_tileset_atlas_10x10.png`. It can recreate `src/assets/world/world_atlas.normalized.png` and debug atlas outputs for the preserved `generic10x10` worldgen mode.
-- `import_classic_world_tileset.mjs`: imports the complex classic sheet `C:\Users\Marku\Downloads\57105.png`. The PNG has an RGBA color type but no meaningful alpha, so the importer removes only exact `#00B100` pixels, writes `src/assets/world/tilesets/classic_world_tileset.cleaned.png`, `classicWorldTileset.manifest.json`, extracted tile/object/landmark PNGs, and debug reports/contact sheets in `docs/debug/world-tileset-import/`.
+- `import_atlas_v3.mjs`: imports `D:\Projects\new_artwork\atlas_v3.jpeg`, converts it once to `src/assets/world/atlas_v3.png`, detects mostly-black empty cells, writes `src/assets/world/atlasV3.manifest.json`, and creates `docs/debug/world-atlas-v3/atlas-v3-labeled.png` plus `atlas-v3-import-report.md`.
+- `import_world_atlas.mjs`: legacy importer for the older final PNG source `C:\Users\Marku\Downloads\master_overworld_tileset_atlas_10x10.png`. It can still recreate `src/assets/world/world_atlas.normalized.png` and debug atlas outputs, but that 10x10 generated atlas is no longer active runtime terrain.
+- `import_classic_world_tileset.mjs`: archived importer for the complex classic sheet `C:\Users\Marku\Downloads\57105.png`. The classic sheet is not active runtime terrain.
 
-Manual crop maps live in `tools/art_import/crop_maps/`. Runtime overworld generation now has two modes: the default `classicIsland` mode uses the cleaned classic special sheet and curated region 7+10 catalog, while `generic10x10` keeps the normalized 10x10 atlas available as a separate mode.
+Manual crop maps live in `tools/art_import/crop_maps/`. The active overworld uses only the fixed 8x8 `atlas_v3` path, not the old crop-map/JPEG normalization path, the legacy 10x10 atlas, or the classic special sheet.
 
 The source folder `D:\Projects\new_artwork` contained 63 PNGs and no ZIPs. No extraction into `D:\Projects\new_artwork_extracted` was needed.
 
@@ -45,7 +46,7 @@ In the current pass, 73 rembg candidates were generated. rembg was promoted only
 
 Rendered now from `assets_v2`:
 
-- Overworld terrain: `classicIsland` renders from the cleaned classic sheet `src/assets/world/tilesets/classic_world_tileset.cleaned.png` through `src/data/worldTiles.ts` and the curated region 7+10 catalog in `src/world/classicGrasslandRegionCatalog.ts`; `generic10x10` renders from `src/assets/world/world_atlas.normalized.png` through the separate generic atlas catalog.
+- Overworld terrain: generated worlds render from `src/assets/world/atlas_v3.png` through `src/assets/world/atlasV3.manifest.json` and `src/data/worldTiles.ts`. The active grid is 8x8 with 29 non-empty tiles and 35 empty black slots that worldgen ignores.
 - Location markers: town, castle, cave, keep, shrine, tower, port, gate, eclipse spire.
 - Town/interior: stone floor/walls, exit gate, service signs, table/rug, crate, barrel, lamps.
 - Characters: Arlen/Mira/Kael portraits; fighter/priest/wizard normalized class sheets drive Arlen/Mira/Kael battle sprites, and the fighter sheet drives the visible exploration leader.
@@ -60,17 +61,18 @@ Still fallback or older assets:
 - Dungeon tiles/objects, vehicles, inventory/equipment/relic icons, title art, and effects still use Batch 001 or generated fallbacks.
 - `command_window.png`, `target_window.png`, `party_status_window.png`, and `message_window.png` are reference/source-only because they include sample text or baked layout.
 
-Generic atlas:
+Legacy/reference world atlas:
 
-- `src/assets/world/world_atlas.normalized.png` remains the runtime atlas for `generic10x10` mode. The current default mode is `classicIsland`, so the generic atlas should not appear unless that mode is selected.
+- `src/assets/world/world_atlas.normalized.png` may remain in the repository as an archived/generated atlas asset, but `src/main.ts` excludes it from active eager loading and runtime gameplay should not use it unless a future task intentionally reactivates it.
+- `src/assets/world/tilesets/classic_world_tileset.cleaned.png`, `classicWorldTileset.manifest.json`, extracted classic crops, and classic debug contact sheets may remain as archived assets/tool outputs, but active gameplay must not import them.
 
 ## Current Sizes
 
 - Canvas/backing render target: 1920x1080 by default.
 - Layout grid: 960x540-equivalent coordinates derived from the Full HD design size with `PIXEL_ART_SCALE = 2`.
 - Display tile grid: 32x32 layout pixels, rendered as 64x64 canvas pixels at the default Full HD target.
-- Classic world tileset: 832x1072 source/cleaned PNG, 52x67 cells at a 16px base grid, 12 manually verified major groups, 1885 deduplicated 16x16 tile crops, and 122 object/landmark component crops. `classicIsland` uses only the curated region 7+10 subset in `src/world/classicGrasslandRegionCatalog.ts`.
-- Generic world atlas: 10 columns x 10 rows, 256x256 cells, 2560x2560 opaque PNG. It is used only by `generic10x10` mode.
+- Active `atlas_v3` world atlas: source `D:\Projects\new_artwork\atlas_v3.jpeg`, runtime `src/assets/world/atlas_v3.png`, 1024x1024 PNG, 8 columns x 8 rows, 128x128 logical cells, 29 non-empty tiles, and 35 mostly-black empty cells.
+- Legacy world atlas: 10 columns x 10 rows, 256x256 cells, 2560x2560 opaque PNG. It is not active gameplay terrain.
 - V2 town tiles: 32x32 opaque PNGs.
 - Class character sheets: 5 columns x 2 rows, 704x512 cells, 3520x1024 sheet size, transparent PNG. Manifest anchor is bodyCenterX=352 and feetBaselineY=464.
 - V2 portraits: 32x40 transparent PNGs.
@@ -83,7 +85,7 @@ Generic atlas:
 - Dawnford/town service markers render as one clean horizontal row of five image-only icons. Do not add always-visible text labels such as Items/Arms/Magic/Clinic back onto those markers.
 - The town south exit uses the gate art only; there is no floating "Exit" label or persistent bottom-right interaction hint in normal town exploration.
 - Overworld locations render as larger 3x3-ish landmarks with matching entry footprints. Keep terrain tiles small/repeating, but landmarks should remain visually important.
-- Overworld slicing is mode-aware. Classic mode uses exact manifest source rectangles from the classic manifest: `source.x`, `source.y`, `source.width`, and `source.height`. Generic mode uses exact fixed source rectangles from the 10x10 atlas catalog. Do not mix the two, reintroduce proportional slicing/JPEG cleanup, or use debug-grid art for runtime terrain.
+- Active overworld slicing uses exact 8x8 atlas math from `atlasV3.manifest.json`: `sx = col * tileWidth`, `sy = row * tileHeight`, `sw = tileWidth`, `sh = tileHeight`. Do not reintroduce classic special tiles, old 10x10 assumptions, roads/beaches/bridges, chroma-keying, global black transparency, or debug-grid art for runtime terrain.
 - Battle backgrounds are full 16:9 opaque JPEG images and are assigned linear texture filtering. Pixel sprites, tiles, UI, and icons remain nearest-neighbor filtered. The canvas itself uses `image-rendering: auto` so high-resolution artwork is not globally pixelated.
 - Battle party presentation uses the normalized fighter/priest/wizard class sheets only on the battlefield; redundant small head portraits/icons and old standalone party battle PNGs are intentionally not drawn there.
 
@@ -94,7 +96,7 @@ Generic atlas:
 - Keep service labels and UI text live unless an image is purely decorative/title art.
 - Keep battle backgrounds opaque.
 - Keep terrain tiles rectangular and opaque; do not run rembg on terrain.
-- For `classic_world_tileset`, preserve pixel edges by removing only exact `#00B100` matte pixels. Do not use fuzzy green removal unless a future source analysis proves it is necessary.
+- For `atlas_v3`, black cells mean unused slots. Do not treat black as transparency, do not chroma-key the atlas, and do not select empty cells in worldgen.
 - Do not rerun rembg or chroma-key the fighter/priest/wizard source sheets; their existing alpha channel is the source of truth.
 - Prefer nearest-neighbor scaling for tiles, icons, sprites, and enemies.
 - Review `assets_v2/previews/*.png` and `assets_v2/previews/QUALITY_REPORT.md` before expanding runtime mappings.
@@ -115,4 +117,3 @@ Generic atlas:
 - Do not bake UI text into images except for title/logo artwork.
 - Do not switch to a hyper-detailed style that conflicts with the current 32px tile grid.
 - Do not use source collages directly as sprites/tiles unless they are explicitly intended as full-screen/background art.
-- Do not use the reference map `C:\Users\Marku\Downloads\ctworldmap1000ad.png` as runtime art. It is design guidance only for classic island composition.

@@ -22,34 +22,34 @@ Run from `D:\Projects\Endless Fantasy`:
 npm test
 ```
 
-This runs `tools/worldgen/test_worldgen.mjs` and `tools/art_import/test_classic_world_tileset.mjs`. The worldgen portion validates both overworld modes and asserts:
+This runs `tools/worldgen/test_worldgen.mjs`. It validates the active `atlas_v3` terrain path, generates deterministic worlds, and asserts:
 
-- runtime classic and generic atlas assets exist and are PNGs
-- the worldgen config defaults to `classicIsland` and keeps `generic10x10` available
-- the classic curated gameplay catalog uses only region 7+10 manifest entries instead of all extracted crops
-- every active source rectangle is an exact integer rectangle inside the 832x1072 classic sheet
-- classic island worlds have ocean/shore/grass layering, clustered forests/mountains, paths, reachable classic POIs, blocked water, and no old ten-POI layout
-- generic 10x10 worlds still use the preserved ten progression POIs, water/bridge walkability, and deterministic seeded generation
-- same seed reproduces the same world per mode
+- runtime atlas `src/assets/world/atlas_v3.png` exists and is a 1024x1024 PNG
+- active runtime metadata points to `atlas_v3`
+- the atlas is an 8x8 grid with 128x128 square source cells
+- the manifest has 29 non-empty tiles and 35 mostly-black empty cells
+- empty atlas cells are not tile IDs and are not present in worldgen pools
+- every non-empty source rectangle uses exact 8x8 grid math and stays inside bounds
+- runtime source files do not actively reference the failed classic tileset, `classicIsland`, old 10x10 atlas, or classic object renderer
+- start tile is walkable grass
+- required POIs are reachable and not on blocked/water terrain
+- water tiles are not walkable
+- blocked mountain, volcano, and lava tiles are not walkable
+- generated worlds contain no roads, rivers, bridges, or empty-cell references
+- same seed reproduces the same world
 - different seeds produce different tile grids
-
-The classic tileset portion validates the active `classic_world_tileset` pack: cleaned/source PNGs exist, exact `#00B100` matte pixels are transparent, 12 groups and all 16px tile occurrences are represented in the manifest, extracted tile/object PNGs exist, source rectangles are in bounds, and current runtime files explicitly load the active classic image and manifest.
 
 To write a human-readable generation report and PNG minimap preview:
 
 ```powershell
-npm run debug:worldgen -- classicIsland optional-seed
-npm run debug:worldgen -- generic10x10 optional-seed
+npm run debug:worldgen -- optional-seed
 ```
 
 Outputs:
 
 - `docs/debug/worldgen/latest-worldgen-report.md`
-- `docs/debug/worldgen/classic-island-preview.png`
-- `docs/debug/worldgen/classic-island-generation-report.md`
-- `docs/debug/worldgen/generic10x10-preview.png`
-- `docs/debug/worldgen/generic10x10-generation-report.md`
-- `docs/debug/world-tileset-import/region-07-and-10-selected-assets.png`
+- `docs/debug/worldgen/atlas-v3-world-preview.png`
+- `docs/debug/worldgen/world-preview-seed-<seed>.png`
 
 ## Asset Import Validation
 
@@ -76,22 +76,30 @@ node tools\art_import\import_character_sprites.mjs
 
 Check `assets_v2/characters/classes/*_normalized.png`, `src/data/characterSprites.ts`, and `docs/debug/sprite-import/*.debug.png` / `*.import-report.md`. The normalized runtime sheets should be transparent 5x2 sheets with identical 704x512 cells; debug previews are the only files with labels, grid boxes, anchor crosses, and baseline lines.
 
-For the 10x10 overworld atlas, run only if intentionally regenerating the asset used by `generic10x10` mode:
+For the active `atlas_v3` overworld atlas, run after changing `D:\Projects\new_artwork\atlas_v3.jpeg` or the importer/classification rules:
+
+```powershell
+npm run import:atlas-v3
+```
+
+Check `src/assets/world/atlas_v3.png`, `src/assets/world/atlasV3.manifest.json`, `docs/debug/world-atlas-v3/atlas-v3-labeled.png`, and `docs/debug/world-atlas-v3/atlas-v3-import-report.md`. Black/near-black cells are unused slots only; do not chroma-key black or classify empty slots as gameplay tiles.
+
+For the legacy 10x10 overworld atlas, run only if intentionally regenerating that archived asset:
 
 ```powershell
 node tools\art_import\import_world_atlas.mjs
 ```
 
-Check `src/assets/world/world_atlas.normalized.png` and `docs/debug/world-atlas/world_atlas.labeled-preview.png` / `world_atlas.import-report.md`. This should stay separate from the classic special tileset catalog.
+Check `src/assets/world/world_atlas.normalized.png` and `docs/debug/world-atlas/world_atlas.labeled-preview.png` / `world_atlas.import-report.md`. This should not replace the active `atlas_v3` runtime path without a deliberate follow-up task.
 
-For the active classic world tileset pack, run:
+For the archived classic world tileset pack, run only if intentionally inspecting archived assets:
 
 ```powershell
-npm run import:classic-world-tileset
-npm run test:classic-world-tileset
+node tools\art_import\import_classic_world_tileset.mjs
+node tools\art_import\test_classic_world_tileset.mjs
 ```
 
-Check `src/assets/world/tilesets/classic_world_tileset.cleaned.png`, `src/assets/world/tilesets/classicWorldTileset.manifest.json`, `src/assets/world/tilesets/classic/extracted/`, and `docs/debug/world-tileset-import/`. The cleaned PNG should remove only exact `#00B100` matte pixels; the debug contact sheets and group-detection image are review outputs only and are not runtime assets. Runtime classic terrain selection should stay curated through `src/world/classicGrasslandRegionCatalog.ts`.
+Check `src/assets/world/tilesets/classic_world_tileset.cleaned.png`, `src/assets/world/tilesets/classicWorldTileset.manifest.json`, `src/assets/world/tilesets/classic/extracted/`, and `docs/debug/world-tileset-import/`. The cleaned PNG should remove only exact `#00B100` matte pixels; the debug contact sheets and group-detection image are review outputs only and are not runtime assets. This classic pack is not active gameplay terrain.
 
 For rembg-related regeneration, use `D:\tools\rembg\venv_rembg\Scripts\rembg.exe` with `birefnet-general`. The expected AMD/Windows provider path is DirectML (`DmlExecutionProvider`). Do not add NVIDIA-specific checks.
 
@@ -149,8 +157,8 @@ Expected:
 - Verify blocked terrain rules when testing boat/skyship flags.
 - Confirm collision does not jitter or leave the player visually/logically between tiles.
 - Confirm the overworld leader remains readable when standing on a town/location marker.
-- Confirm v2 terrain does not show hard source-sheet border lines between every tile.
-- Confirm water and raw river tiles block movement, while bridge tiles are walkable.
+- Confirm `atlas_v3` terrain shows no unused black cells; dark seams can come from actual atlas cell edge pixels and should not be debug grid overlays.
+- Confirm water blocks movement, and current worlds do not generate roads, rivers, beaches, or bridges.
 - Confirm new games produce different world seeds and load restores the same saved world.
 
 ## Battle Test

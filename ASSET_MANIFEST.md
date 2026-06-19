@@ -9,7 +9,7 @@ This manifest covers the art needed by the current playable implementation. It i
 - Tile grid is 32x32 layout pixels, displayed as crisp 64x64 pixels at the Full HD render target.
 - Recommended source tiles are 16x16 PNG displayed at 4x on the Full HD render target.
 - Overworld map is 64x40 tiles.
-- Active overworld terrain now uses `src/assets/world/tilesets/classic_world_tileset.cleaned.png` plus `src/assets/world/tilesets/classicWorldTileset.manifest.json`; `src/world/classicWorldTileCatalog.ts` curates manifest source rectangles for 32x32 map tiles.
+- Active overworld terrain now uses the fixed-grid 8x8 atlas `src/assets/world/atlas_v3.png` plus `src/assets/world/atlasV3.manifest.json`. Black cells in that atlas are unused slots and are excluded from worldgen.
 - Dungeon floors are 22x14 tiles.
 - Current drawing functions to refine later: `drawWorldTile`, `drawDungeonTile`, `drawLocationIcon`, `drawTown`, `drawLeader`, `drawCharacterSpriteFrame`, `drawNpc`, `drawPortrait`, `drawEnemySprite`, `drawPixelCrystal`, `drawPanel`, and `drawBar` in `src/main.ts`.
 - Phaser preloads the current PNG/JPEG assets in `src/main.ts`. All generated placeholders should remain as fallback paths for missing textures and unfinished asset families.
@@ -19,11 +19,11 @@ Priority scale: P1 readability-critical, P2 core gameplay polish, P3 boss/story 
 
 ## A. Core Tiles
 
-Note: the individual `assets/tiles/world/*` entries below remain fallback/legacy targets. The active generated overworld renders from the curated classic tileset catalog:
+Note: the individual `assets/tiles/world/*` entries below remain fallback/legacy targets. The active generated overworld renders from `atlas_v3` only:
 
 | Asset ID | Filename | Category | Size | Req | Priority | Used In | Tint/Recolor | Artist Notes | Replacement Target |
 |---|---|---:|---:|---|---|---|---|---|---|
-| classic_world_tileset | src/assets/world/tilesets/classic_world_tileset.cleaned.png + classicWorldTileset.manifest.json | World terrain/object sheet | 832x1072 sheet, 16px base grid, irregular manifest rects | Required | P1 | Generated overworld terrain, roads, bridges, water, mountains, landmarks, POIs | No | Runtime uses exact manifest source rectangles selected by `src/world/classicWorldTileCatalog.ts`; do not feed all extracted manifest entries directly into worldgen. | `drawWorldTile(tileId)`, `drawLocationIcon(location)` |
+| atlas_v3 | src/assets/world/atlas_v3.png + atlasV3.manifest.json | World terrain atlas | 1024x1024 sheet, 8x8 grid, 128px cells | Required | P1 | Generated overworld terrain only | No | Runtime uses exact 8x8 cell rectangles. Empty black cells are ignored, not transparency. POIs render from separate marker art/fallbacks. | `drawWorldTile(tileId)` |
 
 | Asset ID | Filename | Category | Size | Req | Priority | Used In | Tint/Recolor | Artist Notes | Replacement Target |
 |---|---|---:|---:|---|---|---|---|---|---|
@@ -37,7 +37,7 @@ Note: the individual `assets/tiles/world/*` entries below remain fallback/legacy
 | tile_deep_water_b | assets/tiles/world/deep_water_b.png | World tile | 16x16 | Optional | P4 | Deep water animation | Yes | Second deep water frame. | Future animated tile loader |
 | tile_sand | assets/tiles/world/sand.png | World tile | 16x16 | Required | P1 | Desert/Sunbarrow region | Yes | Ochre sand with sparse marks, not too bright. | `drawWorldTile("sand")` |
 | tile_road | assets/tiles/world/road.png | World tile | 16x16 | Required | P1 | Roads/locations | Yes | Warm path, reads as safe route. | `drawWorldTile("road")` |
-| tile_bridge | assets/tiles/world/bridge.png | World tile | 16x16 | Optional | P2 | Water crossings if added visually | Partial | Wooden/stone bridge over water; currently roads imply routes. | Future `drawWorldTile` route overlay |
+| tile_bridge | assets/tiles/world/bridge.png | World tile | 16x16 | Optional | P2 | Water crossings if added visually | Partial | Wooden/stone bridge over water; not active in the current atlas_v3 overworld. | Future route/bridge overlay |
 | marker_town | assets/tiles/markers/town.png | Map marker | 16x16 | Required | P2 | Dawnford, Brinewick, Elderleaf, Sunbarrow | Yes | Safe settlement icon; can palette swap per town. | `drawLocationIcon(kind: "town")` |
 | marker_castle | assets/tiles/markers/castle.png | Map marker | 16x16 | Required | P2 | Dawnford identity | Partial | Castle/town variant for Dawnford. | `drawLocationIcon`, location-specific later |
 | marker_cave | assets/tiles/markers/cave.png | Map marker | 16x16 | Required | P2 | Moss Cave | Yes | Dark opening in stone/moss. | `drawLocationIcon(kind: "dungeon")` |

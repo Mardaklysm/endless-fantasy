@@ -39,7 +39,7 @@ Keep all paths lowercase snake_case. Use PNG for most raster art. Battle/backgro
 
 ## Loading Strategy
 
-Current note: the Phaser scene already has a `preload()` image loader. The active overworld terrain uses the `classic_world_tileset` texture from `src/assets/world/tilesets/classic_world_tileset.cleaned.png`, the imported manifest `classicWorldTileset.manifest.json`, and the curated gameplay catalog in `src/world/classicWorldTileCatalog.ts`; individual root `assets/tiles/world/*` files are fallback/legacy references.
+Current note: the Phaser scene already has a `preload()` image loader. The active overworld terrain uses the `atlas_v3` texture from `src/assets/world/atlas_v3.png`, imported manifest `src/assets/world/atlasV3.manifest.json`, and tile metadata in `src/data/worldTiles.ts`; individual root `assets/tiles/world/*` files are fallback/legacy references.
 
 For future asset families, extend the existing loader incrementally:
 
@@ -82,7 +82,7 @@ This lets the game remain playable after every partial art import.
 
 | Code Area | Current Function | Future Asset Hook | Risk |
 |---|---|---|---|
-| World terrain | `drawWorldTile` | `src/assets/world/tilesets/classic_world_tileset.cleaned.png` + `classicWorldTileset.manifest.json` + `src/world/classicWorldTileCatalog.ts` | Active path; curated manifest rects render into 32px display tiles |
+| World terrain | `drawWorldTile` | `src/assets/world/atlas_v3.png` + `src/assets/world/atlasV3.manifest.json` + `src/data/worldTiles.ts` | Active path; exact 8x8 atlas cells render into 32px display tiles; empty black cells are ignored |
 | Location markers | `drawLocationIcon` | `assets/tiles/markers/*` | Low, but needs location-id variant mapping |
 | Town floor/services | `drawTown` and service blocks | Town floor/service marker assets | Medium, because service text is currently drawn directly |
 | Dungeon tiles | `drawDungeonTile` | `assets/tiles/dungeons/*`, `assets/tiles/objects/*` | Low for base tiles, medium for opened chest state |
@@ -140,7 +140,7 @@ This lets the game remain playable after every partial art import.
 ## Safe Incremental Replacement Order
 
 1. Add folder structure and loader keys for Phase 1 assets.
-2. Replace `drawWorldTile` with atlas/manifest-backed rendering. Done for `classic_world_tileset`; generated terrain drawing remains fallback.
+2. Replace `drawWorldTile` with atlas/manifest-backed rendering. Done for `atlas_v3`; generated terrain drawing remains fallback.
 3. Replace or extend class sprite rendering through `src/data/characterSprites.ts` and `drawCharacterSpriteFrame`.
 4. Replace `drawPanel` and menu cursor with UI assets.
 5. Replace normal enemy rendering by adding an enemy-id-to-texture map. Keep generated shapes if missing.

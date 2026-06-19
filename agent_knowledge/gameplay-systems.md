@@ -10,13 +10,13 @@
 - Holding a direction moves smoothly; releasing can stop between tiles rather than completing a forced tile step.
 - Shift keeps faster exploration movement, but still advances continuously rather than skipping tiles.
 - Visual position and logical tile position are intentionally separate during movement. Do not recompute rendering from stale logical tile coordinates mid-move.
-- Terrain uses the 100 tile IDs in `src/data/worldTiles.ts`, grouped by biome, walkability, movement cost, and tags.
+- Terrain uses the 29 non-empty `atlas_v3` tile IDs in `src/data/worldTiles.ts`, grouped by biome, walkability, movement cost, and tags. The 35 mostly-black atlas cells are unused slots and are never gameplay tiles.
 - World collision uses centralized `isWorldTileWalkable(tileId)` from the tile manifest.
-- Water, river, ocean, swamp water, cliffs, lava, and blocked mountain tiles are not walkable.
-- Bridges, roads, paths, and carved POI footprints are walkable.
+- Deep water, lava, volcanoes, and blocked mountain tiles are not walkable.
+- Grass, desert/dryland, snow/ice ground, dark ground, gravel, and carved POI footprints are walkable.
 - Boat and skyship flags still gate progression/location access, but they no longer make raw water or blocked mountains walkable.
-- The generator creates coherent biome regions, rivers, bridges, roads, and procedural POI coordinates, then validates that required POIs are reachable from the start.
-- Overworld locations use larger 3x3-ish footprints for rendering and entry. The terrain under each footprint is road/passable so the player can approach and enter naturally.
+- The `atlas_v3_tile_world` generator creates coherent grass, desert, snow, dark, water, rock, and sparse lava regions plus procedural POI coordinates, then validates that required POIs are reachable from the start. It currently does not generate roads, rivers, beaches, or bridges.
+- Overworld locations use larger 3x3-ish footprints for rendering and entry. The terrain under each footprint is carved to walkable atlas-v3 land so the player can approach and enter naturally.
 - Location footprints enter towns/dungeons/gate automatically when the player crosses into the footprint.
 - Town south gates can exit when stepping into the exit tile or pressing south while already standing on the gate tile.
 - Town interactions check the facing tile first, then the nearby forgiving service/NPC fallback.
@@ -27,7 +27,7 @@
 - Random encounters occur on dangerous world terrain and inside dungeons when settings allow.
 - Encounter setting can be toggled in the menu.
 - Encounter counter decrements only when the derived logical tile changes; forests/hills are more dangerous.
-- World encounter tables are selected from generated tile encounter families such as plains, forest, hills, sand, water, and final/darkland. Roads and bridges suppress random encounters.
+- World encounter tables are selected from generated tile encounter families such as plains, hills, sand, water, and final/darkland. The current atlas-v3 generator does not create encounter-suppressing roads or bridges.
 - Dungeon encounter tables are defined per dungeon.
 - F9 debug menu can start an encounter for testing.
 

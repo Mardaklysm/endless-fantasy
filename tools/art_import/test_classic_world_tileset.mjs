@@ -96,21 +96,20 @@ for (const file of [
   assert(fs.existsSync(path.join(DEBUG_DIR, file)), `Missing debug output: docs/debug/world-tileset-import/${file}`);
 }
 
-assertRuntimeLoadsClassicTileset();
+assertRuntimeDoesNotLoadClassicTileset();
 
-console.log(`Classic world tileset validation passed: ${tileEntries.length} unique tiles, ${objectEntries.length} objects/landmarks.`);
+console.log(`Archived classic world tileset validation passed: ${tileEntries.length} unique tiles, ${objectEntries.length} objects/landmarks.`);
 
-function assertRuntimeLoadsClassicTileset() {
+function assertRuntimeDoesNotLoadClassicTileset() {
   const runtimeFiles = ["src/main.ts", "src/world/worldGenerator.ts", "src/data/worldTiles.ts"];
-  const mainSource = fs.readFileSync(path.join(PROJECT_ROOT, "src/main.ts"), "utf8");
-  assert(mainSource.includes("classic_world_tileset.cleaned.png"), "src/main.ts must explicitly load the active classic tileset image.");
-  assert(mainSource.includes("classicWorldTileset.manifest.json"), "src/main.ts must explicitly load the active classic tileset manifest.");
-  assert(mainSource.includes("classic_world_tileset"), "src/main.ts must use the classic texture key.");
-  assert(mainSource.includes("resolveWorldgenMode"), "src/main.ts must route classic usage through the worldgen mode selector.");
   for (const file of runtimeFiles) {
     const text = fs.readFileSync(path.join(PROJECT_ROOT, file), "utf8");
+    assert(!text.includes("classic_world_tileset.cleaned.png"), `${file} must not load the archived classic tileset image.`);
+    assert(!text.includes("classicWorldTileset.manifest.json"), `${file} must not load the archived classic tileset manifest.`);
+    assert(!text.includes("classic_world_tileset"), `${file} must not use the archived classic texture key.`);
+    assert(!text.includes("classicIsland"), `${file} must not use the failed classicIsland worldgen mode.`);
     assert(!text.includes("57105.png"), `${file} must not load the raw source tileset.`);
-    assert(!text.includes("ctworldmap1000ad.png"), `${file} must not load the reference map as runtime art.`);
+    assert(!text.replace("!./assets/world/world_atlas.normalized.png", "").includes("world_atlas.normalized.png"), `${file} must not load the old generated atlas.`);
   }
 }
 

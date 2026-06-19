@@ -59,7 +59,7 @@ The game saves to `localStorage`. You can save from the menu on the overworld or
 ## Gameplay Summary
 
 - Three-character party: Arlen, Mira, and Kael
-- Seeded procedural overworld with classic tileset terrain, towns, dungeons, roads, rivers, bridges, and random encounters
+- Seeded procedural overworld using the 8x8 `atlas_v3` terrain atlas, towns, dungeons, lakes, regional patches, blockers, and random encounters
 - Five dungeons: Moss Cave, Ashen Keep, Tide Shrine, Skyglass Tower, and Eclipse Spire
 - Turn-based battles with Attack, Magic, Item, Defend, and Run commands
 - Individual initiative turns, status effects, elemental weaknesses, boss fights, XP/gold, level-ups, equipment, shops, inns, clinics, and magic shops

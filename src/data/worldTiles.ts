@@ -1,174 +1,196 @@
-import {
-  CLASSIC_WORLD_TILESET_ID,
-  CLASSIC_WORLD_TILESET_IMAGE,
-  CLASSIC_WORLD_TILESET_MANIFEST,
-  CLASSIC_WORLD_TILESET_MANIFEST_PATH,
-  CLASSIC_WORLD_TILESET_TEXTURE_KEY,
-  CLASSIC_WORLD_TILE_DEFINITIONS,
-  CLASSIC_WORLD_TILE_IDS,
-  type ClassicSourceRect,
-  type ClassicWorldBiome,
-  type ClassicWorldEncounterFamily,
-  type ClassicWorldTerrainDefinition,
-  type ClassicWorldTileId,
-} from "../world/classicGrasslandRegionCatalog.ts";
-import {
-  GENERIC_WORLD_ATLAS,
-  GENERIC_WORLD_TILE_DEFINITIONS,
-  GENERIC_WORLD_TILE_IDS,
-  type GenericSourceRect,
-  type GenericWorldBiome,
-  type GenericWorldEncounterFamily,
-  type GenericWorldTileDefinition,
-  type GenericWorldTileId,
-} from "../world/genericAtlasWorldCatalog.ts";
+import atlasV3ManifestJson from "../assets/world/atlasV3.manifest.json" with { type: "json" };
 
-export { CLASSIC_WORLD_TILE_IDS, GENERIC_WORLD_TILE_IDS };
+export type WorldBiome = "grassland" | "forest" | "desert" | "snow" | "darkland" | "water" | "mountain" | "lava";
+export type WorldEncounterFamily = "plains" | "forest" | "sand" | "hills" | "water" | "final";
+export type WorldTileId = string;
 
-export type WorldBiome = ClassicWorldBiome | GenericWorldBiome;
-export type WorldEncounterFamily = ClassicWorldEncounterFamily | GenericWorldEncounterFamily;
-export type WorldTileId = ClassicWorldTileId | GenericWorldTileId;
-export type WorldSourceRect = ClassicSourceRect | GenericSourceRect;
+export interface WorldSourceRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
 
-export interface WorldAtlasDefinition {
-  id: string;
-  textureKey: string;
-  image: string;
-  manifest?: string;
-  sourceCopy?: string;
-  sheetWidth: number;
-  sheetHeight: number;
-  baseTileSize: number;
-  sourceColumns: number;
-  sourceRows: number;
-  backgroundMode?: string;
-  transparentColor?: string;
-  slicing: "manifestSourceRect" | "generic10x10Grid";
-  oldGeneratedAtlasActive: boolean;
+interface AtlasV3BaseCell {
+  row: number;
+  col: number;
+  empty: boolean;
+  source: WorldSourceRect;
+  emptyRatio: number;
+  notes?: string;
+}
+
+interface AtlasV3TileCell extends AtlasV3BaseCell {
+  empty: false;
+  id: WorldTileId;
+  biome: WorldBiome;
+  category: string;
+  encounterFamily: WorldEncounterFamily;
+  walkable: boolean;
+  movementCost: number;
+  tags: string[];
+}
+
+interface AtlasV3EmptyCell extends AtlasV3BaseCell {
+  empty: true;
+}
+
+type AtlasV3Cell = AtlasV3TileCell | AtlasV3EmptyCell;
+
+interface AtlasV3Manifest {
+  schemaVersion: number;
+  id: "atlas_v3";
+  sourceImage: string;
+  runtimeImage: string;
+  columns: 8;
+  rows: 8;
+  tileWidth: number;
+  tileHeight: number;
+  image: {
+    width: number;
+    height: number;
+    runtimeFormat: string;
+    sourceFormat: string;
+  };
+  emptyDetection: {
+    nearBlackLuminance: number;
+    nearBlackMaxChannel: number;
+    emptyPixelRatio: number;
+  };
+  cells: AtlasV3Cell[];
+  tiles: Record<string, AtlasV3TileCell>;
 }
 
 export interface WorldTileDefinition {
   id: WorldTileId;
-  displayName: string;
+  row: number;
+  col: number;
   biome: WorldBiome;
+  category: string;
   encounterFamily: WorldEncounterFamily;
   walkable: boolean;
   movementCost: number;
   tags: readonly string[];
   sourceRect: WorldSourceRect;
-  textureKey: string;
-  atlasId: string;
+  emptyRatio: number;
   notes?: string;
-  row?: number;
-  col?: number;
-  macroRegion?: number;
-  manifestId?: string;
 }
 
-export const WORLD_ATLASES = {
-  classicIsland: {
-    id: CLASSIC_WORLD_TILESET_ID,
-    textureKey: CLASSIC_WORLD_TILESET_TEXTURE_KEY,
-    image: CLASSIC_WORLD_TILESET_IMAGE,
-    manifest: CLASSIC_WORLD_TILESET_MANIFEST_PATH,
-    sheetWidth: CLASSIC_WORLD_TILESET_MANIFEST.image.width,
-    sheetHeight: CLASSIC_WORLD_TILESET_MANIFEST.image.height,
-    baseTileSize: CLASSIC_WORLD_TILESET_MANIFEST.baseGrid.chosenTileSize,
-    sourceColumns: CLASSIC_WORLD_TILESET_MANIFEST.baseGrid.columns,
-    sourceRows: CLASSIC_WORLD_TILESET_MANIFEST.baseGrid.rows,
-    backgroundMode: CLASSIC_WORLD_TILESET_MANIFEST.image.backgroundMode,
-    transparentColor: CLASSIC_WORLD_TILESET_MANIFEST.image.transparentColor,
-    slicing: "manifestSourceRect",
-    oldGeneratedAtlasActive: false,
-  },
-  generic10x10: {
-    id: GENERIC_WORLD_ATLAS.id,
-    textureKey: GENERIC_WORLD_ATLAS.textureKey,
-    image: GENERIC_WORLD_ATLAS.image,
-    sourceCopy: GENERIC_WORLD_ATLAS.sourceCopy,
-    sheetWidth: GENERIC_WORLD_ATLAS.sheetWidth,
-    sheetHeight: GENERIC_WORLD_ATLAS.sheetHeight,
-    baseTileSize: GENERIC_WORLD_ATLAS.tileWidth,
-    sourceColumns: GENERIC_WORLD_ATLAS.columns,
-    sourceRows: GENERIC_WORLD_ATLAS.rows,
-    slicing: "generic10x10Grid",
-    oldGeneratedAtlasActive: false,
-  },
-} as const satisfies Record<string, WorldAtlasDefinition>;
+export const ATLAS_V3_MANIFEST = atlasV3ManifestJson as AtlasV3Manifest;
 
-export const WORLD_ATLAS = WORLD_ATLASES.classicIsland;
+export const WORLD_ATLAS = {
+  id: ATLAS_V3_MANIFEST.id,
+  textureKey: "atlas_v3",
+  image: ATLAS_V3_MANIFEST.runtimeImage,
+  manifest: "src/assets/world/atlasV3.manifest.json",
+  sourceImage: ATLAS_V3_MANIFEST.sourceImage,
+  columns: ATLAS_V3_MANIFEST.columns,
+  rows: ATLAS_V3_MANIFEST.rows,
+  tileWidth: ATLAS_V3_MANIFEST.tileWidth,
+  tileHeight: ATLAS_V3_MANIFEST.tileHeight,
+  sheetWidth: ATLAS_V3_MANIFEST.image.width,
+  sheetHeight: ATLAS_V3_MANIFEST.image.height,
+  emptyCellsActive: false,
+  oldGeneratedAtlasActive: false,
+  usingOld10x10Atlas: false,
+  usingClassicSpecialTileset: false
+} as const;
 
-export const WORLD_ATLASES_BY_TEXTURE_KEY = Object.fromEntries(
-  Object.values(WORLD_ATLASES).map((atlas) => [atlas.textureKey, atlas]),
-) as Record<string, WorldAtlasDefinition>;
+export const WORLD_TILE_IDS = {
+  brightGrass: "bright_grass",
+  mediumGrass: "medium_grass",
+  darkGrass: "dark_grass",
+  flowerMeadowGrass: "flower_meadow_grass",
+  lushCloverGrass: "lush_clover_grass",
+  weedsGrass: "weeds_grass",
+  trampledGrass: "trampled_grass",
+  grassStones: "grass_stones",
+  brightSand: "bright_sand",
+  duneSand: "dune_sand",
+  rockySand: "rocky_sand",
+  crackedDryEarth: "cracked_dry_earth",
+  reddishDesertSoil: "reddish_desert_soil",
+  cactusSand: "cactus_sand",
+  desertScrub: "desert_scrub",
+  cleanSnow: "clean_snow",
+  packedSnow: "packed_snow",
+  icySnow: "icy_snow",
+  snowRocks: "snow_rocks",
+  frozenLakeIce: "frozen_lake_ice",
+  crackedIce: "cracked_ice",
+  deadCrackedEarth: "dead_cracked_earth",
+  ashBlackGround: "ash_black_ground",
+  cursedPurpleGround: "cursed_purple_ground",
+  deepWater: "deep_water",
+  rockyMountainGround: "rocky_mountain_ground",
+  gravelStoneGround: "gravel_stone_ground",
+  volcanoMound: "volcano_mound",
+  lavaCrackedGround: "lava_cracked_ground"
+} as const satisfies Record<string, WorldTileId>;
 
-function classicTileToWorldTile(tile: ClassicWorldTerrainDefinition<ClassicWorldTileId>): WorldTileDefinition {
-  return {
-    id: tile.id,
-    displayName: tile.displayName,
-    biome: tile.biome,
-    encounterFamily: tile.encounterFamily,
-    walkable: tile.walkable,
-    movementCost: tile.movementCost,
-    tags: tile.tags,
-    sourceRect: tile.sourceRect,
-    textureKey: CLASSIC_WORLD_TILESET_TEXTURE_KEY,
-    atlasId: CLASSIC_WORLD_TILESET_ID,
-    notes: tile.notes,
-    macroRegion: tile.macroRegion,
-    manifestId: tile.manifestId,
-  };
+export const ATLAS_V3_CELLS = ATLAS_V3_MANIFEST.cells as readonly AtlasV3Cell[];
+export const ATLAS_V3_EMPTY_CELLS = ATLAS_V3_CELLS.filter((cell): cell is AtlasV3EmptyCell => cell.empty);
+export const ATLAS_V3_NON_EMPTY_CELLS = ATLAS_V3_CELLS.filter((cell): cell is AtlasV3TileCell => !cell.empty);
+export const ATLAS_V3_EMPTY_CELL_KEYS = new Set(ATLAS_V3_EMPTY_CELLS.map((cell) => cellKey(cell.row, cell.col)));
+
+export const WORLD_TILE_DEFINITIONS = ATLAS_V3_NON_EMPTY_CELLS.map(
+  (cell): WorldTileDefinition => ({
+    id: cell.id,
+    row: cell.row,
+    col: cell.col,
+    biome: cell.biome,
+    category: cell.category,
+    encounterFamily: cell.encounterFamily,
+    walkable: cell.walkable,
+    movementCost: cell.movementCost,
+    tags: cell.tags,
+    sourceRect: {
+      x: cell.source.x,
+      y: cell.source.y,
+      width: cell.source.width,
+      height: cell.source.height
+    },
+    emptyRatio: cell.emptyRatio,
+    notes: cell.notes
+  })
+) as readonly WorldTileDefinition[];
+
+export const WORLD_TILES = Object.fromEntries(WORLD_TILE_DEFINITIONS.map((tile) => [tile.id, tile])) as Record<WorldTileId, WorldTileDefinition>;
+export const WORLD_TILE_ID_SET = new Set(Object.keys(WORLD_TILES));
+
+export function isAtlasV3TileId(tileId?: string): tileId is WorldTileId {
+  return !!tileId && WORLD_TILE_ID_SET.has(tileId);
 }
 
-function genericTileToWorldTile(tile: GenericWorldTileDefinition<GenericWorldTileId>): WorldTileDefinition {
-  return {
-    id: tile.id,
-    displayName: tile.displayName,
-    biome: tile.biome,
-    encounterFamily: tile.encounterFamily,
-    walkable: tile.walkable,
-    movementCost: tile.movementCost,
-    tags: tile.tags,
-    sourceRect: tile.sourceRect,
-    textureKey: tile.textureKey,
-    atlasId: tile.atlasId,
-    notes: tile.notes,
-    row: tile.row,
-    col: tile.col,
-  };
+export function isAtlasV3EmptyCell(row: number, col: number): boolean {
+  return ATLAS_V3_EMPTY_CELL_KEYS.has(cellKey(row, col));
 }
 
-export const WORLD_TILE_DEFINITIONS = [
-  ...CLASSIC_WORLD_TILE_DEFINITIONS.map((tile) => classicTileToWorldTile(tile as ClassicWorldTerrainDefinition<ClassicWorldTileId>)),
-  ...GENERIC_WORLD_TILE_DEFINITIONS.map((tile) => genericTileToWorldTile(tile as GenericWorldTileDefinition<GenericWorldTileId>)),
-] as readonly WorldTileDefinition[];
-
-export const WORLD_TILES = Object.fromEntries(WORLD_TILE_DEFINITIONS.map((tile) => [tile.id, tile])) as Record<
-  WorldTileId,
-  WorldTileDefinition
->;
+export function worldTileById(tileId?: WorldTileId): WorldTileDefinition | undefined {
+  if (!tileId) return undefined;
+  return WORLD_TILES[tileId];
+}
 
 export function isWorldTileWalkable(tileId?: WorldTileId): boolean {
-  if (!tileId) return false;
-  return WORLD_TILES[tileId]?.walkable ?? false;
+  return worldTileById(tileId)?.walkable ?? false;
 }
 
 export function worldTileMovementCost(tileId?: WorldTileId): number {
-  if (!tileId) return 99;
-  return WORLD_TILES[tileId]?.movementCost ?? 99;
+  return worldTileById(tileId)?.movementCost ?? 99;
 }
 
 export function worldTileHasTag(tileId: WorldTileId | undefined, tag: string): boolean {
-  if (!tileId) return false;
-  return WORLD_TILES[tileId]?.tags.includes(tag) ?? false;
+  return worldTileById(tileId)?.tags.includes(tag) ?? false;
 }
 
 export function worldTileEncounterFamily(tileId?: WorldTileId): WorldEncounterFamily | undefined {
-  if (!tileId) return undefined;
-  const family = WORLD_TILES[tileId]?.encounterFamily;
-  return family === "road" ? undefined : family;
+  return worldTileById(tileId)?.encounterFamily;
 }
 
 export function worldTileIdsMatching(predicate: (tile: WorldTileDefinition) => boolean): WorldTileId[] {
   return WORLD_TILE_DEFINITIONS.filter(predicate).map((tile) => tile.id);
+}
+
+function cellKey(row: number, col: number): string {
+  return `${row}:${col}`;
 }

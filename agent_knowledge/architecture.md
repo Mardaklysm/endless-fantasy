@@ -29,12 +29,7 @@ D:\Projects\Endless Fantasy\
       characterSprites.ts
       worldTiles.ts
     world/
-      classicGrasslandRegionCatalog.ts
-      classicIslandWorldGenerator.ts
-      genericAtlasWorldCatalog.ts
-      genericAtlasWorldGenerator.ts
       worldGenerator.ts
-      worldgenConfig.ts
     main.ts
     style.css
     vite-env.d.ts
@@ -70,12 +65,8 @@ Ignored/generated folders:
 - Asset texture key/path maps and renderer lookup maps for terrain, locations, dungeons, enemies, portraits, and NPCs.
 - Data tables: `ITEMS`, `SPELLS`, `WEAPONS`, `ARMORS`, `ENEMIES`, `WORLD_TABLES`.
 - Imported class sprite manifest from `src/data/characterSprites.ts` for fighter/priest/wizard frame rectangles, anchors, and source metadata.
-- Imported world tile metadata from `src/data/worldTiles.ts` for both overworld modes: the generic 10x10 atlas catalog and the curated classic-special catalog, including source rectangles, texture keys, tile IDs, walkability, movement cost, encounter family, and tags.
-- `src/world/worldgenConfig.ts`: worldgen mode selection. The current default is `classicIsland`; query overrides support `?worldgen=classicIsland` and `?worldgen=generic10x10`.
-- `src/world/worldGenerator.ts`: thin dispatcher that calls either the generic 10x10 generator or the classic island generator.
-- `src/world/genericAtlasWorldGenerator.ts`: preserved seeded deterministic generic atlas overworld generation with broad biomes, roads/rivers/bridges, legacy progression POIs, reachability validation, and debug-report formatting.
-- `src/world/classicIslandWorldGenerator.ts`: specialized seeded island/grassland generator for the classic special tileset. It uses a small classic POI model instead of the old ten progression locations.
-- `src/world/classicGrasslandRegionCatalog.ts`: curated region 7+10 classic tileset catalog. It intentionally does not expose the full 1885 extracted tile pool to worldgen.
+- Imported world tile manifest from `src/data/worldTiles.ts` for the active `atlas_v3` overworld atlas, 8x8 source rectangles, empty-cell exclusion, tile IDs, walkability, movement cost, encounter family, and tags.
+- `src/world/worldGenerator.ts`: seeded deterministic `atlas_v3_tile_world` generation, grass/desert/snow/dark/water/rock/lava patch placement, POI placement, reachability validation, and debug-report formatting. It does not generate roads, rivers, bridges, classic POI objects, or old 10x10 tile IDs.
 - `SynthAudio`: WebAudio helper for generated music loops and sound effects.
 - `CrystalOathScene`: main Phaser scene containing game state, input handling, map movement, battles, menus, save/load, and rendering.
 - Dungeon generation helpers: `makeDungeonFloors`, `blankDungeon`, `carveRect`, `carveLine`, `setTile`, `floorToStrings`.
@@ -129,13 +120,13 @@ The scene keeps generated fallback drawing for missing textures. It also tracks 
 
 Fighter/priest/wizard class sprites are normalized 5x2 transparent sheets in `assets_v2/characters/classes/`. Runtime rendering selects fixed manifest cells and positions each crop by manifest `bodyCenterX` and `feetBaselineY`, so walk and attack frames share a stable body anchor. The old Arlen/Mira/Kael tiny map/battle PNGs are excluded from the runtime asset glob.
 
-Overworld rendering supports two separate generation/asset modes. `classicIsland` uses `src/assets/world/tilesets/classic_world_tileset.cleaned.png`, `src/assets/world/tilesets/classicWorldTileset.manifest.json`, and exact manifest `source.x/y/width/height` rectangles from the curated region 7+10 catalog. It also draws classic object/landmark overlays after base terrain and blocks overlay footprints except entry tiles. `generic10x10` uses the preserved `src/assets/world/world_atlas.normalized.png` catalog with fixed 10x10 atlas source rectangles. `drawWorldTile` chooses the texture and crop from each tile definition, so classic mode does not assume row/column slicing and generic mode does not depend on the classic manifest.
+Overworld rendering uses the active `atlas_v3` tileset at `src/assets/world/atlas_v3.png` plus the imported manifest `src/assets/world/atlasV3.manifest.json`. `drawWorldTile` crops exact 8x8 atlas cell rectangles from `src/data/worldTiles.ts` and draws them at 32 layout pixels, scaled to 64 canvas pixels by the Full HD render scale. Black/empty atlas cells are not tile IDs and must not be generated or drawn. The classic special tileset and old generated 10x10 atlas are not active runtime terrain.
 
 Render resolution is split into clear constants: `DESIGN_WIDTH = 1920`, `DESIGN_HEIGHT = 1080`, `PIXEL_ART_SCALE = 2`, `LAYOUT_WIDTH = DESIGN_WIDTH / PIXEL_ART_SCALE`, and `LAYOUT_HEIGHT = DESIGN_HEIGHT / PIXEL_ART_SCALE`. Graphics commands, Phaser images, and live text are scaled by `PIXEL_ART_SCALE` when rendered, so existing 960x540-style layout coordinates fill a true 1920x1080 canvas. Pointer input maps from canvas coordinates back to layout coordinates by dividing by `PIXEL_ART_SCALE`.
 
 Texture filtering is per asset family: battle backgrounds use linear filtering and the canvas CSS uses `image-rendering: auto`; sprites, tiles, UI, icons, enemies, and class sheets use nearest-neighbor texture filtering.
 
-New games call the seeded world generator through the selected mode. Generic mode includes the legacy ten progression POIs, roads, rivers, bridges, start position, entry triggers, and validation result. Classic island mode includes a smaller special-map POI set (`start_village`, `forest_village`, `mountain_cave`, `castle_or_keep`, optional `port_or_dock`, optional `shrine_or_landmark`) plus coastline, paths, forest clusters, mountain clusters, overlays, and validation result. `CrystalOathScene.locations()` adapts classic POIs into existing town/dungeon interiors only as a compatibility layer; it does not visually place the old ten POI layout in classic mode.
+New games call the seeded world generator. The generated world includes the tile grid, POI coordinates, start position, entry triggers, and validation result; roads, rivers, and bridges are intentionally empty for the current minimal atlas pass. `CrystalOathScene.locations()` adapts generated POIs back into the existing town/dungeon/gate/final entry behavior and keeps progression locks in code.
 
 Battle rendering is split into helper sections:
 
