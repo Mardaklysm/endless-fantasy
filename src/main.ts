@@ -33,11 +33,10 @@ const MOVE_DURATION_MS = 155;
 const FAST_MOVE_DURATION_MS = 95;
 const MOVE_TILES_PER_MS = 1 / MOVE_DURATION_MS;
 const FAST_MOVE_TILES_PER_MS = 1 / FAST_MOVE_DURATION_MS;
-const BATTLE_ACTION_DELAY_MS = 820;
+const BATTLE_ACTION_DELAY_MS = 0;
 const BATTLE_TURN_DELAY_MS = 420;
-const PLAYER_HITBOX = { left: 0.22, top: 0.18, right: 0.78, bottom: 0.9 };
 const WORLD_PLAYER_BASE_SPRITE_WIDTH = 33;
-const WORLD_PLAYER_SPRITE_WIDTH = WORLD_PLAYER_BASE_SPRITE_WIDTH * 2;
+const EXPLORE_PLAYER_SPRITE_WIDTH = WORLD_PLAYER_BASE_SPRITE_WIDTH * 2;
 const LANDMARK_FOOTPRINT = 3;
 
 type Mode =
@@ -72,6 +71,13 @@ type TargetKind = "enemy" | "ally" | "allEnemies" | "allAllies" | "self";
 interface Vec {
   x: number;
   y: number;
+}
+
+interface ExploreStep {
+  mode: ExploreMode;
+  from: Vec;
+  to: Vec;
+  dir: Vec;
 }
 
 interface StatusState {
@@ -1195,6 +1201,7 @@ class CrystalOathScene extends Phaser.Scene {
   private blockedMoveCooldown = 0;
   private walkAnimElapsed = 0;
   private playerMoving = false;
+  private activeStep?: ExploreStep;
   private worldTilesetValidated = false;
 
   constructor() {
@@ -1413,6 +1420,7 @@ class CrystalOathScene extends Phaser.Scene {
   }
 
   private handleExplore(event: KeyboardEvent) {
+    if (this.activeStep) return;
     if (isCancel(event)) {
       this.clearHeldMovement();
       this.openMainMenu();
@@ -1425,7 +1433,6 @@ class CrystalOathScene extends Phaser.Scene {
     const dir = keyDirection(event);
     if (!dir) return;
     this.lastMoveDir = { ...dir };
-    if (!event.repeat) this.moveExploreContinuously(dir, 32);
     this.markDirty();
   }
 
@@ -1788,6 +1795,14 @@ class CrystalOathScene extends Phaser.Scene {
 
   private clearHeldMovement() {
     this.heldDirections = [];
+    this.cancelActiveStep();
+  }
+
+  private cancelActiveStep() {
+    if (!this.activeStep) return;
+    const mode = this.activeStep.mode;
+    this.setVisualExplorePos(mode, this.currentExploreTile(mode));
+    this.activeStep = undefined;
   }
 
   private currentHeldDirection(): Vec | undefined {
@@ -1804,6 +1819,15 @@ class CrystalOathScene extends Phaser.Scene {
     this.playerMoving = false;
     if (!this.isExploreMode(this.mode)) {
       this.walkAnimElapsed = 0;
+      this.activeStep = undefined;
+      return;
+    }
+    if (this.activeStep) {
+      this.lastMoveDir = { ...this.activeStep.dir };
+      this.playerMoving = true;
+      this.walkAnimElapsed += delta;
+      this.advanceExploreStep(delta);
+      this.markDirty();
       return;
     }
     const dir = this.currentHeldDirection();
@@ -1812,7 +1836,7 @@ class CrystalOathScene extends Phaser.Scene {
       return;
     }
     this.lastMoveDir = { ...dir };
-    if (!this.moveExploreContinuously(dir, delta)) {
+    if (!this.beginExploreStep(this.mode, dir)) {
       if (this.blockedMoveCooldown <= 0) {
         this.audio.blip("error");
         this.blockedMoveCooldown = 150;
@@ -1822,37 +1846,41 @@ class CrystalOathScene extends Phaser.Scene {
     }
     this.playerMoving = true;
     this.walkAnimElapsed += delta;
+    this.advanceExploreStep(delta);
     this.markDirty();
   }
 
-  private moveExploreContinuously(dir: Vec, delta: number): boolean {
+  private beginExploreStep(mode: ExploreMode, dir: Vec): boolean {
     if (!this.isExploreMode(this.mode)) return false;
-    const mode = this.mode;
-    const speed = (this.shiftHeld ? FAST_MOVE_TILES_PER_MS : MOVE_TILES_PER_MS) * delta;
-    let pos = this.visualExplorePos(mode);
-    let moved = false;
-    if (mode === "town" && dir.y > 0 && this.isTownExitTile(this.positionToTile(pos)) && pos.y >= 12.68) {
+    if (this.activeStep) return true;
+    const from = this.currentExploreTile(mode);
+    if (mode === "town" && dir.y > 0 && this.isTownExitTile(from)) {
       this.exitTownToWorld();
       return true;
     }
-    if (dir.x !== 0) {
-      const next = { x: pos.x + dir.x * speed, y: pos.y };
-      if (this.canOccupyExplorePos(mode, next)) {
-        pos = next;
-        moved = true;
-      }
-    }
-    if (dir.y !== 0 && this.isExploreMode(this.mode) && this.mode === mode) {
-      const next = { x: pos.x, y: pos.y + dir.y * speed };
-      if (this.canOccupyExplorePos(mode, next)) {
-        pos = next;
-        moved = true;
-      }
-    }
-    if (!moved || !this.isExploreMode(this.mode) || this.mode !== mode) return moved;
-    this.setVisualExplorePos(mode, pos);
-    this.updateEnteredExploreTile(mode, dir);
+    const to = { x: from.x + dir.x, y: from.y + dir.y };
+    if (!this.canOccupyExploreTile(mode, to.x, to.y)) return false;
+    this.setVisualExplorePos(mode, from);
+    this.activeStep = { mode, from, to, dir: { ...dir } };
     return true;
+  }
+
+  private advanceExploreStep(delta: number) {
+    const step = this.activeStep;
+    if (!step || !this.isExploreMode(this.mode) || this.mode !== step.mode) {
+      this.activeStep = undefined;
+      return;
+    }
+    const speed = (this.shiftHeld ? FAST_MOVE_TILES_PER_MS : MOVE_TILES_PER_MS) * delta;
+    if (speed <= 0) return;
+    const pos = this.visualExplorePos(step.mode);
+    const remaining = Math.abs(step.to.x - pos.x) + Math.abs(step.to.y - pos.y);
+    if (remaining <= speed) {
+      this.setVisualExplorePos(step.mode, step.to);
+      this.completeExploreStep(step);
+      return;
+    }
+    this.setVisualExplorePos(step.mode, { x: pos.x + step.dir.x * speed, y: pos.y + step.dir.y * speed });
   }
 
   private currentExploreTile(mode: ExploreMode): Vec {
@@ -1868,23 +1896,6 @@ class CrystalOathScene extends Phaser.Scene {
     else this.dungeonPos = next;
   }
 
-  private positionToTile(pos: Vec): Vec {
-    return { x: Math.floor(pos.x + 0.5), y: Math.floor(pos.y + 0.5) };
-  }
-
-  private canOccupyExplorePos(mode: ExploreMode, pos: Vec): boolean {
-    const left = Math.floor(pos.x + PLAYER_HITBOX.left);
-    const right = Math.floor(pos.x + PLAYER_HITBOX.right);
-    const top = Math.floor(pos.y + PLAYER_HITBOX.top);
-    const bottom = Math.floor(pos.y + PLAYER_HITBOX.bottom);
-    for (let y = top; y <= bottom; y += 1) {
-      for (let x = left; x <= right; x += 1) {
-        if (!this.canOccupyExploreTile(mode, x, y)) return false;
-      }
-    }
-    return true;
-  }
-
   private canOccupyExploreTile(mode: ExploreMode, x: number, y: number): boolean {
     if (mode === "world") {
       if (x < 0 || y < 0 || x >= WORLD_W || y >= WORLD_H) return false;
@@ -1897,13 +1908,19 @@ class CrystalOathScene extends Phaser.Scene {
     return !(tile === "#" || (tile === "D" && !this.puzzleFlags.has(`${this.currentDungeon}-switch`)));
   }
 
-  private updateEnteredExploreTile(mode: ExploreMode, dir: Vec) {
-    if (!this.isExploreMode(this.mode) || this.mode !== mode) return;
-    const tile = this.positionToTile(this.visualExplorePos(mode));
-    const previous = this.currentExploreTile(mode);
-    if (tile.x === previous.x && tile.y === previous.y) return;
-    this.setCurrentExploreTile(mode, tile);
+  private completeExploreStep(step: ExploreStep) {
+    if (!this.isExploreMode(this.mode) || this.mode !== step.mode) {
+      this.activeStep = undefined;
+      return;
+    }
+    this.setCurrentExploreTile(step.mode, step.to);
+    this.activeStep = undefined;
     this.lastStepFrame += 1;
+    this.handleCompletedExploreTile(step.mode, step.to, step.dir);
+  }
+
+  private handleCompletedExploreTile(mode: ExploreMode, tile: Vec, dir: Vec) {
+    if (!this.isExploreMode(this.mode) || this.mode !== mode) return;
     if (mode === "world") {
       this.applyWalkPoison();
       const loc = this.locationAt(tile.x, tile.y);
@@ -1952,6 +1969,7 @@ class CrystalOathScene extends Phaser.Scene {
   }
 
   private syncAllVisualPositions() {
+    this.activeStep = undefined;
     this.visualWorldPos = { ...this.worldPos };
     this.visualTownPos = { ...this.townPos };
     this.visualDungeonPos = { ...this.dungeonPos };
@@ -2570,6 +2588,11 @@ class CrystalOathScene extends Phaser.Scene {
     if (this.checkBattleEnd()) return;
     this.battle.pendingAction = undefined;
     this.battle.selected = 0;
+    if (delay <= 0) {
+      this.advanceBattleAfterDelay();
+      this.markDirty();
+      return;
+    }
     this.battle.phase = "resolving";
     this.battle.actionTimer = delay;
     this.markDirty();
@@ -4651,44 +4674,33 @@ Statuses: ${statuses}`;
   }
 
   private drawLeader(x: number, y: number, mode?: ExploreMode) {
-    const currentMode = mode ?? this.mode;
     const frame = this.playerMoving ? Math.floor(this.walkAnimElapsed / 85) % 2 : 0;
-    const isWorld = currentMode === "world";
-    const spriteCellWidth = isWorld ? WORLD_PLAYER_SPRITE_WIDTH : 132;
-    const shadowWidth = isWorld ? 36 : 48;
-    const shadowHeight = isWorld ? 12 : 12;
-    const ellipseW = isWorld ? 32 : 46;
-    const ellipseH = isWorld ? 12 : 12;
-    const bodyOffsetX = isWorld ? 12 : 12;
-    const bodyOffsetY = isWorld ? 28 : 38;
+    const spriteCellWidth = EXPLORE_PLAYER_SPRITE_WIDTH;
+    const shadowWidth = 36;
+    const shadowHeight = 12;
+    const ellipseW = 32;
+    const ellipseH = 12;
+    const bodyOffsetX = 12;
+    const bodyOffsetY = 28;
     const bodyCenterX = x + bodyOffsetX;
     const feetBaselineY = y + bodyOffsetY;
     this.drawActorShadow(bodyCenterX, feetBaselineY, shadowWidth, shadowHeight);
-    this.g.lineStyle(isWorld ? 1 : 2, 0xfff0a8, isWorld ? 0.62 : 0.42).strokeEllipse(bodyCenterX, feetBaselineY, ellipseW, ellipseH);
+    this.g.lineStyle(1, 0xfff0a8, 0.62).strokeEllipse(bodyCenterX, feetBaselineY, ellipseW, ellipseH);
     if (this.drawCharacterSpriteFrame(PARTY_CLASS.arlen, this.explorationCharacterFrame(frame), bodyCenterX, feetBaselineY, spriteCellWidth)) {
       return;
     }
-    if (isWorld) {
-      const scale = 2;
-      const fx = bodyCenterX - 11 * scale;
-      const fy = feetBaselineY - 37 * scale;
-      this.g.fillStyle(0x050812, 1).fillRect(fx + 5 * scale, fy + 3 * scale, 22 * scale, 29 * scale);
-      this.g.fillStyle(0x2a213a, 1).fillRect(fx + 7 * scale, fy + scale, 18 * scale, 9 * scale);
-      this.g.fillStyle(0xf0c18d, 1).fillRect(fx + 9 * scale, fy + 5 * scale, 14 * scale, 12 * scale);
-      this.g.fillStyle(0xb93434, 1).fillRect(fx + 6 * scale, fy + 17 * scale, 22 * scale, 13 * scale);
-      this.g.fillStyle(0xf2e9dd, 1).fillRect(fx + 15 * scale, fy + 17 * scale, 7 * scale, 16 * scale);
-      this.g.fillStyle(0x1c2238, 1).fillRect(fx + 7 * scale, fy + 30 * scale, 8 * scale, (7 + frame) * scale);
-      this.g.fillRect(fx + 20 * scale, fy + 30 * scale, 8 * scale, (7 + (1 - frame)) * scale);
-      this.g.fillStyle(0xffffff, 1).fillRect(fx + 11 * scale, fy + 10 * scale, 3 * scale, 3 * scale);
-      this.g.fillRect(fx + 19 * scale, fy + 10 * scale, 3 * scale, 3 * scale);
-      return;
-    }
-    this.g.fillStyle(0x1c2440, 1).fillRect(x + 8, y + 6, 10, 7);
-    this.g.fillStyle(0xf1c897, 1).fillRect(x + 9, y + 2, 9, 8);
-    this.g.fillStyle(0xb73b36, 1).fillRect(x + 6, y + 12, 14, 12);
-    this.g.fillStyle(0xe9edf7, 1).fillRect(x + 13, y + 13, 5, 13);
-    this.g.fillStyle(0x3a3155, 1).fillRect(x + 6, y + 24, 5, 5 + frame);
-    this.g.fillStyle(0x3a3155, 1).fillRect(x + 17, y + 24, 5, 5 + (1 - frame));
+    const scale = 2;
+    const fx = bodyCenterX - 11 * scale;
+    const fy = feetBaselineY - 37 * scale;
+    this.g.fillStyle(0x050812, 1).fillRect(fx + 5 * scale, fy + 3 * scale, 22 * scale, 29 * scale);
+    this.g.fillStyle(0x2a213a, 1).fillRect(fx + 7 * scale, fy + scale, 18 * scale, 9 * scale);
+    this.g.fillStyle(0xf0c18d, 1).fillRect(fx + 9 * scale, fy + 5 * scale, 14 * scale, 12 * scale);
+    this.g.fillStyle(0xb93434, 1).fillRect(fx + 6 * scale, fy + 17 * scale, 22 * scale, 13 * scale);
+    this.g.fillStyle(0xf2e9dd, 1).fillRect(fx + 15 * scale, fy + 17 * scale, 7 * scale, 16 * scale);
+    this.g.fillStyle(0x1c2238, 1).fillRect(fx + 7 * scale, fy + 30 * scale, 8 * scale, (7 + frame) * scale);
+    this.g.fillRect(fx + 20 * scale, fy + 30 * scale, 8 * scale, (7 + (1 - frame)) * scale);
+    this.g.fillStyle(0xffffff, 1).fillRect(fx + 11 * scale, fy + 10 * scale, 3 * scale, 3 * scale);
+    this.g.fillRect(fx + 19 * scale, fy + 10 * scale, 3 * scale, 3 * scale);
   }
 
   private drawNpc(x: number, y: number, idx: number) {

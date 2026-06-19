@@ -153,9 +153,9 @@ Keyboard events are registered in `create()`:
 - F: fullscreen.
 - F9: hidden debug menu outside battle.
 
-Exploration movement is continuous in tile-space using persistent visual positions: `visualWorldPos`, `visualTownPos`, and `visualDungeonPos`. Direction keydown records held direction, keyup releases it, and update-time movement advances the visual position by small deltas instead of committing to whole-tile steps. The saved/logical tile positions (`worldPos`, `townPos`, `dungeonPos`) are derived when the player crosses tile centers so encounters, exits, dungeon objects, and location entry still use tile data.
+Exploration movement is tile-anchor based using persistent visual positions: `visualWorldPos`, `visualTownPos`, and `visualDungeonPos`. Direction keydown records held direction, keyup releases it, and update-time movement interpolates one accepted step from the current tile center to the adjacent tile center. Releasing input finishes the active step and stops centered on the destination tile instead of leaving the player between tiles.
 
-Important movement rule: renderers read the persistent visual tile positions, not stale logical coordinates. Collision uses a small player hitbox checked against the tile map on each proposed movement axis, allowing smooth pixel movement while preserving tile-based blocking.
+Important movement rule: renderers read the persistent visual tile positions during the active step, but gameplay tile positions (`worldPos`, `townPos`, `dungeonPos`) commit only when the destination tile is reached. Collision checks the requested destination tile/feet anchor with `canOccupyExploreTile`, not a rectangle around the full sprite. Encounters, exits, dungeon objects, and location entry fire only after completed tile steps.
 
 Mouse support is minimal and mainly starts audio/click blips.
 
