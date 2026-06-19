@@ -271,6 +271,9 @@ function validateRuntimeReferences() {
   assert(worldGeneratorRuntime.includes("findIslandRoadPath"), "Worldgen does not use the weighted road route finder.");
   assert(worldGeneratorRuntime.includes("validateRoadVisuals"), "Worldgen does not validate road visual masks.");
   assert(worldGeneratorRuntime.includes("roadVisualForMask"), "Worldgen does not map road masks through explicit visual specs.");
+  const verticalStraightRoadCase = worldGeneratorRuntime.match(/case ROAD_N \| ROAD_S:[\s\S]*?(?=\n    case |\n    default:)/)?.[0] ?? "";
+  assert(verticalStraightRoadCase.includes("WORLD_TILE_IDS.roadHorizontal") && verticalStraightRoadCase.includes("rotation: 90"), "N+S roads must use the clean horizontal road source rotated 90 degrees.");
+  assert(!verticalStraightRoadCase.includes("WORLD_TILE_IDS.roadVertical"), "N+S roads still use the visually dirty road_vertical source cell.");
 }
 
 function validateRuntimeDebugInsetConsistency() {

@@ -1022,7 +1022,9 @@ function roadVisualForMask(mask: number): Pick<WorldRoadVisual, "sourceMask" | "
     case ROAD_W:
       return { sourceTileId: WORLD_TILE_IDS.roadDeadEndEast, sourceMask: ROAD_W, rotation: 0 };
     case ROAD_N | ROAD_S:
-      return { sourceTileId: WORLD_TILE_IDS.roadVertical, sourceMask: ROAD_N | ROAD_S, rotation: 0 };
+      // The atlas cell named road_vertical has a small side spur in the art.
+      // Rotate the clean horizontal source so the rendered connector mask stays exact.
+      return { sourceTileId: WORLD_TILE_IDS.roadHorizontal, sourceMask: ROAD_E | ROAD_W, rotation: 90 };
     case ROAD_E | ROAD_W:
       return { sourceTileId: WORLD_TILE_IDS.roadHorizontal, sourceMask: ROAD_E | ROAD_W, rotation: 0 };
     case ROAD_N | ROAD_E:
