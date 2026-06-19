@@ -13,7 +13,17 @@ import {
   type WorldTileDefinition,
   type WorldTileId
 } from "./data/worldTiles.ts";
-import { ACTIVE_WORLDGEN_MODE, createWorldSeed, generateWorld, type GeneratedWorld } from "./world/worldGenerator.ts";
+import { generateDungeonFloors } from "./world/dungeonGenerator.ts";
+import {
+  ACTIVE_WORLDGEN_MODE,
+  createWorldSeed,
+  generateWorld,
+  getIslandAt,
+  type GeneratedWorld,
+  type IslandId,
+  type WorldLandmarkKind,
+  type WorldPoiKind
+} from "./world/worldGenerator.ts";
 import "./style.css";
 
 const DESIGN_WIDTH = 1920;
@@ -82,9 +92,14 @@ interface ExploreStep {
 
 interface StatusState {
   poison?: number;
+  burn?: number;
+  bleed?: number;
+  weakness?: number;
+  charged?: number;
   sleep?: number;
   silence?: number;
   stun?: number;
+  guarded?: number;
   ward?: number;
   starveil?: number;
 }
@@ -107,6 +122,7 @@ interface CharacterState {
   statuses: StatusState;
   charges: Record<string, { current: number; max: number }>;
   spells: string[];
+  skillCooldowns: Record<string, number>;
   defending: boolean;
 }
 
@@ -133,6 +149,15 @@ interface SpellDef {
   description: string;
 }
 
+interface PlayerSkillDef {
+  id: string;
+  name: string;
+  users: CharacterState["id"][] | "all";
+  target: "enemy" | "ally" | "self";
+  cooldown: number;
+  description: string;
+}
+
 interface GearDef {
   id: string;
   name: string;
@@ -145,11 +170,21 @@ interface GearDef {
 
 interface EnemyMove {
   name: string;
-  kind: "attack" | "damage" | "status" | "buff";
+  kind: "attack" | "damage" | "status" | "buff" | "defend" | "heal" | "charge" | "steal";
   power: number;
   element?: ElementType;
   status?: keyof StatusState;
   target?: "one" | "all";
+  intent?: EnemyIntentKind;
+}
+
+type EnemyIntentKind = "attack" | "heavyAttack" | "defend" | "poison" | "heal" | "charge" | "flee" | "summon" | "stealGold";
+
+interface EnemyIntent {
+  kind: EnemyIntentKind;
+  label: string;
+  message: string;
+  move: EnemyMove;
 }
 
 interface EnemyDef {
@@ -165,6 +200,7 @@ interface EnemyDef {
   weak: ElementType[];
   resist: ElementType[];
   moves: EnemyMove[];
+  drops?: { item: string; chance: number }[];
   palette: string[];
   sprite: "blob" | "beast" | "wing" | "knight" | "serpent" | "crown";
   boss?: boolean;
@@ -174,12 +210,16 @@ interface EnemyState extends EnemyDef {
   uid: string;
   hp: number;
   statuses: StatusState;
+  intent?: EnemyIntent;
 }
 
 interface LocationDef {
   id: string;
   name: string;
-  kind: "town" | "dungeon" | "final" | "gate";
+  kind: WorldPoiKind;
+  islandId?: IslandId;
+  landmarkKind?: WorldLandmarkKind;
+  difficultyTier?: number;
   x: number;
   y: number;
   footprint?: number;
@@ -244,8 +284,9 @@ interface Dialogue {
 interface BattleAction {
   side: "party" | "enemy";
   actorId: string;
-  type: "attack" | "spell" | "item" | "defend" | "run" | "skip";
+  type: "attack" | "skill" | "spell" | "item" | "defend" | "run" | "skip";
   targetIndex?: number;
+  skillId?: string;
   spellId?: string;
   itemId?: string;
 }
@@ -261,7 +302,7 @@ interface BattleAnimation {
   targetActorId?: string;
 }
 
-type BattlePhase = "command" | "target" | "spell" | "item" | "allyTarget" | "resolving" | "log";
+type BattlePhase = "command" | "target" | "skill" | "spell" | "item" | "allyTarget" | "resolving" | "log";
 
 interface InitiativeEntry {
   side: "party" | "enemy";
@@ -287,6 +328,13 @@ interface BattleState {
   log: string[];
   actionTimer: number;
   victoryAwarded: boolean;
+}
+
+interface TravelDestination {
+  destinationIslandId: IslandId;
+  displayName: string;
+  costGold: number;
+  requiredUnlockFlag?: "unlockedIsland2" | "unlockedIsland3";
 }
 
 type ServiceKind = "inn" | "item" | "arms" | "magic" | "clinic";
@@ -673,6 +721,14 @@ const ITEMS: Record<string, ItemDef> = {
     description: "Escapes most battles.",
     battle: true,
     field: false
+  },
+  charteredCompass: {
+    id: "charteredCompass",
+    name: "Chartered Compass",
+    price: 0,
+    description: "A harbor charter that opens routes to harsher seas.",
+    battle: false,
+    field: false
   }
 };
 
@@ -848,6 +904,57 @@ const SPELLS: Record<string, SpellDef> = {
   }
 };
 
+const PLAYER_SKILLS: Record<string, PlayerSkillDef> = {
+  powerStrike: {
+    id: "powerStrike",
+    name: "Power Strike",
+    users: ["arlen"],
+    target: "enemy",
+    cooldown: 2,
+    description: "Heavy weapon damage."
+  },
+  guardBreak: {
+    id: "guardBreak",
+    name: "Guard Break",
+    users: ["arlen"],
+    target: "enemy",
+    cooldown: 3,
+    description: "Damage and weaken defense."
+  },
+  quickSlash: {
+    id: "quickSlash",
+    name: "Quick Slash",
+    users: ["arlen"],
+    target: "enemy",
+    cooldown: 1,
+    description: "Fast cut with better crit odds."
+  },
+  firstAid: {
+    id: "firstAid",
+    name: "First Aid",
+    users: ["mira"],
+    target: "ally",
+    cooldown: 3,
+    description: "Small heal without charges."
+  },
+  fireSpark: {
+    id: "fireSpark",
+    name: "Fire Spark",
+    users: ["kael"],
+    target: "enemy",
+    cooldown: 2,
+    description: "Fire damage with a burn chance."
+  },
+  focus: {
+    id: "focus",
+    name: "Focus",
+    users: "all",
+    target: "self",
+    cooldown: 4,
+    description: "Guard and recover a spell charge."
+  }
+};
+
 const WEAPONS: Record<string, GearDef> = {
   trainingBlade: {
     id: "trainingBlade",
@@ -856,7 +963,7 @@ const WEAPONS: Record<string, GearDef> = {
     power: 2,
     kind: "weapon",
     users: ["arlen"],
-    description: "A plain Dawnford sword."
+    description: "A plain Greenhaven sword."
   },
   ironSaber: {
     id: "ironSaber",
@@ -958,6 +1065,32 @@ const GEAR: Record<string, GearDef> = { ...WEAPONS, ...ARMORS };
 const ENEMIES: Record<string, EnemyDef> = {
   slimebud: enemy("slimebud", "Slimebud", 22, 7, 1, 3, 9, 7, "earth", ["fire"], [], ["#579e54", "#83d078", "#e7ffe2"], "blob"),
   bristleRat: enemy("bristleRat", "Bristle Rat", 18, 8, 1, 6, 8, 8, "none", ["fire"], [], ["#665044", "#b98f68", "#fff0c9"], "beast"),
+  greenWolf: enemy("greenWolf", "Green Wolf", 30, 11, 2, 12, 18, 16, "none", ["fire"], [], ["#31553a", "#84b86f", "#f6efc9"], "beast", [
+    { name: "Pounce", kind: "damage", power: 8, status: "bleed", intent: "heavyAttack" }
+  ]),
+  bandit: enemy("bandit", "Bandit", 34, 12, 3, 8, 20, 24, "none", ["light"], [], ["#3d2a24", "#9c6a3d", "#ffe0a3"], "knight", [
+    { name: "Dirty Cut", kind: "damage", power: 5, status: "bleed", intent: "attack" },
+    { name: "Snatch Purse", kind: "steal", power: 8, intent: "stealGold" }
+  ]),
+  reefCrab: enemy("reefCrab", "Reef Crab", 44, 13, 9, 3, 34, 34, "ice", ["lightning", "fire"], ["ice"], ["#25566b", "#e08866", "#fff0bd"], "blob", [
+    { name: "Shell Up", kind: "defend", power: 0, intent: "defend" }
+  ]),
+  pirate: enemy("pirate", "Pirate", 58, 17, 6, 9, 48, 58, "none", ["lightning"], [], ["#252031", "#c05b39", "#f2e3a4"], "knight", [
+    { name: "Broadside", kind: "damage", power: 13, target: "all", intent: "heavyAttack" },
+    { name: "Cutpurse", kind: "steal", power: 14, intent: "stealGold" }
+  ]),
+  jungleShaman: enemy("jungleShaman", "Jungle Shaman", 46, 13, 4, 10, 52, 44, "earth", ["fire"], ["earth"], ["#1b4932", "#62b66c", "#f0f6ad"], "crown", [
+    { name: "Venom Chant", kind: "status", power: 5, status: "poison", target: "all", intent: "poison" },
+    { name: "Moss Mend", kind: "heal", power: 24, intent: "heal" }
+  ]),
+  ashGolem: enemy("ashGolem", "Ash Golem", 78, 21, 14, 3, 82, 76, "fire", ["ice"], ["fire"], ["#211f22", "#8a6a55", "#ff8f3d"], "knight", [
+    { name: "Gather Heat", kind: "charge", power: 10, intent: "charge" },
+    { name: "Molten Slam", kind: "damage", power: 18, status: "burn", intent: "heavyAttack" }
+  ]),
+  seaSerpent: enemy("seaSerpent", "Sea Serpent", 72, 20, 7, 12, 74, 80, "ice", ["lightning"], ["ice"], ["#103c58", "#3ea6c9", "#d8ffff"], "serpent", [
+    { name: "Venom Tide", kind: "status", power: 7, status: "poison", intent: "poison" },
+    { name: "Coil Charge", kind: "charge", power: 9, intent: "charge" }
+  ]),
   fieldImp: enemy("fieldImp", "Field Imp", 24, 9, 2, 7, 12, 11, "shadow", ["light"], ["shadow"], ["#5a3c84", "#b16ee4", "#f7df8a"], "beast", [
     { name: "Drowsy Pinch", kind: "status", power: 4, status: "sleep" }
   ]),
@@ -1071,12 +1204,12 @@ function boss(
 }
 
 const WORLD_TABLES: Record<string, string[]> = {
-  plains: ["slimebud", "bristleRat", "fieldImp"],
-  forest: ["thornWisp", "mossling", "venomMoth"],
+  plains: ["slimebud", "greenWolf", "bandit"],
+  forest: ["greenWolf", "thornWisp", "venomMoth", "jungleShaman"],
   hills: ["pebbleGnawer", "caveBat", "ironBeetle"],
-  sand: ["cinderPup", "ashSprite", "coalKnight"],
-  water: ["reefFang", "bubbleEye", "drownedHusk"],
-  final: ["eclipseShade", "crownGuard", "voidSerpent"]
+  sand: ["reefCrab", "pirate", "cinderPup"],
+  water: ["reefFang", "reefCrab", "seaSerpent"],
+  final: ["ashGolem", "coalKnight", "eclipseShade", "voidSerpent"]
 };
 
 class SynthAudio {
@@ -1173,6 +1306,7 @@ class CrystalOathScene extends Phaser.Scene {
   private visualDungeonPos: Vec = { x: 1, y: 1 };
   private currentTown = "dawnford";
   private currentDungeon = "mossCave";
+  private currentIslandId: IslandId = "greenhaven";
   private dungeonFloor = 0;
   private previousMode: Mode = "world";
   private pendingTownReturn: Vec = { x: 10, y: 22 };
@@ -1182,11 +1316,19 @@ class CrystalOathScene extends Phaser.Scene {
     boat: false,
     skyship: false,
     gateOpen: false,
-    introSeen: false
+    introSeen: false,
+    travel: {
+      visitedIsland2: false,
+      visitedIsland3: false,
+      unlockedIsland2: true,
+      unlockedIsland3: false
+    }
   };
   private openedChests = new Set<string>();
+  private discoveredPois = new Set<string>();
   private puzzleFlags = new Set<string>();
   private defeatedBosses = new Set<string>();
+  private clearedDungeons = new Set<string>();
   private settings = {
     encounters: true,
     xpMultiplier: 1,
@@ -1469,7 +1611,7 @@ class CrystalOathScene extends Phaser.Scene {
       this.makeCharacter("mira", "Mira", "White Sage", 30, 4, 4, 6, 7, "willowRod", "travelCloth", ["mend", "ward"]),
       this.makeCharacter("kael", "Kael", "Ember Adept", 26, 3, 3, 7, 5, "willowRod", "travelCloth", ["spark", "ember"])
     ];
-    this.inventory = { potion: 5, antidote: 2, tent: 1, phoenixAsh: 0, etherleaf: 0, smokeBomb: 0 };
+    this.inventory = { potion: 5, antidote: 2, tent: 1, phoenixAsh: 0, etherleaf: 0, smokeBomb: 0, charteredCompass: 0 };
     this.gearBag = { trainingBlade: 1, willowRod: 2, travelCloth: 3 };
     this.gold = 80;
     this.buildWorldFromSeed(createWorldSeed());
@@ -1478,18 +1620,15 @@ class CrystalOathScene extends Phaser.Scene {
     this.dungeonPos = { x: 1, y: 1 };
     this.currentTown = "dawnford";
     this.currentDungeon = "mossCave";
+    this.currentIslandId = "greenhaven";
     this.dungeonFloor = 0;
     this.encounterCounter = 10;
-    this.flags = {
-      relics: { root: false, flame: false, tide: false, gale: false },
-      boat: false,
-      skyship: false,
-      gateOpen: false,
-      introSeen: true
-    };
+    this.flags = { ...this.defaultFlags(), introSeen: true };
     this.openedChests = new Set();
+    this.discoveredPois = new Set();
     this.puzzleFlags = new Set();
     this.defeatedBosses = new Set();
+    this.clearedDungeons = new Set();
     this.settings.encounters = true;
     this.settings.xpMultiplier = 1;
     this.settings.fastText = false;
@@ -1500,11 +1639,10 @@ class CrystalOathScene extends Phaser.Scene {
     this.audio.setMode("world");
     this.dialogue = {
       lines: [
-        "King Rovan: The Star Relics have dimmed, and every road in Asterra feels colder.",
-        "King Rovan: Arlen, Mira, Kael. Your oath begins beneath Dawnford's old banner.",
-        "Mira: We restore Root, Flame, Tide, and Gale, then face the Eclipse Crown.",
-        "Kael: That sounds impossible. Good. I brought notes.",
-        "Arlen: We leave at dawn. First, the Moss Cave north-east of the castle."
+        "Harbor Master: Welcome to Greenhaven, last warm light before the archipelago opens wide.",
+        "Mira: Root, Flame, Tide, and Gale are scattered across these islands now.",
+        "Kael: A living map, a cursed sea, and a suspicious number of caves. Excellent.",
+        "Arlen: We clear Mossy Cave, earn passage, then sail for Coralreach."
       ],
       index: 0,
       done: () => {
@@ -1552,10 +1690,59 @@ class CrystalOathScene extends Phaser.Scene {
         "3": { current: 0, max: 0 }
       },
       spells,
+      skillCooldowns: {},
       defending: false
     };
     this.refreshCharges(character, true);
     return character;
+  }
+
+  private defaultFlags() {
+    return {
+      relics: { root: false, flame: false, tide: false, gale: false },
+      boat: false,
+      skyship: false,
+      gateOpen: false,
+      introSeen: false,
+      travel: {
+        visitedIsland2: false,
+        visitedIsland3: false,
+        unlockedIsland2: true,
+        unlockedIsland3: false
+      }
+    };
+  }
+
+  private normalizeFlags(raw: Partial<ReturnType<CrystalOathScene["defaultFlags"]>> | undefined) {
+    const defaults = this.defaultFlags();
+    return {
+      ...defaults,
+      ...(raw ?? {}),
+      relics: { ...defaults.relics, ...(raw?.relics ?? {}) },
+      travel: { ...defaults.travel, ...(raw?.travel ?? {}) }
+    };
+  }
+
+  private normalizeParty(rawParty: CharacterState[]): CharacterState[] {
+    if (!rawParty.length) {
+      return [
+        this.makeCharacter("arlen", "Arlen", "Vanguard", 42, 9, 7, 5, 4, "trainingBlade", "travelCloth", []),
+        this.makeCharacter("mira", "Mira", "White Sage", 30, 4, 4, 6, 7, "willowRod", "travelCloth", ["mend", "ward"]),
+        this.makeCharacter("kael", "Kael", "Ember Adept", 26, 3, 3, 7, 5, "willowRod", "travelCloth", ["spark", "ember"])
+      ];
+    }
+    return rawParty.map((member) => ({
+      ...member,
+      statuses: member.statuses ?? {},
+      charges: member.charges ?? {
+        "1": { current: 0, max: 0 },
+        "2": { current: 0, max: 0 },
+        "3": { current: 0, max: 0 }
+      },
+      spells: member.spells ?? [],
+      skillCooldowns: member.skillCooldowns ?? {},
+      defending: false
+    }));
   }
 
   private locations(): LocationDef[] {
@@ -1563,6 +1750,9 @@ class CrystalOathScene extends Phaser.Scene {
       id: poi.id,
       name: poi.name,
       kind: poi.kind,
+      islandId: poi.islandId,
+      landmarkKind: poi.landmarkKind,
+      difficultyTier: poi.difficultyTier,
       x: poi.x,
       y: poi.y,
       footprint: poi.footprint,
@@ -1574,13 +1764,7 @@ class CrystalOathScene extends Phaser.Scene {
     if (id === "ashenKeep") {
       return {
         requires: () => this.flags.relics.root,
-        lockedText: "A wall of roots bars the keep road. Restore the Root Relic first."
-      };
-    }
-    if (id === "tideShrine") {
-      return {
-        requires: () => this.flags.boat,
-        lockedText: "The shrine lies past rough water. Brinewick may know an old route."
+        lockedText: "Ashfang's keep smolders behind root-sealed stone. Clear Greenhaven's cave first."
       };
     }
     if (id === "skyglassTower") {
@@ -1602,7 +1786,7 @@ class CrystalOathScene extends Phaser.Scene {
     return {
       dawnford: {
         id: "dawnford",
-        name: "Dawnford",
+        name: "Greenhaven",
         palette: ["#23314f", "#4b6a9b", "#d9e6ff"],
         innPrice: 18,
         clinicPrice: 35,
@@ -1611,14 +1795,14 @@ class CrystalOathScene extends Phaser.Scene {
         armorStock: ["ringMail", "sageMantle"],
         spellStock: ["glow", "frost"],
         npcs: [
-          { x: 5, y: 7, lines: ["Guard: Moss Cave lies north-east. Its troll hates bright flame."] },
-          { x: 14, y: 8, lines: ["Archivist: Chests stay open after you save. Ancient magic, very practical."] },
-          { x: 9, y: 5, lines: ["King Rovan: Bring back the Root Relic, and the old harbor will answer."] }
+          { x: 5, y: 7, lines: ["Guard: Mossy Cave shifts every season, but its deepest room always hoards trouble."] },
+          { x: 14, y: 8, lines: ["Archivist: The map seed is written in the stars. Same seed, same islands."] },
+          { x: 9, y: 5, lines: ["Harbor Master: Passage to Coralreach is 10 gold from the dock outside town."] }
         ]
       },
       brinewick: {
         id: "brinewick",
-        name: "Brinewick",
+        name: "Coralreach",
         palette: ["#183e5b", "#2f9ac0", "#d2fbff"],
         innPrice: 26,
         clinicPrice: 45,
@@ -1627,15 +1811,15 @@ class CrystalOathScene extends Phaser.Scene {
         armorStock: ["ringMail", "sageMantle"],
         spellStock: ["mendall", "quakelet"],
         arrival: () => {
-          if (this.flags.relics.root && !this.flags.boat) {
-            this.flags.boat = true;
-            this.say(["Harbormaster: Rootlight! The tide-skiff wakes for you. Water routes are open."]);
+          if (!this.flags.travel.visitedIsland2) {
+            this.flags.travel.visitedIsland2 = true;
+            this.say(["Coralreach smells of rain, spice, and old stone. Pirates watch the ruins from the trees."]);
           }
         },
         npcs: [
-          { x: 6, y: 7, lines: ["Sailor: The Tide Shrine waits south-east, past the blue chop."] },
-          { x: 15, y: 7, lines: ["Fisher: Lightning bites hardest under a wet sky."] },
-          { x: 11, y: 4, lines: ["Harbormaster: With Root restored, the skiff remembers your oath."] }
+          { x: 6, y: 7, lines: ["Sailor: Jungle ruins lie inland. Pirates found something there and stopped laughing."] },
+          { x: 15, y: 7, lines: ["Fisher: I saw a wreck south of the harbor. It might still have cargo."] },
+          { x: 11, y: 4, lines: ["Harbor Master: Ashfang passage is 10 gold when your nerve is ready."] }
         ]
       },
       elderleaf: {
@@ -1650,13 +1834,13 @@ class CrystalOathScene extends Phaser.Scene {
         spellStock: ["revive", "storm"],
         npcs: [
           { x: 5, y: 8, lines: ["Druid: Poison lingers after battle. Carry antidotes or rest at an inn."] },
-          { x: 14, y: 6, lines: ["Scout: The Ashen Keep opened when Rootlight returned. Ice cools proud flame."] },
+          { x: 14, y: 6, lines: ["Scout: Ashfang Keep opened when Rootlight returned. Ice cools proud flame."] },
           { x: 11, y: 10, lines: ["Child: I saw a hidden chest sparkle behind the cave's switch stone."] }
         ]
       },
       sunbarrow: {
         id: "sunbarrow",
-        name: "Sunbarrow",
+        name: "Ashfang Camp",
         palette: ["#6c4c22", "#d29a44", "#fff0ae"],
         innPrice: 32,
         clinicPrice: 55,
@@ -1665,7 +1849,7 @@ class CrystalOathScene extends Phaser.Scene {
         armorStock: ["ringMail", "sageMantle"],
         spellStock: ["starveil", "nova"],
         npcs: [
-          { x: 7, y: 7, lines: ["Miner: Skyglass Tower opens only when Flame and Tide stop quarreling."] },
+          { x: 7, y: 7, lines: ["Miner: Ashfang's cliffs move like they are thinking. Stay on the paths."] },
           { x: 13, y: 9, lines: ["Trader: Starveil wins long fights. Nova ends short ones."] },
           { x: 10, y: 5, lines: ["Outrider: Four relics point to Starfall Gate, not the spire itself."] }
         ]
@@ -1700,16 +1884,20 @@ class CrystalOathScene extends Phaser.Scene {
     };
   }
 
+  private generatedDungeonFloors(dungeonId: string, tier: number, final = false): string[][] {
+    return generateDungeonFloors({ seed: this.worldSeed, dungeonId, tier, final });
+  }
+
   private dungeons(): Record<string, DungeonDef> {
     return {
       mossCave: {
         id: "mossCave",
-        name: "Moss Cave",
+        name: "Mossy Cave",
         relic: "root",
         boss: "rootboundTroll",
         palette: { floor: 0x31543b, wall: 0x18271e, accent: 0x78a95f, chest: 0xc08a3a, gate: 0x6a4328 },
-        encounterTable: ["pebbleGnawer", "caveBat", "ironBeetle"],
-        floors: makeDungeonFloors(1),
+        encounterTable: ["slimebud", "greenWolf", "bandit", "caveBat"],
+        floors: this.generatedDungeonFloors("mossCave", 1),
         chestRewards: [
           { id: "mossCave-0", item: "etherleaf" },
           { id: "mossCave-1", gear: "starbrand" },
@@ -1721,12 +1909,12 @@ class CrystalOathScene extends Phaser.Scene {
       },
       ashenKeep: {
         id: "ashenKeep",
-        name: "Ashen Keep",
+        name: "Ashfang Keep",
         relic: "flame",
         boss: "emberTyrant",
         palette: { floor: 0x522a22, wall: 0x1e1213, accent: 0xff6a38, chest: 0xd9a445, gate: 0x7b1d13 },
-        encounterTable: ["cinderPup", "ashSprite", "coalKnight"],
-        floors: makeDungeonFloors(2),
+        encounterTable: ["ashGolem", "cinderPup", "ashSprite", "coalKnight"],
+        floors: this.generatedDungeonFloors("ashenKeep", 3),
         chestRewards: [
           { id: "ashenKeep-0", item: "phoenixAsh" },
           { id: "ashenKeep-1", gear: "emberStaff" },
@@ -1738,12 +1926,12 @@ class CrystalOathScene extends Phaser.Scene {
       },
       tideShrine: {
         id: "tideShrine",
-        name: "Tide Shrine",
+        name: "Coralreach Ruins",
         relic: "tide",
         boss: "tideOracle",
         palette: { floor: 0x1b5770, wall: 0x0b2234, accent: 0x68d5ec, chest: 0xd8bd68, gate: 0x184968 },
-        encounterTable: ["reefFang", "bubbleEye", "drownedHusk"],
-        floors: makeDungeonFloors(3),
+        encounterTable: ["pirate", "jungleShaman", "reefCrab", "drownedHusk"],
+        floors: this.generatedDungeonFloors("tideShrine", 2),
         chestRewards: [
           { id: "tideShrine-0", item: "etherleaf" },
           { id: "tideShrine-1", gear: "tidePlate" },
@@ -1760,7 +1948,7 @@ class CrystalOathScene extends Phaser.Scene {
         boss: "galeChimera",
         palette: { floor: 0x485f78, wall: 0x172336, accent: 0xa8f2ff, chest: 0xe2c76f, gate: 0x3a7690 },
         encounterTable: ["skyMite", "galeHarpy", "glassRoc"],
-        floors: makeDungeonFloors(4),
+        floors: this.generatedDungeonFloors("skyglassTower", 3),
         chestRewards: [
           { id: "skyglassTower-0", item: "phoenixAsh" },
           { id: "skyglassTower-1", gear: "galeCloak" },
@@ -1776,7 +1964,7 @@ class CrystalOathScene extends Phaser.Scene {
         boss: "eclipseCrown",
         palette: { floor: 0x221a35, wall: 0x08070e, accent: 0xb09cff, chest: 0xffdc78, gate: 0x4f2f75 },
         encounterTable: ["eclipseShade", "crownGuard", "voidSerpent"],
-        floors: makeDungeonFloors(5, true),
+        floors: this.generatedDungeonFloors("eclipseSpire", 4, true),
         chestRewards: [
           { id: "eclipseSpire-0", item: "etherleaf" },
           { id: "eclipseSpire-1", item: "phoenixAsh" },
@@ -1923,8 +2111,10 @@ class CrystalOathScene extends Phaser.Scene {
     if (!this.isExploreMode(this.mode) || this.mode !== mode) return;
     if (mode === "world") {
       this.applyWalkPoison();
+      this.syncCurrentIslandFromWorldPos();
       const loc = this.locationAt(tile.x, tile.y);
-      if (loc) this.enterLocation(loc);
+      if (loc && (loc.kind === "harbor" || loc.kind === "landmark")) this.interactWorldLocation(loc);
+      else if (loc) this.enterLocation(loc);
       else this.maybeEncounter();
       return;
     }
@@ -2001,7 +2191,10 @@ class CrystalOathScene extends Phaser.Scene {
   private interact() {
     if (this.mode === "world") {
       const loc = this.locationAt(this.worldPos.x, this.worldPos.y);
-      if (loc) this.enterLocation(loc);
+      if (loc) {
+        if (loc.kind === "harbor" || loc.kind === "landmark") this.interactWorldLocation(loc);
+        else this.enterLocation(loc);
+      }
       return;
     }
     if (this.mode === "town") {
@@ -2087,6 +2280,11 @@ class CrystalOathScene extends Phaser.Scene {
 
   private enterLocation(loc: LocationDef) {
     this.clearHeldMovement();
+    if (loc.islandId) this.currentIslandId = loc.islandId;
+    if (loc.kind === "harbor" || loc.kind === "landmark") {
+      this.interactWorldLocation(loc);
+      return;
+    }
     if (loc.requires && !loc.requires()) {
       this.say([loc.lockedText ?? "A strange force blocks the way."]);
       return;
@@ -2180,10 +2378,180 @@ class CrystalOathScene extends Phaser.Scene {
     return worldTileEncounterFamily(terrain) as keyof typeof WORLD_TABLES | undefined;
   }
 
+  private worldEncounterKeyAt(x: number, y: number): keyof typeof WORLD_TABLES | undefined {
+    const terrain = this.world[y]?.[x];
+    if (!terrain || this.isRoadAt(x, y)) return undefined;
+    const islandId = this.generatedWorld?.islandByTile[y]?.[x] ?? this.currentIslandId;
+    const biome = this.generatedWorld?.biomes[y]?.[x];
+    if (biome === "forest") return islandId === "coralreach" ? "forest" : "forest";
+    if (islandId === "ashfang" && (biome === "darkland" || biome === "lava" || biome === "mountain")) return "final";
+    if (islandId === "coralreach" && biome === "desert") return "sand";
+    return this.terrainEncounterKey(terrain);
+  }
+
+  private isRoadAt(x: number, y: number): boolean {
+    return !!this.generatedWorld?.roads.some((road) => road.x === x && road.y === y);
+  }
+
+  private syncCurrentIslandFromWorldPos() {
+    const island = this.generatedWorld ? getIslandAt(this.generatedWorld, this.worldPos.x, this.worldPos.y) : undefined;
+    if (island) this.currentIslandId = island.id;
+  }
+
+  private currentIslandName(): string {
+    return this.generatedWorld?.islands.find((island) => island.id === this.currentIslandId)?.name ?? "Open Sea";
+  }
+
+  private interactWorldLocation(loc: LocationDef) {
+    if (loc.islandId) this.currentIslandId = loc.islandId;
+    if (loc.kind === "harbor") {
+      this.openHarborMenu(loc);
+      return;
+    }
+    if (loc.kind === "landmark") this.discoverLandmark(loc);
+  }
+
+  private openHarborMenu(loc: LocationDef) {
+    this.rememberMenuReturnMode();
+    const options: MenuOption[] = this.getAvailableDestinations(loc.islandId ?? this.currentIslandId).map((destination) => ({
+      label: () => {
+        const locked = this.isDestinationLocked(destination);
+        return `${destination.displayName} - ${destination.costGold}g${locked ? " (locked)" : ""}`;
+      },
+      action: () => {
+        if (this.isDestinationLocked(destination)) {
+          this.flashMessage("The Harbor Master needs a proper chart for that route.");
+          return;
+        }
+        this.travelToIsland(destination);
+      }
+    }));
+    options.push({ label: "Leave harbor", action: () => this.closeMenuTo("world") });
+    this.openMenu(`${loc.name}`, options, () => this.closeMenuTo("world"), () => `Gold ${this.gold} | Seed ${this.worldSeed}`);
+  }
+
+  private getAvailableDestinations(currentIslandId: IslandId): TravelDestination[] {
+    if (currentIslandId === "greenhaven") {
+      return [{ destinationIslandId: "coralreach", displayName: "Coralreach", costGold: 10, requiredUnlockFlag: "unlockedIsland2" }];
+    }
+    if (currentIslandId === "coralreach") {
+      return [
+        { destinationIslandId: "greenhaven", displayName: "Greenhaven", costGold: 10 },
+        { destinationIslandId: "ashfang", displayName: "Ashfang Isle", costGold: 10, requiredUnlockFlag: "unlockedIsland3" }
+      ];
+    }
+    return [
+      { destinationIslandId: "coralreach", displayName: "Coralreach", costGold: 10 },
+      { destinationIslandId: "greenhaven", displayName: "Greenhaven", costGold: 10 }
+    ];
+  }
+
+  private isDestinationLocked(destination: TravelDestination): boolean {
+    if (!destination.requiredUnlockFlag) return false;
+    return !this.flags.travel[destination.requiredUnlockFlag];
+  }
+
+  private travelToIsland(destination: TravelDestination) {
+    if (this.gold < destination.costGold) {
+      this.flashMessage(`You need ${destination.costGold} gold for passage.`);
+      return;
+    }
+    this.gold -= destination.costGold;
+    this.flags.boat = true;
+    if (destination.destinationIslandId === "coralreach") this.flags.travel.visitedIsland2 = true;
+    if (destination.destinationIslandId === "ashfang") this.flags.travel.visitedIsland3 = true;
+    this.currentIslandId = destination.destinationIslandId;
+    this.worldPos = this.arrivalTileForIsland(destination.destinationIslandId);
+    this.mode = "world";
+    this.menu = undefined;
+    this.syncAllVisualPositions();
+    this.audio.setMode("world");
+    this.saveGame();
+    this.say([`You board the boat and sail across the glittering sea to ${destination.displayName}.`], () => {
+      this.mode = "world";
+      this.audio.setMode("world");
+    });
+  }
+
+  private arrivalTileForIsland(islandId: IslandId): Vec {
+    const island = this.generatedWorld?.islands.find((candidate) => candidate.id === islandId);
+    const harbor = island?.harborPosition;
+    if (!harbor) return this.generatedWorld?.startPosition ?? { x: 10, y: 22 };
+    const candidates = [
+      { x: harbor.x, y: harbor.y + 2 },
+      { x: harbor.x - 2, y: harbor.y },
+      { x: harbor.x + 2, y: harbor.y },
+      { x: harbor.x, y: harbor.y - 2 },
+      { x: harbor.x, y: harbor.y }
+    ];
+    return candidates.find((pos) => this.canOccupyExploreTile("world", pos.x, pos.y)) ?? harbor;
+  }
+
+  private discoverLandmark(loc: LocationDef) {
+    const landmarkKind = loc.landmarkKind ?? "ruins";
+    if (this.discoveredPois.has(loc.id)) {
+      this.say([`${loc.name}: You have already searched this place.`]);
+      return;
+    }
+    this.discoveredPois.add(loc.id);
+    const tier = loc.difficultyTier ?? 1;
+    const rewardGold = 10 + tier * 8;
+    if (landmarkKind === "shipwreck") {
+      this.gold += rewardGold;
+      this.saveGame();
+      if (Phaser.Math.Between(1, 100) <= 35) {
+        this.say([`The shipwreck yields ${rewardGold} gold, but something coils beneath the planks.`], () => this.startRandomBattle(["reefCrab", "seaSerpent"], undefined));
+      } else this.say([`You search the shipwreck and recover ${rewardGold} gold.`]);
+      return;
+    }
+    if (landmarkKind === "shrine") {
+      for (const member of this.party) if (member.hp > 0) member.hp = Math.min(member.maxHp, member.hp + Math.floor(member.maxHp * 0.4));
+      this.saveGame();
+      this.say([`${loc.name} glows softly. The party's wounds close.`]);
+      return;
+    }
+    if (landmarkKind === "hiddenChest") {
+      this.gold += rewardGold;
+      this.inventory.etherleaf = (this.inventory.etherleaf ?? 0) + 1;
+      this.saveGame();
+      this.say([`A hidden cache snaps open. Found ${rewardGold} gold and Etherleaf.`]);
+      return;
+    }
+    if (landmarkKind === "monsterNest") {
+      this.gold += Math.floor(rewardGold / 2);
+      this.saveGame();
+      this.say([`${loc.name} stirs. Clearing it should make the island safer.`], () => this.startRandomBattle(this.currentIslandId === "ashfang" ? ["ashGolem", "coalKnight"] : ["greenWolf", "bandit"], undefined));
+      return;
+    }
+    if (landmarkKind === "secretMerchant") {
+      this.openShop(`${loc.name}`, [
+        { id: "potion", type: "item" },
+        { id: "phoenixAsh", type: "item" },
+        { id: "etherleaf", type: "item" },
+        { id: "smokeBomb", type: "item" },
+        { id: "glassWand", type: "gear" }
+      ]);
+      return;
+    }
+    if (landmarkKind === "resourceNode") {
+      this.gearBag.ringMail = (this.gearBag.ringMail ?? 0) + 1;
+      this.saveGame();
+      this.say([`You mine glittering ore and shape it into usable Ring Mail.`]);
+      return;
+    }
+    if (landmarkKind === "ancientDoor") {
+      this.saveGame();
+      this.say([this.hasAllRelics() ? "The ancient door hums with fourfold light, pointing toward Starfall Gate." : "The ancient door waits for four relic lights."]);
+      return;
+    }
+    this.gold += rewardGold;
+    this.saveGame();
+    this.say([`${loc.name} whispers old island lore. Found ${rewardGold} gold among the stones.`]);
+  }
+
   private maybeEncounter() {
     if (!this.settings.encounters) return;
-    const terrain = this.world[this.worldPos.y][this.worldPos.x];
-    const tableKey = this.terrainEncounterKey(terrain);
+    const tableKey = this.worldEncounterKeyAt(this.worldPos.x, this.worldPos.y);
     if (!tableKey) return;
     this.encounterCounter -= tableKey === "forest" || tableKey === "hills" || tableKey === "final" ? 2 : 1;
     if (this.encounterCounter <= 0) {
@@ -2221,12 +2589,61 @@ class CrystalOathScene extends Phaser.Scene {
 
   private cloneEnemy(id: string): EnemyState {
     const def = ENEMIES[id];
-    return {
+    const enemyState: EnemyState = {
       ...def,
       uid: `${id}-${Math.random().toString(36).slice(2)}`,
       hp: def.maxHp,
       statuses: {}
     };
+    enemyState.intent = this.planEnemyIntent(enemyState);
+    return enemyState;
+  }
+
+  private planEnemyIntent(enemy: EnemyState): EnemyIntent {
+    const move = Phaser.Utils.Array.GetRandom(enemy.moves);
+    const kind = move.intent ?? this.intentKindForMove(move);
+    return {
+      kind,
+      label: this.intentLabel(kind),
+      message: this.intentMessage(enemy.name, kind, move),
+      move
+    };
+  }
+
+  private intentKindForMove(move: EnemyMove): EnemyIntentKind {
+    if (move.kind === "status" && move.status === "poison") return "poison";
+    if (move.kind === "defend") return "defend";
+    if (move.kind === "heal") return "heal";
+    if (move.kind === "charge") return "charge";
+    if (move.kind === "steal") return "stealGold";
+    if (move.kind === "damage" && move.power >= 12) return "heavyAttack";
+    return "attack";
+  }
+
+  private intentLabel(kind: EnemyIntentKind): string {
+    return (
+      {
+        attack: "Attack",
+        heavyAttack: "Heavy Attack",
+        defend: "Defend",
+        poison: "Poison",
+        heal: "Heal",
+        charge: "Charge",
+        flee: "Flee",
+        summon: "Summon",
+        stealGold: "Steal Gold"
+      }[kind] ?? "Attack"
+    );
+  }
+
+  private intentMessage(enemyName: string, kind: EnemyIntentKind, move: EnemyMove): string {
+    if (kind === "heavyAttack") return `${enemyName} is preparing ${move.name}.`;
+    if (kind === "defend") return `${enemyName} raises its guard.`;
+    if (kind === "poison") return `${enemyName} readies a venom trick.`;
+    if (kind === "heal") return `${enemyName} begins a healing chant.`;
+    if (kind === "charge") return `${enemyName} gathers power.`;
+    if (kind === "stealGold") return `${enemyName} eyes the party's gold.`;
+    return `${enemyName} is watching for an opening.`;
   }
 
   private battleBackgroundFor(dungeonId?: string): AssetKey {
@@ -2355,6 +2772,7 @@ class CrystalOathScene extends Phaser.Scene {
       if (entry.side === "party") {
         const member = actor as CharacterState;
         member.defending = false;
+        this.tickSkillCooldowns(member);
         this.battle.log = [`${member.name}'s turn.`];
         if (this.applyTurnStartStatuses(member)) {
           this.finishCurrentTurn(BATTLE_ACTION_DELAY_MS);
@@ -2414,8 +2832,13 @@ class CrystalOathScene extends Phaser.Scene {
 
   private battleOptions(): string[] {
     if (!this.battle) return [];
-    if (this.battle.phase === "command") return ["Attack", "Magic", "Item", "Defend", "Run"];
+    if (this.battle.phase === "command") return ["Attack", "Skill", "Magic", "Item", "Defend", "Run"];
     if (this.battle.phase === "target") return this.battle.enemies.filter((e) => e.hp > 0).map((e) => `${e.name} ${e.hp}/${e.maxHp}`);
+    if (this.battle.phase === "skill") {
+      const actor = this.currentBattleActor();
+      if (!actor) return [];
+      return this.skillsForActor(actor).map((skill) => this.skillOptionLabel(actor, skill));
+    }
     if (this.battle.phase === "spell") {
       const actor = this.currentBattleActor();
       if (!actor) return [];
@@ -2436,6 +2859,21 @@ class CrystalOathScene extends Phaser.Scene {
     return [];
   }
 
+  private skillsForActor(actor: CharacterState): PlayerSkillDef[] {
+    return Object.values(PLAYER_SKILLS).filter((skill) => skill.users === "all" || skill.users.includes(actor.id));
+  }
+
+  private skillOptionLabel(actor: CharacterState, skill: PlayerSkillDef): string {
+    const cooldown = actor.skillCooldowns[skill.id] ?? 0;
+    return `${skill.name}${cooldown > 0 ? ` (${cooldown})` : ""}`;
+  }
+
+  private tickSkillCooldowns(actor: CharacterState) {
+    for (const skillId of Object.keys(actor.skillCooldowns)) {
+      actor.skillCooldowns[skillId] = Math.max(0, actor.skillCooldowns[skillId] - 1);
+    }
+  }
+
   private adjustBattleSelection(delta: number) {
     if (!this.battle) return;
     const options = this.battleOptions();
@@ -2454,6 +2892,14 @@ class CrystalOathScene extends Phaser.Scene {
         this.battle.pendingAction = { side: "party", actorId: actor.id, type: "attack" };
         this.battle.phase = "target";
         this.battle.selected = 0;
+      } else if (command === "Skill") {
+        const skills = this.skillsForActor(actor);
+        if (!skills.length) {
+          this.battle.log = [`${actor.name} has no skills.`];
+        } else {
+          this.battle.phase = "skill";
+          this.battle.selected = 0;
+        }
       } else if (command === "Magic") {
         if (!actor.spells.length || this.statusActive(actor, "silence")) {
           this.battle.log = [this.statusActive(actor, "silence") ? `${actor.name} is silenced.` : `${actor.name} knows no spells.`];
@@ -2472,6 +2918,27 @@ class CrystalOathScene extends Phaser.Scene {
         this.executePlayerAction({ side: "party", actorId: actor.id, type: "defend" });
       } else if (command === "Run") {
         this.executePlayerAction({ side: "party", actorId: actor.id, type: "run" });
+      }
+      return;
+    }
+    if (this.battle.phase === "skill") {
+      const skills = this.skillsForActor(actor);
+      const skill = skills[this.battle.selected];
+      if (!skill) return;
+      const cooldown = actor.skillCooldowns[skill.id] ?? 0;
+      if (cooldown > 0) {
+        this.battle.log = [`${skill.name} needs ${cooldown} more turn${cooldown === 1 ? "" : "s"}.`];
+        return;
+      }
+      this.battle.pendingAction = { side: "party", actorId: actor.id, type: "skill", skillId: skill.id };
+      if (skill.target === "enemy") {
+        this.battle.phase = "target";
+        this.battle.selected = 0;
+      } else if (skill.target === "ally") {
+        this.battle.phase = "allyTarget";
+        this.battle.selected = 0;
+      } else {
+        this.executePlayerAction(this.battle.pendingAction as BattleAction);
       }
       return;
     }
@@ -2551,6 +3018,15 @@ class CrystalOathScene extends Phaser.Scene {
       const target = this.battle.enemies[action.targetIndex ?? -1] ?? this.battle.enemies.find((enemy) => enemy.hp > 0);
       return target ? { targetSide: "enemy", targetActorId: target.uid } : {};
     }
+    if (action.type === "skill" && action.skillId) {
+      const skill = PLAYER_SKILLS[action.skillId];
+      if (skill.target === "enemy") {
+        const target = this.battle.enemies[action.targetIndex ?? -1] ?? this.battle.enemies.find((enemy) => enemy.hp > 0);
+        return target ? { targetSide: "enemy", targetActorId: target.uid } : {};
+      }
+      const target = skill.target === "self" ? this.party.find((member) => member.id === action.actorId) : this.party[action.targetIndex ?? 0];
+      return target ? { targetSide: "party", targetActorId: target.id } : {};
+    }
     if (action.type === "spell" && action.spellId) {
       const spell = SPELLS[action.spellId];
       if (spell.target === "enemy") {
@@ -2623,11 +3099,14 @@ class CrystalOathScene extends Phaser.Scene {
     if (action.type === "attack") {
       const target = this.getLivingEnemy(action.targetIndex);
       if (!target) return false;
-      const damage = this.physicalDamage(this.attackPower(actor), target.defense, actor.luck);
+      const damage = this.physicalDamage(this.attackPower(actor), this.effectiveEnemyDefense(target), actor.luck);
       target.hp = Math.max(0, target.hp - damage.amount);
       this.battle.log.push(`${actor.name} hits ${target.name} for ${damage.amount}${damage.critical ? " critical" : ""}.`);
       this.audio.blip("hit");
       return true;
+    }
+    if (action.type === "skill" && action.skillId) {
+      return this.usePlayerSkill(actor, action.skillId, action.targetIndex);
     }
     if (action.type === "spell" && action.spellId) {
       return this.castSpell(actor, action.spellId, action.targetIndex);
@@ -2643,28 +3122,161 @@ class CrystalOathScene extends Phaser.Scene {
     const enemy = this.battle.enemies.find((e) => e.uid === action.actorId);
     if (!enemy || enemy.hp <= 0) return true;
     this.battle.log = [];
-    const move = Phaser.Utils.Array.GetRandom(enemy.moves);
+    const move = enemy.intent?.move ?? Phaser.Utils.Array.GetRandom(enemy.moves);
+    if (enemy.intent?.message) this.battle.log.push(enemy.intent.message);
+    enemy.intent = undefined;
+    if (move.kind === "defend") {
+      enemy.statuses.guarded = 2;
+      this.battle.log.push(`${enemy.name} braces behind its guard.`);
+      enemy.intent = this.planEnemyIntent(enemy);
+      return true;
+    }
+    if (move.kind === "heal") {
+      const allies = this.battle.enemies.filter((candidate) => candidate.hp > 0);
+      const target = allies.sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0] ?? enemy;
+      const amount = Math.min(target.maxHp - target.hp, move.power + Phaser.Math.Between(0, 8));
+      target.hp += Math.max(0, amount);
+      this.battle.log.push(`${enemy.name}'s ${move.name} restores ${amount} HP to ${target.name}.`);
+      enemy.intent = this.planEnemyIntent(enemy);
+      return true;
+    }
+    if (move.kind === "charge") {
+      enemy.statuses.guarded = 2;
+      enemy.statuses.charged = 2;
+      this.battle.log.push(`${enemy.name} gathers power for the next strike.`);
+      enemy.intent = this.planEnemyIntent(enemy);
+      return true;
+    }
+    if (move.kind === "steal") {
+      const stolen = Math.min(this.gold, move.power + Phaser.Math.Between(0, 8));
+      this.gold -= stolen;
+      const target = this.randomLivingPartyMember();
+      if (target) {
+        const chip = Math.max(1, enemy.attack - this.defensePower(target) + 3);
+        target.hp = Math.max(0, target.hp - chip);
+        this.battle.log.push(`${enemy.name}'s ${move.name} clips ${target.name} for ${chip} and steals ${stolen} gold.`);
+      } else this.battle.log.push(`${enemy.name} steals ${stolen} gold.`);
+      enemy.intent = this.planEnemyIntent(enemy);
+      return true;
+    }
     if (move.kind === "status") {
       const targets = move.target === "all" ? this.party.filter((c) => c.hp > 0) : [this.randomLivingPartyMember()].filter(Boolean) as CharacterState[];
       for (const target of targets) {
         if (Phaser.Math.Between(1, 100) <= 58) {
-          target.statuses[move.status!] = move.status === "poison" ? 99 : Phaser.Math.Between(1, 3);
+          target.statuses[move.status!] = move.status === "poison" ? 99 : Phaser.Math.Between(2, 4);
           this.battle.log.push(`${enemy.name}'s ${move.name} inflicts ${move.status} on ${target.name}.`);
         } else this.battle.log.push(`${target.name} resists ${move.name}.`);
       }
+      enemy.intent = this.planEnemyIntent(enemy);
       return true;
     }
     const targets = move.target === "all" ? this.party.filter((c) => c.hp > 0) : [this.randomLivingPartyMember()].filter(Boolean) as CharacterState[];
     for (const target of targets) {
-      const raw = enemy.attack + move.power + Phaser.Math.Between(0, 4);
+      const raw = enemy.attack + move.power + (enemy.statuses.charged ? 8 : 0) + Phaser.Math.Between(0, 4);
       let damage = Math.max(1, raw - this.defensePower(target));
       if (target.defending) damage = Math.ceil(damage * 0.45);
+      if (target.statuses.guarded) damage = Math.ceil(damage * 0.55);
       if (target.statuses.starveil) damage = Math.ceil(damage * 0.65);
       target.hp = Math.max(0, target.hp - damage);
       this.battle.log.push(`${enemy.name}'s ${move.name} hits ${target.name} for ${damage}.`);
+      if (move.status && target.hp > 0 && Phaser.Math.Between(1, 100) <= 40) {
+        target.statuses[move.status] = move.status === "poison" ? 99 : 3;
+        this.battle.log.push(`${target.name} suffers ${move.status}.`);
+      }
       this.audio.blip("hit");
     }
+    if (enemy.statuses.charged) delete enemy.statuses.charged;
+    enemy.intent = this.planEnemyIntent(enemy);
     return true;
+  }
+
+  private usePlayerSkill(actor: CharacterState, skillId: string, targetIndex?: number): boolean {
+    if (!this.battle) return false;
+    const skill = PLAYER_SKILLS[skillId];
+    if (!skill) return false;
+    if ((actor.skillCooldowns[skill.id] ?? 0) > 0) {
+      this.battle.log.push(`${skill.name} is still cooling down.`);
+      return false;
+    }
+    this.battle.log = [];
+    if (skill.id === "powerStrike") {
+      const target = this.getLivingEnemy(targetIndex);
+      if (!target) return false;
+      const damage = this.physicalDamage(this.attackPower(actor) + 12, this.effectiveEnemyDefense(target), actor.luck);
+      target.hp = Math.max(0, target.hp - damage.amount);
+      this.battle.log.push(`${actor.name} uses Power Strike for ${damage.amount}${damage.critical ? " critical" : ""}.`);
+      this.setSkillCooldown(actor, skill);
+      this.audio.blip("hit");
+      return true;
+    }
+    if (skill.id === "guardBreak") {
+      const target = this.getLivingEnemy(targetIndex);
+      if (!target) return false;
+      const damage = this.physicalDamage(this.attackPower(actor) + 4, this.effectiveEnemyDefense(target), actor.luck);
+      target.hp = Math.max(0, target.hp - damage.amount);
+      target.statuses.weakness = 3;
+      this.battle.log.push(`${actor.name} cracks ${target.name}'s guard for ${damage.amount}. Weakness takes hold.`);
+      this.setSkillCooldown(actor, skill);
+      this.audio.blip("hit");
+      return true;
+    }
+    if (skill.id === "quickSlash") {
+      const target = this.getLivingEnemy(targetIndex);
+      if (!target) return false;
+      const damage = this.physicalDamage(this.attackPower(actor) - 1, this.effectiveEnemyDefense(target), actor.luck + 10);
+      target.hp = Math.max(0, target.hp - damage.amount);
+      this.battle.log.push(`${actor.name} flashes in with Quick Slash for ${damage.amount}${damage.critical ? " critical" : ""}.`);
+      this.setSkillCooldown(actor, skill);
+      this.audio.blip("hit");
+      return true;
+    }
+    if (skill.id === "fireSpark") {
+      const target = this.getLivingEnemy(targetIndex);
+      if (!target) return false;
+      let amount = 22 + actor.level * 4 + Phaser.Math.Between(0, 7) - Math.floor(target.defense / 2);
+      if (target.weak.includes("fire")) amount = Math.floor(amount * 1.45);
+      if (target.resist.includes("fire")) amount = Math.floor(amount * 0.55);
+      amount = Math.max(3, amount);
+      target.hp = Math.max(0, target.hp - amount);
+      if (Phaser.Math.Between(1, 100) <= 45) target.statuses.burn = 3;
+      this.battle.log.push(`${actor.name} casts Fire Spark. ${target.name} takes ${amount}${target.statuses.burn ? " and burns" : ""}.`);
+      this.setSkillCooldown(actor, skill);
+      this.audio.blip("spell");
+      return true;
+    }
+    if (skill.id === "firstAid") {
+      const target = this.party[targetIndex ?? this.party.indexOf(actor)];
+      if (!target || target.hp <= 0) {
+        this.battle.log.push("First Aid needs a standing ally.");
+        return false;
+      }
+      const amount = 22 + actor.level * 3;
+      target.hp = Math.min(target.maxHp, target.hp + amount);
+      delete target.statuses.bleed;
+      this.battle.log.push(`${actor.name} uses First Aid. ${target.name} recovers ${amount}.`);
+      this.setSkillCooldown(actor, skill);
+      this.audio.blip("spell");
+      return true;
+    }
+    if (skill.id === "focus") {
+      actor.statuses.guarded = 2;
+      for (const tier of ["1", "2", "3"]) {
+        const charge = actor.charges[tier];
+        if (charge && charge.current < charge.max) {
+          charge.current += 1;
+          break;
+        }
+      }
+      this.battle.log.push(`${actor.name} focuses, guarding and steadying their magic.`);
+      this.setSkillCooldown(actor, skill);
+      this.audio.blip("spell");
+      return true;
+    }
+    return false;
+  }
+
+  private setSkillCooldown(actor: CharacterState, skill: PlayerSkillDef) {
+    actor.skillCooldowns[skill.id] = skill.cooldown;
   }
 
   private castSpell(actor: CharacterState, spellId: string, targetIndex?: number): boolean {
@@ -2724,9 +3336,11 @@ class CrystalOathScene extends Phaser.Scene {
     charge.current -= 1;
     this.audio.blip("spell");
     for (const target of targets) {
-      let amount = spell.power + actor.level * 5 + Phaser.Math.Between(0, 8) - Math.floor(target.defense / 2);
+      let amount = spell.power + actor.level * 5 + Phaser.Math.Between(0, 8) - Math.floor(this.effectiveEnemyDefense(target) / 2);
       if (target.weak.includes(spell.element)) amount = Math.floor(amount * 1.45);
       if (target.resist.includes(spell.element)) amount = Math.floor(amount * 0.55);
+      if (target.statuses.weakness) amount = Math.floor(amount * 1.2);
+      if (target.statuses.guarded) amount = Math.ceil(amount * 0.7);
       amount = Math.max(2, amount);
       target.hp = Math.max(0, target.hp - amount);
       this.battle.log.push(`${actor.name} casts ${spell.name}. ${target.name} takes ${amount}.`);
@@ -2842,6 +3456,18 @@ class CrystalOathScene extends Phaser.Scene {
       this.battle.log.push(`${actor.name} suffers ${damage} poison damage.`);
       if (actor.hp <= 0) return true;
     }
+    if (actor.hp > 0 && actor.statuses.burn) {
+      const damage = Math.max(1, Math.floor(actor.maxHp * 0.04));
+      actor.hp = Math.max(0, actor.hp - damage);
+      this.battle.log.push(`${actor.name} burns for ${damage}.`);
+      if (actor.hp <= 0) return true;
+    }
+    if (actor.hp > 0 && actor.statuses.bleed) {
+      const damage = Math.max(1, Math.floor(actor.maxHp * 0.03));
+      actor.hp = Math.max(0, actor.hp - damage);
+      this.battle.log.push(`${actor.name} bleeds for ${damage}.`);
+      if (actor.hp <= 0) return true;
+    }
     if (this.consumeSkipStatus(actor)) {
       this.battle.log.push(`${actor.name} cannot act.`);
       return true;
@@ -2865,7 +3491,7 @@ class CrystalOathScene extends Phaser.Scene {
   }
 
   private tickStatus(actor: CharacterState | EnemyState) {
-    for (const key of ["ward", "starveil", "silence"] as (keyof StatusState)[]) {
+    for (const key of ["ward", "starveil", "silence", "burn", "bleed", "weakness", "guarded", "charged"] as (keyof StatusState)[]) {
       if (actor.statuses[key]) {
         actor.statuses[key]! -= 1;
         if (actor.statuses[key]! <= 0) delete actor.statuses[key];
@@ -2900,9 +3526,14 @@ class CrystalOathScene extends Phaser.Scene {
         this.battle.log.push(`${member.name} reached level ${member.level}!`);
       }
     }
-    if (Phaser.Math.Between(1, 100) <= 22 && this.battle.kind === "random") {
-      this.inventory.potion = (this.inventory.potion ?? 0) + 1;
-      this.battle.log.push("Found a Potion.");
+    if (this.battle.kind === "random") {
+      const bestEnemy = [...this.battle.enemies].sort((a, b) => b.xp + b.gold - (a.xp + a.gold))[0];
+      const dropChance = Phaser.Math.Clamp(20 + Math.floor((bestEnemy?.xp ?? 0) / 10), 20, 38);
+      if (Phaser.Math.Between(1, 100) <= dropChance) {
+        const loot = bestEnemy && bestEnemy.xp > 60 ? Phaser.Utils.Array.GetRandom(["etherleaf", "phoenixAsh", "smokeBomb"]) : Phaser.Utils.Array.GetRandom(["potion", "antidote", "potion"]);
+        this.inventory[loot] = (this.inventory[loot] ?? 0) + 1;
+        this.battle.log.push(`Found ${ITEMS[loot].name}.`);
+      }
     }
     this.battle.victoryAwarded = true;
     this.battle.phase = "log";
@@ -2940,12 +3571,21 @@ class CrystalOathScene extends Phaser.Scene {
     if (wasBoss && dungeonId && bossId) {
       const dungeon = this.dungeons()[dungeonId];
       this.defeatedBosses.add(bossId);
+      this.clearedDungeons.add(dungeonId);
       if (dungeon.relic) this.flags.relics[dungeon.relic] = true;
       this.mode = "dungeon";
       this.syncAllVisualPositions();
       this.audio.setMode("dungeon");
       const extra: string[] = [];
-      if (dungeon.relic === "root") extra.push("Brinewick's tide-skiff may now wake at the harbor.");
+      if (dungeonId === "mossCave") {
+        this.gold += 30;
+        extra.push("The cave hoard yields 30 gold for passage.");
+      }
+      if (dungeonId === "tideShrine") {
+        this.inventory.charteredCompass = Math.max(1, this.inventory.charteredCompass ?? 0);
+        this.flags.travel.unlockedIsland3 = true;
+        extra.push("The boss drops a Chartered Compass. Ashfang routes are now charted.");
+      }
       if (dungeon.relic === "gale") {
         this.flags.skyship = true;
         extra.push("The Gale Relic reveals a high road. Visit Starfall Gate with all four relics.");
@@ -2979,7 +3619,11 @@ class CrystalOathScene extends Phaser.Scene {
   }
 
   private defensePower(actor: CharacterState): number {
-    return actor.baseDefense + (ARMORS[actor.armor]?.power ?? 0) + (actor.statuses.ward ? 4 : 0);
+    return actor.baseDefense + (ARMORS[actor.armor]?.power ?? 0) + (actor.statuses.ward ? 4 : 0) + (actor.statuses.guarded ? 5 : 0);
+  }
+
+  private effectiveEnemyDefense(enemy: EnemyState): number {
+    return Math.max(0, enemy.defense + (enemy.statuses.guarded ? 5 : 0) - (enemy.statuses.weakness ? 5 : 0));
   }
 
   private enemyDanger(): number {
@@ -3090,7 +3734,7 @@ Statuses: ${statuses}`;
   private openFieldItemTargets(itemId: string) {
     const item = ITEMS[itemId];
     if (!item.field) {
-      this.flashMessage("That item is for battle.");
+      this.flashMessage(item.battle ? "That item is for battle." : `${item.name} is a key item.`);
       return;
     }
     if (itemId === "tent") {
@@ -3287,6 +3931,8 @@ Statuses: ${statuses}`;
             this.flags.boat = !all;
             this.flags.skyship = !all;
             this.flags.gateOpen = !all;
+            this.flags.travel.unlockedIsland2 = true;
+            this.flags.travel.unlockedIsland3 = !all;
             this.openDebugMenu();
           }
         },
@@ -3499,6 +4145,7 @@ Statuses: ${statuses}`;
       gearBag: this.gearBag,
       gold: this.gold,
       worldSeed: this.worldSeed,
+      currentIslandId: this.currentIslandId,
       worldPos: this.worldPos,
       townPos: this.townPos,
       dungeonPos: this.dungeonPos,
@@ -3507,8 +4154,10 @@ Statuses: ${statuses}`;
       dungeonFloor: this.dungeonFloor,
       flags: this.flags,
       openedChests: [...this.openedChests],
+      discoveredPois: [...this.discoveredPois],
       puzzleFlags: [...this.puzzleFlags],
       defeatedBosses: [...this.defeatedBosses],
+      clearedDungeons: [...this.clearedDungeons],
       settings: this.settings,
       encounterCounter: this.encounterCounter
     };
@@ -3521,26 +4170,30 @@ Statuses: ${statuses}`;
     try {
       const data = JSON.parse(raw);
       this.buildWorldFromSeed(data.worldSeed ?? createWorldSeed());
-      this.party = data.party;
-      this.inventory = data.inventory;
-      this.gearBag = data.gearBag;
-      this.gold = data.gold;
+      this.party = this.normalizeParty(data.party ?? []);
+      this.inventory = { potion: 0, antidote: 0, tent: 0, phoenixAsh: 0, etherleaf: 0, smokeBomb: 0, charteredCompass: 0, ...(data.inventory ?? {}) };
+      this.gearBag = data.gearBag ?? {};
+      this.gold = data.gold ?? 0;
+      this.currentIslandId = data.currentIslandId ?? getIslandAt(this.generatedWorld!, data.worldPos?.x ?? 0, data.worldPos?.y ?? 0)?.id ?? "greenhaven";
       this.worldPos = data.worldPos ?? this.generatedWorld?.startPosition ?? { x: 10, y: 22 };
       this.townPos = data.townPos ?? { x: 10, y: 12 };
       this.dungeonPos = data.dungeonPos ?? { x: 1, y: 1 };
       this.currentTown = data.currentTown ?? "dawnford";
       this.currentDungeon = data.currentDungeon ?? "mossCave";
       this.dungeonFloor = data.dungeonFloor ?? 0;
-      this.flags = data.flags;
+      this.flags = this.normalizeFlags(data.flags);
       this.openedChests = new Set(data.openedChests ?? []);
+      this.discoveredPois = new Set(data.discoveredPois ?? data.discoveredPoints ?? []);
       this.puzzleFlags = new Set(data.puzzleFlags ?? []);
       this.defeatedBosses = new Set(data.defeatedBosses ?? []);
+      this.clearedDungeons = new Set(data.clearedDungeons ?? []);
       this.settings = { ...this.settings, ...data.settings };
       this.audio.setMuted(this.settings.muted);
       this.encounterCounter = data.encounterCounter ?? 10;
       if (!this.canOccupyExploreTile("world", this.worldPos.x, this.worldPos.y)) {
         this.worldPos = { ...(this.generatedWorld?.startPosition ?? { x: 10, y: 22 }) };
       }
+      this.syncCurrentIslandFromWorldPos();
       this.mode = "world";
       this.clearHeldMovement();
       this.syncAllVisualPositions();
@@ -3719,7 +4372,7 @@ Statuses: ${statuses}`;
   private battleCharacterFrame(member: CharacterState): CharacterSpriteFrameName {
     const animation = this.battle?.animation;
     if (animation?.action.side === "party" && animation.action.actorId === member.id) {
-      if (animation.action.type === "attack") {
+      if (animation.action.type === "attack" || animation.action.type === "skill") {
         return animation.elapsed < animation.impactAt * 0.58 ? "attack_windup_left" : "attack_release_left";
       }
       return animation.elapsed < animation.impactAt ? "walk_left_b" : "walk_left_a";
@@ -3781,15 +4434,16 @@ Statuses: ${statuses}`;
         }
       }
     }
+    this.drawWorldOverlays(startX, endX, startY, endY, tileCam);
     for (const loc of this.locations()) {
       const radius = Math.floor(this.locationFootprint(loc) / 2);
       if (loc.x + radius < startX || loc.x - radius > endX || loc.y + radius < startY || loc.y - radius > endY) continue;
       this.drawLocationIcon(loc, (loc.x - radius) * TILE - tileCam.x, (loc.y - radius) * TILE - tileCam.y);
     }
     this.drawLeader(leaderPos.x * TILE - cam.x + 4, leaderPos.y * TILE - cam.y + 3, "world");
-    this.drawHud("World");
+    this.drawHud(this.currentIslandName());
     const loc = this.locationAt(this.worldPos.x, this.worldPos.y);
-    if (loc) this.drawPrompt(`Enter ${loc.name}`);
+    if (loc) this.drawPrompt(loc.kind === "harbor" ? `Use ${loc.name}` : loc.kind === "landmark" ? `Inspect ${loc.name}` : `Enter ${loc.name}`);
     if (DEBUG_WORLD_LAYOUT) {
       const mapPixelW = this.world[0]?.length ?? 0;
       const mapPixelH = this.world.length;
@@ -4117,6 +4771,11 @@ Statuses: ${statuses}`;
 
   private drawBattleEnemy(enemy: EnemyState, x: number, y: number, size: number, targeted: boolean) {
     this.drawActorShadow(x + size / 2, y + size - 4, size * 0.82, 15);
+    if (enemy.hp > 0 && enemy.intent) {
+      this.g.fillStyle(0x07101d, 0.78).fillRect(x - 6, Math.max(6, y - 24), size + 12, 20);
+      this.g.lineStyle(1, 0xfff0a8, 0.55).strokeRect(x - 6, Math.max(6, y - 24), size + 12, 20);
+      this.text(x, Math.max(8, y - 21), `Intent: ${enemy.intent.label}`, 10, "#fff2a8", "left", { wordWrapWidth: size + 4, strokeThickness: 1 });
+    }
     if (targeted) {
       this.g.fillStyle(0xfff0a8, 0.16).fillRect(x - 10, y - 10, size + 20, size + 36);
       this.g.lineStyle(3, 0xfff0a8, 1).strokeRect(x - 10, y - 10, size + 20, size + 36);
@@ -4182,8 +4841,10 @@ Statuses: ${statuses}`;
     this.ui.fillStyle(0xfff0a8, 0.16).fillRect(x + 16, y + 35, w - 32, 1);
     if (target) {
       this.text(x + 16, y + 48, target.name, 18, "#ffffff", "left", { wordWrapWidth: w - 32 });
-      this.text(x + 16, y + 78, `HP ${target.hp}/${target.maxHp}`, 14, "#dce9ff");
-      this.drawBar(x + 16, y + 104, w - 32, 12, target.hp, target.maxHp, 0xd95252);
+      this.text(x + 16, y + 74, `Intent: ${target.intent?.label ?? "Unknown"}`, 13, "#fff2a8", "left", { wordWrapWidth: w - 32 });
+      const statuses = Object.keys(target.statuses).filter((s) => target.statuses[s as keyof StatusState]).join(" ") || "ok";
+      this.text(x + 16, y + 94, `HP ${target.hp}/${target.maxHp}  ${statuses}`, 12, "#dce9ff", "left", { wordWrapWidth: w - 32 });
+      this.drawBar(x + 16, y + 122, w - 32, 12, target.hp, target.maxHp, 0xd95252);
     } else {
       this.battle!.log.slice(-4).forEach((line, idx) => {
         const rowY = y + 46 + idx * 22;
@@ -4197,17 +4858,19 @@ Statuses: ${statuses}`;
     if (!this.battle) return;
     this.drawPanel(x, y, w, h);
     const actor = this.currentBattleActor();
-    if (["command", "target", "spell", "item", "allyTarget"].includes(this.battle.phase) && actor) {
+    if (["command", "target", "skill", "spell", "item", "allyTarget"].includes(this.battle.phase) && actor) {
       const prompt =
         this.battle.phase === "command"
           ? `${actor.name}'s turn`
           : this.battle.phase === "target"
             ? `${actor.name}: choose target`
-            : this.battle.phase === "spell"
-              ? `${actor.name}: choose magic`
-            : this.battle.phase === "item"
-              ? `${actor.name}: choose item`
-              : `${actor.name}: choose ally`;
+            : this.battle.phase === "skill"
+              ? `${actor.name}: choose skill`
+              : this.battle.phase === "spell"
+                ? `${actor.name}: choose magic`
+                : this.battle.phase === "item"
+                  ? `${actor.name}: choose item`
+                  : `${actor.name}: choose ally`;
       this.text(x + 16, y + 12, prompt, 14, "#fff2a8", "left", { wordWrapWidth: w - 32 });
       this.ui.fillStyle(0xfff0a8, 0.16).fillRect(x + 16, y + 35, w - 32, 1);
       this.battleOptions().forEach((option, idx) => {
@@ -4338,6 +5001,42 @@ Statuses: ${statuses}`;
     else if (tile?.biome === "desert") this.drawWorldSandTile(sx, sy, x, y);
     else this.drawWorldRoadTile(sx, sy, x, y);
     this.drawWorldCoastEdges(terrain, sx, sy, x, y);
+  }
+
+  private drawWorldOverlays(startX: number, endX: number, startY: number, endY: number, tileCam: Vec) {
+    if (!this.generatedWorld) return;
+    const inView = (pos: Vec) => pos.x >= startX && pos.x <= endX && pos.y >= startY && pos.y <= endY;
+    for (const pos of this.generatedWorld.shallows) {
+      if (!inView(pos)) continue;
+      const sx = pos.x * TILE - tileCam.x;
+      const sy = pos.y * TILE - tileCam.y;
+      this.g.fillStyle(0x76e7ff, 0.2).fillRect(sx + 2, sy + 2, TILE - 4, TILE - 4);
+      if ((pos.x + pos.y) % 3 === 0) this.g.lineStyle(1, 0xc9fbff, 0.5).lineBetween(sx + 6, sy + 12, sx + 24, sy + 8);
+    }
+    for (const route of this.generatedWorld.seaRoutes) {
+      route.forEach((pos, idx) => {
+        if (!inView(pos) || idx % 3 !== 0) return;
+        const sx = pos.x * TILE - tileCam.x;
+        const sy = pos.y * TILE - tileCam.y;
+        this.g.fillStyle(0xfff0a8, 0.62).fillCircle(sx + TILE / 2, sy + TILE / 2, 3);
+      });
+    }
+    for (const reef of this.generatedWorld.reefs) {
+      if (!inView(reef)) continue;
+      const sx = reef.x * TILE - tileCam.x;
+      const sy = reef.y * TILE - tileCam.y;
+      this.g.fillStyle(0xd8d0a0, 0.85).fillTriangle(sx + 8, sy + 23, sx + 14, sy + 12, sx + 20, sy + 23);
+      this.g.fillStyle(0x6c7c8a, 0.8).fillRect(sx + 19, sy + 19, 6, 4);
+    }
+    for (const bridge of this.generatedWorld.bridges) {
+      if (!inView(bridge)) continue;
+      const sx = bridge.x * TILE - tileCam.x;
+      const sy = bridge.y * TILE - tileCam.y;
+      const color = bridge.material === "stone" ? 0xa69b86 : 0x9a6a3d;
+      this.g.fillStyle(0x07101d, 0.35).fillRect(sx + 5, sy + 5, TILE - 10, TILE - 10);
+      this.g.fillStyle(color, 0.95).fillRect(sx + 7, sy + 12, TILE - 14, 8);
+      this.g.lineStyle(1, 0xffefbd, 0.65).lineBetween(sx + 8, sy + 16, sx + TILE - 8, sy + 16);
+    }
   }
 
   private rebuildWorldTerrainCache() {
@@ -4580,6 +5279,15 @@ Statuses: ${statuses}`;
     return false;
   }
 
+  private locationTextureForKind(loc: LocationDef): AssetKey | undefined {
+    if (loc.kind === "harbor") return "marker_port";
+    if (loc.landmarkKind === "shrine") return "marker_shrine";
+    if (loc.landmarkKind === "cave") return "marker_cave";
+    if (loc.landmarkKind === "ruins" || loc.landmarkKind === "ancientDoor") return "marker_gate";
+    if (loc.landmarkKind === "secretMerchant") return "marker_town";
+    return undefined;
+  }
+
   private drawDungeonTile(tile: string, sx: number, sy: number, dungeon: DungeonDef, tileX: number, tileY: number) {
     if (tile === "#") {
       if (this.drawTileTexture("dungeon_wall_base", sx, sy)) return;
@@ -4625,12 +5333,26 @@ Statuses: ${statuses}`;
     const cx = sx + size / 2;
     const bottom = sy + size - 8;
     this.drawActorShadow(cx, bottom, size * 0.72, 18);
-    const locationTexture = LOCATION_TEXTURES[loc.id];
+    const locationTexture = LOCATION_TEXTURES[loc.id] ?? this.locationTextureForKind(loc);
     if (locationTexture && this.hasTexture(locationTexture)) {
       this.drawTexture(locationTexture, sx, sy - 4, size, size, LAYER_OBJECT_IMAGE);
       return;
     }
     const u = size / 96;
+    if (loc.kind === "harbor") {
+      this.g.fillStyle(0x9a6a3d, 1).fillRect(sx + 18 * u, sy + 54 * u, 60 * u, 12 * u);
+      this.g.fillStyle(0xe8c36b, 1).fillRect(sx + 24 * u, sy + 42 * u, 48 * u, 18 * u);
+      this.g.fillStyle(0x2f8db8, 1).fillTriangle(sx + 34 * u, sy + 42 * u, sx + 50 * u, sy + 18 * u, sx + 66 * u, sy + 42 * u);
+      this.g.fillStyle(0xf7f2d0, 1).fillRect(sx + 47 * u, sy + 20 * u, 5 * u, 38 * u);
+      return;
+    }
+    if (loc.kind === "landmark") {
+      const color = loc.landmarkKind === "shrine" ? 0x95e7ff : loc.landmarkKind === "monsterNest" ? 0xd96b55 : 0xffdf78;
+      this.g.fillStyle(0x1b2430, 1).fillRect(sx + 24 * u, sy + 44 * u, 48 * u, 32 * u);
+      this.g.fillStyle(color, 1).fillTriangle(sx + 18 * u, sy + 48 * u, cx, sy + 18 * u, sx + 78 * u, sy + 48 * u);
+      this.g.fillStyle(0x07101d, 1).fillRect(cx - 9 * u, sy + 56 * u, 18 * u, 20 * u);
+      return;
+    }
     if (loc.id === "dawnford" || loc.kind === "town") {
       const roof = loc.id === "brinewick" ? 0x4c9fc7 : loc.id === "sunbarrow" ? 0xf08a2e : 0xd9542e;
       this.g.fillStyle(0x1a2334, 0.55).fillRect(sx + 18 * u, sy + 54 * u, 60 * u, 24 * u);
@@ -4843,13 +5565,14 @@ Statuses: ${statuses}`;
     this.text(28, 18, place, 17, "#fff2a8", "left", { wordWrapWidth: 250 });
     this.text(28, 42, `Gold ${this.gold}  Relics ${this.relicCount()}/4  ${travel}`, 12, "#e7efff", "left", { wordWrapWidth: 250 });
 
-    const rightW = 258;
+    const rightW = 318;
     const rightX = WIDTH - rightW - 12;
     this.drawPanel(rightX, 10, rightW, 56);
     this.text(rightX + 16, 19, `Enc ${this.settings.encounters ? "ON" : "OFF"}  XP ${this.settings.xpMultiplier}x`, 13, "#e7efff", "left", {
       wordWrapWidth: rightW - 32
     });
-    this.text(rightX + 16, 41, `${this.settings.muted ? "Muted" : "Audio"}  Esc Menu`, 12, "#c5d2f2", "left", { wordWrapWidth: rightW - 32 });
+    const seedText = import.meta.env.DEV ? `Seed ${this.worldSeed}` : `${this.settings.muted ? "Muted" : "Audio"}  Esc Menu`;
+    this.text(rightX + 16, 41, seedText, 11, "#c5d2f2", "left", { wordWrapWidth: rightW - 32 });
   }
 
   private drawPrompt(text: string) {
@@ -4871,69 +5594,6 @@ Statuses: ${statuses}`;
   private markDirty() {
     this.dirty = true;
   }
-}
-
-function makeDungeonFloors(variant: number, final = false): string[][] {
-  const width = 22;
-  const height = 14;
-  const floor0 = blankDungeon(width, height);
-  carveRect(floor0, 1, 1, 8, 5);
-  carveRect(floor0, 11, 1, 9, 5);
-  carveRect(floor0, 4, 8, 16, 5);
-  carveLine(floor0, 8, 3, 11, 3);
-  carveLine(floor0, 6, 5, 6, 10);
-  setTile(floor0, 1, 1, "E");
-  setTile(floor0, 16, 2, "C");
-  setTile(floor0, 3 + (variant % 3), 10, "K");
-  setTile(floor0, 19, 12, "S");
-
-  const floor1 = blankDungeon(width, height);
-  carveRect(floor1, 1, 8, 8, 5);
-  carveRect(floor1, 11, 8, 9, 5);
-  carveRect(floor1, 6, 1, 14, 5);
-  carveLine(floor1, 8, 10, 11, 10);
-  carveLine(floor1, 12, 5, 12, 10);
-  setTile(floor1, 2, 12, "S");
-  setTile(floor1, 7, 9, "C");
-  setTile(floor1, 12, 7, "D");
-  setTile(floor1, 18, 2, "C");
-  setTile(floor1, 19, 3, "B");
-  if (final) {
-    setTile(floor1, 12, 7, "D");
-    setTile(floor1, 10, 3, "K");
-  }
-  return [floorToStrings(floor0), floorToStrings(floor1)];
-}
-
-function blankDungeon(width: number, height: number): string[][] {
-  return Array.from({ length: height }, () => Array.from({ length: width }, () => "#"));
-}
-
-function carveRect(map: string[][], x: number, y: number, w: number, h: number) {
-  for (let yy = y; yy < y + h; yy += 1) {
-    for (let xx = x; xx < x + w; xx += 1) setTile(map, xx, yy, ".");
-  }
-}
-
-function carveLine(map: string[][], x1: number, y1: number, x2: number, y2: number) {
-  const dx = Math.sign(x2 - x1);
-  const dy = Math.sign(y2 - y1);
-  let x = x1;
-  let y = y1;
-  setTile(map, x, y, ".");
-  while (x !== x2 || y !== y2) {
-    if (x !== x2) x += dx;
-    if (y !== y2) y += dy;
-    setTile(map, x, y, ".");
-  }
-}
-
-function setTile(map: string[][], x: number, y: number, value: string) {
-  if (map[y]?.[x] !== undefined) map[y][x] = value;
-}
-
-function floorToStrings(map: string[][]): string[] {
-  return map.map((row) => row.join(""));
 }
 
 function isUp(event: KeyboardEvent) {

@@ -35,12 +35,14 @@ This runs `tools/worldgen/test_worldgen.mjs`. It validates the active `atlas_v3`
 - runtime cache rendering, fallback visible-tile drawing, and debug previews all use the same shared inset source-rect helper
 - runtime source no longer imports or calls the removed map-level seam repair module
 - runtime source files do not actively reference the failed classic tileset, `classicIsland`, old 10x10 atlas, or classic object renderer
-- start tile is walkable grass
-- required POIs are reachable and not on blocked/water terrain
+- start tile is walkable grass on Greenhaven
+- generated worlds contain at least three island records with island tile maps, towns, harbors, dungeons, and landmarks
+- required POIs are reachable on their own island and not on blocked/water terrain
+- harbors are coastal
 - water tiles are not walkable
 - blocked mountain, volcano, and lava tiles are not walkable
-- generated world edges are a blocked rocky mountain border
-- generated worlds contain no roads, rivers, bridges, or empty-cell references
+- generated world edges are a deep-water ocean border
+- generated worlds include roads, shallow-water tracking, docks/bridges, sea routes, beaches, forest/jungle biome hooks, reefs/ocean details, and no empty-cell references
 - same seed reproduces the same world
 - different seeds produce different tile grids
 
@@ -134,10 +136,10 @@ Expected:
 ## New Game Test
 
 - Select New Game.
-- Intro dialogue appears in Dawnford.
+- Intro dialogue appears in Greenhaven.
 - Advance dialogue with Enter/Z.
-- Player ends in Dawnford town interior.
-- Dawnford should show v2 stone floors/walls, service signs, lamps, table/rug, crates/barrels, and exit gate.
+- Player ends in Greenhaven town interior.
+- Greenhaven should show v2 stone floors/walls, service signs, lamps, table/rug, crates/barrels, and exit gate.
 
 ## Load/Save Test
 
@@ -157,8 +159,9 @@ Expected:
 - Hold Shift while moving and confirm movement is faster but still interpolated tile movement.
 - Confirm there is no snap-forward-then-reset-back behavior during or after a step.
 - Confirm the camera follows the interpolated visual position without a visible reset.
-- Exit Dawnford through the south gate.
-- Confirm pressing south while already standing on Dawnford's south gate exits to the overworld.
+- Exit Greenhaven through the south gate.
+- Confirm pressing south while already standing on Greenhaven's south gate exits to the overworld.
+- Confirm the overworld is mostly ocean with three islands, beach/coast edges, shallow-water/route overlays, harbor markers, and landmark markers.
 - Walk on world terrain.
 - Enter a town/location by stepping onto it.
 - Confirm town/dungeon/location entry occurs after the tile step completes, not mid-step.
@@ -168,15 +171,18 @@ Expected:
 - Confirm collision does not jitter or leave the player visually/logically between tiles.
 - Confirm the overworld leader remains readable when standing on a town/location marker.
 - Confirm `atlas_v3` terrain shows no unused black cells; dark seams can come from actual atlas cell edge pixels and should not be debug grid overlays.
-- Confirm water blocks movement, and current worlds do not generate roads, rivers, beaches, or bridges.
+- Confirm water blocks movement while generated roads suppress encounters and harbors enable boat travel.
+- At Greenhaven Harbor, confirm Coralreach costs 10 gold, deducts gold, moves the player to Coralreach harbor, and can return by harbor.
 - Confirm new games produce different world seeds and load restores the same saved world.
 
 ## Battle Test
 
 - Trigger a random encounter by walking or use F9 debug encounter.
 - Confirm the battle UI shows one current actor at a time.
+- Confirm enemies show intent before the player acts.
 - Confirm the battle view uses enemies on the left, party battlers on the right, lower-left target/log panel, lower-middle command panel, and lower-right party status panel.
 - Confirm only the current party member gets a command menu.
+- Choose Skill and verify skill cooldown labels/actions are available.
 - Choose Attack, select an enemy, and verify damage resolves immediately before the next actor acts.
 - Confirm enemies act on their own initiative turns without waiting for all party commands.
 - Confirm initiative order varies slightly between encounters/cycles while faster actors tend to act earlier.
@@ -193,6 +199,7 @@ Expected:
 - Use Antidote on poison if available.
 - Use Phoenix Ash on fallen character if available.
 - Cast Mend/Ward/Spark/Ember early.
+- Use skills such as Power Strike, First Aid, Fire Spark, and Focus.
 - Verify spell charges decrement and inns restore them.
 
 ## Level-Up And Reward Test
@@ -212,14 +219,15 @@ Expected:
 ## Boss / Progression Test
 
 - Enter a dungeon.
+- Confirm dungeon layout is room-and-corridor procedural and deterministic for a seed.
 - Confirm random encounters occur.
 - Open chest.
 - Activate switch.
 - Pass gate.
 - Use stairs.
 - Fight boss.
-- Confirm boss victory sets relic/story flag and autosaves.
-- Confirm progression unlocks later route.
+- Confirm boss victory sets relic/story/cleared-dungeon flags and autosaves.
+- Confirm Coralreach boss awards Chartered Compass/unlocks Ashfang route.
 
 This is longer than a quick smoke test; run when changing dungeon/progression/boss/save behavior.
 
@@ -234,6 +242,7 @@ Use the in-app browser or normal browser devtools after startup and after a batt
 - Menu opens/closes.
 - Settings toggle works.
 - Random/debug battle starts.
+- Battle intent and Skill command work.
 - Battle commands resolve.
 - Victory reward works.
 - Save/load works.

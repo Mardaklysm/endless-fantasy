@@ -163,23 +163,39 @@ function validateWorldgen() {
 
   for (let i = 0; i < worldCount; i += 1) {
     const world = generateWorld({ seed: `atlas-v3-worldgen-test-${i}` });
-    assert(world.mode === "atlas_v3_tile_world", `World ${i} mode is ${world.mode}.`);
+    assert(world.mode === "atlas_v3_archipelago_world", `World ${i} mode is ${world.mode}.`);
     assert(world.validation.valid, `World ${i} failed validation: ${world.validation.errors.join("; ")}`);
-    assert(world.roads.length === 0, `World ${i} generated roads.`);
+    assert(world.islands.length >= 3, `World ${i} generated only ${world.islands.length} islands.`);
+    assert(world.roads.length > 0, `World ${i} did not generate roads.`);
     assert(world.rivers.length === 0, `World ${i} generated rivers.`);
-    assert(world.bridges.length === 0, `World ${i} generated bridges.`);
+    assert(world.bridges.length > 0, `World ${i} did not generate harbor dock/bridge markers.`);
+    assert(world.shallows.length > 0, `World ${i} did not track shallow water.`);
+    assert(world.reefs.length > 0, `World ${i} did not add ocean details.`);
+    assert(world.seaRoutes.length >= 2, `World ${i} did not add sea routes.`);
     assert(isWorldTileWalkable(world.tiles[world.startPosition.y][world.startPosition.x]), `World ${i} start is blocked.`);
     assert(worldTileById(world.tiles[world.startPosition.y][world.startPosition.x])?.biome === "grassland", `World ${i} start is not grassland.`);
+    assert(world.islandByTile[world.startPosition.y][world.startPosition.x] === "greenhaven", `World ${i} start is not on Greenhaven.`);
+
+    for (const island of world.islands) {
+      assert(island.id && island.name, `World ${i} has an unnamed island.`);
+      assert(island.tileMap.length > 0, `World ${i} island ${island.id} has no tile map.`);
+      assert(island.townPosition.x > 0 && island.harborPosition.x > 0, `World ${i} island ${island.id} is missing town or harbor position.`);
+      assert(island.dungeonPositions.length > 0, `World ${i} island ${island.id} has no dungeon position.`);
+      assert(island.specialLandmarkPositions.length > 0, `World ${i} island ${island.id} has no landmarks.`);
+    }
 
     for (const poi of world.pois) {
       const tile = world.tiles[poi.y][poi.x];
       assert(!worldTileHasTag(tile, "water"), `World ${i} POI ${poi.id} was placed on water.`);
       assert(isWorldTileWalkable(tile), `World ${i} POI ${poi.id} was placed on blocked terrain.`);
       assert(world.validation.reachablePoiIds.includes(poi.id), `World ${i} POI ${poi.id} was not reachable.`);
+      if (poi.kind === "harbor") assert(hasAdjacentWater(world, poi), `World ${i} harbor ${poi.id} is not coastal.`);
     }
 
     let sawWater = false;
     let sawBlocked = false;
+    let sawBeach = false;
+    let sawForestBiome = false;
     for (let y = 0; y < world.tiles.length; y += 1) {
       const row = world.tiles[y];
       for (let x = 0; x < row.length; x += 1) {
@@ -189,7 +205,7 @@ function validateWorldgen() {
         const def = worldTileById(tile);
         assert(def, `World ${i} generated an atlas cell without a tile definition: ${tile}.`);
         if (isWorldEdge) {
-          assert(tile === WORLD_TILE_IDS.rockyMountainGround, `World ${i} edge ${x},${y} is ${tile}, expected rocky mountain border.`);
+          assert(tile === WORLD_TILE_IDS.deepWater, `World ${i} edge ${x},${y} is ${tile}, expected ocean border.`);
           assert(!isWorldTileWalkable(tile), `World ${i} edge ${x},${y} is walkable.`);
         }
         if (worldTileHasTag(tile, "water")) {
@@ -200,10 +216,14 @@ function validateWorldgen() {
           sawBlocked = true;
           assert(!isWorldTileWalkable(tile), `World ${i} blocked tile ${tile} is walkable.`);
         }
+        if (worldTileHasTag(tile, "sand")) sawBeach = true;
+        if (world.biomes[y][x] === "forest") sawForestBiome = true;
       }
     }
     assert(sawWater, `World ${i} did not generate water.`);
     assert(sawBlocked, `World ${i} did not generate blocked terrain.`);
+    assert(sawBeach, `World ${i} did not generate beaches.`);
+    assert(sawForestBiome, `World ${i} did not generate forest/jungle biome hooks.`);
 
     const signature = world.tiles.map((row) => row.join(",")).join("|");
     if (i === 0) firstSignature = signature;
@@ -215,8 +235,26 @@ function validateWorldgen() {
   const different = generateWorld({ seed: "atlas-v3-different-seed" });
   assert(JSON.stringify(stableA.tiles) === JSON.stringify(stableB.tiles), "Same seed produced different tile grids.");
   assert(JSON.stringify(stableA.pois) === JSON.stringify(stableB.pois), "Same seed produced different POIs.");
+  assert(JSON.stringify(stableA.islands) === JSON.stringify(stableB.islands), "Same seed produced different islands.");
   assert(JSON.stringify(stableA.tiles) !== JSON.stringify(different.tiles), "Different seeds produced the same tile grid.");
   assert(sawDifferentWorld, "Generated worlds did not vary across different seeds.");
+}
+
+function hasAdjacentWater(world, poi) {
+  for (let yy = poi.y - 1; yy <= poi.y + 1; yy += 1) {
+    for (let xx = poi.x - 1; xx <= poi.x + 1; xx += 1) {
+      const neighbors = [
+        [xx + 1, yy],
+        [xx - 1, yy],
+        [xx, yy + 1],
+        [xx, yy - 1]
+      ];
+      for (const [x, y] of neighbors) {
+        if (worldTileHasTag(world.tiles[y]?.[x], "water")) return true;
+      }
+    }
+  }
+  return false;
 }
 
 function assertNoActiveDeprecatedReference(file, text, value) {

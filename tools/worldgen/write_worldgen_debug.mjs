@@ -138,6 +138,8 @@ function drawWorldMarkers(image, world) {
 
 function colorForPoi(kind) {
   if (kind === "town") return [255, 110, 70, 255];
+  if (kind === "harbor") return [90, 230, 255, 255];
+  if (kind === "landmark") return [110, 235, 120, 255];
   if (kind === "gate") return [255, 216, 90, 255];
   if (kind === "final") return [183, 114, 255, 255];
   return [130, 205, 255, 255];

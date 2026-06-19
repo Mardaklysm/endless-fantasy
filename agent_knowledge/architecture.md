@@ -29,6 +29,8 @@ D:\Projects\Endless Fantasy\
       characterSprites.ts
       worldTiles.ts
     world/
+      dungeonGenerator.ts
+      seededRng.ts
       worldGenerator.ts
     main.ts
     style.css
@@ -66,10 +68,11 @@ Ignored/generated folders:
 - Data tables: `ITEMS`, `SPELLS`, `WEAPONS`, `ARMORS`, `ENEMIES`, `WORLD_TABLES`.
 - Imported class sprite manifest from `src/data/characterSprites.ts` for fighter/priest/wizard frame rectangles, anchors, and source metadata.
 - Imported world tile manifest from `src/data/worldTiles.ts` for the active `atlas_v3` overworld atlas, 8x8 source rectangles, shared source-edge inset, empty-cell exclusion, tile IDs, walkability, movement cost, encounter family, and tags.
-- `src/world/worldGenerator.ts`: seeded deterministic `atlas_v3_tile_world` generation, grass/desert/snow/dark/water/rock/lava patch placement, POI placement, reachability validation, and debug-report formatting. It does not generate roads, rivers, bridges, classic POI objects, or old 10x10 tile IDs.
+- `src/world/seededRng.ts`: deterministic RNG/hash/noise helpers shared by map and dungeon generation.
+- `src/world/worldGenerator.ts`: seeded deterministic `atlas_v3_archipelago_world` generation. It starts from ocean, builds three irregular islands (Greenhaven, Coralreach, Ashfang Isle), tracks island metadata/tile maps, places towns/harbors/dungeons/landmarks, carves roads, records shallow-water/coast detail, sea routes, dock markers, and validates island-local reachability.
+- `src/world/dungeonGenerator.ts`: deterministic room-and-corridor dungeon floor generation from `worldSeed + dungeonId + tier`, including entrance/stairs, chests, switch/gate, and boss placement.
 - `SynthAudio`: WebAudio helper for generated music loops and sound effects.
 - `CrystalOathScene`: main Phaser scene containing game state, input handling, map movement, battles, menus, save/load, and rendering.
-- Dungeon generation helpers: `makeDungeonFloors`, `blankDungeon`, `carveRect`, `carveLine`, `setTile`, `floorToStrings`.
 - Input helpers: `isUp`, `isDown`, `isLeft`, `isRight`, `isConfirm`, `isCancel`, `keyDirection`.
 - Phaser config at bottom of file.
 
@@ -128,18 +131,20 @@ Render resolution is split into clear constants: `DESIGN_WIDTH = 1920`, `DESIGN_
 
 Texture filtering is per asset family: battle backgrounds use linear filtering and the canvas CSS uses `image-rendering: auto`; sprites, tiles, UI, icons, enemies, and class sheets use nearest-neighbor texture filtering.
 
-New games call the seeded world generator. The generated world includes the tile grid, POI coordinates, start position, entry triggers, and validation result; roads, rivers, and bridges are intentionally empty for the current minimal atlas pass. `CrystalOathScene.locations()` adapts generated POIs back into the existing town/dungeon/gate/final entry behavior and keeps progression locks in code.
+New games call the seeded archipelago generator. The generated world includes the tile grid, island ids per tile, island records, POI coordinates, start position, harbor docks, shallow-water/detail coordinates, sea routes, entry triggers, and validation result. `CrystalOathScene.locations()` adapts generated POIs back into town/dungeon/gate/final entry behavior and also exposes harbor/landmark overworld interactions.
+
+The terrain cache still draws atlas-v3 base tiles only. `drawWorldOverlays` draws lightweight shallow-water highlights, reef/rock details, route dots, and dock/bridge hints over the cached map so ocean detail remains visible without modifying atlas pixels.
 
 Battle rendering is split into helper sections:
 
 - `drawBattleBackdrop`: original scenic forest/plains backdrop.
-- `drawBattleEnemy` / `enemyBattleSlot`: enemies on the left with shadows, HP bars, and target highlight.
+- `drawBattleEnemy` / `enemyBattleSlot`: enemies on the left with shadows, HP bars, target highlight, and visible intent labels.
 - `drawPartyBattler`: original procedural party battlers on the right.
 - `drawBattleTargetPanel`: lower-left target/log panel.
 - `drawBattleCommandPanel`: lower-middle command panel for the current party actor.
 - `drawBattleStatusPanel`: lower-right party status and next-turn preview.
 
-Party battlers use the class sheets: Arlen -> fighter, Mira -> priest, Kael -> wizard. Battle idle uses `walk_left_a`; party attacks swap through `attack_windup_left` and `attack_release_left` during the existing lunge animation.
+Party battlers use the class sheets: Arlen -> fighter, Mira -> priest, Kael -> wizard. Battle idle uses `walk_left_a`; party attacks and skills swap through `attack_windup_left` and `attack_release_left` during the existing lunge animation.
 
 ## Input Approach
 
@@ -161,9 +166,9 @@ Mouse support is minimal and mainly starts audio/click blips.
 
 ## Save/Load Approach
 
-`saveGame()` serializes party, inventory, gear, gold, world seed, positions, current town/dungeon, story flags, opened chests, puzzle flags, defeated bosses, settings, and encounter counter to `localStorage`.
+`saveGame()` serializes party, inventory, gear, gold, world seed, current island id, positions, current town/dungeon, story/travel flags, discovered POIs, opened chests, puzzle flags, defeated bosses, cleared dungeons, settings, and encounter counter to `localStorage`.
 
-`loadGame()` reads `crystal-oath-save-v1`, rebuilds the generated overworld from the saved `worldSeed`, restores state, returns to `world`, and marks the scene dirty. Save schema migration is not implemented yet; older saves without `worldSeed` receive a new generated world.
+`loadGame()` reads `crystal-oath-save-v1`, rebuilds the generated overworld from the saved `worldSeed`, normalizes older saves with missing travel/discovery/skill fields, restores state, returns to `world`, and marks the scene dirty. There is still no explicit numeric schema version.
 
 ## Audio Approach
 

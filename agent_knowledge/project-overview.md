@@ -10,7 +10,7 @@
 
 ## Core Loop
 
-The player starts in Dawnford, explores tile-based towns/world/dungeons, triggers random encounters on dangerous terrain, wins turn-based battles for XP/gold/items, buys/rests/upgrades in towns, clears four relic dungeons, opens Starfall Gate, then reaches Eclipse Spire for the final boss and ending.
+The player starts in Greenhaven on a seeded archipelago overworld, explores islands, towns, harbors, landmarks, and procedural dungeons, triggers random encounters on dangerous terrain, wins turn-based battles for XP/gold/items, buys/rests/upgrades in towns, uses harbor travel to reach stronger islands, clears relic dungeons, opens Starfall Gate, then reaches Eclipse Spire for the final boss and ending.
 
 ## Target Runtime
 
@@ -22,14 +22,14 @@ The player starts in Dawnford, explores tile-based towns/world/dungeons, trigger
 
 ## High-Level Content Structure
 
-- Towns: Dawnford, Brinewick, Elderleaf, Sunbarrow, Starfall Gate.
-- Dungeons: Moss Cave, Ashen Keep, Tide Shrine, Skyglass Tower, Eclipse Spire.
-- Systems: title/new/load, overworld, towns, dungeons, menu/status/items/magic/equipment/settings, battle, shops, inns, clinics, game over, ending.
+- Islands/towns: Greenhaven, Coralreach, Ashfang Isle/Ashfang Camp, Elderleaf, Starfall Gate.
+- Dungeons: Mossy Cave, Coralreach Ruins, Ashfang Keep, Skyglass Tower, Eclipse Spire.
+- Systems: title/new/load, seeded archipelago overworld, harbor travel, landmarks/points of interest, towns, procedural dungeons, menu/status/items/magic/equipment/settings, battle, shops, inns, clinics, game over, ending.
 - Current art/audio: PNG/JPEG assets are loaded from `assets/` and `assets_v2/` with generated code fallbacks still present. Audio remains generated in code.
 
 ## Current Development State
 
-The first playable iteration exists. It is implemented mostly in one TypeScript scene (`src/main.ts`). It has working movement, menus, random/debug encounters, battles, rewards, leveling, shops, inns, clinics, dungeon chests/switches/bosses, save/load, synthesized audio, and a title/ending flow.
+The first playable iteration exists. It is implemented mostly in one TypeScript scene (`src/main.ts`) with modular world/dungeon generation under `src/world/`. It has working movement, menus, random/debug encounters, battles with enemy intent and player skills, rewards, leveling, shops, inns, clinics, deterministic procedural dungeon chests/switches/bosses, harbor travel, save/load, synthesized audio, and a title/ending flow.
 
 The project also has a complete art planning pass:
 

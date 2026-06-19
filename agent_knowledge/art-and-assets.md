@@ -82,10 +82,11 @@ Legacy/reference world atlas:
 
 ## Current Runtime Presentation Notes
 
-- Dawnford/town service markers render as one clean horizontal row of five image-only icons. Do not add always-visible text labels such as Items/Arms/Magic/Clinic back onto those markers.
+- Greenhaven/town service markers render as one clean horizontal row of five image-only icons. Do not add always-visible text labels such as Items/Arms/Magic/Clinic back onto those markers.
 - The town south exit uses the gate art only; there is no floating "Exit" label or persistent bottom-right interaction hint in normal town exploration.
 - Overworld locations render as larger 3x3-ish landmarks with matching entry footprints. Keep terrain tiles small/repeating, but landmarks should remain visually important.
-- Active overworld slicing starts from exact 8x8 atlas math from `atlasV3.manifest.json`, then applies the shared source inset: `sx = tile.source.x + 3`, `sy = tile.source.y + 3`, `sw = tile.source.width - 6`, `sh = tile.source.height - 6`. Do not reintroduce classic special tiles, old 10x10 assumptions, roads/beaches/bridges, chroma-keying, global black transparency, or debug-grid art for runtime terrain.
+- Active overworld slicing starts from exact 8x8 atlas math from `atlasV3.manifest.json`, then applies the shared source inset: `sx = tile.source.x + 3`, `sy = tile.source.y + 3`, `sw = tile.source.width - 6`, `sh = tile.source.height - 6`. Do not reintroduce classic special tiles, old 10x10 assumptions, chroma-keying, global black transparency, or debug-grid art for runtime terrain. Road, beach, dock, bridge, shallow-water, reef, and shipwreck art may replace current placeholders only through atlas-v3-compatible opaque terrain tiles or explicit runtime overlay mappings.
+- The archipelago generator currently uses placeholders/fallbacks for roads, beaches, docks/bridges, shallow water, reefs, water rocks, and shipwrecks. Preserve those fallbacks until replacement assets are imported, mapped, and verified in `npm test` and browser smoke QA.
 - Do not implement runtime map-level seam blending for `atlas_v3`. Runtime and debug previews should crop valid source cells inward and must not mutate cached map pixels by mixing water/grass or other neighboring terrain colors after placement.
 - Battle backgrounds are full 16:9 opaque JPEG images and are assigned linear texture filtering. Pixel sprites, tiles, UI, and icons remain nearest-neighbor filtered. The canvas itself uses `image-rendering: auto` so high-resolution artwork is not globally pixelated.
 - Battle party presentation uses the normalized fighter/priest/wizard class sheets only on the battlefield; redundant small head portraits/icons and old standalone party battle PNGs are intentionally not drawn there.
@@ -101,6 +102,34 @@ Legacy/reference world atlas:
 - Do not rerun rembg or chroma-key the fighter/priest/wizard source sheets; their existing alpha channel is the source of truth.
 - Prefer nearest-neighbor scaling for tiles, icons, sprites, and enemies.
 - Review `assets_v2/previews/*.png` and `assets_v2/previews/QUALITY_REPORT.md` before expanding runtime mappings.
+
+## Archipelago Placeholder Replacement Prompts
+
+Use these prompts when creating original terrain sheets to replace the placeholder archipelago tiles. Keep outputs opaque rectangular PNGs, no labels, no UI text, no copyrighted references, top-down JRPG perspective, and compatible with the current 32px display tile grid. A convenient source format is a clean 4x4 or 6x4 grid of 128x128 source cells that can be downsampled/cropped into atlas-v3-style terrain cells.
+
+Road/path prompt:
+
+```text
+Create an original top-down 16-bit fantasy JRPG road and footpath terrain tileset. Opaque PNG, clean 4x4 grid, 128x128 pixels per cell, no text, no labels, no characters, no buildings. Tiles must be seamless and readable when downsampled to 32x32. Include dirt road straight north-south, straight east-west, four corners, four T-junctions, crossroads, two dead ends, trampled grass path variant, and small pebble/grass edge variants. Palette should fit lush green islands, warm sand beaches, dark volcanic ground, and existing compact pixel-art terrain. Use crisp pixel-art shapes, restrained outlines, and natural irregular edges.
+```
+
+Beach/coast prompt:
+
+```text
+Create an original top-down 16-bit fantasy JRPG island beach and coastline terrain tileset. Opaque PNG, clean 6x4 grid, 128x128 pixels per cell, no text, no labels, no people, no buildings. Tiles must be seamless and readable when downsampled to 32x32. Include grass-to-sand transitions, sand-only beach variations, sand-to-shallow-water edges for north/south/east/west, inner and outer beach corners, small coves, shell/stone details, and a few darker wet-sand edge variants. Coastlines should look irregular and natural, not square, with soft foam hints and compact readable shapes.
+```
+
+Dock/bridge prompt:
+
+```text
+Create an original top-down 16-bit fantasy JRPG wooden dock and small bridge terrain tileset. Opaque PNG, clean 4x4 grid, 128x128 pixels per cell, no text, no labels, no characters, no ships. Tiles must be seamless and readable when downsampled to 32x32. Include horizontal dock, vertical dock, dock end caps, T-shaped pier, corner pier, short wooden bridge north-south, short wooden bridge east-west, bridge ends connecting to sand/grass, rope posts, and subtle plank variations. Style should match a compact fantasy island overworld, with warm wood, simple shadows, and no modern elements.
+```
+
+Shallow water/reef/shipwreck prompt:
+
+```text
+Create an original top-down 16-bit fantasy JRPG ocean detail terrain tileset for an island archipelago. Opaque PNG, clean 6x4 grid, 128x128 pixels per cell, no text, no labels, no characters. Tiles must be seamless and readable when downsampled to 32x32. Include shallow turquoise water variations, foam rings near coast, coral reef patches, jagged dark sea rocks, small wave sparkle details, floating driftwood, and two small shipwreck fragments that fit in one tile each. Keep the palette compatible with deep blue ocean, sandy beaches, and lush green islands. Details should be decorative and readable without cluttering the map.
+```
 
 ## References
 

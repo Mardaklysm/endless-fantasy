@@ -12,7 +12,7 @@ This backlog is practical project memory, not a full design document. Keep it sh
 - Add vehicle rendering for boat/skyship on the overworld after deciding whether they replace or accompany Arlen.
 - Add simple effect rendering only after battle timing can show short animations without slowing commands.
 - Add v2-quality art for later-region normal enemies not covered by the first twelve common roster crops.
-- The current `atlas_v3_tile_world` generator deliberately omits roads, rivers, beaches, and bridges. Future work can add transition/route art only after compatible original atlas tiles exist.
+- Archipelago generation now includes roads, beaches, dock markers, shallow-water overlays, sea route dots, and ocean details using atlas-safe fallbacks/overlays. Future work can replace these with dedicated original transition/route tiles when compatible art exists.
 - If overworld terrain still feels grid-like after the atlas source inset, improve it with real transition tiles or lower-frequency worldgen patches; do not add map-level terrain pixel blending.
 - Consider dynamic loading/code splitting for large JPEG battle backgrounds and large normalized class sheets if bundle size becomes painful.
 
@@ -22,7 +22,7 @@ This backlog is practical project memory, not a full design document. Keep it sh
 - Verify future batches match filename, size, and transparency guidance before wiring.
 - `chest_open.png` is wired for opened chest state; keep testing it during dungeon pass-throughs.
 - `tile_water_b` and `tile_deep_water_b` are loaded but not animated yet.
-- `tile_bridge` exists in `assets_v2`, but no bridge/route terrain overlay is active for the current `atlas_v3` overworld.
+- `tile_bridge` exists in `assets_v2`, but current route/dock visuals are lightweight Graphics overlays rather than true terrain tiles.
 - Reference-only UI window crops in `assets_v2/ui` are intentionally not loaded at runtime because they contain sample text.
 - Normalized fighter/priest/wizard class sheets are wired; keep old standalone party map/battle PNGs out of runtime glob loading unless intentionally reintroduced.
 - Keep the archived classic tileset pack out of active runtime unless a future task explicitly reopens that direction. Active terrain should continue to use only non-empty `atlas_v3` cells.
@@ -31,6 +31,8 @@ This backlog is practical project memory, not a full design document. Keep it sh
 
 - Save schema has no version/migration strategy.
 - Balance needs a full manual playthrough pass.
+- Archipelago travel economy and early dungeon rewards need a manual tuning pass after several real playthroughs.
+- Coralreach/Ashfang progression is implemented, but final relic ordering and island encounter balance need end-to-end verification.
 - Game over/load path should be tested with real defeat state.
 - Boss progression should be manually verified end-to-end after any dungeon or flag change.
 - Mouse menu support is minimal.
@@ -40,6 +42,7 @@ This backlog is practical project memory, not a full design document. Keep it sh
 
 - Effect PNG sheets are loaded but not rendered yet.
 - No animated water/torch/chest sparkle polish yet.
+- Sea routes, reefs, docks, and shallow water use simple overlay graphics; replace with dedicated original tiles/animation when available.
 - Battle enemies use PNGs now; future larger boss art still needs overlap checks when progression reaches each boss.
 - Battle actions now have short lunge/step movement; future effect-sheet rendering can layer spell/item VFX on top of the timing path.
 - Battle backdrops now use v2 region panels; later tuning can reduce bundle weight with dynamic loading/code splitting.
