@@ -436,11 +436,18 @@ const ASSET_MODULES = import.meta.glob(["../assets/**/*.{png,jpeg,jpg}", "!../as
   import: "default"
 }) as Record<string, string>;
 
-const SRC_ASSET_MODULES = import.meta.glob(["./assets/**/*.{png,jpeg,jpg}", "!./assets/world/source/**/*.{png,jpeg,jpg}"], {
-  eager: true,
-  query: "?url",
-  import: "default"
-}) as Record<string, string>;
+const SRC_ASSET_MODULES = import.meta.glob(
+  [
+    "./assets/**/*.{png,jpeg,jpg}",
+    "!./assets/world/source/**/*.{png,jpeg,jpg}",
+    "!./assets/world/tilesets/**/*.{png,jpeg,jpg}"
+  ],
+  {
+    eager: true,
+    query: "?url",
+    import: "default"
+  }
+) as Record<string, string>;
 
 const ASSET_V2_MODULES = import.meta.glob(
   [

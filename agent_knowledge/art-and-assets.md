@@ -21,6 +21,7 @@ Reusable scripts live in `tools/art_import/`:
 - `generate_asset_previews.ps1`: creates contact sheets and `assets_v2/previews/QUALITY_REPORT.md`.
 - `import_character_sprites.mjs`: imports `D:\Tools\rembg\bg_output\fighter.png`, `priest.png`, and `wizard.png` without running rembg, splits them as 5x2 alpha PNG sheets, normalizes fixed cells/anchors, writes `src/data/characterSprites.ts`, and creates debug previews/reports in `docs/debug/sprite-import/`.
 - `import_world_atlas.mjs`: imports the final PNG source `C:\Users\Marku\Downloads\master_overworld_tileset_atlas_10x10.png`, copies it exactly to `src/assets/world/world_atlas.normalized.png`, stores a provenance copy in `src/assets/world/source/`, writes the 100-tile manifest in `src/data/worldTiles.ts`, and creates `docs/debug/world-atlas/world_atlas.labeled-preview.png` plus `world_atlas.import-report.md`.
+- `import_classic_world_tileset.mjs`: imports the complex candidate sheet `C:\Users\Marku\Downloads\57105.png` as an inactive `classic_world_tileset` pack. The PNG has an RGBA color type but no meaningful alpha, so the importer removes only exact `#00B100` pixels, writes `src/assets/world/tilesets/classic_world_tileset.cleaned.png`, `classicWorldTileset.manifest.json`, extracted tile/object/landmark PNGs, and debug reports/contact sheets in `docs/debug/world-tileset-import/`.
 
 Manual crop maps live in `tools/art_import/crop_maps/`. The active final world atlas does not use the old crop-map/JPEG normalization path; it is a strict 10x10 PNG with no gutters or grid lines.
 
@@ -59,12 +60,17 @@ Still fallback or older assets:
 - Dungeon tiles/objects, vehicles, inventory/equipment/relic icons, title art, and effects still use Batch 001 or generated fallbacks.
 - `command_window.png`, `target_window.png`, `party_status_window.png`, and `message_window.png` are reference/source-only because they include sample text or baked layout.
 
+Inactive candidate packs:
+
+- `src/assets/world/tilesets/classic_world_tileset.cleaned.png` and `src/assets/world/tilesets/classicWorldTileset.manifest.json` describe the imported classic overworld tileset sheet. This pack is not loaded by `src/main.ts` and should not replace the active 10x10 overworld atlas until the manifest has been human-reviewed and asset rights/provenance are confirmed.
+
 ## Current Sizes
 
 - Canvas/backing render target: 1920x1080 by default.
 - Layout grid: 960x540-equivalent coordinates derived from the Full HD design size with `PIXEL_ART_SCALE = 2`.
 - Display tile grid: 32x32 layout pixels, rendered as 64x64 canvas pixels at the default Full HD target.
 - World atlas: 10 columns x 10 rows, 256x256 cells, 2560x2560 opaque PNG, displayed as 32x32 layout-pixel map tiles and 64x64 canvas pixels at Full HD.
+- Classic candidate world tileset: 832x1072 source/cleaned PNG, 52x67 cells at a 16px base grid, 12 manually verified major groups, 1885 deduplicated 16x16 tile crops, and 122 object/landmark component crops. It is prepared for later world-building use only.
 - V2 town tiles: 32x32 opaque PNGs.
 - Class character sheets: 5 columns x 2 rows, 704x512 cells, 3520x1024 sheet size, transparent PNG. Manifest anchor is bodyCenterX=352 and feetBaselineY=464.
 - V2 portraits: 32x40 transparent PNGs.
@@ -88,6 +94,7 @@ Still fallback or older assets:
 - Keep service labels and UI text live unless an image is purely decorative/title art.
 - Keep battle backgrounds opaque.
 - Keep terrain tiles rectangular and opaque; do not run rembg on terrain.
+- For `classic_world_tileset`, preserve pixel edges by removing only exact `#00B100` matte pixels. Do not use fuzzy green removal unless a future source analysis proves it is necessary.
 - Do not rerun rembg or chroma-key the fighter/priest/wizard source sheets; their existing alpha channel is the source of truth.
 - Prefer nearest-neighbor scaling for tiles, icons, sprites, and enemies.
 - Review `assets_v2/previews/*.png` and `assets_v2/previews/QUALITY_REPORT.md` before expanding runtime mappings.

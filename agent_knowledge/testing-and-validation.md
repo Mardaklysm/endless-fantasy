@@ -22,7 +22,7 @@ Run from `D:\Projects\Endless Fantasy`:
 npm test
 ```
 
-This runs `tools/worldgen/test_worldgen.mjs`, validates the active world atlas/manifest, generates 100 deterministic worlds, and asserts:
+This runs `tools/worldgen/test_worldgen.mjs` and `tools/art_import/test_classic_world_tileset.mjs`. The worldgen portion validates the active world atlas/manifest, generates 100 deterministic worlds, and asserts:
 
 - runtime atlas exists and is a square 10x10 PNG
 - manifest has 100 in-bounds tile definitions
@@ -35,6 +35,8 @@ This runs `tools/worldgen/test_worldgen.mjs`, validates the active world atlas/m
 - every generated world has at least one bridge
 - same seed reproduces the same world
 - different seeds produce different tile grids
+
+The classic tileset portion validates the inactive `classic_world_tileset` pack: cleaned/source PNGs exist, exact `#00B100` matte pixels are transparent, 12 groups and all 16px tile occurrences are represented in the manifest, extracted tile/object PNGs exist, source rectangles are in bounds, and current runtime files do not load the candidate pack.
 
 To write a human-readable generation report and PNG minimap preview:
 
@@ -79,6 +81,15 @@ node tools\art_import\import_world_atlas.mjs
 ```
 
 Check `src/assets/world/world_atlas.normalized.png`, `src/data/worldTiles.ts`, and `docs/debug/world-atlas/world_atlas.labeled-preview.png` / `world_atlas.import-report.md`. The runtime atlas should be an exact copy of the final clean 10x10 PNG with 256x256 cells and no source separator lines; the labeled preview is the only atlas output with labels/grid boxes.
+
+For the inactive classic world tileset pack, run:
+
+```powershell
+npm run import:classic-world-tileset
+npm run test:classic-world-tileset
+```
+
+Check `src/assets/world/tilesets/classic_world_tileset.cleaned.png`, `src/assets/world/tilesets/classicWorldTileset.manifest.json`, `src/assets/world/tilesets/classic/extracted/`, and `docs/debug/world-tileset-import/`. The cleaned PNG should remove only exact `#00B100` matte pixels; the debug contact sheets and group-detection image are review outputs only and are not runtime assets.
 
 For rembg-related regeneration, use `D:\tools\rembg\venv_rembg\Scripts\rembg.exe` with `birefnet-general`. The expected AMD/Windows provider path is DirectML (`DmlExecutionProvider`). Do not add NVIDIA-specific checks.
 
