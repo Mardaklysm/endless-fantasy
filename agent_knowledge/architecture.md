@@ -190,8 +190,8 @@ Current visuals use PNG assets where Batch 001 has been wired, with generated co
 - `LAYOUT_HEIGHT = 540` derived from the Full HD design height
 - `TILE = 32`
 - `SAVE_KEY = "crystal-oath-save-v1"`
-- `WORLD_W = 64`
-- `WORLD_H = 40`
+- `WORLD_W = 96`
+- `WORLD_H = 64`
 - `MIN_EDGE_SAMPLE_INSET = 3` and `MAX_EDGE_SAMPLE_INSET = 6` in `src/world/terrainBlending.ts`; seam repair searches this shallow range for clean local source pixels and mixes both sides.
 - `SEAM_SEARCH_RADIUS = 4` and `INTERSECTION_SEARCH_RADIUS = 5` in `src/world/terrainBlending.ts`; only near-black pixels inside those expected boundary areas may be repaired.
 - `NEAR_BLACK_LUMINANCE_THRESHOLD = 32` in `src/world/terrainBlending.ts`; normal non-black terrain pixels must not be modified by the seam repair pass.

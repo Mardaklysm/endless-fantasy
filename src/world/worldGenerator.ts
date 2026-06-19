@@ -12,8 +12,8 @@ import {
   type WorldTileId
 } from "../data/worldTiles.ts";
 
-export const DEFAULT_WORLD_WIDTH = 64;
-export const DEFAULT_WORLD_HEIGHT = 40;
+export const DEFAULT_WORLD_WIDTH = 96;
+export const DEFAULT_WORLD_HEIGHT = 64;
 export const ACTIVE_WORLDGEN_MODE = "atlas_v3_tile_world" as const;
 
 export interface WorldVec {

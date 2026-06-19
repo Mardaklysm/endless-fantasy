@@ -1,8 +1,8 @@
 # Black Seam Repair Report
 
 Mode: `black_seam_repair`
-Seed: `atlas-v3-black-seam-qa`
-Map size: 64x40
+Seed: `viewport-fix-qa-v1`
+Map size: 96x64
 Tile size: 32px
 Seam search radius: 4px
 seamSearchWidth: 9px
@@ -12,14 +12,14 @@ Near-black threshold: luminance < 32
 minEdgeSampleInset: 3px
 maxEdgeSampleInset: 6px
 replacementMode: dual-side-mix
-Pixels inspected: 1741905
-Pixels replaced: 162832
-replacedPixelCount: 162832
-Replacement percentage: 6.2115%
-replacedPixelPercent: 6.2115%
-Vertical seam pixels repaired: 103027
-Horizontal seam pixels repaired: 102032
-Intersection pixels repaired: 52449
+Pixels inspected: 4217049
+Pixels replaced: 389340
+replacedPixelCount: 389340
+Replacement percentage: 6.1884%
+replacedPixelPercent: 6.1884%
+Vertical seam pixels repaired: 246484
+Horizontal seam pixels repaired: 245214
+Intersection pixels repaired: 126903
 Enabled: true
 Debug view: false
 Max replacement ratio guard: 12.00%

@@ -30,8 +30,8 @@ const WIDTH = LAYOUT_WIDTH;
 const HEIGHT = LAYOUT_HEIGHT;
 const TILE = 32;
 const SAVE_KEY = "crystal-oath-save-v1";
-const WORLD_W = 64;
-const WORLD_H = 40;
+const WORLD_W = 96;
+const WORLD_H = 64;
 const MOVE_DURATION_MS = 155;
 const FAST_MOVE_DURATION_MS = 95;
 const MOVE_TILES_PER_MS = 1 / MOVE_DURATION_MS;
@@ -3745,10 +3745,16 @@ Statuses: ${statuses}`;
       if (loc.x + radius < startX || loc.x - radius > endX || loc.y + radius < startY || loc.y - radius > endY) continue;
       this.drawLocationIcon(loc, (loc.x - radius) * TILE - tileCam.x, (loc.y - radius) * TILE - tileCam.y);
     }
-    this.drawLeader(leaderPos.x * TILE - cam.x + 4, leaderPos.y * TILE - cam.y + 3);
+    this.drawLeader(leaderPos.x * TILE - cam.x + 4, leaderPos.y * TILE - cam.y + 3, "world");
     this.drawHud("World");
     const loc = this.locationAt(this.worldPos.x, this.worldPos.y);
     if (loc) this.drawPrompt(`Enter ${loc.name}`);
+    if (import.meta.env.DEV) {
+      const mapPixelW = this.world[0]?.length ?? 0;
+      const mapPixelH = this.world.length;
+      this.g.fillStyle(0xffffff, 0.5);
+      this.text(16, HEIGHT - 32, `W${mapPixelW}x${mapPixelH}  cam ${tileCam.x},${tileCam.y}  player ${this.worldPos.x},${this.worldPos.y}`, 10, "#aaccff", "left");
+    }
   }
 
   private drawTownFloorTile(px: number, py: number, x: number, y: number) {
@@ -3929,7 +3935,7 @@ Statuses: ${statuses}`;
     TOWN_SERVICES.forEach((service) => this.drawTownService(service, ox, oy));
     town.npcs.forEach((npc, idx) => this.drawNpc(ox + npc.x * TILE + 6, oy + npc.y * TILE + 5, idx));
     const leaderPos = this.visualExplorePos("town");
-    this.drawLeader(ox + leaderPos.x * TILE + 4, oy + leaderPos.y * TILE + 3);
+    this.drawLeader(ox + leaderPos.x * TILE + 4, oy + leaderPos.y * TILE + 3, "town");
     this.drawHud(town.name);
   }
 
@@ -3947,7 +3953,7 @@ Statuses: ${statuses}`;
         this.drawDungeonTile(floor[y][x], sx, sy, dungeon, x, y);
       }
     }
-    this.drawLeader(leaderPos.x * TILE - cam.x + 4, leaderPos.y * TILE - cam.y + 3);
+    this.drawLeader(leaderPos.x * TILE - cam.x + 4, leaderPos.y * TILE - cam.y + 3, "dungeon");
     this.drawHud(`${dungeon.name} F${this.dungeonFloor + 1}`);
     this.drawPrompt("Explore / interact");
   }
@@ -4625,25 +4631,35 @@ Statuses: ${statuses}`;
     this.g.fillStyle(0x050812, 0.34).fillEllipse(x, y, width, height);
   }
 
-  private drawLeader(x: number, y: number) {
+  private drawLeader(x: number, y: number, mode?: ExploreMode) {
+    const currentMode = mode ?? this.mode;
     const frame = this.playerMoving ? Math.floor(this.walkAnimElapsed / 85) % 2 : 0;
-    const bodyCenterX = x + 12;
-    const feetBaselineY = y + 38;
-    this.drawActorShadow(bodyCenterX, feetBaselineY, 48, 12);
-    this.g.lineStyle(2, 0xfff0a8, this.mode === "world" ? 0.82 : 0.42).strokeEllipse(bodyCenterX, feetBaselineY, 46, 12);
-    if (this.drawCharacterSpriteFrame(PARTY_CLASS.arlen, this.explorationCharacterFrame(frame), bodyCenterX, feetBaselineY, 132)) {
+    const isWorld = currentMode === "world";
+    const spriteCellWidth = isWorld ? 33 : 132;
+    const shadowWidth = isWorld ? 18 : 48;
+    const shadowHeight = isWorld ? 6 : 12;
+    const ellipseW = isWorld ? 16 : 46;
+    const ellipseH = isWorld ? 6 : 12;
+    const bodyOffsetX = isWorld ? 4 : 12;
+    const bodyOffsetY = isWorld ? 14 : 38;
+    const bodyCenterX = x + bodyOffsetX;
+    const feetBaselineY = y + bodyOffsetY;
+    this.drawActorShadow(bodyCenterX, feetBaselineY, shadowWidth, shadowHeight);
+    this.g.lineStyle(isWorld ? 1 : 2, 0xfff0a8, isWorld ? 0.62 : 0.42).strokeEllipse(bodyCenterX, feetBaselineY, ellipseW, ellipseH);
+    if (this.drawCharacterSpriteFrame(PARTY_CLASS.arlen, this.explorationCharacterFrame(frame), bodyCenterX, feetBaselineY, spriteCellWidth)) {
       return;
     }
-    if (this.mode === "world") {
-      this.g.fillStyle(0x050812, 1).fillRect(x + 5, y + 3, 22, 29);
-      this.g.fillStyle(0x2a213a, 1).fillRect(x + 7, y + 1, 18, 9);
-      this.g.fillStyle(0xf0c18d, 1).fillRect(x + 9, y + 5, 14, 12);
-      this.g.fillStyle(0xb93434, 1).fillRect(x + 6, y + 17, 22, 13);
-      this.g.fillStyle(0xf2e9dd, 1).fillRect(x + 15, y + 17, 7, 16);
-      this.g.fillStyle(0x1c2238, 1).fillRect(x + 7, y + 30, 8, 7 + frame);
-      this.g.fillRect(x + 20, y + 30, 8, 7 + (1 - frame));
-      this.g.fillStyle(0xffffff, 1).fillRect(x + 11, y + 10, 3, 3);
-      this.g.fillRect(x + 19, y + 10, 3, 3);
+    if (isWorld) {
+      const scale = 1;
+      this.g.fillStyle(0x050812, 1).fillRect(x + 5, y + 3, 22 * scale, 29 * scale);
+      this.g.fillStyle(0x2a213a, 1).fillRect(x + 7, y + 1, 18 * scale, 9 * scale);
+      this.g.fillStyle(0xf0c18d, 1).fillRect(x + 9, y + 5, 14 * scale, 12 * scale);
+      this.g.fillStyle(0xb93434, 1).fillRect(x + 6, y + 17, 22 * scale, 13 * scale);
+      this.g.fillStyle(0xf2e9dd, 1).fillRect(x + 15, y + 17, 7 * scale, 16 * scale);
+      this.g.fillStyle(0x1c2238, 1).fillRect(x + 7, y + 30, 8 * scale, 7 + frame);
+      this.g.fillRect(x + 20, y + 30, 8 * scale, 7 + (1 - frame));
+      this.g.fillStyle(0xffffff, 1).fillRect(x + 11, y + 10, 3 * scale, 3 * scale);
+      this.g.fillRect(x + 19, y + 10, 3 * scale, 3 * scale);
       return;
     }
     this.g.fillStyle(0x1c2440, 1).fillRect(x + 8, y + 6, 10, 7);
