@@ -12,7 +12,7 @@ This backlog is practical project memory, not a full design document. Keep it sh
 - Add vehicle rendering for boat/skyship on the overworld after deciding whether they replace or accompany Arlen.
 - Add simple effect rendering only after battle timing can show short animations without slowing commands.
 - Add v2-quality art for later-region normal enemies not covered by the first twelve common roster crops.
-- Route, river, bridge, and reachability generation is implemented for the overworld. Future work can polish biome transition edges or add animated water without changing the core generator.
+- Route, river, bridge, and reachability generation is implemented for the preserved generic 10x10 overworld. The classic island generator now handles its own shore rings, paths, clustered forests/mountains, and small POI set separately.
 - Consider dynamic loading/code splitting for large JPEG battle backgrounds and large normalized class sheets if bundle size becomes painful.
 
 ## Asset Manifest Follow-Up
@@ -24,7 +24,8 @@ This backlog is practical project memory, not a full design document. Keep it sh
 - `tile_bridge` exists in `assets_v2` but no bridge/route terrain overlay is implemented yet.
 - Reference-only UI window crops in `assets_v2/ui` are intentionally not loaded at runtime because they contain sample text.
 - Normalized fighter/priest/wizard class sheets are wired; keep old standalone party map/battle PNGs out of runtime glob loading unless intentionally reintroduced.
-- Continue semantic cleanup of the active `classic_world_tileset` manifest/catalog over time: rename low-confidence generated entries where useful, add more curated transition/object variants deliberately, and avoid loading the whole extracted pack blindly into worldgen.
+- Continue semantic cleanup of the `classic_world_tileset` manifest/catalog over time: rename low-confidence generated entries where useful, add more curated transition/object variants deliberately, and avoid loading the whole extracted pack blindly into worldgen.
+- Improve classic island shoreline/autotile selection over time. The current region 7+10-only catalog keeps the map coherent, but better dedicated coast connectors would reduce repeated cliff/shore artifacts.
 
 ## Gameplay Gaps
 

@@ -106,10 +106,11 @@ function assertRuntimeLoadsClassicTileset() {
   assert(mainSource.includes("classic_world_tileset.cleaned.png"), "src/main.ts must explicitly load the active classic tileset image.");
   assert(mainSource.includes("classicWorldTileset.manifest.json"), "src/main.ts must explicitly load the active classic tileset manifest.");
   assert(mainSource.includes("classic_world_tileset"), "src/main.ts must use the classic texture key.");
+  assert(mainSource.includes("resolveWorldgenMode"), "src/main.ts must route classic usage through the worldgen mode selector.");
   for (const file of runtimeFiles) {
     const text = fs.readFileSync(path.join(PROJECT_ROOT, file), "utf8");
     assert(!text.includes("57105.png"), `${file} must not load the raw source tileset.`);
-    assert(!text.replace("!./assets/world/world_atlas.normalized.png", "").includes("world_atlas.normalized.png"), `${file} must not load the old generated atlas.`);
+    assert(!text.includes("ctworldmap1000ad.png"), `${file} must not load the reference map as runtime art.`);
   }
 }
 
