@@ -39,7 +39,7 @@ Keep all paths lowercase snake_case. Use PNG for most raster art. Battle/backgro
 
 ## Loading Strategy
 
-Current note: the Phaser scene already has a `preload()` image loader. The active overworld terrain uses the `atlas_v3` texture from `src/assets/world/atlas_v3.png`, imported manifest `src/assets/world/atlasV3.manifest.json`, and tile metadata in `src/data/worldTiles.ts`; individual root `assets/tiles/world/*` files are fallback/legacy references. The terrain cache and fallback draw path use `ATLAS_V3_SOURCE_INSET = 3` to crop dirty source-cell edges while drawing each valid tile into the full destination tile. Runtime must not run map-level seam blending or mutate cached terrain pixels with neighboring terrain colors.
+Current note: the Phaser scene already has a `preload()` image loader. The active overworld terrain uses the `atlas_v3` texture from `src/assets/world/atlas_v3.png`, imported manifest `src/assets/world/atlasV3.manifest.json`, and tile metadata in `src/data/worldTiles.ts`; individual root `assets/tiles/world/*` files are fallback/legacy references. The terrain cache and fallback draw path use `ATLAS_V3_SOURCE_INSET = 3` to crop dirty source-cell edges while drawing each valid tile into the full destination tile. Harbor dock overlays use `src/assets/world/pier_atlas.png`. Runtime must not run map-level seam blending or mutate cached terrain pixels with neighboring terrain colors.
 
 For future asset families, extend the existing loader incrementally:
 
@@ -82,7 +82,8 @@ This lets the game remain playable after every partial art import.
 
 | Code Area | Current Function | Future Asset Hook | Risk |
 |---|---|---|---|
-| World terrain | `drawWorldTile` | `src/assets/world/atlas_v3.png` + `src/assets/world/atlasV3.manifest.json` + `src/data/worldTiles.ts` | Active path; exact 8x8 atlas cells render into 32px display tiles; empty black cells are ignored |
+| World terrain | `drawWorldTile` | `src/assets/world/atlas_v3.png` + `src/assets/world/atlasV3.manifest.json` + `src/data/worldTiles.ts` | Active path; exact 8x8 atlas cells render into 32px display tiles; all 64 cells are classified terrain |
+| Harbor docks | `drawPierDockTile` | `src/assets/world/pier_atlas.png` | Low; 4x4 atlas cells are cropped into generated harbor dock markers with generated fallback |
 | Location markers | `drawLocationIcon` | `assets/tiles/markers/*` | Low, but needs location-id variant mapping |
 | Town floor/services | `drawTown` and service blocks | Town floor/service marker assets | Medium, because service text is currently drawn directly |
 | Dungeon tiles | `drawDungeonTile` | `assets/tiles/dungeons/*`, `assets/tiles/objects/*` | Low for base tiles, medium for opened chest state |
@@ -194,7 +195,7 @@ npm run build
 Then smoke test:
 
 - Title screen still appears.
-- New Game starts and Dawnford renders.
+- New Game starts and Greenhaven renders.
 - Player sprite moves without jitter.
 - Menu text remains readable.
 - A battle starts and enemy labels/HP bars do not overlap art.

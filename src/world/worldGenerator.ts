@@ -186,15 +186,16 @@ const GRASS_TILES = [
   WORLD_TILE_IDS.lushCloverGrass,
   WORLD_TILE_IDS.weedsGrass
 ];
-const FOREST_TILES = [WORLD_TILE_IDS.darkGrass, WORLD_TILE_IDS.lushCloverGrass, WORLD_TILE_IDS.weedsGrass];
-const BEACH_TILES = [WORLD_TILE_IDS.brightSand, WORLD_TILE_IDS.duneSand, WORLD_TILE_IDS.rockySand];
-const ROAD_TILE = WORLD_TILE_IDS.trampledGrass;
-const HILL_TILES = [WORLD_TILE_IDS.grassStones, WORLD_TILE_IDS.gravelStoneGround];
-const DARK_TILES = [WORLD_TILE_IDS.deadCrackedEarth, WORLD_TILE_IDS.ashBlackGround, WORLD_TILE_IDS.cursedPurpleGround];
-const ASH_WALKABLE_TILES = [WORLD_TILE_IDS.deadCrackedEarth, WORLD_TILE_IDS.ashBlackGround, WORLD_TILE_IDS.gravelStoneGround];
+const FOREST_TILES = [WORLD_TILE_IDS.lightForest, WORLD_TILE_IDS.denseForest, WORLD_TILE_IDS.weedsGrass];
+const JUNGLE_TILES = [WORLD_TILE_IDS.jungle, WORLD_TILE_IDS.denseForest, WORLD_TILE_IDS.lightForest];
+const BEACH_TILES = [WORLD_TILE_IDS.beachSand, WORLD_TILE_IDS.wetBeachSand, WORLD_TILE_IDS.grassSandCoast, WORLD_TILE_IDS.sandWaterEdge, WORLD_TILE_IDS.coveCoast];
+const ROAD_TILE = WORLD_TILE_IDS.roadHorizontal;
+const HILL_TILES = [WORLD_TILE_IDS.grassStones, WORLD_TILE_IDS.gravelStoneGround, WORLD_TILE_IDS.rockyHills];
+const ASH_WALKABLE_TILES = [WORLD_TILE_IDS.deadCrackedEarth, WORLD_TILE_IDS.ashBlackGround, WORLD_TILE_IDS.volcanicAshGround, WORLD_TILE_IDS.ashForest];
 const MOUNTAIN_TILE = WORLD_TILE_IDS.rockyMountainGround;
 const LAVA_TILE = WORLD_TILE_IDS.lavaCrackedGround;
 const WATER_TILE = WORLD_TILE_IDS.deepWater;
+const SHALLOW_WATER_TILES = [WORLD_TILE_IDS.shallowWater, WORLD_TILE_IDS.foamyShallowWater];
 
 export function createWorldSeed(): string {
   return `archipelago-${Date.now().toString(36)}-${Math.floor(Math.random() * 0xffffffff).toString(36)}`;
@@ -487,13 +488,13 @@ function paintIsland(
       continue;
     }
     if (template.theme === "volcanic") {
-      if (volcanic > 0.82) setWorldTile(tiles, biomes, x, y, LAVA_TILE, "lava");
+      if (volcanic > 0.86) setWorldTile(tiles, biomes, x, y, pickByNoise([LAVA_TILE, WORLD_TILE_IDS.lavaRockTransition], seed, x, y), "lava");
       else if (volcanic > 0.74) setWorldTile(tiles, biomes, x, y, MOUNTAIN_TILE, "mountain");
       else if (hill > 0.65) setWorldTile(tiles, biomes, x, y, WORLD_TILE_IDS.gravelStoneGround, "mountain");
       else setWorldTile(tiles, biomes, x, y, pickByNoise(ASH_WALKABLE_TILES, seed, x, y), "darkland");
     } else if (template.theme === "tropical") {
       if (hill > 0.8) setWorldTile(tiles, biomes, x, y, WORLD_TILE_IDS.gravelStoneGround, "mountain");
-      else if (n > 0.54) setWorldTile(tiles, biomes, x, y, pickByNoise(FOREST_TILES, seed, x, y), "forest");
+      else if (n > 0.54) setWorldTile(tiles, biomes, x, y, pickByNoise(JUNGLE_TILES, seed, x, y), "forest");
       else if (n < 0.2) setWorldTile(tiles, biomes, x, y, pickByNoise(BEACH_TILES, seed, x, y), "desert");
       else setWorldTile(tiles, biomes, x, y, pickByNoise(GRASS_TILES, seed, x, y), "grassland");
     } else {
@@ -520,7 +521,14 @@ function addTinyIslets(
       for (let xx = x - radius; xx <= x + radius; xx += 1) {
         if (Math.hypot(xx - x, yy - y) > radius + 0.25 || !inBounds(tiles[0].length, tiles.length, xx, yy)) continue;
         islandByTile[yy][xx] = null;
-        setWorldTile(tiles, biomes, xx, yy, rng.chance(0.55) ? WORLD_TILE_IDS.brightSand : pickByNoise(GRASS_TILES, `${seed}:islet`, xx, yy), rng.chance(0.55) ? "desert" : "grassland");
+        setWorldTile(
+          tiles,
+          biomes,
+          xx,
+          yy,
+          rng.chance(0.55) ? WORLD_TILE_IDS.beachSand : pickByNoise(GRASS_TILES, `${seed}:islet`, xx, yy),
+          rng.chance(0.55) ? "desert" : "grassland"
+        );
       }
     }
   }
@@ -692,7 +700,7 @@ function carvePoiFootprints(
   for (const poi of pois) {
     const tile =
       poi.kind === "harbor"
-        ? WORLD_TILE_IDS.brightSand
+        ? WORLD_TILE_IDS.beachSand
         : poi.kind === "town"
           ? ROAD_TILE
           : poi.kind === "final"
@@ -726,14 +734,55 @@ function carveIslandRoads(
   const harbor = pois.find((poi) => poi.kind === "harbor");
   const important = pois.filter((poi) => poi.kind === "dungeon" || poi.kind === "gate" || poi.kind === "final");
   if (!town || !harbor) return;
+  const islandRoadKeys = new Set<string>();
   for (const destination of [harbor, ...important]) {
     const path = findIslandPath(tiles, islandByTile, islandId, town, destination);
     for (const pos of path) {
       if (isWaterTile(tiles[pos.y][pos.x])) continue;
       setWorldTile(tiles, biomes, pos.x, pos.y, ROAD_TILE, "grassland");
       roads.push(pos);
+      islandRoadKeys.add(posKey(pos));
     }
   }
+  orientRoadTiles(tiles, biomes, islandRoadKeys);
+}
+
+function orientRoadTiles(tiles: WorldTileId[][], biomes: WorldBiome[][], roadKeys: Set<string>) {
+  for (const key of roadKeys) {
+    const pos = parseKey(key);
+    if (!worldTileHasTag(tiles[pos.y]?.[pos.x], "road")) continue;
+    const tile = roadTileForConnections(tiles, pos.x, pos.y);
+    setWorldTile(tiles, biomes, pos.x, pos.y, tile, WORLD_TILES[tile].biome);
+  }
+}
+
+function roadTileForConnections(tiles: WorldTileId[][], x: number, y: number): WorldTileId {
+  const up = isRoadConnection(tiles, x, y - 1);
+  const down = isRoadConnection(tiles, x, y + 1);
+  const left = isRoadConnection(tiles, x - 1, y);
+  const right = isRoadConnection(tiles, x + 1, y);
+  const count = [up, down, left, right].filter(Boolean).length;
+  if (count >= 4) return WORLD_TILE_IDS.roadCrossroads;
+  if (count === 3) {
+    if (!up) return WORLD_TILE_IDS.roadTSouth;
+    if (!down) return WORLD_TILE_IDS.roadTNorth;
+    if (!left) return WORLD_TILE_IDS.roadTEast;
+    return WORLD_TILE_IDS.roadTWest;
+  }
+  if (left && right) return WORLD_TILE_IDS.roadHorizontal;
+  if (up && down) return WORLD_TILE_IDS.roadVertical;
+  if (up && right) return WORLD_TILE_IDS.roadCornerNe;
+  if (right && down) return WORLD_TILE_IDS.roadCornerSe;
+  if (down && left) return WORLD_TILE_IDS.roadCornerSw;
+  if (left && up) return WORLD_TILE_IDS.roadCornerNw;
+  if (left) return WORLD_TILE_IDS.roadDeadEndEast;
+  if (right) return WORLD_TILE_IDS.roadDeadEndWest;
+  if (up || down) return WORLD_TILE_IDS.roadVertical;
+  return WORLD_TILE_IDS.softGrassTrail;
+}
+
+function isRoadConnection(tiles: WorldTileId[][], x: number, y: number): boolean {
+  return inBounds(tiles[0].length, tiles.length, x, y) && worldTileHasTag(tiles[y][x], "road");
 }
 
 function findIslandPath(
@@ -790,7 +839,7 @@ function markShallowWater(tiles: WorldTileId[][], biomes: WorldBiome[][]): World
       const nearLand = nearestLandDistance(tiles, x, y, 3);
       if (nearLand > 0 && nearLand <= 2) {
         shallows.push({ x, y });
-        biomes[y][x] = "water";
+        setWorldTile(tiles, biomes, x, y, pickByNoise(SHALLOW_WATER_TILES, "shallows", x, y), "water");
       }
     }
   }

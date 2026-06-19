@@ -18,6 +18,7 @@ const REPORT_PATH = path.join(DEBUG_DIR, "atlas-v3-import-report.md");
 
 const COLUMNS = 8;
 const ROWS = 8;
+const RUNTIME_SIZE = 1024;
 const NEAR_BLACK_LUMINANCE = 20;
 const NEAR_BLACK_MAX_CHANNEL = 34;
 const EMPTY_PIXEL_RATIO = 0.9;
@@ -31,6 +32,14 @@ const BLEND_GROUPS = {
   weeds_grass: "grass",
   trampled_grass: "grass",
   grass_stones: "grass",
+  beach_sand: "desert",
+  wet_beach_sand: "desert",
+  grass_sand_coast: "desert",
+  sand_water_edge: "desert",
+  sand_water_corner: "desert",
+  shallow_water: "water",
+  foamy_shallow_water: "water",
+  cove_coast: "desert",
   bright_sand: "desert",
   dune_sand: "desert",
   rocky_sand: "desert",
@@ -38,20 +47,47 @@ const BLEND_GROUPS = {
   reddish_desert_soil: "desert",
   cactus_sand: "desert",
   desert_scrub: "desert",
+  desert_road_crossroads: "desert",
   clean_snow: "snow",
   packed_snow: "snow",
   icy_snow: "snow",
   snow_rocks: "snow",
   frozen_lake_ice: "ice",
   cracked_ice: "ice",
+  snowy_forest: "snow",
+  snow_mountain: "rock",
+  light_forest: "grass",
+  dense_forest: "grass",
+  jungle: "grass",
   dead_cracked_earth: "dark",
   ash_black_ground: "dark",
   cursed_purple_ground: "dark",
+  dead_forest: "dark",
+  ash_forest: "dark",
   deep_water: "water",
+  road_horizontal: "grass",
+  road_vertical: "grass",
+  road_corner_sw: "grass",
+  road_t_s: "grass",
+  road_crossroads: "grass",
+  road_dead_end_e: "grass",
+  soft_grass_trail: "grass",
   rocky_mountain_ground: "rock",
   gravel_stone_ground: "rock",
+  rocky_hills: "rock",
+  snowy_mountain_ground: "rock",
   volcano_mound: "lava",
-  lava_cracked_ground: "lava"
+  road_corner_se: "grass",
+  road_corner_ne: "grass",
+  road_corner_nw: "grass",
+  lava_cracked_ground: "lava",
+  cooled_lava_rock: "lava",
+  volcanic_ash_ground: "dark",
+  lava_rock_transition: "lava",
+  road_t_e: "grass",
+  road_t_n: "grass",
+  road_t_w: "grass",
+  road_dead_end_w: "grass"
 };
 
 const CELL_CLASSIFICATION = [
@@ -65,7 +101,16 @@ const CELL_CLASSIFICATION = [
     tile("trampled_grass", "grassland", "grassland", "plains", true, 1, ["grass", "trampled", "land"], "Trampled grass patch."),
     tile("grass_stones", "grassland", "grassland", "plains", true, 1.15, ["grass", "stones", "land"], "Grass with scattered stones.")
   ],
-  emptyRow(),
+  [
+    tile("beach_sand", "desert", "coast", "sand", true, 1.15, ["sand", "beach", "coast", "land"], "Clean dry beach sand."),
+    tile("wet_beach_sand", "desert", "coast", "sand", true, 1.2, ["sand", "beach", "wet", "coast", "land"], "Wet darker beach sand."),
+    tile("grass_sand_coast", "desert", "coast", "sand", true, 1.2, ["sand", "grass", "beach", "coast", "land"], "Grass-to-sand coast transition."),
+    tile("sand_water_edge", "desert", "coast", "sand", true, 1.25, ["sand", "beach", "coast", "land"], "Sand-to-water straight coast edge."),
+    tile("sand_water_corner", "desert", "coast", "sand", true, 1.25, ["sand", "beach", "coast", "corner", "land"], "Sand-to-water coast corner."),
+    tile("shallow_water", "water", "water", "water", false, 99, ["water", "shallow", "blocked"], "Shallow turquoise water is blocked."),
+    tile("foamy_shallow_water", "water", "water", "water", false, 99, ["water", "shallow", "foam", "blocked"], "Foamy shallow-water edge is blocked."),
+    tile("cove_coast", "desert", "coast", "sand", true, 1.25, ["sand", "beach", "coast", "cove", "land"], "Curved cove coast tile.")
+  ],
   [
     tile("bright_sand", "desert", "dryland", "sand", true, 1.25, ["sand", "desert", "land"], "Bright sand."),
     tile("dune_sand", "desert", "dryland", "sand", true, 1.35, ["sand", "desert", "dune", "land"], "Wind-shaped dune sand."),
@@ -74,7 +119,7 @@ const CELL_CLASSIFICATION = [
     tile("reddish_desert_soil", "desert", "dryland", "sand", true, 1.35, ["desert", "red", "rocks", "land"], "Reddish desert soil."),
     tile("cactus_sand", "desert", "dryland", "sand", true, 1.6, ["desert", "cactus", "sand", "land"], "Cactus sand; walkable with higher movement cost."),
     tile("desert_scrub", "desert", "dryland", "sand", true, 1.45, ["desert", "scrub", "land"], "Dry scrubland."),
-    null
+    tile("desert_road_crossroads", "desert", "road", "sand", true, 0.9, ["road", "sand", "land", "safe"], "Sandy dirt path crossroads.")
   ],
   [
     tile("clean_snow", "snow", "snow", "hills", true, 1.35, ["snow", "land"], "Clean snow."),
@@ -83,48 +128,48 @@ const CELL_CLASSIFICATION = [
     tile("snow_rocks", "snow", "snow", "hills", true, 1.6, ["snow", "rocks", "land"], "Snow with rocks."),
     tile("frozen_lake_ice", "snow", "ice", "hills", true, 1.35, ["ice", "frozen", "land"], "Frozen lake ice used as walkable frozen ground, not water."),
     tile("cracked_ice", "snow", "ice", "hills", true, 1.5, ["ice", "cracked", "frozen", "land"], "Cracked ice used as walkable frozen ground, not water."),
-    null,
-    null
+    tile("snowy_forest", "forest", "snow_forest", "forest", true, 1.7, ["forest", "snow", "land"], "Snow-covered forest tile."),
+    tile("snow_mountain", "mountain", "snow_mountain", "hills", false, 99, ["mountain", "snow", "blocked"], "Centered snowy mountain blocker.")
   ],
   [
-    null,
-    null,
-    null,
+    tile("light_forest", "forest", "forest", "forest", true, 1.45, ["forest", "trees", "land"], "Light centered forest tile."),
+    tile("dense_forest", "forest", "forest", "forest", true, 1.65, ["forest", "trees", "dense", "land"], "Dense centered forest tile."),
+    tile("jungle", "forest", "jungle", "forest", true, 1.7, ["forest", "jungle", "land"], "Tropical jungle tile."),
     tile("dead_cracked_earth", "darkland", "cursed", "final", true, 1.5, ["darkland", "dead", "cracked", "land"], "Dead cracked earth."),
     tile("ash_black_ground", "darkland", "cursed", "final", true, 1.55, ["darkland", "ash", "blackened", "land"], "Ash-black ground."),
     tile("cursed_purple_ground", "darkland", "cursed", "final", true, 1.6, ["darkland", "cursed", "purple", "land"], "Cursed purple ground."),
-    null,
-    null
+    tile("dead_forest", "darkland", "dead_forest", "final", true, 1.75, ["forest", "darkland", "dead", "land"], "Centered dead forest tile."),
+    tile("ash_forest", "darkland", "ash_forest", "final", true, 1.8, ["forest", "darkland", "ash", "land"], "Centered burned ash forest tile.")
   ],
   [
     tile("deep_water", "water", "water", "water", false, 99, ["water", "deep", "blocked"], "Deep water is blocked."),
-    null,
-    null,
-    null,
-    null,
-    null,
-    null,
-    null
+    tile("road_horizontal", "grassland", "road", "plains", true, 0.85, ["road", "land", "safe"], "Horizontal dirt road."),
+    tile("road_vertical", "grassland", "road", "plains", true, 0.85, ["road", "land", "safe"], "Vertical dirt road."),
+    tile("road_corner_sw", "grassland", "road", "plains", true, 0.85, ["road", "land", "safe", "corner"], "Dirt road corner."),
+    tile("road_t_s", "grassland", "road", "plains", true, 0.85, ["road", "land", "safe", "junction"], "Dirt road T-junction."),
+    tile("road_crossroads", "grassland", "road", "plains", true, 0.85, ["road", "land", "safe", "junction"], "Dirt road crossroads."),
+    tile("road_dead_end_e", "grassland", "road", "plains", true, 0.85, ["road", "land", "safe", "dead_end"], "Dirt road dead end."),
+    tile("soft_grass_trail", "grassland", "road", "plains", true, 0.9, ["road", "grass", "trail", "land", "safe"], "Soft grass trail.")
   ],
   [
     tile("rocky_mountain_ground", "mountain", "rock", "hills", false, 99, ["mountain", "rock", "blocked"], "Rocky mountain ground is a blocker."),
     tile("gravel_stone_ground", "mountain", "rock", "hills", true, 1.7, ["rock", "gravel", "stone", "land"], "Walkable gravel and stone ground."),
-    null,
-    null,
+    tile("rocky_hills", "mountain", "rock", "hills", true, 1.7, ["rock", "hills", "land"], "Centered rocky hill clusters."),
+    tile("snowy_mountain_ground", "mountain", "snow_mountain", "hills", false, 99, ["mountain", "snow", "blocked"], "Snowy mountain blocker."),
     tile("volcano_mound", "mountain", "volcano", "final", false, 99, ["volcano", "lava", "blocked"], "Volcano mound is blocked."),
-    null,
-    null,
-    null
+    tile("road_corner_se", "grassland", "road", "plains", true, 0.85, ["road", "land", "safe", "corner"], "Dirt road corner."),
+    tile("road_corner_ne", "grassland", "road", "plains", true, 0.85, ["road", "land", "safe", "corner"], "Dirt road corner."),
+    tile("road_corner_nw", "grassland", "road", "plains", true, 0.85, ["road", "land", "safe", "corner"], "Dirt road corner.")
   ],
   [
     tile("lava_cracked_ground", "lava", "lava", "final", false, 99, ["lava", "blocked"], "Lava cracked ground is blocked."),
-    null,
-    null,
-    null,
-    null,
-    null,
-    null,
-    null
+    tile("cooled_lava_rock", "lava", "lava", "final", false, 99, ["lava", "rock", "blocked"], "Cooled lava rocks are blocked."),
+    tile("volcanic_ash_ground", "darkland", "ash", "final", true, 1.65, ["darkland", "ash", "volcanic", "land"], "Walkable volcanic ash ground."),
+    tile("lava_rock_transition", "lava", "lava", "final", false, 99, ["lava", "rock", "blocked"], "Lava-to-rock transition is blocked."),
+    tile("road_t_e", "grassland", "road", "plains", true, 0.85, ["road", "land", "safe", "junction"], "Dirt road T-junction."),
+    tile("road_t_n", "grassland", "road", "plains", true, 0.85, ["road", "land", "safe", "junction"], "Dirt road T-junction."),
+    tile("road_t_w", "grassland", "road", "plains", true, 0.85, ["road", "land", "safe", "junction"], "Dirt road T-junction."),
+    tile("road_dead_end_w", "grassland", "road", "plains", true, 0.85, ["road", "land", "safe", "dead_end"], "Dirt road dead end alternate.")
   ]
 ];
 
@@ -206,10 +251,17 @@ function convertJpegToPng(source, output) {
     "Add-Type -AssemblyName System.Drawing;",
     `$source=${sourceLiteral};`,
     `$output=${outputLiteral};`,
+    `$target=${RUNTIME_SIZE};`,
     "$image=[System.Drawing.Image]::FromFile($source);",
+    "$bitmap=New-Object System.Drawing.Bitmap $target,$target;",
+    "$graphics=[System.Drawing.Graphics]::FromImage($bitmap);",
     "try {",
-    "$image.Save($output, [System.Drawing.Imaging.ImageFormat]::Png);",
-    "} finally { $image.Dispose(); }"
+    "$graphics.InterpolationMode=[System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic;",
+    "$graphics.PixelOffsetMode=[System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality;",
+    "$graphics.SmoothingMode=[System.Drawing.Drawing2D.SmoothingMode]::None;",
+    "$graphics.DrawImage($image, 0, 0, $target, $target);",
+    "$bitmap.Save($output, [System.Drawing.Imaging.ImageFormat]::Png);",
+    "} finally { $graphics.Dispose(); $bitmap.Dispose(); $image.Dispose(); }"
   ].join(" ");
   execFileSync("powershell", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command], { stdio: "pipe" });
 }

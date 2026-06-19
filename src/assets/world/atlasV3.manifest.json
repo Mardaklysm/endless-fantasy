@@ -3,7 +3,7 @@
   "id": "atlas_v3",
   "generatedBy": "tools/art_import/import_atlas_v3.mjs",
   "sourceImage": "D:/Projects/new_artwork/atlas_v3.jpeg",
-  "sourceSha256": "F5BB2712DC1650E766AD68372A286F769A251D018508A3E3AFA7BD80884EBF46",
+  "sourceSha256": "0D1C3CD8B5CC0460A628F937C8DC330D5CB8C73760798DD3F79F08F6DBC59ADA",
   "runtimeImage": "src/assets/world/atlas_v3.png",
   "columns": 8,
   "rows": 8,
@@ -43,7 +43,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0613,
+      "emptyRatio": 0.0002,
       "notes": "Bright open grass."
     },
     {
@@ -68,7 +68,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0603,
+      "emptyRatio": 0.0003,
       "notes": "Medium open grass."
     },
     {
@@ -93,7 +93,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0615,
+      "emptyRatio": 0.0143,
       "notes": "Darker grass variant."
     },
     {
@@ -118,7 +118,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0615,
+      "emptyRatio": 0.0016,
       "notes": "Flower meadow grass."
     },
     {
@@ -144,7 +144,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0615,
+      "emptyRatio": 0.0007,
       "notes": "Lush clover ground."
     },
     {
@@ -169,7 +169,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0615,
+      "emptyRatio": 0.0003,
       "notes": "Sparse weed clusters on grass."
     },
     {
@@ -194,7 +194,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0615,
+      "emptyRatio": 0.0003,
       "notes": "Trampled grass patch."
     },
     {
@@ -219,112 +219,219 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0615,
+      "emptyRatio": 0.0012,
       "notes": "Grass with scattered stones."
     },
     {
       "row": 1,
       "col": 0,
-      "empty": true,
+      "empty": false,
+      "id": "beach_sand",
+      "biome": "desert",
+      "category": "coast",
+      "blendGroup": "desert",
+      "encounterFamily": "sand",
+      "walkable": true,
+      "movementCost": 1.15,
+      "tags": [
+        "sand",
+        "beach",
+        "coast",
+        "land"
+      ],
       "source": {
         "x": 0,
         "y": 128,
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 1,
-      "notes": "Unused black atlas slot; ignored by worldgen."
+      "emptyRatio": 0.0002,
+      "notes": "Clean dry beach sand."
     },
     {
       "row": 1,
       "col": 1,
-      "empty": true,
+      "empty": false,
+      "id": "wet_beach_sand",
+      "biome": "desert",
+      "category": "coast",
+      "blendGroup": "desert",
+      "encounterFamily": "sand",
+      "walkable": true,
+      "movementCost": 1.2,
+      "tags": [
+        "sand",
+        "beach",
+        "wet",
+        "coast",
+        "land"
+      ],
       "source": {
         "x": 128,
         "y": 128,
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 1,
-      "notes": "Unused black atlas slot; ignored by worldgen."
+      "emptyRatio": 0.0016,
+      "notes": "Wet darker beach sand."
     },
     {
       "row": 1,
       "col": 2,
-      "empty": true,
+      "empty": false,
+      "id": "grass_sand_coast",
+      "biome": "desert",
+      "category": "coast",
+      "blendGroup": "desert",
+      "encounterFamily": "sand",
+      "walkable": true,
+      "movementCost": 1.2,
+      "tags": [
+        "sand",
+        "grass",
+        "beach",
+        "coast",
+        "land"
+      ],
       "source": {
         "x": 256,
         "y": 128,
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 1,
-      "notes": "Unused black atlas slot; ignored by worldgen."
+      "emptyRatio": 0.0017,
+      "notes": "Grass-to-sand coast transition."
     },
     {
       "row": 1,
       "col": 3,
-      "empty": true,
+      "empty": false,
+      "id": "sand_water_edge",
+      "biome": "desert",
+      "category": "coast",
+      "blendGroup": "desert",
+      "encounterFamily": "sand",
+      "walkable": true,
+      "movementCost": 1.25,
+      "tags": [
+        "sand",
+        "beach",
+        "coast",
+        "land"
+      ],
       "source": {
         "x": 384,
         "y": 128,
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 1,
-      "notes": "Unused black atlas slot; ignored by worldgen."
+      "emptyRatio": 0.0052,
+      "notes": "Sand-to-water straight coast edge."
     },
     {
       "row": 1,
       "col": 4,
-      "empty": true,
+      "empty": false,
+      "id": "sand_water_corner",
+      "biome": "desert",
+      "category": "coast",
+      "blendGroup": "desert",
+      "encounterFamily": "sand",
+      "walkable": true,
+      "movementCost": 1.25,
+      "tags": [
+        "sand",
+        "beach",
+        "coast",
+        "corner",
+        "land"
+      ],
       "source": {
         "x": 512,
         "y": 128,
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 1,
-      "notes": "Unused black atlas slot; ignored by worldgen."
+      "emptyRatio": 0.0047,
+      "notes": "Sand-to-water coast corner."
     },
     {
       "row": 1,
       "col": 5,
-      "empty": true,
+      "empty": false,
+      "id": "shallow_water",
+      "biome": "water",
+      "category": "water",
+      "blendGroup": "water",
+      "encounterFamily": "water",
+      "walkable": false,
+      "movementCost": 99,
+      "tags": [
+        "water",
+        "shallow",
+        "blocked"
+      ],
       "source": {
         "x": 640,
         "y": 128,
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 1,
-      "notes": "Unused black atlas slot; ignored by worldgen."
+      "emptyRatio": 0.0002,
+      "notes": "Shallow turquoise water is blocked."
     },
     {
       "row": 1,
       "col": 6,
-      "empty": true,
+      "empty": false,
+      "id": "foamy_shallow_water",
+      "biome": "water",
+      "category": "water",
+      "blendGroup": "water",
+      "encounterFamily": "water",
+      "walkable": false,
+      "movementCost": 99,
+      "tags": [
+        "water",
+        "shallow",
+        "foam",
+        "blocked"
+      ],
       "source": {
         "x": 768,
         "y": 128,
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 1,
-      "notes": "Unused black atlas slot; ignored by worldgen."
+      "emptyRatio": 0.0003,
+      "notes": "Foamy shallow-water edge is blocked."
     },
     {
       "row": 1,
       "col": 7,
-      "empty": true,
+      "empty": false,
+      "id": "cove_coast",
+      "biome": "desert",
+      "category": "coast",
+      "blendGroup": "desert",
+      "encounterFamily": "sand",
+      "walkable": true,
+      "movementCost": 1.25,
+      "tags": [
+        "sand",
+        "beach",
+        "coast",
+        "cove",
+        "land"
+      ],
       "source": {
         "x": 896,
         "y": 128,
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 1,
-      "notes": "Unused black atlas slot; ignored by worldgen."
+      "emptyRatio": 0.0026,
+      "notes": "Curved cove coast tile."
     },
     {
       "row": 2,
@@ -348,7 +455,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0565,
+      "emptyRatio": 0.0002,
       "notes": "Bright sand."
     },
     {
@@ -374,7 +481,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0609,
+      "emptyRatio": 0.0002,
       "notes": "Wind-shaped dune sand."
     },
     {
@@ -400,7 +507,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0608,
+      "emptyRatio": 0.0002,
       "notes": "Rocky sand."
     },
     {
@@ -426,7 +533,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0615,
+      "emptyRatio": 0.0014,
       "notes": "Cracked dry earth."
     },
     {
@@ -452,7 +559,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0584,
+      "emptyRatio": 0.0003,
       "notes": "Reddish desert soil."
     },
     {
@@ -478,7 +585,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.061,
+      "emptyRatio": 0.0002,
       "notes": "Cactus sand; walkable with higher movement cost."
     },
     {
@@ -503,21 +610,34 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.061,
+      "emptyRatio": 0.0002,
       "notes": "Dry scrubland."
     },
     {
       "row": 2,
       "col": 7,
-      "empty": true,
+      "empty": false,
+      "id": "desert_road_crossroads",
+      "biome": "desert",
+      "category": "road",
+      "blendGroup": "desert",
+      "encounterFamily": "sand",
+      "walkable": true,
+      "movementCost": 0.9,
+      "tags": [
+        "road",
+        "sand",
+        "land",
+        "safe"
+      ],
       "source": {
         "x": 896,
         "y": 256,
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 1,
-      "notes": "Unused black atlas slot; ignored by worldgen."
+      "emptyRatio": 0.0002,
+      "notes": "Sandy dirt path crossroads."
     },
     {
       "row": 3,
@@ -540,7 +660,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0552,
+      "emptyRatio": 0.0002,
       "notes": "Clean snow."
     },
     {
@@ -565,7 +685,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0596,
+      "emptyRatio": 0.0002,
       "notes": "Packed snow."
     },
     {
@@ -590,7 +710,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0599,
+      "emptyRatio": 0.0002,
       "notes": "Icy snow."
     },
     {
@@ -615,7 +735,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0563,
+      "emptyRatio": 0.0002,
       "notes": "Snow with rocks."
     },
     {
@@ -640,7 +760,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0605,
+      "emptyRatio": 0.0002,
       "notes": "Frozen lake ice used as walkable frozen ground, not water."
     },
     {
@@ -666,73 +786,134 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0613,
+      "emptyRatio": 0.0002,
       "notes": "Cracked ice used as walkable frozen ground, not water."
     },
     {
       "row": 3,
       "col": 6,
-      "empty": true,
+      "empty": false,
+      "id": "snowy_forest",
+      "biome": "forest",
+      "category": "snow_forest",
+      "blendGroup": "snow",
+      "encounterFamily": "forest",
+      "walkable": true,
+      "movementCost": 1.7,
+      "tags": [
+        "forest",
+        "snow",
+        "land"
+      ],
       "source": {
         "x": 768,
         "y": 384,
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 1,
-      "notes": "Unused black atlas slot; ignored by worldgen."
+      "emptyRatio": 0.0002,
+      "notes": "Snow-covered forest tile."
     },
     {
       "row": 3,
       "col": 7,
-      "empty": true,
+      "empty": false,
+      "id": "snow_mountain",
+      "biome": "mountain",
+      "category": "snow_mountain",
+      "blendGroup": "rock",
+      "encounterFamily": "hills",
+      "walkable": false,
+      "movementCost": 99,
+      "tags": [
+        "mountain",
+        "snow",
+        "blocked"
+      ],
       "source": {
         "x": 896,
         "y": 384,
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 1,
-      "notes": "Unused black atlas slot; ignored by worldgen."
+      "emptyRatio": 0.0175,
+      "notes": "Centered snowy mountain blocker."
     },
     {
       "row": 4,
       "col": 0,
-      "empty": true,
+      "empty": false,
+      "id": "light_forest",
+      "biome": "forest",
+      "category": "forest",
+      "blendGroup": "grass",
+      "encounterFamily": "forest",
+      "walkable": true,
+      "movementCost": 1.45,
+      "tags": [
+        "forest",
+        "trees",
+        "land"
+      ],
       "source": {
         "x": 0,
         "y": 512,
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 1,
-      "notes": "Unused black atlas slot; ignored by worldgen."
+      "emptyRatio": 0.0002,
+      "notes": "Light centered forest tile."
     },
     {
       "row": 4,
       "col": 1,
-      "empty": true,
+      "empty": false,
+      "id": "dense_forest",
+      "biome": "forest",
+      "category": "forest",
+      "blendGroup": "grass",
+      "encounterFamily": "forest",
+      "walkable": true,
+      "movementCost": 1.65,
+      "tags": [
+        "forest",
+        "trees",
+        "dense",
+        "land"
+      ],
       "source": {
         "x": 128,
         "y": 512,
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 1,
-      "notes": "Unused black atlas slot; ignored by worldgen."
+      "emptyRatio": 0.0092,
+      "notes": "Dense centered forest tile."
     },
     {
       "row": 4,
       "col": 2,
-      "empty": true,
+      "empty": false,
+      "id": "jungle",
+      "biome": "forest",
+      "category": "jungle",
+      "blendGroup": "grass",
+      "encounterFamily": "forest",
+      "walkable": true,
+      "movementCost": 1.7,
+      "tags": [
+        "forest",
+        "jungle",
+        "land"
+      ],
       "source": {
         "x": 256,
         "y": 512,
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 1,
-      "notes": "Unused black atlas slot; ignored by worldgen."
+      "emptyRatio": 0.0002,
+      "notes": "Tropical jungle tile."
     },
     {
       "row": 4,
@@ -757,7 +938,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0616,
+      "emptyRatio": 0.009,
       "notes": "Dead cracked earth."
     },
     {
@@ -783,7 +964,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.1097,
+      "emptyRatio": 0.0327,
       "notes": "Ash-black ground."
     },
     {
@@ -809,34 +990,60 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0641,
+      "emptyRatio": 0.0271,
       "notes": "Cursed purple ground."
     },
     {
       "row": 4,
       "col": 6,
-      "empty": true,
+      "empty": false,
+      "id": "dead_forest",
+      "biome": "darkland",
+      "category": "dead_forest",
+      "blendGroup": "dark",
+      "encounterFamily": "final",
+      "walkable": true,
+      "movementCost": 1.75,
+      "tags": [
+        "forest",
+        "darkland",
+        "dead",
+        "land"
+      ],
       "source": {
         "x": 768,
         "y": 512,
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 1,
-      "notes": "Unused black atlas slot; ignored by worldgen."
+      "emptyRatio": 0.0106,
+      "notes": "Centered dead forest tile."
     },
     {
       "row": 4,
       "col": 7,
-      "empty": true,
+      "empty": false,
+      "id": "ash_forest",
+      "biome": "darkland",
+      "category": "ash_forest",
+      "blendGroup": "dark",
+      "encounterFamily": "final",
+      "walkable": true,
+      "movementCost": 1.8,
+      "tags": [
+        "forest",
+        "darkland",
+        "ash",
+        "land"
+      ],
       "source": {
         "x": 896,
         "y": 512,
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 1,
-      "notes": "Unused black atlas slot; ignored by worldgen."
+      "emptyRatio": 0.0506,
+      "notes": "Centered burned ash forest tile."
     },
     {
       "row": 5,
@@ -860,99 +1067,189 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0615,
+      "emptyRatio": 0.0145,
       "notes": "Deep water is blocked."
     },
     {
       "row": 5,
       "col": 1,
-      "empty": true,
+      "empty": false,
+      "id": "road_horizontal",
+      "biome": "grassland",
+      "category": "road",
+      "blendGroup": "grass",
+      "encounterFamily": "plains",
+      "walkable": true,
+      "movementCost": 0.85,
+      "tags": [
+        "road",
+        "land",
+        "safe"
+      ],
       "source": {
         "x": 128,
         "y": 640,
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 1,
-      "notes": "Unused black atlas slot; ignored by worldgen."
+      "emptyRatio": 0.0002,
+      "notes": "Horizontal dirt road."
     },
     {
       "row": 5,
       "col": 2,
-      "empty": true,
+      "empty": false,
+      "id": "road_vertical",
+      "biome": "grassland",
+      "category": "road",
+      "blendGroup": "grass",
+      "encounterFamily": "plains",
+      "walkable": true,
+      "movementCost": 0.85,
+      "tags": [
+        "road",
+        "land",
+        "safe"
+      ],
       "source": {
         "x": 256,
         "y": 640,
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 1,
-      "notes": "Unused black atlas slot; ignored by worldgen."
+      "emptyRatio": 0.0002,
+      "notes": "Vertical dirt road."
     },
     {
       "row": 5,
       "col": 3,
-      "empty": true,
+      "empty": false,
+      "id": "road_corner_sw",
+      "biome": "grassland",
+      "category": "road",
+      "blendGroup": "grass",
+      "encounterFamily": "plains",
+      "walkable": true,
+      "movementCost": 0.85,
+      "tags": [
+        "road",
+        "land",
+        "safe",
+        "corner"
+      ],
       "source": {
         "x": 384,
         "y": 640,
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 1,
-      "notes": "Unused black atlas slot; ignored by worldgen."
+      "emptyRatio": 0.0002,
+      "notes": "Dirt road corner."
     },
     {
       "row": 5,
       "col": 4,
-      "empty": true,
+      "empty": false,
+      "id": "road_t_s",
+      "biome": "grassland",
+      "category": "road",
+      "blendGroup": "grass",
+      "encounterFamily": "plains",
+      "walkable": true,
+      "movementCost": 0.85,
+      "tags": [
+        "road",
+        "land",
+        "safe",
+        "junction"
+      ],
       "source": {
         "x": 512,
         "y": 640,
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 1,
-      "notes": "Unused black atlas slot; ignored by worldgen."
+      "emptyRatio": 0.0002,
+      "notes": "Dirt road T-junction."
     },
     {
       "row": 5,
       "col": 5,
-      "empty": true,
+      "empty": false,
+      "id": "road_crossroads",
+      "biome": "grassland",
+      "category": "road",
+      "blendGroup": "grass",
+      "encounterFamily": "plains",
+      "walkable": true,
+      "movementCost": 0.85,
+      "tags": [
+        "road",
+        "land",
+        "safe",
+        "junction"
+      ],
       "source": {
         "x": 640,
         "y": 640,
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 1,
-      "notes": "Unused black atlas slot; ignored by worldgen."
+      "emptyRatio": 0.0002,
+      "notes": "Dirt road crossroads."
     },
     {
       "row": 5,
       "col": 6,
-      "empty": true,
+      "empty": false,
+      "id": "road_dead_end_e",
+      "biome": "grassland",
+      "category": "road",
+      "blendGroup": "grass",
+      "encounterFamily": "plains",
+      "walkable": true,
+      "movementCost": 0.85,
+      "tags": [
+        "road",
+        "land",
+        "safe",
+        "dead_end"
+      ],
       "source": {
         "x": 768,
         "y": 640,
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 1,
-      "notes": "Unused black atlas slot; ignored by worldgen."
+      "emptyRatio": 0.0002,
+      "notes": "Dirt road dead end."
     },
     {
       "row": 5,
       "col": 7,
-      "empty": true,
+      "empty": false,
+      "id": "soft_grass_trail",
+      "biome": "grassland",
+      "category": "road",
+      "blendGroup": "grass",
+      "encounterFamily": "plains",
+      "walkable": true,
+      "movementCost": 0.9,
+      "tags": [
+        "road",
+        "grass",
+        "trail",
+        "land",
+        "safe"
+      ],
       "source": {
         "x": 896,
         "y": 640,
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 1,
-      "notes": "Unused black atlas slot; ignored by worldgen."
+      "emptyRatio": 0.0002,
+      "notes": "Soft grass trail."
     },
     {
       "row": 6,
@@ -976,7 +1273,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0618,
+      "emptyRatio": 0.0003,
       "notes": "Rocky mountain ground is a blocker."
     },
     {
@@ -1002,34 +1299,58 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0616,
+      "emptyRatio": 0.0079,
       "notes": "Walkable gravel and stone ground."
     },
     {
       "row": 6,
       "col": 2,
-      "empty": true,
+      "empty": false,
+      "id": "rocky_hills",
+      "biome": "mountain",
+      "category": "rock",
+      "blendGroup": "rock",
+      "encounterFamily": "hills",
+      "walkable": true,
+      "movementCost": 1.7,
+      "tags": [
+        "rock",
+        "hills",
+        "land"
+      ],
       "source": {
         "x": 256,
         "y": 768,
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 1,
-      "notes": "Unused black atlas slot; ignored by worldgen."
+      "emptyRatio": 0.0002,
+      "notes": "Centered rocky hill clusters."
     },
     {
       "row": 6,
       "col": 3,
-      "empty": true,
+      "empty": false,
+      "id": "snowy_mountain_ground",
+      "biome": "mountain",
+      "category": "snow_mountain",
+      "blendGroup": "rock",
+      "encounterFamily": "hills",
+      "walkable": false,
+      "movementCost": 99,
+      "tags": [
+        "mountain",
+        "snow",
+        "blocked"
+      ],
       "source": {
         "x": 384,
         "y": 768,
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 1,
-      "notes": "Unused black atlas slot; ignored by worldgen."
+      "emptyRatio": 0.0002,
+      "notes": "Snowy mountain blocker."
     },
     {
       "row": 6,
@@ -1053,47 +1374,86 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0703,
+      "emptyRatio": 0.0002,
       "notes": "Volcano mound is blocked."
     },
     {
       "row": 6,
       "col": 5,
-      "empty": true,
+      "empty": false,
+      "id": "road_corner_se",
+      "biome": "grassland",
+      "category": "road",
+      "blendGroup": "grass",
+      "encounterFamily": "plains",
+      "walkable": true,
+      "movementCost": 0.85,
+      "tags": [
+        "road",
+        "land",
+        "safe",
+        "corner"
+      ],
       "source": {
         "x": 640,
         "y": 768,
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 1,
-      "notes": "Unused black atlas slot; ignored by worldgen."
+      "emptyRatio": 0.0002,
+      "notes": "Dirt road corner."
     },
     {
       "row": 6,
       "col": 6,
-      "empty": true,
+      "empty": false,
+      "id": "road_corner_ne",
+      "biome": "grassland",
+      "category": "road",
+      "blendGroup": "grass",
+      "encounterFamily": "plains",
+      "walkable": true,
+      "movementCost": 0.85,
+      "tags": [
+        "road",
+        "land",
+        "safe",
+        "corner"
+      ],
       "source": {
         "x": 768,
         "y": 768,
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 1,
-      "notes": "Unused black atlas slot; ignored by worldgen."
+      "emptyRatio": 0.0002,
+      "notes": "Dirt road corner."
     },
     {
       "row": 6,
       "col": 7,
-      "empty": true,
+      "empty": false,
+      "id": "road_corner_nw",
+      "biome": "grassland",
+      "category": "road",
+      "blendGroup": "grass",
+      "encounterFamily": "plains",
+      "walkable": true,
+      "movementCost": 0.85,
+      "tags": [
+        "road",
+        "land",
+        "safe",
+        "corner"
+      ],
       "source": {
         "x": 896,
         "y": 768,
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 1,
-      "notes": "Unused black atlas slot; ignored by worldgen."
+      "emptyRatio": 0.0002,
+      "notes": "Dirt road corner."
     },
     {
       "row": 7,
@@ -1116,99 +1476,188 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0684,
+      "emptyRatio": 0.0138,
       "notes": "Lava cracked ground is blocked."
     },
     {
       "row": 7,
       "col": 1,
-      "empty": true,
+      "empty": false,
+      "id": "cooled_lava_rock",
+      "biome": "lava",
+      "category": "lava",
+      "blendGroup": "lava",
+      "encounterFamily": "final",
+      "walkable": false,
+      "movementCost": 99,
+      "tags": [
+        "lava",
+        "rock",
+        "blocked"
+      ],
       "source": {
         "x": 128,
         "y": 896,
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 1,
-      "notes": "Unused black atlas slot; ignored by worldgen."
+      "emptyRatio": 0.0413,
+      "notes": "Cooled lava rocks are blocked."
     },
     {
       "row": 7,
       "col": 2,
-      "empty": true,
+      "empty": false,
+      "id": "volcanic_ash_ground",
+      "biome": "darkland",
+      "category": "ash",
+      "blendGroup": "dark",
+      "encounterFamily": "final",
+      "walkable": true,
+      "movementCost": 1.65,
+      "tags": [
+        "darkland",
+        "ash",
+        "volcanic",
+        "land"
+      ],
       "source": {
         "x": 256,
         "y": 896,
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 1,
-      "notes": "Unused black atlas slot; ignored by worldgen."
+      "emptyRatio": 0.0247,
+      "notes": "Walkable volcanic ash ground."
     },
     {
       "row": 7,
       "col": 3,
-      "empty": true,
+      "empty": false,
+      "id": "lava_rock_transition",
+      "biome": "lava",
+      "category": "lava",
+      "blendGroup": "lava",
+      "encounterFamily": "final",
+      "walkable": false,
+      "movementCost": 99,
+      "tags": [
+        "lava",
+        "rock",
+        "blocked"
+      ],
       "source": {
         "x": 384,
         "y": 896,
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 1,
-      "notes": "Unused black atlas slot; ignored by worldgen."
+      "emptyRatio": 0.0139,
+      "notes": "Lava-to-rock transition is blocked."
     },
     {
       "row": 7,
       "col": 4,
-      "empty": true,
+      "empty": false,
+      "id": "road_t_e",
+      "biome": "grassland",
+      "category": "road",
+      "blendGroup": "grass",
+      "encounterFamily": "plains",
+      "walkable": true,
+      "movementCost": 0.85,
+      "tags": [
+        "road",
+        "land",
+        "safe",
+        "junction"
+      ],
       "source": {
         "x": 512,
         "y": 896,
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 1,
-      "notes": "Unused black atlas slot; ignored by worldgen."
+      "emptyRatio": 0.0002,
+      "notes": "Dirt road T-junction."
     },
     {
       "row": 7,
       "col": 5,
-      "empty": true,
+      "empty": false,
+      "id": "road_t_n",
+      "biome": "grassland",
+      "category": "road",
+      "blendGroup": "grass",
+      "encounterFamily": "plains",
+      "walkable": true,
+      "movementCost": 0.85,
+      "tags": [
+        "road",
+        "land",
+        "safe",
+        "junction"
+      ],
       "source": {
         "x": 640,
         "y": 896,
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 1,
-      "notes": "Unused black atlas slot; ignored by worldgen."
+      "emptyRatio": 0.0002,
+      "notes": "Dirt road T-junction."
     },
     {
       "row": 7,
       "col": 6,
-      "empty": true,
+      "empty": false,
+      "id": "road_t_w",
+      "biome": "grassland",
+      "category": "road",
+      "blendGroup": "grass",
+      "encounterFamily": "plains",
+      "walkable": true,
+      "movementCost": 0.85,
+      "tags": [
+        "road",
+        "land",
+        "safe",
+        "junction"
+      ],
       "source": {
         "x": 768,
         "y": 896,
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 1,
-      "notes": "Unused black atlas slot; ignored by worldgen."
+      "emptyRatio": 0.0002,
+      "notes": "Dirt road T-junction."
     },
     {
       "row": 7,
       "col": 7,
-      "empty": true,
+      "empty": false,
+      "id": "road_dead_end_w",
+      "biome": "grassland",
+      "category": "road",
+      "blendGroup": "grass",
+      "encounterFamily": "plains",
+      "walkable": true,
+      "movementCost": 0.85,
+      "tags": [
+        "road",
+        "land",
+        "safe",
+        "dead_end"
+      ],
       "source": {
         "x": 896,
         "y": 896,
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 1,
-      "notes": "Unused black atlas slot; ignored by worldgen."
+      "emptyRatio": 0.0001,
+      "notes": "Dirt road dead end alternate."
     }
   ],
   "tiles": {
@@ -1234,7 +1683,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0613,
+      "emptyRatio": 0.0002,
       "notes": "Bright open grass."
     },
     "medium_grass": {
@@ -1259,7 +1708,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0603,
+      "emptyRatio": 0.0003,
       "notes": "Medium open grass."
     },
     "dark_grass": {
@@ -1284,7 +1733,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0615,
+      "emptyRatio": 0.0143,
       "notes": "Darker grass variant."
     },
     "flower_meadow_grass": {
@@ -1309,7 +1758,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0615,
+      "emptyRatio": 0.0016,
       "notes": "Flower meadow grass."
     },
     "lush_clover_grass": {
@@ -1335,7 +1784,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0615,
+      "emptyRatio": 0.0007,
       "notes": "Lush clover ground."
     },
     "weeds_grass": {
@@ -1360,7 +1809,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0615,
+      "emptyRatio": 0.0003,
       "notes": "Sparse weed clusters on grass."
     },
     "trampled_grass": {
@@ -1385,7 +1834,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0615,
+      "emptyRatio": 0.0003,
       "notes": "Trampled grass patch."
     },
     "grass_stones": {
@@ -1410,8 +1859,219 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0615,
+      "emptyRatio": 0.0012,
       "notes": "Grass with scattered stones."
+    },
+    "beach_sand": {
+      "row": 1,
+      "col": 0,
+      "empty": false,
+      "id": "beach_sand",
+      "biome": "desert",
+      "category": "coast",
+      "blendGroup": "desert",
+      "encounterFamily": "sand",
+      "walkable": true,
+      "movementCost": 1.15,
+      "tags": [
+        "sand",
+        "beach",
+        "coast",
+        "land"
+      ],
+      "source": {
+        "x": 0,
+        "y": 128,
+        "width": 128,
+        "height": 128
+      },
+      "emptyRatio": 0.0002,
+      "notes": "Clean dry beach sand."
+    },
+    "wet_beach_sand": {
+      "row": 1,
+      "col": 1,
+      "empty": false,
+      "id": "wet_beach_sand",
+      "biome": "desert",
+      "category": "coast",
+      "blendGroup": "desert",
+      "encounterFamily": "sand",
+      "walkable": true,
+      "movementCost": 1.2,
+      "tags": [
+        "sand",
+        "beach",
+        "wet",
+        "coast",
+        "land"
+      ],
+      "source": {
+        "x": 128,
+        "y": 128,
+        "width": 128,
+        "height": 128
+      },
+      "emptyRatio": 0.0016,
+      "notes": "Wet darker beach sand."
+    },
+    "grass_sand_coast": {
+      "row": 1,
+      "col": 2,
+      "empty": false,
+      "id": "grass_sand_coast",
+      "biome": "desert",
+      "category": "coast",
+      "blendGroup": "desert",
+      "encounterFamily": "sand",
+      "walkable": true,
+      "movementCost": 1.2,
+      "tags": [
+        "sand",
+        "grass",
+        "beach",
+        "coast",
+        "land"
+      ],
+      "source": {
+        "x": 256,
+        "y": 128,
+        "width": 128,
+        "height": 128
+      },
+      "emptyRatio": 0.0017,
+      "notes": "Grass-to-sand coast transition."
+    },
+    "sand_water_edge": {
+      "row": 1,
+      "col": 3,
+      "empty": false,
+      "id": "sand_water_edge",
+      "biome": "desert",
+      "category": "coast",
+      "blendGroup": "desert",
+      "encounterFamily": "sand",
+      "walkable": true,
+      "movementCost": 1.25,
+      "tags": [
+        "sand",
+        "beach",
+        "coast",
+        "land"
+      ],
+      "source": {
+        "x": 384,
+        "y": 128,
+        "width": 128,
+        "height": 128
+      },
+      "emptyRatio": 0.0052,
+      "notes": "Sand-to-water straight coast edge."
+    },
+    "sand_water_corner": {
+      "row": 1,
+      "col": 4,
+      "empty": false,
+      "id": "sand_water_corner",
+      "biome": "desert",
+      "category": "coast",
+      "blendGroup": "desert",
+      "encounterFamily": "sand",
+      "walkable": true,
+      "movementCost": 1.25,
+      "tags": [
+        "sand",
+        "beach",
+        "coast",
+        "corner",
+        "land"
+      ],
+      "source": {
+        "x": 512,
+        "y": 128,
+        "width": 128,
+        "height": 128
+      },
+      "emptyRatio": 0.0047,
+      "notes": "Sand-to-water coast corner."
+    },
+    "shallow_water": {
+      "row": 1,
+      "col": 5,
+      "empty": false,
+      "id": "shallow_water",
+      "biome": "water",
+      "category": "water",
+      "blendGroup": "water",
+      "encounterFamily": "water",
+      "walkable": false,
+      "movementCost": 99,
+      "tags": [
+        "water",
+        "shallow",
+        "blocked"
+      ],
+      "source": {
+        "x": 640,
+        "y": 128,
+        "width": 128,
+        "height": 128
+      },
+      "emptyRatio": 0.0002,
+      "notes": "Shallow turquoise water is blocked."
+    },
+    "foamy_shallow_water": {
+      "row": 1,
+      "col": 6,
+      "empty": false,
+      "id": "foamy_shallow_water",
+      "biome": "water",
+      "category": "water",
+      "blendGroup": "water",
+      "encounterFamily": "water",
+      "walkable": false,
+      "movementCost": 99,
+      "tags": [
+        "water",
+        "shallow",
+        "foam",
+        "blocked"
+      ],
+      "source": {
+        "x": 768,
+        "y": 128,
+        "width": 128,
+        "height": 128
+      },
+      "emptyRatio": 0.0003,
+      "notes": "Foamy shallow-water edge is blocked."
+    },
+    "cove_coast": {
+      "row": 1,
+      "col": 7,
+      "empty": false,
+      "id": "cove_coast",
+      "biome": "desert",
+      "category": "coast",
+      "blendGroup": "desert",
+      "encounterFamily": "sand",
+      "walkable": true,
+      "movementCost": 1.25,
+      "tags": [
+        "sand",
+        "beach",
+        "coast",
+        "cove",
+        "land"
+      ],
+      "source": {
+        "x": 896,
+        "y": 128,
+        "width": 128,
+        "height": 128
+      },
+      "emptyRatio": 0.0026,
+      "notes": "Curved cove coast tile."
     },
     "bright_sand": {
       "row": 2,
@@ -1435,7 +2095,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0565,
+      "emptyRatio": 0.0002,
       "notes": "Bright sand."
     },
     "dune_sand": {
@@ -1461,7 +2121,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0609,
+      "emptyRatio": 0.0002,
       "notes": "Wind-shaped dune sand."
     },
     "rocky_sand": {
@@ -1487,7 +2147,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0608,
+      "emptyRatio": 0.0002,
       "notes": "Rocky sand."
     },
     "cracked_dry_earth": {
@@ -1513,7 +2173,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0615,
+      "emptyRatio": 0.0014,
       "notes": "Cracked dry earth."
     },
     "reddish_desert_soil": {
@@ -1539,7 +2199,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0584,
+      "emptyRatio": 0.0003,
       "notes": "Reddish desert soil."
     },
     "cactus_sand": {
@@ -1565,7 +2225,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.061,
+      "emptyRatio": 0.0002,
       "notes": "Cactus sand; walkable with higher movement cost."
     },
     "desert_scrub": {
@@ -1590,8 +2250,34 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.061,
+      "emptyRatio": 0.0002,
       "notes": "Dry scrubland."
+    },
+    "desert_road_crossroads": {
+      "row": 2,
+      "col": 7,
+      "empty": false,
+      "id": "desert_road_crossroads",
+      "biome": "desert",
+      "category": "road",
+      "blendGroup": "desert",
+      "encounterFamily": "sand",
+      "walkable": true,
+      "movementCost": 0.9,
+      "tags": [
+        "road",
+        "sand",
+        "land",
+        "safe"
+      ],
+      "source": {
+        "x": 896,
+        "y": 256,
+        "width": 128,
+        "height": 128
+      },
+      "emptyRatio": 0.0002,
+      "notes": "Sandy dirt path crossroads."
     },
     "clean_snow": {
       "row": 3,
@@ -1614,7 +2300,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0552,
+      "emptyRatio": 0.0002,
       "notes": "Clean snow."
     },
     "packed_snow": {
@@ -1639,7 +2325,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0596,
+      "emptyRatio": 0.0002,
       "notes": "Packed snow."
     },
     "icy_snow": {
@@ -1664,7 +2350,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0599,
+      "emptyRatio": 0.0002,
       "notes": "Icy snow."
     },
     "snow_rocks": {
@@ -1689,7 +2375,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0563,
+      "emptyRatio": 0.0002,
       "notes": "Snow with rocks."
     },
     "frozen_lake_ice": {
@@ -1714,7 +2400,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0605,
+      "emptyRatio": 0.0002,
       "notes": "Frozen lake ice used as walkable frozen ground, not water."
     },
     "cracked_ice": {
@@ -1740,8 +2426,134 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0613,
+      "emptyRatio": 0.0002,
       "notes": "Cracked ice used as walkable frozen ground, not water."
+    },
+    "snowy_forest": {
+      "row": 3,
+      "col": 6,
+      "empty": false,
+      "id": "snowy_forest",
+      "biome": "forest",
+      "category": "snow_forest",
+      "blendGroup": "snow",
+      "encounterFamily": "forest",
+      "walkable": true,
+      "movementCost": 1.7,
+      "tags": [
+        "forest",
+        "snow",
+        "land"
+      ],
+      "source": {
+        "x": 768,
+        "y": 384,
+        "width": 128,
+        "height": 128
+      },
+      "emptyRatio": 0.0002,
+      "notes": "Snow-covered forest tile."
+    },
+    "snow_mountain": {
+      "row": 3,
+      "col": 7,
+      "empty": false,
+      "id": "snow_mountain",
+      "biome": "mountain",
+      "category": "snow_mountain",
+      "blendGroup": "rock",
+      "encounterFamily": "hills",
+      "walkable": false,
+      "movementCost": 99,
+      "tags": [
+        "mountain",
+        "snow",
+        "blocked"
+      ],
+      "source": {
+        "x": 896,
+        "y": 384,
+        "width": 128,
+        "height": 128
+      },
+      "emptyRatio": 0.0175,
+      "notes": "Centered snowy mountain blocker."
+    },
+    "light_forest": {
+      "row": 4,
+      "col": 0,
+      "empty": false,
+      "id": "light_forest",
+      "biome": "forest",
+      "category": "forest",
+      "blendGroup": "grass",
+      "encounterFamily": "forest",
+      "walkable": true,
+      "movementCost": 1.45,
+      "tags": [
+        "forest",
+        "trees",
+        "land"
+      ],
+      "source": {
+        "x": 0,
+        "y": 512,
+        "width": 128,
+        "height": 128
+      },
+      "emptyRatio": 0.0002,
+      "notes": "Light centered forest tile."
+    },
+    "dense_forest": {
+      "row": 4,
+      "col": 1,
+      "empty": false,
+      "id": "dense_forest",
+      "biome": "forest",
+      "category": "forest",
+      "blendGroup": "grass",
+      "encounterFamily": "forest",
+      "walkable": true,
+      "movementCost": 1.65,
+      "tags": [
+        "forest",
+        "trees",
+        "dense",
+        "land"
+      ],
+      "source": {
+        "x": 128,
+        "y": 512,
+        "width": 128,
+        "height": 128
+      },
+      "emptyRatio": 0.0092,
+      "notes": "Dense centered forest tile."
+    },
+    "jungle": {
+      "row": 4,
+      "col": 2,
+      "empty": false,
+      "id": "jungle",
+      "biome": "forest",
+      "category": "jungle",
+      "blendGroup": "grass",
+      "encounterFamily": "forest",
+      "walkable": true,
+      "movementCost": 1.7,
+      "tags": [
+        "forest",
+        "jungle",
+        "land"
+      ],
+      "source": {
+        "x": 256,
+        "y": 512,
+        "width": 128,
+        "height": 128
+      },
+      "emptyRatio": 0.0002,
+      "notes": "Tropical jungle tile."
     },
     "dead_cracked_earth": {
       "row": 4,
@@ -1766,7 +2578,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0616,
+      "emptyRatio": 0.009,
       "notes": "Dead cracked earth."
     },
     "ash_black_ground": {
@@ -1792,7 +2604,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.1097,
+      "emptyRatio": 0.0327,
       "notes": "Ash-black ground."
     },
     "cursed_purple_ground": {
@@ -1818,8 +2630,60 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0641,
+      "emptyRatio": 0.0271,
       "notes": "Cursed purple ground."
+    },
+    "dead_forest": {
+      "row": 4,
+      "col": 6,
+      "empty": false,
+      "id": "dead_forest",
+      "biome": "darkland",
+      "category": "dead_forest",
+      "blendGroup": "dark",
+      "encounterFamily": "final",
+      "walkable": true,
+      "movementCost": 1.75,
+      "tags": [
+        "forest",
+        "darkland",
+        "dead",
+        "land"
+      ],
+      "source": {
+        "x": 768,
+        "y": 512,
+        "width": 128,
+        "height": 128
+      },
+      "emptyRatio": 0.0106,
+      "notes": "Centered dead forest tile."
+    },
+    "ash_forest": {
+      "row": 4,
+      "col": 7,
+      "empty": false,
+      "id": "ash_forest",
+      "biome": "darkland",
+      "category": "ash_forest",
+      "blendGroup": "dark",
+      "encounterFamily": "final",
+      "walkable": true,
+      "movementCost": 1.8,
+      "tags": [
+        "forest",
+        "darkland",
+        "ash",
+        "land"
+      ],
+      "source": {
+        "x": 896,
+        "y": 512,
+        "width": 128,
+        "height": 128
+      },
+      "emptyRatio": 0.0506,
+      "notes": "Centered burned ash forest tile."
     },
     "deep_water": {
       "row": 5,
@@ -1843,8 +2707,189 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0615,
+      "emptyRatio": 0.0145,
       "notes": "Deep water is blocked."
+    },
+    "road_horizontal": {
+      "row": 5,
+      "col": 1,
+      "empty": false,
+      "id": "road_horizontal",
+      "biome": "grassland",
+      "category": "road",
+      "blendGroup": "grass",
+      "encounterFamily": "plains",
+      "walkable": true,
+      "movementCost": 0.85,
+      "tags": [
+        "road",
+        "land",
+        "safe"
+      ],
+      "source": {
+        "x": 128,
+        "y": 640,
+        "width": 128,
+        "height": 128
+      },
+      "emptyRatio": 0.0002,
+      "notes": "Horizontal dirt road."
+    },
+    "road_vertical": {
+      "row": 5,
+      "col": 2,
+      "empty": false,
+      "id": "road_vertical",
+      "biome": "grassland",
+      "category": "road",
+      "blendGroup": "grass",
+      "encounterFamily": "plains",
+      "walkable": true,
+      "movementCost": 0.85,
+      "tags": [
+        "road",
+        "land",
+        "safe"
+      ],
+      "source": {
+        "x": 256,
+        "y": 640,
+        "width": 128,
+        "height": 128
+      },
+      "emptyRatio": 0.0002,
+      "notes": "Vertical dirt road."
+    },
+    "road_corner_sw": {
+      "row": 5,
+      "col": 3,
+      "empty": false,
+      "id": "road_corner_sw",
+      "biome": "grassland",
+      "category": "road",
+      "blendGroup": "grass",
+      "encounterFamily": "plains",
+      "walkable": true,
+      "movementCost": 0.85,
+      "tags": [
+        "road",
+        "land",
+        "safe",
+        "corner"
+      ],
+      "source": {
+        "x": 384,
+        "y": 640,
+        "width": 128,
+        "height": 128
+      },
+      "emptyRatio": 0.0002,
+      "notes": "Dirt road corner."
+    },
+    "road_t_s": {
+      "row": 5,
+      "col": 4,
+      "empty": false,
+      "id": "road_t_s",
+      "biome": "grassland",
+      "category": "road",
+      "blendGroup": "grass",
+      "encounterFamily": "plains",
+      "walkable": true,
+      "movementCost": 0.85,
+      "tags": [
+        "road",
+        "land",
+        "safe",
+        "junction"
+      ],
+      "source": {
+        "x": 512,
+        "y": 640,
+        "width": 128,
+        "height": 128
+      },
+      "emptyRatio": 0.0002,
+      "notes": "Dirt road T-junction."
+    },
+    "road_crossroads": {
+      "row": 5,
+      "col": 5,
+      "empty": false,
+      "id": "road_crossroads",
+      "biome": "grassland",
+      "category": "road",
+      "blendGroup": "grass",
+      "encounterFamily": "plains",
+      "walkable": true,
+      "movementCost": 0.85,
+      "tags": [
+        "road",
+        "land",
+        "safe",
+        "junction"
+      ],
+      "source": {
+        "x": 640,
+        "y": 640,
+        "width": 128,
+        "height": 128
+      },
+      "emptyRatio": 0.0002,
+      "notes": "Dirt road crossroads."
+    },
+    "road_dead_end_e": {
+      "row": 5,
+      "col": 6,
+      "empty": false,
+      "id": "road_dead_end_e",
+      "biome": "grassland",
+      "category": "road",
+      "blendGroup": "grass",
+      "encounterFamily": "plains",
+      "walkable": true,
+      "movementCost": 0.85,
+      "tags": [
+        "road",
+        "land",
+        "safe",
+        "dead_end"
+      ],
+      "source": {
+        "x": 768,
+        "y": 640,
+        "width": 128,
+        "height": 128
+      },
+      "emptyRatio": 0.0002,
+      "notes": "Dirt road dead end."
+    },
+    "soft_grass_trail": {
+      "row": 5,
+      "col": 7,
+      "empty": false,
+      "id": "soft_grass_trail",
+      "biome": "grassland",
+      "category": "road",
+      "blendGroup": "grass",
+      "encounterFamily": "plains",
+      "walkable": true,
+      "movementCost": 0.9,
+      "tags": [
+        "road",
+        "grass",
+        "trail",
+        "land",
+        "safe"
+      ],
+      "source": {
+        "x": 896,
+        "y": 640,
+        "width": 128,
+        "height": 128
+      },
+      "emptyRatio": 0.0002,
+      "notes": "Soft grass trail."
     },
     "rocky_mountain_ground": {
       "row": 6,
@@ -1868,7 +2913,7 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0618,
+      "emptyRatio": 0.0003,
       "notes": "Rocky mountain ground is a blocker."
     },
     "gravel_stone_ground": {
@@ -1894,8 +2939,58 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0616,
+      "emptyRatio": 0.0079,
       "notes": "Walkable gravel and stone ground."
+    },
+    "rocky_hills": {
+      "row": 6,
+      "col": 2,
+      "empty": false,
+      "id": "rocky_hills",
+      "biome": "mountain",
+      "category": "rock",
+      "blendGroup": "rock",
+      "encounterFamily": "hills",
+      "walkable": true,
+      "movementCost": 1.7,
+      "tags": [
+        "rock",
+        "hills",
+        "land"
+      ],
+      "source": {
+        "x": 256,
+        "y": 768,
+        "width": 128,
+        "height": 128
+      },
+      "emptyRatio": 0.0002,
+      "notes": "Centered rocky hill clusters."
+    },
+    "snowy_mountain_ground": {
+      "row": 6,
+      "col": 3,
+      "empty": false,
+      "id": "snowy_mountain_ground",
+      "biome": "mountain",
+      "category": "snow_mountain",
+      "blendGroup": "rock",
+      "encounterFamily": "hills",
+      "walkable": false,
+      "movementCost": 99,
+      "tags": [
+        "mountain",
+        "snow",
+        "blocked"
+      ],
+      "source": {
+        "x": 384,
+        "y": 768,
+        "width": 128,
+        "height": 128
+      },
+      "emptyRatio": 0.0002,
+      "notes": "Snowy mountain blocker."
     },
     "volcano_mound": {
       "row": 6,
@@ -1919,8 +3014,86 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0703,
+      "emptyRatio": 0.0002,
       "notes": "Volcano mound is blocked."
+    },
+    "road_corner_se": {
+      "row": 6,
+      "col": 5,
+      "empty": false,
+      "id": "road_corner_se",
+      "biome": "grassland",
+      "category": "road",
+      "blendGroup": "grass",
+      "encounterFamily": "plains",
+      "walkable": true,
+      "movementCost": 0.85,
+      "tags": [
+        "road",
+        "land",
+        "safe",
+        "corner"
+      ],
+      "source": {
+        "x": 640,
+        "y": 768,
+        "width": 128,
+        "height": 128
+      },
+      "emptyRatio": 0.0002,
+      "notes": "Dirt road corner."
+    },
+    "road_corner_ne": {
+      "row": 6,
+      "col": 6,
+      "empty": false,
+      "id": "road_corner_ne",
+      "biome": "grassland",
+      "category": "road",
+      "blendGroup": "grass",
+      "encounterFamily": "plains",
+      "walkable": true,
+      "movementCost": 0.85,
+      "tags": [
+        "road",
+        "land",
+        "safe",
+        "corner"
+      ],
+      "source": {
+        "x": 768,
+        "y": 768,
+        "width": 128,
+        "height": 128
+      },
+      "emptyRatio": 0.0002,
+      "notes": "Dirt road corner."
+    },
+    "road_corner_nw": {
+      "row": 6,
+      "col": 7,
+      "empty": false,
+      "id": "road_corner_nw",
+      "biome": "grassland",
+      "category": "road",
+      "blendGroup": "grass",
+      "encounterFamily": "plains",
+      "walkable": true,
+      "movementCost": 0.85,
+      "tags": [
+        "road",
+        "land",
+        "safe",
+        "corner"
+      ],
+      "source": {
+        "x": 896,
+        "y": 768,
+        "width": 128,
+        "height": 128
+      },
+      "emptyRatio": 0.0002,
+      "notes": "Dirt road corner."
     },
     "lava_cracked_ground": {
       "row": 7,
@@ -1943,8 +3116,188 @@
         "width": 128,
         "height": 128
       },
-      "emptyRatio": 0.0684,
+      "emptyRatio": 0.0138,
       "notes": "Lava cracked ground is blocked."
+    },
+    "cooled_lava_rock": {
+      "row": 7,
+      "col": 1,
+      "empty": false,
+      "id": "cooled_lava_rock",
+      "biome": "lava",
+      "category": "lava",
+      "blendGroup": "lava",
+      "encounterFamily": "final",
+      "walkable": false,
+      "movementCost": 99,
+      "tags": [
+        "lava",
+        "rock",
+        "blocked"
+      ],
+      "source": {
+        "x": 128,
+        "y": 896,
+        "width": 128,
+        "height": 128
+      },
+      "emptyRatio": 0.0413,
+      "notes": "Cooled lava rocks are blocked."
+    },
+    "volcanic_ash_ground": {
+      "row": 7,
+      "col": 2,
+      "empty": false,
+      "id": "volcanic_ash_ground",
+      "biome": "darkland",
+      "category": "ash",
+      "blendGroup": "dark",
+      "encounterFamily": "final",
+      "walkable": true,
+      "movementCost": 1.65,
+      "tags": [
+        "darkland",
+        "ash",
+        "volcanic",
+        "land"
+      ],
+      "source": {
+        "x": 256,
+        "y": 896,
+        "width": 128,
+        "height": 128
+      },
+      "emptyRatio": 0.0247,
+      "notes": "Walkable volcanic ash ground."
+    },
+    "lava_rock_transition": {
+      "row": 7,
+      "col": 3,
+      "empty": false,
+      "id": "lava_rock_transition",
+      "biome": "lava",
+      "category": "lava",
+      "blendGroup": "lava",
+      "encounterFamily": "final",
+      "walkable": false,
+      "movementCost": 99,
+      "tags": [
+        "lava",
+        "rock",
+        "blocked"
+      ],
+      "source": {
+        "x": 384,
+        "y": 896,
+        "width": 128,
+        "height": 128
+      },
+      "emptyRatio": 0.0139,
+      "notes": "Lava-to-rock transition is blocked."
+    },
+    "road_t_e": {
+      "row": 7,
+      "col": 4,
+      "empty": false,
+      "id": "road_t_e",
+      "biome": "grassland",
+      "category": "road",
+      "blendGroup": "grass",
+      "encounterFamily": "plains",
+      "walkable": true,
+      "movementCost": 0.85,
+      "tags": [
+        "road",
+        "land",
+        "safe",
+        "junction"
+      ],
+      "source": {
+        "x": 512,
+        "y": 896,
+        "width": 128,
+        "height": 128
+      },
+      "emptyRatio": 0.0002,
+      "notes": "Dirt road T-junction."
+    },
+    "road_t_n": {
+      "row": 7,
+      "col": 5,
+      "empty": false,
+      "id": "road_t_n",
+      "biome": "grassland",
+      "category": "road",
+      "blendGroup": "grass",
+      "encounterFamily": "plains",
+      "walkable": true,
+      "movementCost": 0.85,
+      "tags": [
+        "road",
+        "land",
+        "safe",
+        "junction"
+      ],
+      "source": {
+        "x": 640,
+        "y": 896,
+        "width": 128,
+        "height": 128
+      },
+      "emptyRatio": 0.0002,
+      "notes": "Dirt road T-junction."
+    },
+    "road_t_w": {
+      "row": 7,
+      "col": 6,
+      "empty": false,
+      "id": "road_t_w",
+      "biome": "grassland",
+      "category": "road",
+      "blendGroup": "grass",
+      "encounterFamily": "plains",
+      "walkable": true,
+      "movementCost": 0.85,
+      "tags": [
+        "road",
+        "land",
+        "safe",
+        "junction"
+      ],
+      "source": {
+        "x": 768,
+        "y": 896,
+        "width": 128,
+        "height": 128
+      },
+      "emptyRatio": 0.0002,
+      "notes": "Dirt road T-junction."
+    },
+    "road_dead_end_w": {
+      "row": 7,
+      "col": 7,
+      "empty": false,
+      "id": "road_dead_end_w",
+      "biome": "grassland",
+      "category": "road",
+      "blendGroup": "grass",
+      "encounterFamily": "plains",
+      "walkable": true,
+      "movementCost": 0.85,
+      "tags": [
+        "road",
+        "land",
+        "safe",
+        "dead_end"
+      ],
+      "source": {
+        "x": 896,
+        "y": 896,
+        "width": 128,
+        "height": 128
+      },
+      "emptyRatio": 0.0001,
+      "notes": "Dirt road dead end alternate."
     }
   }
 }

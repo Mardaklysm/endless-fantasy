@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { CHARACTER_SPRITES, type CharacterSpriteClass, type CharacterSpriteFrameName } from "./data/characterSprites";
 import atlasV3ImageUrl from "./assets/world/atlas_v3.png";
+import pierAtlasImageUrl from "./assets/world/pier_atlas.png";
 import atlasV3Manifest from "./assets/world/atlasV3.manifest.json" with { type: "json" };
 import {
   ATLAS_V3_SOURCE_INSET,
@@ -358,6 +359,7 @@ const TOWN_SERVICES: TownServiceDef[] = [
 
 const ASSET_PATHS = [
   ["atlas_v3", "world/atlas_v3.png"],
+  ["pier_atlas", "world/pier_atlas.png"],
   ["tile_plains", "tiles/world/plains.png"],
   ["tile_forest", "tiles/world/forest.png"],
   ["tile_hills", "tiles/world/hills.png"],
@@ -564,7 +566,8 @@ const ASSET_V2_PATH_OVERRIDES: Partial<Record<AssetKey, string>> = {
 };
 
 const EXPLICIT_ASSET_URLS: Partial<Record<AssetKey, string>> = {
-  atlas_v3: atlasV3ImageUrl
+  atlas_v3: atlasV3ImageUrl,
+  pier_atlas: pierAtlasImageUrl
 };
 
 const ASSET_URLS = Object.fromEntries(
@@ -577,6 +580,18 @@ const ASSET_URLS = Object.fromEntries(
     ];
   })
 ) as Partial<Record<AssetKey, string>>;
+
+const PIER_ATLAS = {
+  textureKey: "pier_atlas",
+  columns: 4,
+  rows: 4,
+  tileWidth: 256,
+  tileHeight: 256,
+  cells: {
+    horizontal: { row: 0, col: 0 },
+    vertical: { row: 0, col: 1 }
+  }
+} as const;
 
 const DUNGEON_FLOOR_TEXTURES: Record<string, AssetKey> = {
   mossCave: "dungeon_floor_moss",
@@ -5032,11 +5047,32 @@ Statuses: ${statuses}`;
       if (!inView(bridge)) continue;
       const sx = bridge.x * TILE - tileCam.x;
       const sy = bridge.y * TILE - tileCam.y;
+      if (this.drawPierDockTile(bridge, sx, sy)) continue;
       const color = bridge.material === "stone" ? 0xa69b86 : 0x9a6a3d;
       this.g.fillStyle(0x07101d, 0.35).fillRect(sx + 5, sy + 5, TILE - 10, TILE - 10);
       this.g.fillStyle(color, 0.95).fillRect(sx + 7, sy + 12, TILE - 14, 8);
       this.g.lineStyle(1, 0xffefbd, 0.65).lineBetween(sx + 8, sy + 16, sx + TILE - 8, sy + 16);
     }
+  }
+
+  private drawPierDockTile(bridge: { orientation: "horizontal" | "vertical"; material: "wood" | "stone" }, sx: number, sy: number): boolean {
+    if (!this.hasTexture(PIER_ATLAS.textureKey)) return false;
+    const cell = bridge.orientation === "vertical" ? PIER_ATLAS.cells.vertical : PIER_ATLAS.cells.horizontal;
+    this.drawCroppedTexture(
+      PIER_ATLAS.textureKey,
+      sx,
+      sy,
+      cell.col * PIER_ATLAS.tileWidth,
+      cell.row * PIER_ATLAS.tileHeight,
+      PIER_ATLAS.tileWidth,
+      PIER_ATLAS.tileHeight,
+      TILE,
+      TILE,
+      LAYER_OBJECT_IMAGE,
+      1,
+      bridge.material === "stone" ? 0xb9b0a1 : undefined
+    );
+    return true;
   }
 
   private rebuildWorldTerrainCache() {

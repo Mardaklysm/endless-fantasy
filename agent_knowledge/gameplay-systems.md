@@ -11,14 +11,14 @@
 - Shift keeps faster exploration movement, but still advances one completed tile step at a time.
 - Visual position interpolates only during the active step. Gameplay position, encounters, location entry, town exits, and dungeon triggers commit when the destination tile is reached.
 - Exploration collision checks the destination tile center, not the full character sprite rectangle.
-- Terrain uses the 29 non-empty `atlas_v3` tile IDs in `src/data/worldTiles.ts`, grouped by biome, walkability, movement cost, and tags. The 35 mostly-black atlas cells are unused slots and are never gameplay tiles.
+- Terrain uses the 64 classified `atlas_v3` tile IDs in `src/data/worldTiles.ts`, grouped by biome, walkability, movement cost, and tags.
 - World collision uses centralized `isWorldTileWalkable(tileId)` from the tile manifest.
 - Deep water, lava, volcanoes, and blocked mountain tiles are not walkable. Boat travel does not make raw water walkable; harbors teleport between island harbor positions.
 - Grass, desert/dryland, snow/ice ground, dark ground, gravel, and carved POI footprints are walkable.
 - Generated overworld edges are deep water, and land must not touch the outer map border.
 - The player sprite uses the same compact doubled map size on the world map, in towns, and in dungeons; this is visual only and does not change collision or movement.
 - The `atlas_v3_archipelago_world` generator creates at least three named islands: Greenhaven (starter), Coralreach (tropical/pirate/ruins), and Ashfang Isle (volcanic/dangerous). It stores island id, name, tier, theme, bounds, local tile map, town position, harbor position, dungeon positions, and landmark positions.
-- The active atlas lacks distinct shallow-water/road/harbor terrain IDs, so the generator uses existing atlas-v3 tiles as fallbacks: deep water for base ocean, sand for beaches, grass/dark grass for grass/forest hooks, gravel/rock/lava for hills/mountains/volcanic terrain, and trampled grass for roads. Shallow water, sea routes, reefs, and docks are tracked as generated overlay coordinates and drawn above the terrain cache.
+- The active atlas includes distinct beach/coast, shallow-water, forest/jungle, road, mountain, darkland, and volcanic terrain IDs. The generator paints shallow water as blocked water terrain, orients road tiles from their neighbor connections, and uses `src/assets/world/pier_atlas.png` for generated harbor dock overlays. Sea routes and optional ocean detail hints remain lightweight overlays.
 - Each island has a town, harbor, at least one dungeon, roads between important points, and several landmarks such as shipwrecks, shrines, hidden chests, monster nests, ruins, caves, resource nodes, merchants, or ancient doors.
 - Overworld locations use larger 3x3-ish footprints for rendering and entry. The terrain under each footprint is carved to walkable atlas-v3 land so the player can approach and enter naturally.
 - Towns/dungeons/gates/final locations enter automatically when crossed. Harbor and landmark footprints are overworld interactions that open travel, rewards, shops, healing, lore, or optional fights.
@@ -256,7 +256,7 @@ Other QoL:
 
 ## Known Gaps
 
-- No automated tests.
+- No automated browser E2E or balance simulation tests.
 - No visual spell/attack animation timing system yet.
 - Mouse menu support is minimal.
 - Item/equipment/relic icons are loaded but not yet displayed in menus/HUD.

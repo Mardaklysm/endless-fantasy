@@ -27,8 +27,7 @@ This runs `tools/worldgen/test_worldgen.mjs`. It validates the active `atlas_v3`
 - runtime atlas `src/assets/world/atlas_v3.png` exists and is a 1024x1024 PNG
 - active runtime metadata points to `atlas_v3`
 - the atlas is an 8x8 grid with 128x128 square source cells
-- the manifest has 29 non-empty tiles and 35 mostly-black empty cells
-- empty atlas cells are not tile IDs and are not present in worldgen pools
+- the manifest has 64 non-empty terrain tiles and 0 active empty cells
 - every non-empty source rectangle uses exact 8x8 grid math and stays inside bounds
 - `ATLAS_V3_SOURCE_INSET` remains within each 128x128 source cell and is easy to test with values 1 through 4
 - inset source rectangle calculation is covered with an explicit inset-2 sample and with the active runtime inset
@@ -42,7 +41,7 @@ This runs `tools/worldgen/test_worldgen.mjs`. It validates the active `atlas_v3`
 - water tiles are not walkable
 - blocked mountain, volcano, and lava tiles are not walkable
 - generated world edges are a deep-water ocean border
-- generated worlds include roads, shallow-water tracking, docks/bridges, sea routes, beaches, forest/jungle biome hooks, reefs/ocean details, and no empty-cell references
+- generated worlds include oriented roads, shallow-water terrain/tracking, pier-atlas docks/bridges, sea routes, beaches/coasts, forest/jungle biome hooks, reefs/ocean details, and no empty-cell references
 - same seed reproduces the same world
 - different seeds produce different tile grids
 
@@ -93,7 +92,7 @@ For the active `atlas_v3` overworld atlas, run after changing `D:\Projects\new_a
 npm run import:atlas-v3
 ```
 
-Check `src/assets/world/atlas_v3.png`, `src/assets/world/atlasV3.manifest.json`, `docs/debug/world-atlas-v3/atlas-v3-labeled.png`, and `docs/debug/world-atlas-v3/atlas-v3-import-report.md`. Black/near-black cells are unused slots only; do not chroma-key black or classify empty slots as gameplay tiles.
+Check `src/assets/world/atlas_v3.png`, `src/assets/world/atlasV3.manifest.json`, `docs/debug/world-atlas-v3/atlas-v3-labeled.png`, and `docs/debug/world-atlas-v3/atlas-v3-import-report.md`. The current atlas classifies all 64 cells as terrain. Do not chroma-key black or treat black pixels as transparency.
 
 For the legacy 10x10 overworld atlas, run only if intentionally regenerating that archived asset:
 
@@ -170,7 +169,7 @@ Expected:
 - Confirm movement stops with the leader's feet/shadow on each tile center, not at the tile's bottom edge.
 - Confirm collision does not jitter or leave the player visually/logically between tiles.
 - Confirm the overworld leader remains readable when standing on a town/location marker.
-- Confirm `atlas_v3` terrain shows no unused black cells; dark seams can come from actual atlas cell edge pixels and should not be debug grid overlays.
+- Confirm `atlas_v3` terrain uses the new coast, road, shallow-water, forest, and mountain cells; dark seams can come from actual atlas cell edge pixels and should not be debug grid overlays.
 - Confirm water blocks movement while generated roads suppress encounters and harbors enable boat travel.
 - At Greenhaven Harbor, confirm Coralreach costs 10 gold, deducts gold, moves the player to Coralreach harbor, and can return by harbor.
 - Confirm new games produce different world seeds and load restores the same saved world.

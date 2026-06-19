@@ -67,9 +67,9 @@ Ignored/generated folders:
 - Asset texture key/path maps and renderer lookup maps for terrain, locations, dungeons, enemies, portraits, and NPCs.
 - Data tables: `ITEMS`, `SPELLS`, `WEAPONS`, `ARMORS`, `ENEMIES`, `WORLD_TABLES`.
 - Imported class sprite manifest from `src/data/characterSprites.ts` for fighter/priest/wizard frame rectangles, anchors, and source metadata.
-- Imported world tile manifest from `src/data/worldTiles.ts` for the active `atlas_v3` overworld atlas, 8x8 source rectangles, shared source-edge inset, empty-cell exclusion, tile IDs, walkability, movement cost, encounter family, and tags.
+- Imported world tile manifest from `src/data/worldTiles.ts` for the active `atlas_v3` overworld atlas, 8x8 source rectangles, shared source-edge inset, tile IDs, walkability, movement cost, encounter family, and tags. The current atlas has 64 classified terrain cells.
 - `src/world/seededRng.ts`: deterministic RNG/hash/noise helpers shared by map and dungeon generation.
-- `src/world/worldGenerator.ts`: seeded deterministic `atlas_v3_archipelago_world` generation. It starts from ocean, builds three irregular islands (Greenhaven, Coralreach, Ashfang Isle), tracks island metadata/tile maps, places towns/harbors/dungeons/landmarks, carves roads, records shallow-water/coast detail, sea routes, dock markers, and validates island-local reachability.
+- `src/world/worldGenerator.ts`: seeded deterministic `atlas_v3_archipelago_world` generation. It starts from ocean, builds three irregular islands (Greenhaven, Coralreach, Ashfang Isle), tracks island metadata/tile maps, places towns/harbors/dungeons/landmarks, carves oriented roads, paints beach/coast and shallow-water terrain, records sea routes and dock markers, and validates island-local reachability.
 - `src/world/dungeonGenerator.ts`: deterministic room-and-corridor dungeon floor generation from `worldSeed + dungeonId + tier`, including entrance/stairs, chests, switch/gate, and boss placement.
 - `SynthAudio`: WebAudio helper for generated music loops and sound effects.
 - `CrystalOathScene`: main Phaser scene containing game state, input handling, map movement, battles, menus, save/load, and rendering.
@@ -123,7 +123,7 @@ The scene keeps generated fallback drawing for missing textures. It also tracks 
 
 Fighter/priest/wizard class sprites are normalized 5x2 transparent sheets in `assets_v2/characters/classes/`. Runtime rendering selects fixed manifest cells and positions each crop by manifest `bodyCenterX` and `feetBaselineY`, so walk and attack frames share a stable body anchor. The old Arlen/Mira/Kael tiny map/battle PNGs are excluded from the runtime asset glob.
 
-Overworld rendering uses the active `atlas_v3` tileset at `src/assets/world/atlas_v3.png` plus the imported manifest `src/assets/world/atlasV3.manifest.json`. `drawWorldTile` and the terrain cache crop valid 8x8 atlas cell rectangles inward with `ATLAS_V3_SOURCE_INSET = 3` via `atlasV3SourceRectWithInset`, then draw the clean interior into the full 32 layout pixel destination tile, scaled to 64 canvas pixels by the Full HD render scale. Black/empty atlas cells are not tile IDs and must not be generated or drawn. The classic special tileset and old generated 10x10 atlas are not active runtime terrain.
+Overworld rendering uses the active `atlas_v3` tileset at `src/assets/world/atlas_v3.png` plus the imported manifest `src/assets/world/atlasV3.manifest.json`. `drawWorldTile` and the terrain cache crop valid 8x8 atlas cell rectangles inward with `ATLAS_V3_SOURCE_INSET = 3` via `atlasV3SourceRectWithInset`, then draw the clean interior into the full 32 layout pixel destination tile, scaled to 64 canvas pixels by the Full HD render scale. All 64 atlas cells are active terrain IDs. The classic special tileset and old generated 10x10 atlas are not active runtime terrain.
 
 Generated overworld terrain is cached as a Phaser canvas texture when a world seed/layout is built. The cache draws each placed atlas tile with the same inset source rectangle used by the fallback visible-tile path. There is no runtime post-placement seam repair, same-tile softening, water seam blend, intersection/corner softening, or mutation of cached map pixels with neighboring terrain colors. Collision, walkability, POIs, and tile IDs remain unchanged.
 
@@ -133,7 +133,7 @@ Texture filtering is per asset family: battle backgrounds use linear filtering a
 
 New games call the seeded archipelago generator. The generated world includes the tile grid, island ids per tile, island records, POI coordinates, start position, harbor docks, shallow-water/detail coordinates, sea routes, entry triggers, and validation result. `CrystalOathScene.locations()` adapts generated POIs back into town/dungeon/gate/final entry behavior and also exposes harbor/landmark overworld interactions.
 
-The terrain cache still draws atlas-v3 base tiles only. `drawWorldOverlays` draws lightweight shallow-water highlights, reef/rock details, route dots, and dock/bridge hints over the cached map so ocean detail remains visible without modifying atlas pixels.
+The terrain cache still draws atlas-v3 base tiles only. Shallow water is now an atlas tile; `drawWorldOverlays` adds route dots, optional ocean detail hints, and pier-atlas dock/bridge cells over the cached map without modifying atlas pixels.
 
 Battle rendering is split into helper sections:
 

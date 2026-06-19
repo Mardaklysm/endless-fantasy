@@ -55,8 +55,8 @@ function validateAtlasV3() {
   assert(ATLAS_V3_MANIFEST.cells.length === 64, `Manifest has ${ATLAS_V3_MANIFEST.cells.length} cells, expected 64.`);
   assert(ATLAS_V3_CELLS.length === 64, `Runtime cell list has ${ATLAS_V3_CELLS.length} cells, expected 64.`);
   assert(ATLAS_V3_NON_EMPTY_CELLS.length === WORLD_TILE_DEFINITIONS.length, "Non-empty manifest cells do not match tile definitions.");
-  assert(ATLAS_V3_NON_EMPTY_CELLS.length === 29, `Expected 29 non-empty atlas_v3 cells, got ${ATLAS_V3_NON_EMPTY_CELLS.length}.`);
-  assert(ATLAS_V3_EMPTY_CELLS.length === 35, `Expected 35 empty atlas_v3 cells, got ${ATLAS_V3_EMPTY_CELLS.length}.`);
+  assert(ATLAS_V3_NON_EMPTY_CELLS.length === 64, `Expected 64 non-empty atlas_v3 cells, got ${ATLAS_V3_NON_EMPTY_CELLS.length}.`);
+  assert(ATLAS_V3_EMPTY_CELLS.length === 0, `Expected 0 empty atlas_v3 cells, got ${ATLAS_V3_EMPTY_CELLS.length}.`);
 
   const seenIds = new Set();
   for (const cell of ATLAS_V3_CELLS) {
@@ -79,10 +79,15 @@ function validateAtlasV3() {
   }
 
   assert(!isWorldTileWalkable(WORLD_TILE_IDS.deepWater), "deep_water must be blocked.");
+  assert(!isWorldTileWalkable(WORLD_TILE_IDS.shallowWater), "shallow_water must be blocked.");
+  assert(!isWorldTileWalkable(WORLD_TILE_IDS.foamyShallowWater), "foamy_shallow_water must be blocked.");
   assert(!isWorldTileWalkable(WORLD_TILE_IDS.rockyMountainGround), "rocky_mountain_ground must be blocked.");
   assert(!isWorldTileWalkable(WORLD_TILE_IDS.volcanoMound), "volcano_mound must be blocked.");
   assert(!isWorldTileWalkable(WORLD_TILE_IDS.lavaCrackedGround), "lava_cracked_ground must be blocked.");
   assert(isWorldTileWalkable(WORLD_TILE_IDS.gravelStoneGround), "gravel_stone_ground must be walkable.");
+  assert(isWorldTileWalkable(WORLD_TILE_IDS.roadHorizontal), "road_horizontal must be walkable.");
+  assert(isWorldTileWalkable(WORLD_TILE_IDS.beachSand), "beach_sand must be walkable.");
+  assert(isWorldTileWalkable(WORLD_TILE_IDS.lightForest), "light_forest must be walkable.");
 }
 
 function validateAtlasV3SourceInset() {
