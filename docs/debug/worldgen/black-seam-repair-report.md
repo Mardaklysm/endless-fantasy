@@ -1,25 +1,34 @@
 # Black Seam Repair Report
 
 Mode: `black_seam_repair`
-Seed: `runtime-alignment-fix-v1`
+Seed: `seam-repair-v2`
 Map size: 96x64
 Tile size: 32px
 Seam search radius: 4px
 seamSearchWidth: 9px
 seamWriteWidth: 9px
 Intersection search radius: 5px
-Near-black threshold: luminance < 32
+Near-black threshold: luminance < 38
+Clean sample min luminance: 20
+Relative darkness threshold: 26
 minEdgeSampleInset: 3px
-maxEdgeSampleInset: 6px
-replacementMode: dual-side-mix
+maxEdgeSampleInset: 8px
+replacementMode: clean-neighbor-dual-mix
 Pixels inspected: 4217049
-Pixels replaced: 389515
-replacedPixelCount: 389515
-Replacement percentage: 6.1912%
-replacedPixelPercent: 6.1912%
-Vertical seam pixels repaired: 246573
-Horizontal seam pixels repaired: 245304
-Intersection pixels repaired: 126928
+Pixels replaced: 455664
+replacedPixelCount: 455664
+Replacement percentage: 7.2426%
+replacedPixelPercent: 7.2426%
+Vertical seam pixels repaired: 270588
+Horizontal seam pixels repaired: 266086
+Corner pixels repaired: 157660
+Water seam pixels repaired: 11752
+Same-tile seam pixels repaired: 495148
+One-sided fallbacks: 0
+
+The old seam pixel is only used for candidate detection and never as a color source.
+Replacement colors are always mixed from clean interior samples of neighboring tiles.
+
 Enabled: true
 Debug view: false
 Max replacement ratio guard: 12.00%

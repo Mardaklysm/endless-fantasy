@@ -21,6 +21,7 @@ import {
   MAX_EDGE_SAMPLE_INSET,
   MIN_EDGE_SAMPLE_INSET,
   NEAR_BLACK_LUMINANCE_THRESHOLD,
+  RELATIVE_DARKNESS_THRESHOLD,
   SEAM_SEARCH_RADIUS,
   repairBlackSeamsImageData
 } from "../../src/world/terrainBlending.ts";
@@ -96,8 +97,9 @@ function validateBlackSeamRepairMetadata() {
   assert(BLACK_SEAM_REPAIR_DEV_OPTIONS.debugView === false, "Black seam repair debug view should be off by default.");
   assert(SEAM_SEARCH_RADIUS === 4, `Expected seam search radius 4, got ${SEAM_SEARCH_RADIUS}.`);
   assert(MIN_EDGE_SAMPLE_INSET === 3, `Expected min edge sample inset 3, got ${MIN_EDGE_SAMPLE_INSET}.`);
-  assert(MAX_EDGE_SAMPLE_INSET === 6, `Expected max edge sample inset 6, got ${MAX_EDGE_SAMPLE_INSET}.`);
-  assert(NEAR_BLACK_LUMINANCE_THRESHOLD === 32, `Expected near-black threshold 32, got ${NEAR_BLACK_LUMINANCE_THRESHOLD}.`);
+  assert(MAX_EDGE_SAMPLE_INSET === 8, `Expected max edge sample inset 8, got ${MAX_EDGE_SAMPLE_INSET}.`);
+  assert(NEAR_BLACK_LUMINANCE_THRESHOLD === 38, `Expected near-black threshold 38, got ${NEAR_BLACK_LUMINANCE_THRESHOLD}.`);
+  assert(RELATIVE_DARKNESS_THRESHOLD === 26, `Expected relative darkness threshold 26, got ${RELATIVE_DARKNESS_THRESHOLD}.`);
   assert(BLACK_SEAM_REPAIR_DEV_OPTIONS.seamSearchRadius === SEAM_SEARCH_RADIUS, "Black seam repair default search radius mismatch.");
   assert(BLACK_SEAM_REPAIR_DEV_OPTIONS.minEdgeSampleInset === MIN_EDGE_SAMPLE_INSET, "Black seam repair default min edge inset mismatch.");
   assert(BLACK_SEAM_REPAIR_DEV_OPTIONS.maxEdgeSampleInset === MAX_EDGE_SAMPLE_INSET, "Black seam repair default max edge inset mismatch.");
@@ -191,6 +193,10 @@ function validateBlackSeamRepair() {
   validateSameTileSeamRepair();
   validateDarkTerrainSafety();
   validateDisabledRepairIsNoop();
+  validateWaterVerticalLineRepair();
+  validateWaterSameTileSeamRepair();
+  validateOldPixelNotUsedAsSource();
+  validateMaskIsThinLines();
 }
 
 function validateOnlyBlackSeamPixelsChange() {
@@ -416,6 +422,172 @@ function assertPixelsEqual(a, b, x, y, message) {
 
 function assertColorEquals(actual, expected, message) {
   assert(actual[0] === expected[0] && actual[1] === expected[1] && actual[2] === expected[2], `${message} Got ${actual.join(",")}, expected ${expected.slice(0, 3).join(",")}.`);
+}
+
+// ─── New tests for improved seam repair ──────────────────────────────────
+
+function validateWaterVerticalLineRepair() {
+  // Simulate water tiles with a dark-but-not-black vertical seam line.
+  // The dark line should be detected via relative darkness, not just near-black.
+  const tileSize = 32;
+  const seamX = tileSize;
+  const waterBase = [30, 90, 150, 255];   // dark blue water
+  const seamDark = [15, 55, 105, 255];     // darker seam line (not pure black)
+  const image = makeTwoTileImage(tileSize, waterBase, waterBase);
+  // Draw a 3px darker vertical line at the seam
+  fillRect(image, seamX - 1, 0, 3, tileSize, seamDark);
+  const before = cloneImage(image);
+
+  const report = repairBlackSeamsImageData(image, [[WORLD_TILE_IDS.deepWater, WORLD_TILE_IDS.deepWater]], {
+    seed: "water-vertical-line",
+    tileSize,
+    captureMask: true,
+    enabled: true
+  });
+
+  // The dark 3px seam line should be repaired
+  assert(report.verticalSeamReplacementCount > 0, "Water vertical seam had no repairs.");
+  assert(report.waterSeamReplacementCount > 0, "Water seam replacement counter not incremented.");
+
+  // Verify the seam pixels were actually changed (not left dark)
+  const repairedSeamLuminances = [];
+  for (let y = 4; y < tileSize - 4; y += 1) {
+    for (let dx = -1; dx <= 1; dx += 1) {
+      const lum = luminance(pixelColor(image, seamX + dx, y));
+      repairedSeamLuminances.push(lum);
+    }
+  }
+  const avgRepairedLuminance = repairedSeamLuminances.reduce((a, b) => a + b, 0) / repairedSeamLuminances.length;
+  const seamDarkLuminance = luminance(seamDark);
+  assert(avgRepairedLuminance > seamDarkLuminance + 5, `Water seam still dark after repair (avg ${avgRepairedLuminance.toFixed(1)} vs dark ${seamDarkLuminance.toFixed(1)}).`);
+
+  // Non-seam water pixels away from seam should be unchanged
+  for (let y = 4; y < tileSize - 4; y += 1) {
+    for (const distX of [5, 10, 20]) {
+      assertPixelsEqual(image, before, seamX - distX, y, `Water pixel ${seamX - distX},${y} was changed away from seam.`);
+      assertPixelsEqual(image, before, seamX + distX, y, `Water pixel ${seamX + distX},${y} was changed away from seam.`);
+    }
+  }
+
+  // Mask should mark repaired pixels
+  const repairedCount = countMaskPixels(report.mask, image.width, image.height);
+  assert(repairedCount > 0, "Mask has no repaired pixels for water seam.");
+  assert(repairedCount <= 5 * tileSize, `Mask has too many repaired pixels: ${repairedCount}.`);
+}
+
+function validateWaterSameTileSeamRepair() {
+  // Same water tile next to itself with a dark seam.
+  // Both sides are identical water, but the atlas edge creates a visible line.
+  const tileSize = 32;
+  const seamX = tileSize;
+  const waterColor = [35, 95, 155, 255];
+  const image = makeTwoTileImage(tileSize, waterColor, waterColor);
+  // Darken the seam line (simulating atlas edge artifact)
+  fillRect(image, seamX, 0, 2, tileSize, [18, 60, 110, 255]);
+  const before = cloneImage(image);
+
+  const report = repairBlackSeamsImageData(image, [[WORLD_TILE_IDS.deepWater, WORLD_TILE_IDS.deepWater]], {
+    seed: "water-same-tile",
+    tileSize,
+    captureMask: true,
+    enabled: true
+  });
+
+  assert(report.sameTileSeamReplacementCount > 0, "Same-tile water seam counter not incremented.");
+  assert(report.waterSeamReplacementCount > 0, "Water seam counter not incremented for same-tile.");
+
+  // Seam should be repaired
+  for (let y = 4; y < tileSize - 4; y += 1) {
+    const seamLuminance = luminance(pixelColor(image, seamX, y));
+    assert(seamLuminance > NEAR_BLACK_LUMINANCE_THRESHOLD, `Same-tile water seam at y=${y} still dark (lum=${seamLuminance.toFixed(1)}).`);
+  }
+
+  // Interior pixels unchanged
+  for (let y = 4; y < tileSize - 4; y += 1) {
+    for (const distX of [8, 16, 24]) {
+      assertPixelsEqual(image, before, seamX - distX, y, `Same-tile water pixel left changed.`);
+      assertPixelsEqual(image, before, seamX + distX, y, `Same-tile water pixel right changed.`);
+    }
+  }
+}
+
+function validateOldPixelNotUsedAsSource() {
+  // The old seam pixel color must never appear in the replacement.
+  // We verify by checking the repaired pixel is NOT a lerp from black.
+  const tileSize = 32;
+  const seamX = tileSize;
+  const leftColor = [200, 50, 50, 255];   // bright red
+  const rightColor = [50, 200, 50, 255];  // bright green
+  const image = makeTwoTileImage(tileSize, leftColor, rightColor);
+  // Pure black seam
+  blackenRect(image, seamX, 0, 1, tileSize);
+
+  repairBlackSeamsImageData(image, [[WORLD_TILE_IDS.brightGrass, WORLD_TILE_IDS.darkGrass]], {
+    seed: "no-old-pixel-source",
+    tileSize,
+    enabled: true
+  });
+
+  // The repaired seam should be a mix of red and green (≈ yellow/brown),
+  // NOT a mix of black with either side (which would be dark red or dark green).
+  for (let y = 4; y < tileSize - 4; y += 1) {
+    const color = pixelColor(image, seamX, y);
+    const lum = luminance(color);
+    // If old black was used, luminance would be low. If clean mix, it should be bright.
+    assert(lum > 60, `Repaired seam pixel at y=${y} appears to mix old black: ${color.join(",")} lum=${lum.toFixed(1)}.`);
+    // The green channel should be significant (from right tile)
+    assert(color[1] > 40, `Repaired seam pixel missing green component at y=${y}: ${color.join(",")}.`);
+    // The red channel should be significant (from left tile)
+    assert(color[0] > 40, `Repaired seam pixel missing red component at y=${y}: ${color.join(",")}.`);
+  }
+}
+
+function validateMaskIsThinLines() {
+  // The repair mask should show only thin seam lines, not broad bands.
+  const tileSize = 32;
+  const image = makeTwoTileImage(tileSize, [100, 160, 80, 255], [80, 120, 200, 255]);
+  blackenRect(image, tileSize, 0, 1, tileSize);
+
+  const report = repairBlackSeamsImageData(image, [[WORLD_TILE_IDS.brightGrass, WORLD_TILE_IDS.deepWater]], {
+    seed: "mask-sanity",
+    tileSize,
+    captureMask: true,
+    enabled: true
+  });
+
+  const maskWidth = image.width;
+  const maskHeight = image.height;
+
+  // Count mask pixels per column — the mask should be concentrated at the seam
+  const colCounts = new Array(maskWidth).fill(0);
+  for (let y = 0; y < maskHeight; y += 1) {
+    for (let x = 0; x < maskWidth; x += 1) {
+      if (report.mask[y * maskWidth + x]) colCounts[x] += 1;
+    }
+  }
+
+  // The seam column should have the most repairs
+  const seamColCount = colCounts[tileSize];
+  assert(seamColCount >= tileSize * 0.8, `Seam column only has ${seamColCount}/${tileSize} mask pixels.`);
+
+  // Columns more than 2px away from seam should have zero repairs
+  for (let x = 0; x < maskWidth; x += 1) {
+    if (Math.abs(x - tileSize) <= 2) continue;
+    assert(colCounts[x] === 0, `Column ${x} has ${colCounts[x]} mask pixels outside seam band.`);
+  }
+
+  // Overall replacement ratio should be small
+  assert(report.replacementRatio < 0.05, `Repair ratio ${report.replacementRatio.toFixed(4)} too high (expected < 5%).`);
+}
+
+function countMaskPixels(mask, width, height) {
+  let count = 0;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (mask[y * width + x]) count += 1;
+    }
+  }
+  return count;
 }
 
 function assert(condition, message) {
