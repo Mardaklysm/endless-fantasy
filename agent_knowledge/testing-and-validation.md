@@ -38,6 +38,12 @@ This runs `tools/worldgen/test_worldgen.mjs`. It validates the active `atlas_v3`
 - generated worlds contain no roads, rivers, bridges, or empty-cell references
 - same seed reproduces the same world
 - different seeds produce different tile grids
+- cached black seam repair replaces only near-black pixels inside narrow expected seam/corner areas
+- non-black terrain pixels remain byte-identical after seam repair
+- seam repair searches for clean local tile-interior samples from `MIN_EDGE_SAMPLE_INSET = 3` through `MAX_EDGE_SAMPLE_INSET = 6`, never from dirty edge pixels
+- repaired seam pixels use `replacementMode: dual-side-mix`, so both adjacent tiles contribute when both sides have valid samples
+- same-tile black seams are repaired without broad terrain blending
+- near-black pixels away from tile seams are not changed
 
 To write a human-readable generation report and PNG minimap preview:
 
@@ -50,6 +56,13 @@ Outputs:
 - `docs/debug/worldgen/latest-worldgen-report.md`
 - `docs/debug/worldgen/atlas-v3-world-preview.png`
 - `docs/debug/worldgen/world-preview-seed-<seed>.png`
+- `docs/debug/worldgen/black-seam-repair-before.png`
+- `docs/debug/worldgen/black-seam-repair-after.png`
+- `docs/debug/worldgen/black-seam-repair-mask.png`
+- `docs/debug/worldgen/black-seam-repair-diff.png`
+- `docs/debug/worldgen/black-seam-repair-report.md`
+
+The black seam repair mask should show only thin repaired grid-line pixels. If it shows broad seam bands or tile interiors, the repair pass is wrong.
 
 ## Asset Import Validation
 

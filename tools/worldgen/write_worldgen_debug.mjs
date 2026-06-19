@@ -3,13 +3,18 @@ import path from "node:path";
 import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
 import { WORLD_ATLAS, WORLD_TILES, worldTileHasTag } from "../../src/data/worldTiles.ts";
+import {
+  BLACK_SEAM_REPAIR_DEV_OPTIONS,
+  blackSeamRepairReportMarkdown,
+  repairBlackSeamsImageData
+} from "../../src/world/terrainBlending.ts";
 import { buildWorldDebugReport, generateWorld } from "../../src/world/worldGenerator.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PROJECT_ROOT = path.resolve(__dirname, "..", "..");
 const REPORT_DIR = path.join(PROJECT_ROOT, "docs", "debug", "worldgen");
-const TILE_SIZE = 16;
+const TILE_SIZE = 32;
 
 const seed = process.argv[2] ?? "debug-world";
 const world = generateWorld({ seed });
@@ -19,17 +24,60 @@ const safeSeed = world.seed.replace(/[^a-z0-9_-]+/gi, "_").slice(0, 80);
 const seedPreviewPath = path.join(REPORT_DIR, `world-preview-seed-${safeSeed}.png`);
 const previewPath = path.join(REPORT_DIR, "atlas-v3-world-preview.png");
 const reportPath = path.join(REPORT_DIR, "latest-worldgen-report.md");
+const repairBeforePath = path.join(REPORT_DIR, "black-seam-repair-before.png");
+const repairAfterPath = path.join(REPORT_DIR, "black-seam-repair-after.png");
+const repairMaskPath = path.join(REPORT_DIR, "black-seam-repair-mask.png");
+const repairDiffPath = path.join(REPORT_DIR, "black-seam-repair-diff.png");
+const repairReportPath = path.join(REPORT_DIR, "black-seam-repair-report.md");
 
-const rendered = renderAtlasPreview(world, readPng(path.join(PROJECT_ROOT, WORLD_ATLAS.image)));
+const atlas = readPng(path.join(PROJECT_ROOT, WORLD_ATLAS.image));
+const beforeTerrain = renderAtlasTerrain(world, atlas);
+const afterTerrain = cloneImage(beforeTerrain);
+const repairReport = repairBlackSeamsImageData(afterTerrain, world.tiles, {
+  seed: world.seed,
+  tileSize: TILE_SIZE,
+  ...BLACK_SEAM_REPAIR_DEV_OPTIONS,
+  captureMask: true
+});
+const mask = makeMaskImage(afterTerrain.width, afterTerrain.height, repairReport.mask);
+const diff = makeDiffImage(beforeTerrain, afterTerrain);
+const rendered = cloneImage(afterTerrain);
+drawWorldMarkers(rendered, world);
+
+writePng(repairBeforePath, beforeTerrain);
+writePng(repairAfterPath, afterTerrain);
+writePng(repairMaskPath, mask);
+writePng(repairDiffPath, diff);
 writePng(previewPath, rendered);
 writePng(seedPreviewPath, rendered);
-fs.writeFileSync(reportPath, `${buildWorldDebugReport(world)}\nPreview: \`${relative(previewPath)}\`\nSeed preview: \`${relative(seedPreviewPath)}\`\n`, "utf8");
+
+const repairMarkdown = `${blackSeamRepairReportMarkdown(repairReport)}
+Before image: \`${relative(repairBeforePath)}\`
+After image: \`${relative(repairAfterPath)}\`
+Mask image: \`${relative(repairMaskPath)}\`
+Diff image: \`${relative(repairDiffPath)}\`
+Gameplay-style preview: \`${relative(previewPath)}\`
+`;
+fs.writeFileSync(repairReportPath, repairMarkdown, "utf8");
+fs.writeFileSync(
+  reportPath,
+  `${buildWorldDebugReport(world)}
+${repairMarkdown}
+Seed preview: \`${relative(seedPreviewPath)}\`
+`,
+  "utf8"
+);
 
 console.log(`Wrote ${relative(reportPath)}`);
 console.log(`Wrote ${relative(previewPath)}`);
 console.log(`Wrote ${relative(seedPreviewPath)}`);
+console.log(`Wrote ${relative(repairBeforePath)}`);
+console.log(`Wrote ${relative(repairAfterPath)}`);
+console.log(`Wrote ${relative(repairMaskPath)}`);
+console.log(`Wrote ${relative(repairDiffPath)}`);
+console.log(`Wrote ${relative(repairReportPath)}`);
 
-function renderAtlasPreview(world, source) {
+function renderAtlasTerrain(world, source) {
   const tileSize = TILE_SIZE;
   const image = makeImage(world.width * tileSize, world.height * tileSize, [5, 8, 18, 255]);
   for (let y = 0; y < world.height; y += 1) {
@@ -38,6 +86,11 @@ function renderAtlasPreview(world, source) {
       blitSource(image, source, tile.sourceRect, x * tileSize, y * tileSize, tileSize, tileSize);
     }
   }
+  return image;
+}
+
+function drawWorldMarkers(image, world) {
+  const tileSize = TILE_SIZE;
   for (const poi of world.pois) {
     const radius = Math.floor(poi.footprint / 2);
     const x = (poi.x - radius) * tileSize;
@@ -45,7 +98,6 @@ function renderAtlasPreview(world, source) {
     fillRect(image, x + 2, y + 2, poi.footprint * tileSize - 4, poi.footprint * tileSize - 4, colorForPoi(poi.kind));
   }
   fillRect(image, world.startPosition.x * tileSize + 4, world.startPosition.y * tileSize + 4, 8, 8, [255, 255, 255, 255]);
-  return image;
 }
 
 function colorForTile(tileId) {
@@ -75,6 +127,41 @@ function makeImage(width, height, fill) {
     data[i + 3] = fill[3];
   }
   return { width, height, data };
+}
+
+function cloneImage(image) {
+  return { width: image.width, height: image.height, data: Buffer.from(image.data) };
+}
+
+function makeDiffImage(before, after) {
+  const diff = makeImage(before.width, before.height, [5, 8, 18, 255]);
+  for (let i = 0; i < before.data.length; i += 4) {
+    const delta = Math.max(
+      Math.abs(before.data[i] - after.data[i]),
+      Math.abs(before.data[i + 1] - after.data[i + 1]),
+      Math.abs(before.data[i + 2] - after.data[i + 2])
+    );
+    if (!delta) continue;
+    diff.data[i] = Math.min(255, 24 + delta * 7);
+    diff.data[i + 1] = Math.min(255, 40 + delta * 4);
+    diff.data[i + 2] = Math.min(255, 110 + delta * 5);
+    diff.data[i + 3] = 255;
+  }
+  return diff;
+}
+
+function makeMaskImage(width, height, mask) {
+  const image = makeImage(width, height, [0, 0, 0, 0]);
+  if (!mask) return image;
+  for (let i = 0; i < mask.length; i += 1) {
+    if (!mask[i]) continue;
+    const offset = i * 4;
+    image.data[offset] = 255;
+    image.data[offset + 1] = 32;
+    image.data[offset + 2] = 32;
+    image.data[offset + 3] = 255;
+  }
+  return image;
 }
 
 function fillRect(image, x, y, width, height, color) {

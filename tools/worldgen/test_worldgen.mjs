@@ -12,19 +12,30 @@ import {
   WORLD_TILE_ID_SET,
   WORLD_TILE_IDS,
   isWorldTileWalkable,
+  worldTileBlendGroup,
   worldTileById,
   worldTileHasTag
 } from "../../src/data/worldTiles.ts";
+import {
+  BLACK_SEAM_REPAIR_DEV_OPTIONS,
+  MAX_EDGE_SAMPLE_INSET,
+  MIN_EDGE_SAMPLE_INSET,
+  NEAR_BLACK_LUMINANCE_THRESHOLD,
+  SEAM_SEARCH_RADIUS,
+  repairBlackSeamsImageData
+} from "../../src/world/terrainBlending.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PROJECT_ROOT = path.resolve(__dirname, "..", "..");
 
 validateAtlasV3();
+validateBlackSeamRepairMetadata();
 validateRuntimeReferences();
 validateWorldgen();
+validateBlackSeamRepair();
 
-console.log("atlas_v3 atlas and worldgen validation passed.");
+console.log("atlas_v3 atlas, worldgen, and black seam repair validation passed.");
 
 function validateAtlasV3() {
   const runtimeAtlasPath = path.join(PROJECT_ROOT, WORLD_ATLAS.image);
@@ -78,6 +89,24 @@ function validateAtlasV3() {
   assert(!isWorldTileWalkable(WORLD_TILE_IDS.volcanoMound), "volcano_mound must be blocked.");
   assert(!isWorldTileWalkable(WORLD_TILE_IDS.lavaCrackedGround), "lava_cracked_ground must be blocked.");
   assert(isWorldTileWalkable(WORLD_TILE_IDS.gravelStoneGround), "gravel_stone_ground must be walkable.");
+}
+
+function validateBlackSeamRepairMetadata() {
+  assert(BLACK_SEAM_REPAIR_DEV_OPTIONS.enabled === true, "Black seam repair should be enabled by default.");
+  assert(BLACK_SEAM_REPAIR_DEV_OPTIONS.debugView === false, "Black seam repair debug view should be off by default.");
+  assert(SEAM_SEARCH_RADIUS === 4, `Expected seam search radius 4, got ${SEAM_SEARCH_RADIUS}.`);
+  assert(MIN_EDGE_SAMPLE_INSET === 3, `Expected min edge sample inset 3, got ${MIN_EDGE_SAMPLE_INSET}.`);
+  assert(MAX_EDGE_SAMPLE_INSET === 6, `Expected max edge sample inset 6, got ${MAX_EDGE_SAMPLE_INSET}.`);
+  assert(NEAR_BLACK_LUMINANCE_THRESHOLD === 32, `Expected near-black threshold 32, got ${NEAR_BLACK_LUMINANCE_THRESHOLD}.`);
+  assert(BLACK_SEAM_REPAIR_DEV_OPTIONS.seamSearchRadius === SEAM_SEARCH_RADIUS, "Black seam repair default search radius mismatch.");
+  assert(BLACK_SEAM_REPAIR_DEV_OPTIONS.minEdgeSampleInset === MIN_EDGE_SAMPLE_INSET, "Black seam repair default min edge inset mismatch.");
+  assert(BLACK_SEAM_REPAIR_DEV_OPTIONS.maxEdgeSampleInset === MAX_EDGE_SAMPLE_INSET, "Black seam repair default max edge inset mismatch.");
+  assert(BLACK_SEAM_REPAIR_DEV_OPTIONS.nearBlackThreshold === NEAR_BLACK_LUMINANCE_THRESHOLD, "Black seam repair default threshold mismatch.");
+
+  for (const tile of WORLD_TILE_DEFINITIONS) {
+    assert(worldTileBlendGroup(tile.id), `Tile ${tile.id} has no blend group.`);
+    assert(tile.blendGroup === worldTileBlendGroup(tile.id), `Tile ${tile.id} blend group does not match helper.`);
+  }
 }
 
 function validateRuntimeReferences() {
@@ -155,6 +184,120 @@ function validateWorldgen() {
   assert(sawDifferentWorld, "Generated worlds did not vary across different seeds.");
 }
 
+function validateBlackSeamRepair() {
+  validateOnlyBlackSeamPixelsChange();
+  validateInteriorSampleReplacement();
+  validateNoBroadBandModification();
+  validateSameTileSeamRepair();
+  validateDarkTerrainSafety();
+  validateDisabledRepairIsNoop();
+}
+
+function validateOnlyBlackSeamPixelsChange() {
+  const tileSize = 32;
+  const seamX = tileSize;
+  const image = makeTwoTileImage(tileSize, [220, 40, 30, 255], [30, 180, 70, 255]);
+  blackenRect(image, seamX - 1, 0, 3, tileSize);
+  const before = cloneImage(image);
+  const report = repairBlackSeamsImageData(image, [[WORLD_TILE_IDS.brightGrass, WORLD_TILE_IDS.darkGrass]], {
+    seed: "black-seam-only",
+    tileSize,
+    captureMask: true,
+    enabled: true,
+    debugView: false
+  });
+  assert(report.pixelsReplaced === 3 * tileSize, `Expected exactly the 3px black seam to be repaired, got ${report.pixelsReplaced}.`);
+  for (let y = 0; y < image.height; y += 1) {
+    for (let x = 0; x < image.width; x += 1) {
+      const wasBlackSeam = x >= seamX - 1 && x <= seamX + 1;
+      if (wasBlackSeam) {
+        assert(report.mask[y * image.width + x] === 1, `Black seam pixel ${x},${y} was not marked repaired.`);
+      } else {
+        assertPixelsEqual(image, before, x, y, `Non-black pixel ${x},${y} was changed.`);
+      }
+    }
+  }
+}
+
+function validateInteriorSampleReplacement() {
+  const tileSize = 32;
+  const seamX = tileSize;
+  const leftInterior = [111, 12, 13, 255];
+  const rightInterior = [17, 122, 19, 255];
+  const image = makeTwoTileImage(tileSize, [200, 80, 70, 255], [50, 210, 90, 255]);
+  fillRect(image, seamX - MIN_EDGE_SAMPLE_INSET - 1, 0, 3, tileSize, leftInterior);
+  fillRect(image, seamX + MIN_EDGE_SAMPLE_INSET - 1, 0, 3, tileSize, rightInterior);
+  blackenRect(image, seamX - 1, 0, 3, tileSize);
+  repairBlackSeamsImageData(image, [[WORLD_TILE_IDS.brightGrass, WORLD_TILE_IDS.darkGrass]], { seed: "interior-source", tileSize });
+  assertColorEquals(pixelColor(image, seamX - 1, 16), weightedColor(leftInterior, rightInterior, sideWeight(-1)), "Left seam pixel did not mix both interior sources.");
+  assertColorEquals(pixelColor(image, seamX, 16), weightedColor(leftInterior, rightInterior, sideWeight(0)), "Center seam pixel did not mix interior sources.");
+  assertColorEquals(pixelColor(image, seamX + 1, 16), weightedColor(leftInterior, rightInterior, sideWeight(1)), "Right seam pixel did not mix both interior sources.");
+}
+
+function validateNoBroadBandModification() {
+  const tileSize = 32;
+  const seamX = tileSize;
+  const image = makeTwoTileImage(tileSize, [160, 120, 80, 255], [70, 150, 210, 255]);
+  blackenRect(image, seamX, 0, 1, tileSize);
+  const before = cloneImage(image);
+  const report = repairBlackSeamsImageData(image, [[WORLD_TILE_IDS.brightGrass, WORLD_TILE_IDS.deepWater]], {
+    seed: "no-broad-band",
+    tileSize,
+    captureMask: true
+  });
+  assert(report.pixelsReplaced === tileSize, `Expected one black seam column repaired, got ${report.pixelsReplaced}.`);
+  assert(report.replacementRatio < 0.02, `Repair changed too many pixels: ${report.replacementRatio}.`);
+  for (let y = 0; y < image.height; y += 1) {
+    for (const x of [seamX - 2, seamX - 1, seamX + 1, seamX + 2]) {
+      assertPixelsEqual(image, before, x, y, `Non-black seam-band pixel ${x},${y} was changed.`);
+    }
+  }
+}
+
+function validateSameTileSeamRepair() {
+  const tileSize = 32;
+  const seamX = tileSize;
+  const image = makeTwoTileImage(tileSize, [84, 166, 70, 255], [84, 166, 70, 255]);
+  blackenRect(image, seamX, 0, 1, tileSize);
+  const report = repairBlackSeamsImageData(image, [[WORLD_TILE_IDS.brightGrass, WORLD_TILE_IDS.brightGrass]], { seed: "same-tile-repair", tileSize });
+  assert(report.pixelsReplaced === tileSize, "Same-tile black seam was not repaired exactly.");
+  for (let y = 0; y < tileSize; y += 1) {
+    assert(luminance(pixelColor(image, seamX, y)) > NEAR_BLACK_LUMINANCE_THRESHOLD, `Same-tile seam remains near black at y=${y}.`);
+  }
+}
+
+function validateDarkTerrainSafety() {
+  const tileSize = 32;
+  const seamX = tileSize;
+  const darkDetail = [42, 42, 42, 255];
+  const image = makeTwoTileImage(tileSize, [64, 54, 72, 255], [70, 60, 76, 255]);
+  fillRect(image, seamX - 2, 8, 1, 8, darkDetail);
+  blackenRect(image, seamX, 0, 1, tileSize);
+  blackenRect(image, 4, 4, 2, 2);
+  const before = cloneImage(image);
+  repairBlackSeamsImageData(image, [[WORLD_TILE_IDS.ashBlackGround, WORLD_TILE_IDS.cursedPurpleGround]], { seed: "dark-safety", tileSize });
+  for (let y = 8; y < 16; y += 1) {
+    assertPixelsEqual(image, before, seamX - 2, y, `Non-black dark seam detail ${seamX - 2},${y} was changed.`);
+  }
+  for (let y = 4; y < 6; y += 1) {
+    for (let x = 4; x < 6; x += 1) {
+      assertPixelsEqual(image, before, x, y, `Near-black pixel away from a seam ${x},${y} was changed.`);
+    }
+  }
+  assert(luminance(pixelColor(image, seamX, 16)) > NEAR_BLACK_LUMINANCE_THRESHOLD, "Actual black seam on dark terrain was not repaired.");
+}
+
+function validateDisabledRepairIsNoop() {
+  const tileSize = 32;
+  const seamX = tileSize;
+  const image = makeTwoTileImage(tileSize, [100, 120, 80, 255], [80, 120, 160, 255]);
+  blackenRect(image, seamX, 0, 1, tileSize);
+  const before = cloneImage(image);
+  const report = repairBlackSeamsImageData(image, [[WORLD_TILE_IDS.brightGrass, WORLD_TILE_IDS.darkGrass]], { seed: "disabled", tileSize, enabled: false });
+  assert(report.pixelsReplaced === 0, "Disabled repair should not replace pixels.");
+  assert(Buffer.compare(image.data, before.data) === 0, "Disabled repair changed pixels.");
+}
+
 function assertNoActiveDeprecatedReference(file, text, value) {
   let activeText = text;
   activeText = activeText.replace(`"!./assets/world/${value}"`, "");
@@ -170,6 +313,109 @@ function readPngDimensions(filePath) {
     width: buffer.readUInt32BE(16),
     height: buffer.readUInt32BE(20)
   };
+}
+
+function makeSyntheticTerrainImage(world, tileSize) {
+  const image = {
+    width: world.width * tileSize,
+    height: world.height * tileSize,
+    data: Buffer.alloc(world.width * tileSize * world.height * tileSize * 4)
+  };
+  for (let y = 0; y < world.height; y += 1) {
+    for (let x = 0; x < world.width; x += 1) {
+      const color = colorForBlendGroup(worldTileBlendGroup(world.tiles[y][x]));
+      fillSyntheticTile(image, x * tileSize, y * tileSize, tileSize, color);
+    }
+  }
+  return image;
+}
+
+function fillSyntheticTile(image, x, y, tileSize, color) {
+  for (let yy = 0; yy < tileSize; yy += 1) {
+    for (let xx = 0; xx < tileSize; xx += 1) {
+      const offset = ((y + yy) * image.width + x + xx) * 4;
+      image.data[offset] = color[0] + ((xx + yy) % 2);
+      image.data[offset + 1] = color[1];
+      image.data[offset + 2] = color[2];
+      image.data[offset + 3] = 255;
+    }
+  }
+}
+
+function colorForBlendGroup(group) {
+  if (group === "desert") return [210, 168, 83];
+  if (group === "snow") return [218, 232, 238];
+  if (group === "ice") return [154, 204, 226];
+  if (group === "dark") return [74, 58, 82];
+  if (group === "water") return [40, 112, 190];
+  if (group === "rock") return [102, 101, 92];
+  if (group === "lava") return [210, 76, 42];
+  return [83, 161, 70];
+}
+
+function cloneImage(image) {
+  return { width: image.width, height: image.height, data: Buffer.from(image.data) };
+}
+
+function makeTwoTileImage(tileSize, leftColor, rightColor) {
+  const image = makeSolidImage(tileSize * 2, tileSize, leftColor);
+  fillRect(image, tileSize, 0, tileSize, tileSize, rightColor);
+  return image;
+}
+
+function makeSolidImage(width, height, color) {
+  const image = { width, height, data: Buffer.alloc(width * height * 4) };
+  fillRect(image, 0, 0, width, height, color);
+  return image;
+}
+
+function fillRect(image, x, y, width, height, color) {
+  for (let yy = y; yy < y + height; yy += 1) {
+    for (let xx = x; xx < x + width; xx += 1) {
+      const offset = (yy * image.width + xx) * 4;
+      image.data[offset] = color[0];
+      image.data[offset + 1] = color[1];
+      image.data[offset + 2] = color[2];
+      image.data[offset + 3] = color[3];
+    }
+  }
+}
+
+function blackenRect(image, x, y, width, height) {
+  fillRect(image, x, y, width, height, [0, 0, 0, 255]);
+}
+
+function pixelColor(image, x, y) {
+  const offset = (y * image.width + x) * 4;
+  return [image.data[offset], image.data[offset + 1], image.data[offset + 2]];
+}
+
+function luminance(color) {
+  return color[0] * 0.2126 + color[1] * 0.7152 + color[2] * 0.0722;
+}
+
+function weightedColor(a, b, secondWeight) {
+  return [
+    Math.round(a[0] + (b[0] - a[0]) * secondWeight),
+    Math.round(a[1] + (b[1] - a[1]) * secondWeight),
+    Math.round(a[2] + (b[2] - a[2]) * secondWeight)
+  ];
+}
+
+function sideWeight(offset) {
+  const normalized = Math.max(0, Math.min(1, (offset + SEAM_SEARCH_RADIUS) / (SEAM_SEARCH_RADIUS * 2)));
+  return 0.3 + (0.7 - 0.3) * normalized;
+}
+
+function assertPixelsEqual(a, b, x, y, message) {
+  const offset = (y * a.width + x) * 4;
+  for (let channel = 0; channel < 4; channel += 1) {
+    assert(a.data[offset + channel] === b.data[offset + channel], message);
+  }
+}
+
+function assertColorEquals(actual, expected, message) {
+  assert(actual[0] === expected[0] && actual[1] === expected[1] && actual[2] === expected[2], `${message} Got ${actual.join(",")}, expected ${expected.slice(0, 3).join(",")}.`);
 }
 
 function assert(condition, message) {

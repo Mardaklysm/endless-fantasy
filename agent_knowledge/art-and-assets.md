@@ -47,6 +47,7 @@ In the current pass, 73 rembg candidates were generated. rembg was promoted only
 Rendered now from `assets_v2`:
 
 - Overworld terrain: generated worlds render from `src/assets/world/atlas_v3.png` through `src/assets/world/atlasV3.manifest.json` and `src/data/worldTiles.ts`. The active grid is 8x8 with 29 non-empty tiles and 35 empty black slots that worldgen ignores.
+- Overworld polish: after the generated tile map is rendered into a cache, `src/world/terrainBlending.ts` repairs only near-black seam pixels using pixels sampled from neighboring tile interiors. This is a runtime/cache pass only; it must not modify or crop `atlas_v3.png`, and it must not broadly blend terrain textures.
 - Location markers: town, castle, cave, keep, shrine, tower, port, gate, eclipse spire.
 - Town/interior: stone floor/walls, exit gate, service signs, table/rug, crate, barrel, lamps.
 - Characters: Arlen/Mira/Kael portraits; fighter/priest/wizard normalized class sheets drive Arlen/Mira/Kael battle sprites, and the fighter sheet drives the visible exploration leader.
@@ -86,6 +87,7 @@ Legacy/reference world atlas:
 - The town south exit uses the gate art only; there is no floating "Exit" label or persistent bottom-right interaction hint in normal town exploration.
 - Overworld locations render as larger 3x3-ish landmarks with matching entry footprints. Keep terrain tiles small/repeating, but landmarks should remain visually important.
 - Active overworld slicing uses exact 8x8 atlas math from `atlasV3.manifest.json`: `sx = col * tileWidth`, `sy = row * tileHeight`, `sw = tileWidth`, `sh = tileHeight`. Do not reintroduce classic special tiles, old 10x10 assumptions, roads/beaches/bridges, chroma-keying, global black transparency, or debug-grid art for runtime terrain.
+- Do not implement atlas-level seam healing for `atlas_v3`. Any seam cleanup belongs to the cached map-level black seam repair pass after tile placement. That pass must search only 3..6 display pixels inward for clean local source pixels, synthesize replacements from both adjacent sides, replace only near-black pixels inside narrow expected seam/corner areas, and leave all non-black tile artwork unchanged.
 - Battle backgrounds are full 16:9 opaque JPEG images and are assigned linear texture filtering. Pixel sprites, tiles, UI, and icons remain nearest-neighbor filtered. The canvas itself uses `image-rendering: auto` so high-resolution artwork is not globally pixelated.
 - Battle party presentation uses the normalized fighter/priest/wizard class sheets only on the battlefield; redundant small head portraits/icons and old standalone party battle PNGs are intentionally not drawn there.
 

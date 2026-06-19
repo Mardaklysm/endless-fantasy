@@ -2,6 +2,7 @@ import atlasV3ManifestJson from "../assets/world/atlasV3.manifest.json" with { t
 
 export type WorldBiome = "grassland" | "forest" | "desert" | "snow" | "darkland" | "water" | "mountain" | "lava";
 export type WorldEncounterFamily = "plains" | "forest" | "sand" | "hills" | "water" | "final";
+export type WorldBlendGroup = "grass" | "desert" | "snow" | "ice" | "dark" | "water" | "rock" | "lava";
 export type WorldTileId = string;
 
 export interface WorldSourceRect {
@@ -25,6 +26,7 @@ interface AtlasV3TileCell extends AtlasV3BaseCell {
   id: WorldTileId;
   biome: WorldBiome;
   category: string;
+  blendGroup: WorldBlendGroup;
   encounterFamily: WorldEncounterFamily;
   walkable: boolean;
   movementCost: number;
@@ -67,6 +69,7 @@ export interface WorldTileDefinition {
   col: number;
   biome: WorldBiome;
   category: string;
+  blendGroup: WorldBlendGroup;
   encounterFamily: WorldEncounterFamily;
   walkable: boolean;
   movementCost: number;
@@ -128,6 +131,38 @@ export const WORLD_TILE_IDS = {
   lavaCrackedGround: "lava_cracked_ground"
 } as const satisfies Record<string, WorldTileId>;
 
+export const WORLD_TILE_BLEND_GROUPS = {
+  [WORLD_TILE_IDS.brightGrass]: "grass",
+  [WORLD_TILE_IDS.mediumGrass]: "grass",
+  [WORLD_TILE_IDS.darkGrass]: "grass",
+  [WORLD_TILE_IDS.flowerMeadowGrass]: "grass",
+  [WORLD_TILE_IDS.lushCloverGrass]: "grass",
+  [WORLD_TILE_IDS.weedsGrass]: "grass",
+  [WORLD_TILE_IDS.trampledGrass]: "grass",
+  [WORLD_TILE_IDS.grassStones]: "grass",
+  [WORLD_TILE_IDS.brightSand]: "desert",
+  [WORLD_TILE_IDS.duneSand]: "desert",
+  [WORLD_TILE_IDS.rockySand]: "desert",
+  [WORLD_TILE_IDS.crackedDryEarth]: "desert",
+  [WORLD_TILE_IDS.reddishDesertSoil]: "desert",
+  [WORLD_TILE_IDS.cactusSand]: "desert",
+  [WORLD_TILE_IDS.desertScrub]: "desert",
+  [WORLD_TILE_IDS.cleanSnow]: "snow",
+  [WORLD_TILE_IDS.packedSnow]: "snow",
+  [WORLD_TILE_IDS.icySnow]: "snow",
+  [WORLD_TILE_IDS.snowRocks]: "snow",
+  [WORLD_TILE_IDS.frozenLakeIce]: "ice",
+  [WORLD_TILE_IDS.crackedIce]: "ice",
+  [WORLD_TILE_IDS.deadCrackedEarth]: "dark",
+  [WORLD_TILE_IDS.ashBlackGround]: "dark",
+  [WORLD_TILE_IDS.cursedPurpleGround]: "dark",
+  [WORLD_TILE_IDS.deepWater]: "water",
+  [WORLD_TILE_IDS.rockyMountainGround]: "rock",
+  [WORLD_TILE_IDS.gravelStoneGround]: "rock",
+  [WORLD_TILE_IDS.volcanoMound]: "lava",
+  [WORLD_TILE_IDS.lavaCrackedGround]: "lava"
+} as const satisfies Record<string, WorldBlendGroup>;
+
 export const ATLAS_V3_CELLS = ATLAS_V3_MANIFEST.cells as readonly AtlasV3Cell[];
 export const ATLAS_V3_EMPTY_CELLS = ATLAS_V3_CELLS.filter((cell): cell is AtlasV3EmptyCell => cell.empty);
 export const ATLAS_V3_NON_EMPTY_CELLS = ATLAS_V3_CELLS.filter((cell): cell is AtlasV3TileCell => !cell.empty);
@@ -140,6 +175,7 @@ export const WORLD_TILE_DEFINITIONS = ATLAS_V3_NON_EMPTY_CELLS.map(
     col: cell.col,
     biome: cell.biome,
     category: cell.category,
+    blendGroup: worldTileBlendGroup(cell.id),
     encounterFamily: cell.encounterFamily,
     walkable: cell.walkable,
     movementCost: cell.movementCost,
@@ -181,6 +217,11 @@ export function worldTileMovementCost(tileId?: WorldTileId): number {
 
 export function worldTileHasTag(tileId: WorldTileId | undefined, tag: string): boolean {
   return worldTileById(tileId)?.tags.includes(tag) ?? false;
+}
+
+export function worldTileBlendGroup(tileId?: WorldTileId): WorldBlendGroup | undefined {
+  if (!tileId) return undefined;
+  return WORLD_TILE_BLEND_GROUPS[tileId];
 }
 
 export function worldTileEncounterFamily(tileId?: WorldTileId): WorldEncounterFamily | undefined {

@@ -10,6 +10,7 @@ This manifest covers the art needed by the current playable implementation. It i
 - Recommended source tiles are 16x16 PNG displayed at 4x on the Full HD render target.
 - Overworld map is 64x40 tiles.
 - Active overworld terrain now uses the fixed-grid 8x8 atlas `src/assets/world/atlas_v3.png` plus `src/assets/world/atlasV3.manifest.json`. Black cells in that atlas are unused slots and are excluded from worldgen.
+- Any visible atlas seam cleanup is runtime black seam repair only: replace near-black pixels at placed-map tile boundaries by mixing clean local samples from both adjacent tiles, without changing the atlas or non-black tile art.
 - Dungeon floors are 22x14 tiles.
 - Current drawing functions to refine later: `drawWorldTile`, `drawDungeonTile`, `drawLocationIcon`, `drawTown`, `drawLeader`, `drawCharacterSpriteFrame`, `drawNpc`, `drawPortrait`, `drawEnemySprite`, `drawPixelCrystal`, `drawPanel`, and `drawBar` in `src/main.ts`.
 - Phaser preloads the current PNG/JPEG assets in `src/main.ts`. All generated placeholders should remain as fallback paths for missing textures and unfinished asset families.

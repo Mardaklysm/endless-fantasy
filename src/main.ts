@@ -12,6 +12,12 @@ import {
   type WorldTileId
 } from "./data/worldTiles.ts";
 import { ACTIVE_WORLDGEN_MODE, createWorldSeed, generateWorld, type GeneratedWorld } from "./world/worldGenerator.ts";
+import {
+  BLACK_SEAM_REPAIR_DEV_OPTIONS,
+  blackSeamRepairReportMarkdown,
+  repairBlackSeamsImageData,
+  type BlackSeamRepairReport
+} from "./world/terrainBlending.ts";
 import "./style.css";
 
 const DESIGN_WIDTH = 1920;
@@ -1148,6 +1154,9 @@ class CrystalOathScene extends Phaser.Scene {
   private generatedWorld?: GeneratedWorld;
   private worldSeed = "title-preview";
   private world: Terrain[][] = [];
+  private worldTerrainCacheKey = "world_terrain_cache";
+  private worldTerrainCacheSeed = "";
+  private worldBlackSeamRepairReport?: BlackSeamRepairReport;
   private party: CharacterState[] = [];
   private inventory: Record<string, number> = {};
   private gearBag: Record<string, number> = {};
@@ -1231,6 +1240,11 @@ class CrystalOathScene extends Phaser.Scene {
         "Using empty cells: false",
         "Using classic special tileset: false",
         "Using old 10x10 atlas: false",
+        `Black Seam Repair Enabled: ${BLACK_SEAM_REPAIR_DEV_OPTIONS.enabled}`,
+        `Black Seam Repair Debug View: ${BLACK_SEAM_REPAIR_DEV_OPTIONS.debugView}`,
+        `Black Seam Repair Search Radius: ${BLACK_SEAM_REPAIR_DEV_OPTIONS.seamSearchRadius}`,
+        `Black Seam Repair Threshold: ${BLACK_SEAM_REPAIR_DEV_OPTIONS.nearBlackThreshold}`,
+        `Black Seam Repair Sample Inset: ${BLACK_SEAM_REPAIR_DEV_OPTIONS.minEdgeSampleInset}-${BLACK_SEAM_REPAIR_DEV_OPTIONS.maxEdgeSampleInset}`,
         `Image: ${WORLD_ATLAS.image}`,
         `Manifest: ${WORLD_ATLAS.manifest}`,
         `Manifest entries: ${Object.keys(atlasV3Manifest.tiles ?? {}).length} non-empty tiles`
@@ -1443,6 +1457,7 @@ class CrystalOathScene extends Phaser.Scene {
     this.generatedWorld = generateWorld({ seed, width: WORLD_W, height: WORLD_H });
     this.worldSeed = this.generatedWorld.seed;
     this.world = this.generatedWorld.tiles;
+    this.rebuildWorldTerrainCache();
     console.info(`Crystal Oath world seed: ${this.worldSeed}`);
   }
 
@@ -3718,9 +3733,11 @@ Statuses: ${statuses}`;
     const endX = Math.min(WORLD_W - 1, Math.ceil((tileCam.x + WIDTH) / TILE));
     const startY = Math.max(0, Math.floor(tileCam.y / TILE) - 1);
     const endY = Math.min(WORLD_H - 1, Math.ceil((tileCam.y + HEIGHT) / TILE));
-    for (let y = startY; y <= endY; y += 1) {
-      for (let x = startX; x <= endX; x += 1) {
-        this.drawWorldTile(this.world[y][x], x * TILE - tileCam.x, y * TILE - tileCam.y, x, y);
+    if (!this.drawCachedWorldTerrain(tileCam)) {
+      for (let y = startY; y <= endY; y += 1) {
+        for (let x = startX; x <= endX; x += 1) {
+          this.drawWorldTile(this.world[y][x], x * TILE - tileCam.x, y * TILE - tileCam.y, x, y);
+        }
       }
     }
     for (const loc of this.locations()) {
@@ -4274,6 +4291,66 @@ Statuses: ${statuses}`;
     else if (tile?.biome === "desert") this.drawWorldSandTile(sx, sy, x, y);
     else this.drawWorldRoadTile(sx, sy, x, y);
     this.drawWorldCoastEdges(terrain, sx, sy, x, y);
+  }
+
+  private rebuildWorldTerrainCache() {
+    this.worldTerrainCacheSeed = "";
+    this.worldBlackSeamRepairReport = undefined;
+    if (!this.world.length || !this.textures.exists(WORLD_ATLAS.textureKey)) return;
+    this.assertWorldTilesetTextureSize();
+    const mapWidth = this.world[0].length * TILE;
+    const mapHeight = this.world.length * TILE;
+    const canvas = document.createElement("canvas");
+    canvas.width = mapWidth;
+    canvas.height = mapHeight;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) throw new Error("Unable to create terrain cache canvas.");
+    ctx.imageSmoothingEnabled = false;
+
+    const atlasSource = this.textures.get(WORLD_ATLAS.textureKey).getSourceImage() as CanvasImageSource & { width: number; height: number };
+    for (let y = 0; y < this.world.length; y += 1) {
+      for (let x = 0; x < this.world[y].length; x += 1) {
+        const tile = WORLD_TILES[this.world[y][x]];
+        if (!tile) throw new Error(`Cannot render unknown world tile ${this.world[y][x]} at ${x},${y}.`);
+        const rect = this.worldTileSourceRect(tile);
+        ctx.drawImage(atlasSource, rect.x, rect.y, rect.width, rect.height, x * TILE, y * TILE, TILE, TILE);
+      }
+    }
+
+    const imageData = ctx.getImageData(0, 0, mapWidth, mapHeight);
+    this.worldBlackSeamRepairReport = repairBlackSeamsImageData(imageData, this.world, {
+      seed: this.worldSeed,
+      tileSize: TILE,
+      ...BLACK_SEAM_REPAIR_DEV_OPTIONS
+    });
+    ctx.putImageData(imageData, 0, 0);
+
+    if (this.textures.exists(this.worldTerrainCacheKey)) this.textures.remove(this.worldTerrainCacheKey);
+    this.textures.addCanvas(this.worldTerrainCacheKey, canvas);
+    this.textures.get(this.worldTerrainCacheKey).setFilter(Phaser.Textures.FilterMode.NEAREST);
+    this.worldTerrainCacheSeed = this.worldSeed;
+    if (import.meta.env.DEV) {
+      console.info(blackSeamRepairReportMarkdown(this.worldBlackSeamRepairReport).trim());
+    }
+  }
+
+  private drawCachedWorldTerrain(tileCam: Vec): boolean {
+    if (this.worldTerrainCacheSeed !== this.worldSeed || !this.textures.exists(this.worldTerrainCacheKey)) return false;
+    const mapWidth = (this.world[0]?.length ?? 0) * TILE;
+    const mapHeight = this.world.length * TILE;
+    const cropX = Math.round(Phaser.Math.Clamp(tileCam.x, 0, Math.max(0, mapWidth - WIDTH)));
+    const cropY = Math.round(Phaser.Math.Clamp(tileCam.y, 0, Math.max(0, mapHeight - HEIGHT)));
+    const cropWidth = Math.min(WIDTH, mapWidth - cropX);
+    const cropHeight = Math.min(HEIGHT, mapHeight - cropY);
+    if (cropWidth <= 0 || cropHeight <= 0) return false;
+    const image = this.add.image(0, 0, this.worldTerrainCacheKey);
+    image.setOrigin(0, 0);
+    image.setCrop(cropX, cropY, cropWidth, cropHeight);
+    image.setDisplaySize(cropWidth * PIXEL_ART_SCALE, cropHeight * PIXEL_ART_SCALE);
+    image.setDepth(LAYER_WORLD_IMAGE);
+    image.setScrollFactor(0);
+    this.images.push(image);
+    return true;
   }
 
   private worldTileSourceRect(tile: WorldTileDefinition) {

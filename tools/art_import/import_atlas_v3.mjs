@@ -22,6 +22,38 @@ const NEAR_BLACK_LUMINANCE = 20;
 const NEAR_BLACK_MAX_CHANNEL = 34;
 const EMPTY_PIXEL_RATIO = 0.9;
 
+const BLEND_GROUPS = {
+  bright_grass: "grass",
+  medium_grass: "grass",
+  dark_grass: "grass",
+  flower_meadow_grass: "grass",
+  lush_clover_grass: "grass",
+  weeds_grass: "grass",
+  trampled_grass: "grass",
+  grass_stones: "grass",
+  bright_sand: "desert",
+  dune_sand: "desert",
+  rocky_sand: "desert",
+  cracked_dry_earth: "desert",
+  reddish_desert_soil: "desert",
+  cactus_sand: "desert",
+  desert_scrub: "desert",
+  clean_snow: "snow",
+  packed_snow: "snow",
+  icy_snow: "snow",
+  snow_rocks: "snow",
+  frozen_lake_ice: "ice",
+  cracked_ice: "ice",
+  dead_cracked_earth: "dark",
+  ash_black_ground: "dark",
+  cursed_purple_ground: "dark",
+  deep_water: "water",
+  rocky_mountain_ground: "rock",
+  gravel_stone_ground: "rock",
+  volcano_mound: "lava",
+  lava_cracked_ground: "lava"
+};
+
 const CELL_CLASSIFICATION = [
   [
     tile("bright_grass", "grassland", "grassland", "plains", true, 1, ["grass", "land", "base"], "Bright open grass."),
@@ -97,11 +129,17 @@ const CELL_CLASSIFICATION = [
 ];
 
 function tile(id, biome, category, encounterFamily, walkable, movementCost, tags, notes) {
-  return { id, biome, category, encounterFamily, walkable, movementCost, tags, notes };
+  return { id, biome, category, blendGroup: blendGroupForTile(id), encounterFamily, walkable, movementCost, tags, notes };
 }
 
 function emptyRow() {
   return Array.from({ length: COLUMNS }, () => null);
+}
+
+function blendGroupForTile(id) {
+  const group = BLEND_GROUPS[id];
+  if (!group) throw new Error(`Missing atlas_v3 blend group for ${id}.`);
+  return group;
 }
 
 function main() {
@@ -224,6 +262,7 @@ function buildCells(image, tileWidth, tileHeight) {
         id: classification.id,
         biome: classification.biome,
         category: classification.category,
+        blendGroup: classification.blendGroup,
         encounterFamily: classification.encounterFamily,
         walkable: classification.walkable,
         movementCost: classification.movementCost,
@@ -259,10 +298,11 @@ function buildReport(image, cells, tileWidth, tileHeight) {
   const empty = cells.filter((cell) => cell.empty);
   const walkable = nonEmpty.filter((cell) => cell.walkable);
   const blocked = nonEmpty.filter((cell) => !cell.walkable);
+  const blendGroups = [...new Set(nonEmpty.map((cell) => cell.blendGroup))].sort();
   const classifiedRows = cells
     .map((cell) => {
       if (cell.empty) return `- Row ${cell.row}, col ${cell.col}: empty (${formatPercent(cell.emptyRatio)} near-black)`;
-      return `- Row ${cell.row}, col ${cell.col}: ${cell.id} (${cell.biome}/${cell.category}; ${cell.walkable ? "walkable" : "blocked"}; tags: ${cell.tags.join(", ")})`;
+      return `- Row ${cell.row}, col ${cell.col}: ${cell.id} (${cell.biome}/${cell.category}; blend ${cell.blendGroup}; ${cell.walkable ? "walkable" : "blocked"}; tags: ${cell.tags.join(", ")})`;
     })
     .join("\n");
 
@@ -291,6 +331,11 @@ Labeled atlas: \`${relative(LABELED_ATLAS_PATH)}\`
 - Empty cells: ${empty.length}
 
 Black/empty cells are unused atlas slots. They are not transparency and are ignored by worldgen.
+
+## Terrain Groups
+
+- Groups used: ${blendGroups.join(", ")}
+- Blend groups are map-rendering metadata only. They do not change source atlas pixels, source rectangles, walkability, or collision.
 
 ## Walkability Summary
 
