@@ -4691,7 +4691,7 @@ Statuses: ${statuses}`;
     const ellipseW = 32;
     const ellipseH = 12;
     const bodyOffsetX = 12;
-    const bodyOffsetY = 28;
+    const bodyOffsetY = 13;
     const bodyCenterX = x + bodyOffsetX;
     const feetBaselineY = y + bodyOffsetY;
     this.drawActorShadow(bodyCenterX, feetBaselineY, shadowWidth, shadowHeight);

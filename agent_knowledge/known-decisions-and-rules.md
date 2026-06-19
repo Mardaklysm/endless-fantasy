@@ -28,8 +28,8 @@
 - Save data uses browser `localStorage` under `crystal-oath-save-v1`.
 - Keyboard is the primary input; mouse support is minimal.
 - Input helpers accept both `KeyboardEvent.code` and `KeyboardEvent.key` for movement/confirm/cancel compatibility.
-- Exploration movement is tile-anchor based: accepted input moves from one bottom-center feet anchor to the next, and releasing input finishes the active step before stopping.
-- Exploration collision uses the destination tile/feet anchor, not the full sprite rectangle. Tile effects commit only when the destination anchor is reached.
+- Exploration movement is tile-center based: accepted input moves from one tile center to the next, and releasing input finishes the active step before stopping.
+- Exploration collision uses the destination tile center, not the full sprite rectangle. Tile effects commit only when the destination tile center is reached.
 - Exploration rendering uses persistent visual tile coordinates during the active step. Do not let render code fall back to stale logical coordinates mid-move.
 - Nested menu flows must preserve the original non-menu return mode; settings/status/item/equipment backs should not overwrite it with `menu` or `dialogue`.
 - Overworld locations use larger 3x3-ish visual and trigger footprints so landmarks read as important instead of one-tile icons.

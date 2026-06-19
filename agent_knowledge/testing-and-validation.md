@@ -164,7 +164,7 @@ Expected:
 - Confirm town/dungeon/location entry occurs after the tile step completes, not mid-step.
 - Confirm random encounters trigger only after completed steps, not mid-step.
 - Verify blocked terrain rules when testing boat/skyship flags.
-- Confirm movement stops with the leader's feet on each tile's bottom-center anchor, not with the sprite visually centered in the tile.
+- Confirm movement stops with the leader's feet/shadow on each tile center, not at the tile's bottom edge.
 - Confirm collision does not jitter or leave the player visually/logically between tiles.
 - Confirm the overworld leader remains readable when standing on a town/location marker.
 - Confirm `atlas_v3` terrain shows no unused black cells; dark seams can come from actual atlas cell edge pixels and should not be debug grid overlays.
