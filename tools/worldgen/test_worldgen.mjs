@@ -6,7 +6,7 @@ import { WORLD_ATLAS, WORLD_TILE_IDS, isWorldTileWalkable, worldTileById } from 
 import { WORLD_OBJECT_ATLAS, WORLD_OBJECT_ID_SET } from "../../src/data/worldObjects.ts";
 import { DUNGEON_ATLAS } from "../../src/data/dungeonTiles.ts";
 import { SEMANTIC_BIOME, SEMANTIC_WATER } from "../../src/world/semantic/semanticTypes.ts";
-import { describeSemanticEdgeOverlayRenderPlan } from "../../src/world/semantic/semanticTerrainRenderer.ts";
+import { SEMANTIC_MASK_TEXTURE_TILE_IDS, describeSemanticMaskTerrainRenderPlan } from "../../src/world/semantic/semanticMaskTerrainRenderer.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -91,7 +91,7 @@ function validateSemanticWorldgen() {
   validatePois(worldA);
   validateRoadConnections(worldA);
   validateRoadAndForestPolicies(worldA);
-  validateSemanticEdgeOverlayRendererPlan(worldA);
+  validateSemanticMaskTerrainRendererPlan(worldA);
 }
 
 function validateIslandOverlayRules(world) {
@@ -213,21 +213,21 @@ function validateRoadAndForestPolicies(world) {
   }
 }
 
-function validateSemanticEdgeOverlayRendererPlan(world) {
+function validateSemanticMaskTerrainRendererPlan(world) {
   const before = stableSummary(world);
-  const plan = describeSemanticEdgeOverlayRenderPlan(world.semantic, { tileSize: 7 });
+  const plan = describeSemanticMaskTerrainRenderPlan(world.semantic, { tileSize: 32, maskPixelsPerCell: 16 });
   const after = stableSummary(world);
-  assert(plan.width === world.width * 7, `Semantic edge overlay texture width expected ${world.width * 7}, got ${plan.width}.`);
-  assert(plan.height === world.height * 7, `Semantic edge overlay texture height expected ${world.height * 7}, got ${plan.height}.`);
-  assert(plan.pixelStep === 1, `Small semantic edge overlay should render with 1px detail step, got ${plan.pixelStep}.`);
-  assert(plan.landCells > 0, "Semantic edge overlay plan found no land cells.");
-  assert(plan.shallowCells > 0, "Semantic edge overlay plan found no shallow-water halo cells.");
-  assert(plan.beachCells > 0, "Semantic edge overlay plan found no beach cells.");
-  assert(plan.coastlineCells > 0, "Semantic edge overlay plan found no coastline cells.");
-  assert(plan.biomeBoundaryCells > 0, "Semantic edge overlay plan found no biome boundary cells.");
-  assert(plan.waterBeachBoundaryCells > 0, "Semantic edge overlay plan found no water/beach boundaries.");
-  assert(plan.sandGrassBoundaryCells > 0, "Semantic edge overlay plan found no sand/grass boundaries.");
-  assert(before === after, "Semantic edge overlay planning mutated the generated world.");
+  assert(plan.width === world.width * 32, `Semantic mask terrain texture width expected ${world.width * 32}, got ${plan.width}.`);
+  assert(plan.height === world.height * 32, `Semantic mask terrain texture height expected ${world.height * 32}, got ${plan.height}.`);
+  assert(plan.maskPixelsPerCell === 16, `Semantic mask terrain should render 16 mask samples per cell, got ${plan.maskPixelsPerCell}.`);
+  assert(plan.pixelBlock === 2, `Semantic mask terrain should render 2px mask blocks at 32px tiles, got ${plan.pixelBlock}.`);
+  for (const [terrainClass, tileId] of Object.entries(SEMANTIC_MASK_TEXTURE_TILE_IDS)) {
+    assert(tileId === SEMANTIC_BASE_TILE_PALETTE[terrainClass] || (terrainClass === "shallowWater" && tileId === SEMANTIC_BASE_TILE_PALETTE.shallowWater), `${terrainClass} mask texture source should match the canonical palette.`);
+    assert(plan.classSamples[terrainClass] > 0, `Semantic mask terrain plan found no ${terrainClass} samples.`);
+  }
+  assert(plan.waterBeachBoundarySamples > 0, "Semantic mask terrain plan found no water/beach boundaries.");
+  assert(plan.sandGrassBoundarySamples > 0, "Semantic mask terrain plan found no sand/grass boundaries.");
+  assert(before === after, "Semantic mask terrain planning mutated the generated world.");
 }
 
 function stableSummary(world) {

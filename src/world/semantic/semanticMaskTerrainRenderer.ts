@@ -1,0 +1,443 @@
+import type Phaser from "phaser";
+import {
+  WORLD_ATLAS,
+  WORLD_TILE_IDS,
+  WORLD_TILES,
+  atlasV3SourceRectWithInset,
+  type WorldTileId
+} from "../../data/worldTiles.ts";
+import { hashNoise } from "../seededRng.ts";
+import { SEMANTIC_BIOME, SEMANTIC_WATER, type SemanticWorld } from "./semanticTypes.ts";
+
+export type SemanticMaskTerrainClass = "deepOcean" | "shallowWater" | "beach" | "grassland" | "sand" | "ice";
+
+export interface SemanticMaskTerrainRenderOptions {
+  tileSize: number;
+  textureKey?: string;
+  atlasTextureKey?: string;
+  maskPixelsPerCell?: number;
+}
+
+export interface SemanticMaskTerrainRenderPlan {
+  width: number;
+  height: number;
+  tileSize: number;
+  maskPixelsPerCell: number;
+  pixelBlock: number;
+  maskWidth: number;
+  maskHeight: number;
+  classSamples: Record<SemanticMaskTerrainClass, number>;
+  waterBeachBoundarySamples: number;
+  sandGrassBoundarySamples: number;
+  sandIceBoundarySamples: number;
+  grassIceBoundarySamples: number;
+}
+
+type TerrainClassId = 0 | 1 | 2 | 3 | 4 | 5;
+type Rgb = [number, number, number];
+
+const TERRAIN_CLASS_IDS = {
+  deepOcean: 0,
+  shallowWater: 1,
+  beach: 2,
+  grassland: 3,
+  sand: 4,
+  ice: 5
+} as const satisfies Record<SemanticMaskTerrainClass, TerrainClassId>;
+
+const TERRAIN_CLASSES = ["deepOcean", "shallowWater", "beach", "grassland", "sand", "ice"] as const satisfies readonly SemanticMaskTerrainClass[];
+
+export const SEMANTIC_MASK_TEXTURE_TILE_IDS = {
+  deepOcean: WORLD_TILE_IDS.deepWater,
+  shallowWater: WORLD_TILE_IDS.shallowWater,
+  beach: WORLD_TILE_IDS.beachSand,
+  grassland: WORLD_TILE_IDS.mediumGrass,
+  sand: WORLD_TILE_IDS.brightSand,
+  ice: WORLD_TILE_IDS.cleanSnow
+} as const satisfies Record<SemanticMaskTerrainClass, WorldTileId>;
+
+const COLORS = {
+  deepOcean: [12, 54, 92] as Rgb,
+  shallowWater: [52, 149, 179] as Rgb,
+  shallowEdge: [93, 196, 213] as Rgb,
+  foam: [234, 251, 237] as Rgb,
+  wetSand: [178, 146, 86] as Rgb,
+  beachEdge: [202, 158, 87] as Rgb,
+  grassEdge: [70, 138, 58] as Rgb,
+  sandEdge: [167, 129, 66] as Rgb,
+  iceEdge: [134, 190, 207] as Rgb,
+  frost: [231, 251, 252] as Rgb
+};
+
+export function createSemanticMaskTerrainTexture(scene: Phaser.Scene, world: SemanticWorld, options: SemanticMaskTerrainRenderOptions): string {
+  const textureKey = options.textureKey ?? `semantic-mask-terrain-${world.seed}`;
+  const atlasTextureKey = options.atlasTextureKey ?? WORLD_ATLAS.textureKey;
+  const atlasSource = scene.textures.exists(atlasTextureKey)
+    ? (scene.textures.get(atlasTextureKey).getSourceImage() as CanvasImageSource & { width: number; height: number })
+    : undefined;
+  const canvas = createSemanticMaskTerrainCanvas(world, { ...options, atlasSource });
+  if (scene.textures.exists(textureKey)) scene.textures.remove(textureKey);
+  scene.textures.addCanvas(textureKey, canvas);
+  return textureKey;
+}
+
+export function createSemanticMaskTerrainCanvas(
+  world: SemanticWorld,
+  options: SemanticMaskTerrainRenderOptions & { atlasSource?: CanvasImageSource & { width: number; height: number } }
+): HTMLCanvasElement {
+  const plan = describeSemanticMaskTerrainRenderPlan(world, options);
+  const classGrid = buildMaskClassGrid(world, plan);
+  const canvas = document.createElement("canvas");
+  canvas.width = plan.width;
+  canvas.height = plan.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Unable to create semantic mask terrain canvas.");
+  ctx.imageSmoothingEnabled = false;
+
+  const fillStyles = createTerrainFillStyles(ctx, options.atlasSource, plan.tileSize);
+  fillFullTerrain(ctx, fillStyles.deepOcean, plan.width, plan.height);
+  for (const terrainClass of TERRAIN_CLASSES) {
+    if (terrainClass === "deepOcean") continue;
+    drawMaskedTerrainClass(ctx, plan, classGrid, TERRAIN_CLASS_IDS[terrainClass], fillStyles[terrainClass]);
+  }
+  drawMaskBoundaryAccents(ctx, world, plan, classGrid);
+
+  return canvas;
+}
+
+export function describeSemanticMaskTerrainRenderPlan(world: SemanticWorld, options: SemanticMaskTerrainRenderOptions): SemanticMaskTerrainRenderPlan {
+  const tileSize = Math.max(1, Math.floor(options.tileSize));
+  const maskPixelsPerCell = chooseMaskPixelsPerCell(tileSize, options.maskPixelsPerCell ?? 16);
+  const pixelBlock = tileSize / maskPixelsPerCell;
+  const maskWidth = world.width * maskPixelsPerCell;
+  const maskHeight = world.height * maskPixelsPerCell;
+  const classGrid = buildMaskClassGrid(world, {
+    maskPixelsPerCell,
+    maskWidth,
+    maskHeight
+  });
+  const classSamples = emptyClassSamples();
+  let waterBeachBoundarySamples = 0;
+  let sandGrassBoundarySamples = 0;
+  let sandIceBoundarySamples = 0;
+  let grassIceBoundarySamples = 0;
+
+  for (let y = 0; y < maskHeight; y += 1) {
+    for (let x = 0; x < maskWidth; x += 1) {
+      const current = terrainClassAt(classGrid, y * maskWidth + x);
+      classSamples[classNameForId(current)] += 1;
+      if (x < maskWidth - 1) {
+        const east = terrainClassAt(classGrid, y * maskWidth + x + 1);
+        const boundary = boundaryKind(current, east);
+        if (boundary === "waterBeach") waterBeachBoundarySamples += 1;
+        if (boundary === "sandGrass") sandGrassBoundarySamples += 1;
+        if (boundary === "sandIce") sandIceBoundarySamples += 1;
+        if (boundary === "grassIce") grassIceBoundarySamples += 1;
+      }
+      if (y < maskHeight - 1) {
+        const south = terrainClassAt(classGrid, (y + 1) * maskWidth + x);
+        const boundary = boundaryKind(current, south);
+        if (boundary === "waterBeach") waterBeachBoundarySamples += 1;
+        if (boundary === "sandGrass") sandGrassBoundarySamples += 1;
+        if (boundary === "sandIce") sandIceBoundarySamples += 1;
+        if (boundary === "grassIce") grassIceBoundarySamples += 1;
+      }
+    }
+  }
+
+  return {
+    width: world.width * tileSize,
+    height: world.height * tileSize,
+    tileSize,
+    maskPixelsPerCell,
+    pixelBlock,
+    maskWidth,
+    maskHeight,
+    classSamples,
+    waterBeachBoundarySamples,
+    sandGrassBoundarySamples,
+    sandIceBoundarySamples,
+    grassIceBoundarySamples
+  };
+}
+
+function buildMaskClassGrid(world: SemanticWorld, plan: Pick<SemanticMaskTerrainRenderPlan, "maskWidth" | "maskHeight" | "maskPixelsPerCell">): Uint8Array {
+  const classGrid = new Uint8Array(plan.maskWidth * plan.maskHeight);
+  for (let my = 0; my < plan.maskHeight; my += 1) {
+    for (let mx = 0; mx < plan.maskWidth; mx += 1) {
+      const sampleX = (mx + 0.5) / plan.maskPixelsPerCell;
+      const sampleY = (my + 0.5) / plan.maskPixelsPerCell;
+      classGrid[my * plan.maskWidth + mx] = classifySample(world, sampleX, sampleY);
+    }
+  }
+  return classGrid;
+}
+
+function classifySample(world: SemanticWorld, sampleX: number, sampleY: number): TerrainClassId {
+  const noiseX = Math.floor(sampleX * 8);
+  const noiseY = Math.floor(sampleY * 8);
+  const boundaryNoise = hashNoise(`${world.seed}:mask-terrain-boundary`, noiseX, noiseY, 0) - 0.5;
+  const landScore = samplePredicate(world, world.layers.landMask, sampleX, sampleY, (value) => value > 0);
+  if (landScore + boundaryNoise * 0.14 < 0.48) {
+    const shallowScore = samplePredicate(world, world.layers.waterClass, sampleX, sampleY, (value) => value === SEMANTIC_WATER.SHALLOW || value === SEMANTIC_WATER.LAKE);
+    return shallowScore + boundaryNoise * 0.08 > 0.36 ? TERRAIN_CLASS_IDS.shallowWater : TERRAIN_CLASS_IDS.deepOcean;
+  }
+
+  const beachScore = sampleBiome(world, sampleX, sampleY, SEMANTIC_BIOME.BEACH);
+  const grassScore = sampleBiome(world, sampleX, sampleY, SEMANTIC_BIOME.GRASS);
+  const sandScore = sampleBiome(world, sampleX, sampleY, SEMANTIC_BIOME.SAND);
+  const iceScore = sampleBiome(world, sampleX, sampleY, SEMANTIC_BIOME.ICE);
+  const distanceToWater = sampleNumeric(world, world.layers.distanceToWater, sampleX, sampleY);
+  const coastBoost = Math.max(0, 2.2 - distanceToWater) * 0.13;
+  const beachValue = beachScore + coastBoost + boundaryNoise * 0.08;
+  const inlandMax = Math.max(grassScore, sandScore, iceScore);
+  if (beachValue > 0.28 && beachValue >= inlandMax - 0.14) return TERRAIN_CLASS_IDS.beach;
+  if (iceScore >= grassScore && iceScore >= sandScore) return TERRAIN_CLASS_IDS.ice;
+  if (sandScore >= grassScore && sandScore >= iceScore) return TERRAIN_CLASS_IDS.sand;
+  return TERRAIN_CLASS_IDS.grassland;
+}
+
+function createTerrainFillStyles(
+  ctx: CanvasRenderingContext2D,
+  atlasSource: (CanvasImageSource & { width: number; height: number }) | undefined,
+  tileSize: number
+): Record<SemanticMaskTerrainClass, CanvasPattern | string> {
+  return {
+    deepOcean: createTerrainPattern(ctx, atlasSource, SEMANTIC_MASK_TEXTURE_TILE_IDS.deepOcean, tileSize, COLORS.deepOcean),
+    shallowWater: createTerrainPattern(ctx, atlasSource, SEMANTIC_MASK_TEXTURE_TILE_IDS.shallowWater, tileSize, COLORS.shallowWater),
+    beach: createTerrainPattern(ctx, atlasSource, SEMANTIC_MASK_TEXTURE_TILE_IDS.beach, tileSize, COLORS.beachEdge),
+    grassland: createTerrainPattern(ctx, atlasSource, SEMANTIC_MASK_TEXTURE_TILE_IDS.grassland, tileSize, COLORS.grassEdge),
+    sand: createTerrainPattern(ctx, atlasSource, SEMANTIC_MASK_TEXTURE_TILE_IDS.sand, tileSize, COLORS.sandEdge),
+    ice: createTerrainPattern(ctx, atlasSource, SEMANTIC_MASK_TEXTURE_TILE_IDS.ice, tileSize, COLORS.frost)
+  };
+}
+
+function createTerrainPattern(
+  ctx: CanvasRenderingContext2D,
+  atlasSource: (CanvasImageSource & { width: number; height: number }) | undefined,
+  tileId: WorldTileId,
+  tileSize: number,
+  fallbackColor: Rgb
+): CanvasPattern | string {
+  const tile = WORLD_TILES[tileId];
+  if (!atlasSource || !tile) return rgbCss(fallbackColor);
+  const rect = atlasV3SourceRectWithInset(tile.sourceRect);
+  const patternCanvas = document.createElement("canvas");
+  patternCanvas.width = tileSize;
+  patternCanvas.height = tileSize;
+  const patternCtx = patternCanvas.getContext("2d");
+  if (!patternCtx) return rgbCss(fallbackColor);
+  patternCtx.imageSmoothingEnabled = false;
+  patternCtx.drawImage(atlasSource, rect.x, rect.y, rect.width, rect.height, 0, 0, tileSize, tileSize);
+  return ctx.createPattern(patternCanvas, "repeat") ?? rgbCss(fallbackColor);
+}
+
+function fillFullTerrain(ctx: CanvasRenderingContext2D, fillStyle: CanvasPattern | string, width: number, height: number) {
+  ctx.save();
+  ctx.fillStyle = fillStyle;
+  ctx.fillRect(0, 0, width, height);
+  ctx.restore();
+}
+
+function drawMaskedTerrainClass(
+  ctx: CanvasRenderingContext2D,
+  plan: SemanticMaskTerrainRenderPlan,
+  classGrid: Uint8Array,
+  terrainClass: TerrainClassId,
+  fillStyle: CanvasPattern | string
+) {
+  const maskCanvas = document.createElement("canvas");
+  maskCanvas.width = plan.width;
+  maskCanvas.height = plan.height;
+  const maskCtx = maskCanvas.getContext("2d");
+  if (!maskCtx) throw new Error("Unable to create semantic terrain mask canvas.");
+  maskCtx.imageSmoothingEnabled = false;
+  maskCtx.fillStyle = "#ffffff";
+  for (let my = 0; my < plan.maskHeight; my += 1) {
+    for (let mx = 0; mx < plan.maskWidth; mx += 1) {
+      if (terrainClassAt(classGrid, my * plan.maskWidth + mx) !== terrainClass) continue;
+      maskCtx.fillRect(mx * plan.pixelBlock, my * plan.pixelBlock, plan.pixelBlock, plan.pixelBlock);
+    }
+  }
+
+  const layerCanvas = document.createElement("canvas");
+  layerCanvas.width = plan.width;
+  layerCanvas.height = plan.height;
+  const layerCtx = layerCanvas.getContext("2d");
+  if (!layerCtx) throw new Error("Unable to create semantic terrain layer canvas.");
+  layerCtx.imageSmoothingEnabled = false;
+  layerCtx.fillStyle = fillStyle;
+  layerCtx.fillRect(0, 0, plan.width, plan.height);
+  layerCtx.globalCompositeOperation = "destination-in";
+  layerCtx.drawImage(maskCanvas, 0, 0);
+  layerCtx.globalCompositeOperation = "source-over";
+  ctx.drawImage(layerCanvas, 0, 0);
+}
+
+function drawMaskBoundaryAccents(ctx: CanvasRenderingContext2D, world: SemanticWorld, plan: SemanticMaskTerrainRenderPlan, classGrid: Uint8Array) {
+  const lineWidth = Math.max(1, Math.floor(plan.pixelBlock));
+  const accentWidth = Math.max(1, Math.floor(plan.pixelBlock * 2));
+  for (let my = 0; my < plan.maskHeight; my += 1) {
+    for (let mx = 0; mx < plan.maskWidth; mx += 1) {
+      const current = terrainClassAt(classGrid, my * plan.maskWidth + mx);
+      if (mx < plan.maskWidth - 1) {
+        const east = terrainClassAt(classGrid, my * plan.maskWidth + mx + 1);
+        if (current !== east) drawBoundaryPair(ctx, world, plan, mx, my, "e", current, east, lineWidth, accentWidth);
+      }
+      if (my < plan.maskHeight - 1) {
+        const south = terrainClassAt(classGrid, (my + 1) * plan.maskWidth + mx);
+        if (current !== south) drawBoundaryPair(ctx, world, plan, mx, my, "s", current, south, lineWidth, accentWidth);
+      }
+    }
+  }
+}
+
+function drawBoundaryPair(
+  ctx: CanvasRenderingContext2D,
+  world: SemanticWorld,
+  plan: SemanticMaskTerrainRenderPlan,
+  mx: number,
+  my: number,
+  side: "e" | "s",
+  current: TerrainClassId,
+  next: TerrainClassId,
+  lineWidth: number,
+  accentWidth: number
+) {
+  const boundary = boundaryKind(current, next);
+  if (!boundary) return;
+  const x = side === "e" ? (mx + 1) * plan.pixelBlock : mx * plan.pixelBlock;
+  const y = side === "s" ? (my + 1) * plan.pixelBlock : my * plan.pixelBlock;
+  const length = plan.pixelBlock;
+  const noise = hashNoise(`${world.seed}:mask-boundary-accent`, mx, my, side === "e" ? 1 : 2);
+  if (noise < 0.08 && boundary !== "waterBeach") return;
+
+  if (boundary === "deepShallow") {
+    drawBoundaryStrip(ctx, x, y, side, length, lineWidth, COLORS.shallowEdge, 0.2);
+    return;
+  }
+  if (boundary === "waterBeach") {
+    drawBoundaryStrip(ctx, x, y, side, length, accentWidth, COLORS.shallowEdge, 0.2);
+    drawBoundaryStrip(ctx, x, y, side, length, lineWidth, COLORS.foam, 0.72);
+    drawBoundaryStrip(ctx, x, y, side, length, accentWidth, COLORS.wetSand, 0.22);
+    return;
+  }
+  if (boundary === "sandGrass") {
+    drawBoundaryStrip(ctx, x, y, side, length, accentWidth, COLORS.beachEdge, 0.32);
+    drawBoundaryStrip(ctx, x, y, side, length, lineWidth, COLORS.grassEdge, 0.28);
+    return;
+  }
+  if (boundary === "sandIce") {
+    drawBoundaryStrip(ctx, x, y, side, length, accentWidth, COLORS.frost, 0.38);
+    drawBoundaryStrip(ctx, x, y, side, length, lineWidth, COLORS.sandEdge, 0.26);
+    return;
+  }
+  if (boundary === "grassIce") {
+    drawBoundaryStrip(ctx, x, y, side, length, accentWidth, COLORS.iceEdge, 0.34);
+    drawBoundaryStrip(ctx, x, y, side, length, lineWidth, COLORS.frost, 0.24);
+  }
+}
+
+function drawBoundaryStrip(ctx: CanvasRenderingContext2D, x: number, y: number, side: "e" | "s", length: number, width: number, color: Rgb, alpha: number) {
+  ctx.fillStyle = rgbaCss(color, alpha);
+  if (side === "e") ctx.fillRect(x - Math.floor(width / 2), y, width, length);
+  else ctx.fillRect(x, y - Math.floor(width / 2), length, width);
+}
+
+function boundaryKind(a: TerrainClassId, b: TerrainClassId): "deepShallow" | "waterBeach" | "sandGrass" | "sandIce" | "grassIce" | undefined {
+  if ((a === TERRAIN_CLASS_IDS.deepOcean && b === TERRAIN_CLASS_IDS.shallowWater) || (b === TERRAIN_CLASS_IDS.deepOcean && a === TERRAIN_CLASS_IDS.shallowWater)) return "deepShallow";
+  if ((isWater(a) && isSandLike(b)) || (isWater(b) && isSandLike(a))) return "waterBeach";
+  if ((isSandLike(a) && b === TERRAIN_CLASS_IDS.grassland) || (isSandLike(b) && a === TERRAIN_CLASS_IDS.grassland)) return "sandGrass";
+  if ((isSandLike(a) && b === TERRAIN_CLASS_IDS.ice) || (isSandLike(b) && a === TERRAIN_CLASS_IDS.ice)) return "sandIce";
+  if ((a === TERRAIN_CLASS_IDS.grassland && b === TERRAIN_CLASS_IDS.ice) || (b === TERRAIN_CLASS_IDS.grassland && a === TERRAIN_CLASS_IDS.ice)) return "grassIce";
+  return undefined;
+}
+
+function isWater(value: TerrainClassId): boolean {
+  return value === TERRAIN_CLASS_IDS.deepOcean || value === TERRAIN_CLASS_IDS.shallowWater;
+}
+
+function isSandLike(value: TerrainClassId): boolean {
+  return value === TERRAIN_CLASS_IDS.beach || value === TERRAIN_CLASS_IDS.sand;
+}
+
+function classNameForId(value: number): SemanticMaskTerrainClass {
+  switch (value) {
+    case TERRAIN_CLASS_IDS.shallowWater:
+      return "shallowWater";
+    case TERRAIN_CLASS_IDS.beach:
+      return "beach";
+    case TERRAIN_CLASS_IDS.grassland:
+      return "grassland";
+    case TERRAIN_CLASS_IDS.sand:
+      return "sand";
+    case TERRAIN_CLASS_IDS.ice:
+      return "ice";
+    case TERRAIN_CLASS_IDS.deepOcean:
+    default:
+      return "deepOcean";
+  }
+}
+
+function terrainClassAt(classGrid: Uint8Array, index: number): TerrainClassId {
+  return classGrid[index] as TerrainClassId;
+}
+
+function sampleBiome(world: SemanticWorld, sampleX: number, sampleY: number, biome: number): number {
+  return samplePredicate(world, world.layers.biome, sampleX, sampleY, (value) => value === biome);
+}
+
+function samplePredicate(world: SemanticWorld, values: ArrayLike<number>, sampleX: number, sampleY: number, predicate: (value: number) => boolean): number {
+  return sampleNumeric(world, values, sampleX, sampleY, (value) => (predicate(value) ? 1 : 0));
+}
+
+function sampleNumeric(world: SemanticWorld, values: ArrayLike<number>, sampleX: number, sampleY: number, mapValue: (value: number) => number = (value) => value): number {
+  const x0 = clampInt(Math.floor(sampleX), 0, world.width - 1);
+  const y0 = clampInt(Math.floor(sampleY), 0, world.height - 1);
+  const x1 = clampInt(x0 + 1, 0, world.width - 1);
+  const y1 = clampInt(y0 + 1, 0, world.height - 1);
+  const tx = Math.max(0, Math.min(1, sampleX - x0));
+  const ty = Math.max(0, Math.min(1, sampleY - y0));
+  const a = mapValue(values[y0 * world.width + x0]);
+  const b = mapValue(values[y0 * world.width + x1]);
+  const c = mapValue(values[y1 * world.width + x0]);
+  const d = mapValue(values[y1 * world.width + x1]);
+  const top = lerp(a, b, tx);
+  const bottom = lerp(c, d, tx);
+  return lerp(top, bottom, ty);
+}
+
+function chooseMaskPixelsPerCell(tileSize: number, requested: number): number {
+  const clamped = Math.max(1, Math.min(tileSize, Math.floor(requested)));
+  for (let value = clamped; value >= 1; value -= 1) {
+    if (tileSize % value === 0) return value;
+  }
+  return 1;
+}
+
+function emptyClassSamples(): Record<SemanticMaskTerrainClass, number> {
+  return {
+    deepOcean: 0,
+    shallowWater: 0,
+    beach: 0,
+    grassland: 0,
+    sand: 0,
+    ice: 0
+  };
+}
+
+function clampInt(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
+}
+
+function rgbCss(color: Rgb): string {
+  return `rgb(${color[0]},${color[1]},${color[2]})`;
+}
+
+function rgbaCss(color: Rgb, alpha: number): string {
+  return `rgba(${color[0]},${color[1]},${color[2]},${Math.max(0, Math.min(1, alpha))})`;
+}

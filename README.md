@@ -6,7 +6,7 @@ An original retro 2D top-down turn-based fantasy RPG set in Asterra. Three trave
 
 This project uses Phaser 3 with TypeScript and Vite. Phaser handles the browser game loop, canvas rendering, keyboard input, scaling, and pixel-art presentation cleanly, while TypeScript keeps the RPG data tables and battle state safer to evolve. Vite provides a small local dev/build workflow.
 
-Final/generated-first art assets now live under `assets/`, `assets_v2/`, and checked-in runtime atlases under `src/assets/world/`, and are loaded by Phaser at startup. The game renders atlas-backed overworld terrain tiles plus a transparent semantic edge overlay, PNG/JPEG world object overlays, dungeon tiles/objects, city/town floors and shop pads, town props, markers, battle backgrounds, portraits, enemies, title decoration/logo, UI cursors, HP bars, and normalized fighter/priest/wizard class sprite sheets. Code-generated fallback art remains in place so the game stays playable if an image is missing or fails to load.
+Final/generated-first art assets now live under `assets/`, `assets_v2/`, and checked-in runtime atlases under `src/assets/world/`, and are loaded by Phaser at startup. The game renders a crisp semantic mask overworld background using atlas terrain crops as repeating texture sources, PNG/JPEG world object overlays, dungeon tiles/objects, city/town floors and shop pads, town props, markers, battle backgrounds, portraits, enemies, title decoration/logo, UI cursors, HP bars, and normalized fighter/priest/wizard class sprite sheets. Code-generated fallback art remains in place so the game stays playable if an image is missing or fails to load.
 
 No external sound, fonts, maps, music, asset packs, or copyrighted material are used. Audio is still synthesized in code.
 
@@ -50,7 +50,7 @@ npm test
 - Shift: move faster while exploring
 - M: mute
 - F: fullscreen
-- F6: cycle semantic world debug overlays, including edge-overlay off, edge debug, raw square tiles, semantic masks, distance bands, walkability, overlay policy, mountain candidates, forests, island themes, POIs, roads, and rivers
+- F6: cycle semantic world debug overlays, including edge debug, raw square tiles, semantic masks, distance bands, walkability, overlay policy, mountain candidates, forests, island themes, POIs, roads, and rivers
 - F9: hidden debug menu for testing
 
 ## Saving
@@ -60,7 +60,7 @@ The game saves to `localStorage`. You can save from the menu on the overworld or
 ## Gameplay Summary
 
 - Three-character party: Arlen, Mira, and Kael
-- Seeded semantic archipelago overworld using generated land/water masks, island IDs, coast bands, grass/sand/ice biomes, walkability, overlay collision policy, road/river overlays, and POIs. Normal gameplay uses one canonical atlas tile per semantic base terrain type, then draws a transparent semantic edge overlay for coast, shallow-water, beach, and biome boundary accents while objects and route overlays stay separate.
+- Seeded semantic archipelago overworld using generated land/water masks, island IDs, coast bands, grass/sand/ice biomes, walkability, overlay collision policy, road/river data, and POIs. Normal gameplay renders a crisp mask-based terrain background from the semantic fields, using existing atlas terrain crops as repeating texture sources with pixel-step coast and biome boundary accents. Objects stay separate, while road/river graph strokes are debug-only until they have proper art.
 - Atlas-backed city/town interiors and dungeons using `dungeon_atlas` for medieval stone, cave, ice, ruin, volcanic, cursed, chest, gate, switch, stair, and boss-seal tiles
 - Four major themed islands: Greenhaven, Coralreach, Frostmere, and Highspire, with deterministic world seeds and harbor travel between charted routes
 - Procedural room-and-corridor dungeons derived from the world seed and dungeon id
@@ -83,7 +83,7 @@ All code, art, and audio are procedurally generated or created inside this proje
 - Title screen appears and New Game starts in Greenhaven.
 - Intro dialogue advances with Enter/Z.
 - Player moves smoothly with keyboard, can exit town through the south gate, and sees an ocean-based archipelago on the overworld.
-- Normal overworld terrain uses canonical atlas tiles for grass/sand/ice/water/beach, with narrow transparent pixel-art edge overlays for shallow-water, coast, beach/inland, and biome boundaries. F6 `edgeDebug` color-codes detected boundaries.
+- Normal overworld terrain is mask-rendered, not square atlas tiles; coast and biome boundaries should read as pixel-crisp organic masks rather than a hard tile grid. F6 `rawTiles` shows the old square atlas view for debugging, and F6 `roads` / `rivers` show the semantic graph lines.
 - Menu opens with Escape and Settings can toggle encounters and XP multiplier.
 - Random or debug encounters enter battle.
 - Battle shows one current actor at a time, enemy intent, and the Skill command; party actions resolve immediately and enemies act on initiative turns.

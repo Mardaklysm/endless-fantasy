@@ -42,9 +42,9 @@ This runs `tools/worldgen/test_worldgen.mjs`. It validates the active semantic r
 - forests remain walkable, while mountains remain blocked
 - Greenhaven and Coralreach do not receive snow mountains, Greenhaven respects its mountain cap, and every island respects its configured mountain cap
 - roads are walkable and not overlapped by mountain/forest overlays
-- normal semantic base terrain uses exactly one canonical tile ID each for deep water, shallow water, beach, grassland, sand/desert, and ice/snow while `TERRAIN_VARIANT_MODE` is off
-- the semantic edge overlay renderer plan reports the expected texture dimensions, shallow halo, beach cells, coastline cells, biome boundaries, and does not mutate the generated world
-- the semantic edge overlay renderer plan detects water/beach and sand/grass boundaries
+- the semantic compatibility tile grid uses exactly one canonical tile ID each for deep water, shallow water, beach, grassland, sand/desert, and ice/snow while `TERRAIN_VARIANT_MODE` is off
+- the semantic mask terrain renderer plan reports the expected texture dimensions, mask resolution, class samples, boundary samples, and does not mutate the generated world
+- the semantic mask terrain renderer uses atlas texture source IDs that match the canonical terrain palette
 
 To write a human-readable generation report and PNG minimap preview:
 
@@ -60,7 +60,7 @@ Outputs:
 - `docs/debug/worldgen/atlas-v3-world-preview.png`
 - `docs/debug/worldgen/world-preview-seed-<seed>.png`
 
-The source-inset report should confirm normal/raw/fallback atlas draws and debug previews use `ATLAS_V3_SOURCE_INSET`, and that stamped-atlas map-level terrain blending/neighbor-pixel mutation is disabled. Normal gameplay terrain uses atlas base tiles plus a transparent semantic edge overlay.
+The source-inset report should confirm raw/fallback atlas draws and debug previews use `ATLAS_V3_SOURCE_INSET`, and that stamped-atlas map-level terrain blending/neighbor-pixel mutation is disabled. Normal gameplay terrain is a semantic mask-rendered background using atlas texture crops, not stamped square atlas cells.
 
 ## Asset Import Validation
 
@@ -206,8 +206,9 @@ Expected:
 - Confirm the overworld leader remains readable when standing on a town/location marker.
 - Confirm `atlas_v3` terrain uses the new coast, road, shallow-water, forest, and mountain cells; dark seams can come from actual atlas cell edge pixels and should not be debug grid overlays.
 - Confirm water blocks movement while generated roads suppress encounters and harbors enable boat travel.
-- Confirm normal overworld terrain uses the existing atlas water/beach/grass/sand/ice tiles as the base art, with a transparent semantic edge overlay for shallow-water halos, coastline tint/foam, beach/inland, and grass/sand/ice boundaries.
-- Use F6 semantic debug overlays to inspect edge-overlay off, edge debug, raw square tiles, semantic masks, distance bands, walkability, overlay policy, mountain candidates/accepted cells, forest soft-terrain cells, island themes, POI clearance, roads, and rivers. `edgeDebug` draws water/beach edges cyan, sand/grass edges magenta, sand/ice edges white, and grass/ice edges blue.
+- Confirm normal overworld terrain is mask-rendered from semantic fields using atlas texture sources, with crisp coastlines and biome boundaries rather than hard square tile edges or full-map blur.
+- Confirm roads and rivers are not drawn as tan/blue graph strokes in normal gameplay; use F6 `roads` and F6 `rivers` to inspect that semantic data.
+- Use F6 semantic debug overlays to inspect edge debug, raw square tiles, semantic masks, distance bands, walkability, overlay policy, mountain candidates/accepted cells, forest soft-terrain cells, island themes, POI clearance, roads, and rivers. `edgeDebug` draws water/beach edges cyan, sand/grass edges magenta, sand/ice edges white, and grass/ice edges blue.
 - At Greenhaven Harbor, confirm Coralreach costs 10 gold, deducts gold, moves the player to Coralreach harbor, and can return by harbor.
 - Confirm new games produce different world seeds and load restores the same saved world.
 

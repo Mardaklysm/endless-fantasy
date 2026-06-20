@@ -32,7 +32,7 @@ import {
   type WorldTileId
 } from "./data/worldTiles.ts";
 import { generateDungeonFloors } from "./world/dungeonGenerator.ts";
-import { createSemanticEdgeOverlayTexture } from "./world/semantic/semanticTerrainRenderer.ts";
+import { createSemanticMaskTerrainTexture } from "./world/semantic/semanticMaskTerrainRenderer.ts";
 import { SEMANTIC_BIOME, SEMANTIC_WATER } from "./world/semantic/semanticTypes.ts";
 import {
   ACTIVE_WORLDGEN_MODE,
@@ -88,6 +88,9 @@ type ExploreMode = "world" | "town" | "dungeon";
 type DirectionName = "up" | "down" | "left" | "right";
 
 type Terrain = WorldTileId;
+type TerrainRenderMode = "mask" | "tile";
+
+const TERRAIN_RENDER_MODE: TerrainRenderMode = "mask";
 
 type ElementType =
   | "none"
@@ -1506,13 +1509,12 @@ class CrystalOathScene extends Phaser.Scene {
   private audio = new SynthAudio();
   private generatedWorld?: GeneratedWorld;
   private roadVisualsByKey = new Map<string, WorldRoadVisual>();
-  private semanticDebugOverlay: "off" | "edgesOff" | "edgeDebug" | "rawTiles" | "masks" | "distance" | "grid" | "walkability" | "policy" | "mountains" | "forests" | "islands" | "pois" | "roads" | "rivers" = "off";
+  private terrainRenderMode: TerrainRenderMode = TERRAIN_RENDER_MODE;
+  private semanticDebugOverlay: "off" | "edgeDebug" | "rawTiles" | "masks" | "distance" | "grid" | "walkability" | "policy" | "mountains" | "forests" | "islands" | "pois" | "roads" | "rivers" = "off";
   private worldSeed = "title-preview";
   private world: Terrain[][] = [];
   private worldTerrainCacheKey = "world_terrain_cache";
   private worldTerrainCacheSeed = "";
-  private semanticEdgeOverlayCacheKey = "semantic_edge_overlay_cache";
-  private semanticEdgeOverlayCacheSeed = "";
   private party: CharacterState[] = [];
   private inventory: Record<string, number> = {};
   private gearBag: Record<string, number> = {};
@@ -1692,7 +1694,7 @@ class CrystalOathScene extends Phaser.Scene {
   }
 
   private cycleSemanticDebugOverlay() {
-    const modes = ["off", "edgesOff", "edgeDebug", "rawTiles", "masks", "distance", "grid", "walkability", "policy", "mountains", "forests", "islands", "pois", "roads", "rivers"] as const;
+    const modes = ["off", "edgeDebug", "rawTiles", "masks", "distance", "grid", "walkability", "policy", "mountains", "forests", "islands", "pois", "roads", "rivers"] as const;
     const current = modes.indexOf(this.semanticDebugOverlay);
     this.semanticDebugOverlay = modes[(current + 1) % modes.length];
     this.flashMessage(`Semantic debug: ${this.semanticDebugOverlay}`);
@@ -4847,7 +4849,7 @@ Statuses: ${statuses}`;
     const endX = Math.min(WORLD_W - 1, Math.ceil((tileCam.x + WIDTH) / TILE));
     const startY = Math.max(0, Math.floor(tileCam.y / TILE) - 1);
     const endY = Math.min(WORLD_H - 1, Math.ceil((tileCam.y + HEIGHT) / TILE));
-    const showRawTiles = this.semanticDebugOverlay === "rawTiles";
+    const showRawTiles = this.terrainRenderMode === "tile" || this.semanticDebugOverlay === "rawTiles";
     if (showRawTiles || !this.drawCachedWorldTerrain(tileCam)) {
       for (let y = startY; y <= endY; y += 1) {
         for (let x = startX; x <= endX; x += 1) {
@@ -4855,7 +4857,6 @@ Statuses: ${statuses}`;
         }
       }
     }
-    if (!showRawTiles && this.semanticDebugOverlay !== "edgesOff") this.drawCachedSemanticEdgeOverlay(tileCam);
     this.drawWorldOverlays(startX, endX, startY, endY, tileCam);
     this.drawSemanticDebugOverlay(startX, endX, startY, endY, tileCam);
     for (const loc of this.locations()) {
@@ -5458,33 +5459,6 @@ Statuses: ${statuses}`;
     if (!this.generatedWorld) return;
     const overlayGraphics = this.worldOverlay;
     const inView = (pos: Vec) => pos.x >= startX && pos.x <= endX && pos.y >= startY && pos.y <= endY;
-    this.drawWorldRoadOverlays(startX, endX, startY, endY, tileCam, overlayGraphics);
-    for (const route of this.generatedWorld.seaRoutes) {
-      route.forEach((pos, idx) => {
-        if (!inView(pos) || idx % 3 !== 0) return;
-        const sx = pos.x * TILE - tileCam.x;
-        const sy = pos.y * TILE - tileCam.y;
-        overlayGraphics.fillStyle(0xfff0a8, 0.62).fillCircle(sx + TILE / 2, sy + TILE / 2, 3);
-      });
-    }
-    for (const river of this.generatedWorld.rivers) {
-      const visiblePath = river.filter(inView);
-      if (!visiblePath.length) continue;
-      overlayGraphics.lineStyle(5, 0x163d9a, 0.9);
-      for (let i = 1; i < river.length; i += 1) {
-        const from = river[i - 1];
-        const to = river[i];
-        if (!inView(from) && !inView(to)) continue;
-        overlayGraphics.lineBetween(from.x * TILE - tileCam.x + TILE / 2, from.y * TILE - tileCam.y + TILE / 2, to.x * TILE - tileCam.x + TILE / 2, to.y * TILE - tileCam.y + TILE / 2);
-      }
-      overlayGraphics.lineStyle(2, 0x72d8ff, 0.9);
-      for (let i = 1; i < river.length; i += 1) {
-        const from = river[i - 1];
-        const to = river[i];
-        if (!inView(from) && !inView(to)) continue;
-        overlayGraphics.lineBetween(from.x * TILE - tileCam.x + TILE / 2, from.y * TILE - tileCam.y + TILE / 2, to.x * TILE - tileCam.x + TILE / 2, to.y * TILE - tileCam.y + TILE / 2);
-      }
-    }
     const hasObjectAtlas = this.hasTexture(WORLD_OBJECT_ATLAS.textureKey);
     for (const overlay of this.generatedWorld.objectOverlays) {
       if (!inView(overlay)) continue;
@@ -5780,59 +5754,17 @@ Statuses: ${statuses}`;
 
   private rebuildWorldTerrainCache() {
     this.worldTerrainCacheSeed = "";
-    this.semanticEdgeOverlayCacheSeed = "";
-    if (!this.world.length) {
-      this.rebuildSemanticEdgeOverlayCache();
-      return;
-    }
-    if (!this.textures.exists(WORLD_ATLAS.textureKey)) {
-      this.rebuildSemanticEdgeOverlayCache();
-      return;
-    }
+    if (!this.generatedWorld || !this.world.length || !this.textures.exists(WORLD_ATLAS.textureKey)) return;
     this.assertWorldTilesetTextureSize();
-    const mapWidth = this.world[0].length * TILE;
-    const mapHeight = this.world.length * TILE;
-    const canvas = document.createElement("canvas");
-    canvas.width = mapWidth;
-    canvas.height = mapHeight;
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    if (!ctx) throw new Error("Unable to create terrain cache canvas.");
-    ctx.imageSmoothingEnabled = false;
-
-    const atlasSource = this.textures.get(WORLD_ATLAS.textureKey).getSourceImage() as CanvasImageSource & { width: number; height: number };
-    for (let y = 0; y < this.world.length; y += 1) {
-      for (let x = 0; x < this.world[y].length; x += 1) {
-        const tile = WORLD_TILES[this.world[y][x]];
-        if (!tile) throw new Error(`Cannot render unknown world tile ${this.world[y][x]} at ${x},${y}.`);
-        const rect = this.worldTileSourceRect(tile);
-        ctx.drawImage(atlasSource, rect.x, rect.y, rect.width, rect.height, x * TILE, y * TILE, TILE, TILE);
-      }
-    }
-
-    if (this.textures.exists(this.worldTerrainCacheKey)) this.textures.remove(this.worldTerrainCacheKey);
-    this.textures.addCanvas(this.worldTerrainCacheKey, canvas);
+    createSemanticMaskTerrainTexture(this, this.generatedWorld.semantic, {
+      tileSize: TILE,
+      textureKey: this.worldTerrainCacheKey,
+      atlasTextureKey: WORLD_ATLAS.textureKey
+    });
     this.textures.get(this.worldTerrainCacheKey).setFilter(Phaser.Textures.FilterMode.NEAREST);
     this.worldTerrainCacheSeed = this.worldSeed;
-    this.rebuildSemanticEdgeOverlayCache();
     if (import.meta.env.DEV) {
-      console.info(`Atlas v3 terrain cache rendered with source inset ${ATLAS_V3_SOURCE_INSET}; semantic edge overlay rendered separately.`);
-    }
-  }
-
-  private rebuildSemanticEdgeOverlayCache() {
-    this.semanticEdgeOverlayCacheSeed = "";
-    if (!this.generatedWorld) {
-      if (this.textures.exists(this.semanticEdgeOverlayCacheKey)) this.textures.remove(this.semanticEdgeOverlayCacheKey);
-      return;
-    }
-    createSemanticEdgeOverlayTexture(this, this.generatedWorld.semantic, {
-      tileSize: TILE,
-      textureKey: this.semanticEdgeOverlayCacheKey
-    });
-    this.textures.get(this.semanticEdgeOverlayCacheKey).setFilter(Phaser.Textures.FilterMode.NEAREST);
-    this.semanticEdgeOverlayCacheSeed = this.worldSeed;
-    if (import.meta.env.DEV) {
-      console.info("Semantic edge overlay texture rendered above atlas terrain tiles.");
+      console.info(`Semantic mask terrain cache rendered from atlas texture sources; raw square tiles remain available through F6 rawTiles.`);
     }
   }
 
@@ -5885,30 +5817,6 @@ Statuses: ${statuses}`;
         `expected display=${cropWidth * PIXEL_ART_SCALE}x${cropHeight * PIXEL_ART_SCALE}`
       );
     }
-    return true;
-  }
-
-  private drawCachedSemanticEdgeOverlay(tileCam: Vec): boolean {
-    if (this.semanticEdgeOverlayCacheSeed !== this.worldSeed || !this.textures.exists(this.semanticEdgeOverlayCacheKey)) return false;
-    const mapWidth = (this.world[0]?.length ?? 0) * TILE;
-    const mapHeight = this.world.length * TILE;
-    const cropX = Math.round(Phaser.Math.Clamp(tileCam.x, 0, Math.max(0, mapWidth - WIDTH)));
-    const cropY = Math.round(Phaser.Math.Clamp(tileCam.y, 0, Math.max(0, mapHeight - HEIGHT)));
-    const cropWidth = Math.min(WIDTH, mapWidth - cropX);
-    const cropHeight = Math.min(HEIGHT, mapHeight - cropY);
-    if (cropWidth <= 0 || cropHeight <= 0) return false;
-
-    const viewFrameKey = `${this.semanticEdgeOverlayCacheKey}_view`;
-    const texture = this.textures.get(this.semanticEdgeOverlayCacheKey);
-    if (texture.has(viewFrameKey)) texture.remove(viewFrameKey);
-    texture.add(viewFrameKey, 0, cropX, cropY, cropWidth, cropHeight);
-
-    const image = this.add.image(0, 0, this.semanticEdgeOverlayCacheKey, viewFrameKey);
-    image.setOrigin(0, 0);
-    image.setDisplaySize(cropWidth * PIXEL_ART_SCALE, cropHeight * PIXEL_ART_SCALE);
-    image.setDepth(LAYER_WORLD_IMAGE + 0.25);
-    image.setScrollFactor(0);
-    this.images.push(image);
     return true;
   }
 
