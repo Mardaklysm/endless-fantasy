@@ -42,6 +42,7 @@ This runs `tools/worldgen/test_worldgen.mjs`. It validates the active semantic r
 - forests remain walkable, while mountains remain blocked
 - Greenhaven and Coralreach do not receive snow mountains, Greenhaven respects its mountain cap, and every island respects its configured mountain cap
 - roads are walkable and not overlapped by mountain/forest overlays
+- the semantic terrain renderer plan reports the expected texture dimensions, shallow halo, beach cells, coastline cells, biome boundaries, and does not mutate the generated world
 
 To write a human-readable generation report and PNG minimap preview:
 
@@ -57,7 +58,7 @@ Outputs:
 - `docs/debug/worldgen/atlas-v3-world-preview.png`
 - `docs/debug/worldgen/world-preview-seed-<seed>.png`
 
-The source-inset report should confirm the runtime cache, fallback draw path, and debug preview all use `ATLAS_V3_SOURCE_INSET`, and that map-level terrain blending/neighbor-pixel mutation is disabled.
+The source-inset report should confirm raw/fallback atlas draws and debug previews use `ATLAS_V3_SOURCE_INSET`, and that stamped-atlas map-level terrain blending/neighbor-pixel mutation is disabled. Normal gameplay terrain is now the generated semantic mask texture, so this report no longer describes the primary overworld background renderer.
 
 ## Asset Import Validation
 
@@ -130,7 +131,7 @@ For the legacy 10x10 overworld atlas, run only if intentionally regenerating tha
 node tools\art_import\import_world_atlas.mjs
 ```
 
-Check `src/assets/world/world_atlas.normalized.png` and `docs/debug/world-atlas/world_atlas.labeled-preview.png` / `world_atlas.import-report.md`. This should not replace the active `atlas_v3` runtime path without a deliberate follow-up task.
+Check `src/assets/world/world_atlas.normalized.png` and `docs/debug/world-atlas/world_atlas.labeled-preview.png` / `world_atlas.import-report.md`. This should not replace the active `atlas_v3` raw/debug/fallback path or the semantic mask terrain renderer without a deliberate follow-up task.
 
 For the archived classic world tileset pack, run only if intentionally inspecting archived assets:
 
@@ -203,7 +204,8 @@ Expected:
 - Confirm the overworld leader remains readable when standing on a town/location marker.
 - Confirm `atlas_v3` terrain uses the new coast, road, shallow-water, forest, and mountain cells; dark seams can come from actual atlas cell edge pixels and should not be debug grid overlays.
 - Confirm water blocks movement while generated roads suppress encounters and harbors enable boat travel.
-- Use F6 semantic debug overlays to inspect walkability, overlay policy, mountain candidates/accepted cells, forest soft-terrain cells, island themes, POI clearance, roads, and rivers.
+- Confirm normal overworld terrain is the generated mask/field texture: shallow-water halos surround land, beaches sit between water and inland terrain, and grass/sand/ice boundaries are softened instead of hard square biome tiles.
+- Use F6 semantic debug overlays to inspect raw square tiles, semantic masks, distance bands, walkability, overlay policy, mountain candidates/accepted cells, forest soft-terrain cells, island themes, POI clearance, roads, and rivers.
 - At Greenhaven Harbor, confirm Coralreach costs 10 gold, deducts gold, moves the player to Coralreach harbor, and can return by harbor.
 - Confirm new games produce different world seeds and load restores the same saved world.
 

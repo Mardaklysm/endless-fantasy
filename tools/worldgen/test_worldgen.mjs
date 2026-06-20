@@ -6,6 +6,7 @@ import { WORLD_ATLAS, WORLD_TILE_IDS, isWorldTileWalkable, worldTileById } from 
 import { WORLD_OBJECT_ATLAS, WORLD_OBJECT_ID_SET } from "../../src/data/worldObjects.ts";
 import { DUNGEON_ATLAS } from "../../src/data/dungeonTiles.ts";
 import { SEMANTIC_BIOME, SEMANTIC_WATER } from "../../src/world/semantic/semanticTypes.ts";
+import { describeSemanticTerrainRenderPlan } from "../../src/world/semantic/semanticTerrainRenderer.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -89,6 +90,7 @@ function validateSemanticWorldgen() {
   validatePois(worldA);
   validateRoadConnections(worldA);
   validateRoadAndForestPolicies(worldA);
+  validateSemanticTerrainRendererPlan(worldA);
 }
 
 function validateIslandOverlayRules(world) {
@@ -170,6 +172,21 @@ function validateRoadAndForestPolicies(world) {
       }
     }
   }
+}
+
+function validateSemanticTerrainRendererPlan(world) {
+  const before = stableSummary(world);
+  const plan = describeSemanticTerrainRenderPlan(world.semantic, { tileSize: 7 });
+  const after = stableSummary(world);
+  assert(plan.width === world.width * 7, `Semantic terrain texture width expected ${world.width * 7}, got ${plan.width}.`);
+  assert(plan.height === world.height * 7, `Semantic terrain texture height expected ${world.height * 7}, got ${plan.height}.`);
+  assert(plan.pixelStep === 1, `Small semantic terrain texture should render with 1px detail step, got ${plan.pixelStep}.`);
+  assert(plan.landCells > 0, "Semantic terrain renderer plan found no land cells.");
+  assert(plan.shallowCells > 0, "Semantic terrain renderer plan found no shallow-water halo cells.");
+  assert(plan.beachCells > 0, "Semantic terrain renderer plan found no beach cells.");
+  assert(plan.coastlineCells > 0, "Semantic terrain renderer plan found no coastline cells.");
+  assert(plan.biomeBoundaryCells > 0, "Semantic terrain renderer plan found no biome boundary cells.");
+  assert(before === after, "Semantic terrain renderer planning mutated the generated world.");
 }
 
 function stableSummary(world) {
