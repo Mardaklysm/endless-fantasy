@@ -121,6 +121,20 @@ const ROAD_E = 2;
 const ROAD_S = 4;
 const ROAD_W = 8;
 
+export type TerrainVariantMode = "off" | "sparse" | "patches";
+
+export const TERRAIN_VARIANT_MODE: TerrainVariantMode = "off";
+
+export const SEMANTIC_BASE_TILE_PALETTE = {
+  deepOcean: WORLD_TILE_IDS.deepWater,
+  shallowWater: WORLD_TILE_IDS.shallowWater,
+  lake: WORLD_TILE_IDS.shallowWater,
+  beach: WORLD_TILE_IDS.beachSand,
+  grassland: WORLD_TILE_IDS.mediumGrass,
+  sand: WORLD_TILE_IDS.brightSand,
+  ice: WORLD_TILE_IDS.cleanSnow
+} as const satisfies Record<string, WorldTileId>;
+
 export function createWorldSeed(): string {
   const random = Math.floor(Math.random() * 0xffffffff).toString(36);
   return `semantic-${Date.now().toString(36)}-${random}`;
@@ -243,11 +257,23 @@ function buildTiles(semantic: SemanticWorld): WorldTileId[][] {
 
 function tileForSemanticCell(semantic: SemanticWorld, x: number, y: number): WorldTileId {
   const i = y * semantic.width + x;
-  if (semantic.layers.lakeMap[i]) return WORLD_TILE_IDS.shallowWater;
+  if (semantic.layers.lakeMap[i]) return SEMANTIC_BASE_TILE_PALETTE.lake;
   if (!semantic.layers.landMask[i]) {
-    return semantic.layers.waterClass[i] === SEMANTIC_WATER.SHALLOW ? WORLD_TILE_IDS.shallowWater : WORLD_TILE_IDS.deepWater;
+    return semantic.layers.waterClass[i] === SEMANTIC_WATER.SHALLOW ? SEMANTIC_BASE_TILE_PALETTE.shallowWater : SEMANTIC_BASE_TILE_PALETTE.deepOcean;
   }
-  if (semantic.layers.biome[i] === SEMANTIC_BIOME.BEACH) return WORLD_TILE_IDS.beachSand;
+  if (TERRAIN_VARIANT_MODE === "off") return canonicalTileForBiome(semantic.layers.biome[i]);
+  return variantTileForSemanticCell(semantic, x, y, i);
+}
+
+function canonicalTileForBiome(biome: number): WorldTileId {
+  if (biome === SEMANTIC_BIOME.BEACH) return SEMANTIC_BASE_TILE_PALETTE.beach;
+  if (biome === SEMANTIC_BIOME.SAND) return SEMANTIC_BASE_TILE_PALETTE.sand;
+  if (biome === SEMANTIC_BIOME.ICE) return SEMANTIC_BASE_TILE_PALETTE.ice;
+  return SEMANTIC_BASE_TILE_PALETTE.grassland;
+}
+
+function variantTileForSemanticCell(semantic: SemanticWorld, x: number, y: number, i: number): WorldTileId {
+  if (semantic.layers.biome[i] === SEMANTIC_BIOME.BEACH) return SEMANTIC_BASE_TILE_PALETTE.beach;
   if (semantic.layers.biome[i] === SEMANTIC_BIOME.SAND) return pickByNoise([WORLD_TILE_IDS.brightSand, WORLD_TILE_IDS.duneSand, WORLD_TILE_IDS.rockySand], semantic.seed, "sand", x, y);
   if (semantic.layers.biome[i] === SEMANTIC_BIOME.ICE) return pickByNoise([WORLD_TILE_IDS.cleanSnow, WORLD_TILE_IDS.packedSnow, WORLD_TILE_IDS.icySnow], semantic.seed, "ice", x, y);
   return pickByNoise([WORLD_TILE_IDS.mediumGrass, WORLD_TILE_IDS.brightGrass, WORLD_TILE_IDS.lushCloverGrass, WORLD_TILE_IDS.flowerMeadowGrass], semantic.seed, "grass", x, y, [0.76, 0.08, 0.1, 0.06]);

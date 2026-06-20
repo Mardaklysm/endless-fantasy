@@ -32,7 +32,7 @@ import {
   type WorldTileId
 } from "./data/worldTiles.ts";
 import { generateDungeonFloors } from "./world/dungeonGenerator.ts";
-import { createSemanticTerrainTexture } from "./world/semantic/semanticTerrainRenderer.ts";
+import { createSemanticEdgeOverlayTexture } from "./world/semantic/semanticTerrainRenderer.ts";
 import { SEMANTIC_BIOME, SEMANTIC_WATER } from "./world/semantic/semanticTypes.ts";
 import {
   ACTIVE_WORLDGEN_MODE,
@@ -1493,6 +1493,7 @@ class SynthAudio {
 
 class CrystalOathScene extends Phaser.Scene {
   private g!: Phaser.GameObjects.Graphics;
+  private worldOverlay!: Phaser.GameObjects.Graphics;
   private ui!: Phaser.GameObjects.Graphics;
   private texts: Phaser.GameObjects.Text[] = [];
   private images: Phaser.GameObjects.Image[] = [];
@@ -1505,11 +1506,13 @@ class CrystalOathScene extends Phaser.Scene {
   private audio = new SynthAudio();
   private generatedWorld?: GeneratedWorld;
   private roadVisualsByKey = new Map<string, WorldRoadVisual>();
-  private semanticDebugOverlay: "off" | "rawTiles" | "masks" | "distance" | "grid" | "walkability" | "policy" | "mountains" | "forests" | "islands" | "pois" | "roads" | "rivers" = "off";
+  private semanticDebugOverlay: "off" | "edgesOff" | "edgeDebug" | "rawTiles" | "masks" | "distance" | "grid" | "walkability" | "policy" | "mountains" | "forests" | "islands" | "pois" | "roads" | "rivers" = "off";
   private worldSeed = "title-preview";
   private world: Terrain[][] = [];
   private worldTerrainCacheKey = "world_terrain_cache";
   private worldTerrainCacheSeed = "";
+  private semanticEdgeOverlayCacheKey = "semantic_edge_overlay_cache";
+  private semanticEdgeOverlayCacheSeed = "";
   private party: CharacterState[] = [];
   private inventory: Record<string, number> = {};
   private gearBag: Record<string, number> = {};
@@ -1579,6 +1582,8 @@ class CrystalOathScene extends Phaser.Scene {
   create() {
     this.g = this.add.graphics();
     this.g.setDepth(0);
+    this.worldOverlay = this.add.graphics();
+    this.worldOverlay.setDepth(LAYER_WORLD_IMAGE + 0.5);
     this.ui = this.add.graphics();
     this.ui.setDepth(LAYER_UI_GRAPHICS);
     this.configureRenderResolution();
@@ -1594,6 +1599,7 @@ class CrystalOathScene extends Phaser.Scene {
   private configureRenderResolution() {
     this.cameras.main.roundPixels = true;
     this.g.setScale(PIXEL_ART_SCALE);
+    this.worldOverlay.setScale(PIXEL_ART_SCALE);
     this.ui.setScale(PIXEL_ART_SCALE);
   }
 
@@ -1686,7 +1692,7 @@ class CrystalOathScene extends Phaser.Scene {
   }
 
   private cycleSemanticDebugOverlay() {
-    const modes = ["off", "rawTiles", "masks", "distance", "grid", "walkability", "policy", "mountains", "forests", "islands", "pois", "roads", "rivers"] as const;
+    const modes = ["off", "edgesOff", "edgeDebug", "rawTiles", "masks", "distance", "grid", "walkability", "policy", "mountains", "forests", "islands", "pois", "roads", "rivers"] as const;
     const current = modes.indexOf(this.semanticDebugOverlay);
     this.semanticDebugOverlay = modes[(current + 1) % modes.length];
     this.flashMessage(`Semantic debug: ${this.semanticDebugOverlay}`);
@@ -4560,6 +4566,7 @@ Statuses: ${statuses}`;
     this.dirty = false;
     this.clearImages();
     this.g.clear();
+    this.worldOverlay.clear();
     this.ui.clear();
     this.clearText();
     if (this.mode === "title") this.drawTitle();
@@ -4848,6 +4855,7 @@ Statuses: ${statuses}`;
         }
       }
     }
+    if (!showRawTiles && this.semanticDebugOverlay !== "edgesOff") this.drawCachedSemanticEdgeOverlay(tileCam);
     this.drawWorldOverlays(startX, endX, startY, endY, tileCam);
     this.drawSemanticDebugOverlay(startX, endX, startY, endY, tileCam);
     for (const loc of this.locations()) {
@@ -5448,32 +5456,33 @@ Statuses: ${statuses}`;
 
   private drawWorldOverlays(startX: number, endX: number, startY: number, endY: number, tileCam: Vec) {
     if (!this.generatedWorld) return;
+    const overlayGraphics = this.worldOverlay;
     const inView = (pos: Vec) => pos.x >= startX && pos.x <= endX && pos.y >= startY && pos.y <= endY;
-    this.drawWorldRoadOverlays(startX, endX, startY, endY, tileCam);
+    this.drawWorldRoadOverlays(startX, endX, startY, endY, tileCam, overlayGraphics);
     for (const route of this.generatedWorld.seaRoutes) {
       route.forEach((pos, idx) => {
         if (!inView(pos) || idx % 3 !== 0) return;
         const sx = pos.x * TILE - tileCam.x;
         const sy = pos.y * TILE - tileCam.y;
-        this.g.fillStyle(0xfff0a8, 0.62).fillCircle(sx + TILE / 2, sy + TILE / 2, 3);
+        overlayGraphics.fillStyle(0xfff0a8, 0.62).fillCircle(sx + TILE / 2, sy + TILE / 2, 3);
       });
     }
     for (const river of this.generatedWorld.rivers) {
       const visiblePath = river.filter(inView);
       if (!visiblePath.length) continue;
-      this.g.lineStyle(5, 0x163d9a, 0.9);
+      overlayGraphics.lineStyle(5, 0x163d9a, 0.9);
       for (let i = 1; i < river.length; i += 1) {
         const from = river[i - 1];
         const to = river[i];
         if (!inView(from) && !inView(to)) continue;
-        this.g.lineBetween(from.x * TILE - tileCam.x + TILE / 2, from.y * TILE - tileCam.y + TILE / 2, to.x * TILE - tileCam.x + TILE / 2, to.y * TILE - tileCam.y + TILE / 2);
+        overlayGraphics.lineBetween(from.x * TILE - tileCam.x + TILE / 2, from.y * TILE - tileCam.y + TILE / 2, to.x * TILE - tileCam.x + TILE / 2, to.y * TILE - tileCam.y + TILE / 2);
       }
-      this.g.lineStyle(2, 0x72d8ff, 0.9);
+      overlayGraphics.lineStyle(2, 0x72d8ff, 0.9);
       for (let i = 1; i < river.length; i += 1) {
         const from = river[i - 1];
         const to = river[i];
         if (!inView(from) && !inView(to)) continue;
-        this.g.lineBetween(from.x * TILE - tileCam.x + TILE / 2, from.y * TILE - tileCam.y + TILE / 2, to.x * TILE - tileCam.x + TILE / 2, to.y * TILE - tileCam.y + TILE / 2);
+        overlayGraphics.lineBetween(from.x * TILE - tileCam.x + TILE / 2, from.y * TILE - tileCam.y + TILE / 2, to.x * TILE - tileCam.x + TILE / 2, to.y * TILE - tileCam.y + TILE / 2);
       }
     }
     const hasObjectAtlas = this.hasTexture(WORLD_OBJECT_ATLAS.textureKey);
@@ -5489,8 +5498,8 @@ Statuses: ${statuses}`;
         if (!inView(reef)) continue;
         const sx = reef.x * TILE - tileCam.x;
         const sy = reef.y * TILE - tileCam.y;
-        this.g.fillStyle(0xd8d0a0, 0.85).fillTriangle(sx + 8, sy + 23, sx + 14, sy + 12, sx + 20, sy + 23);
-        this.g.fillStyle(0x6c7c8a, 0.8).fillRect(sx + 19, sy + 19, 6, 4);
+        overlayGraphics.fillStyle(0xd8d0a0, 0.85).fillTriangle(sx + 8, sy + 23, sx + 14, sy + 12, sx + 20, sy + 23);
+        overlayGraphics.fillStyle(0x6c7c8a, 0.8).fillRect(sx + 19, sy + 19, 6, 4);
       }
     }
     for (const bridge of this.generatedWorld.bridges) {
@@ -5499,45 +5508,49 @@ Statuses: ${statuses}`;
       const sy = bridge.y * TILE - tileCam.y;
       if (this.drawPierDockTile(bridge, sx, sy)) continue;
       const color = bridge.material === "stone" ? 0xa69b86 : 0x9a6a3d;
-      this.g.fillStyle(0x07101d, 0.35).fillRect(sx + 5, sy + 5, TILE - 10, TILE - 10);
-      this.g.fillStyle(color, 0.95).fillRect(sx + 7, sy + 12, TILE - 14, 8);
-      this.g.lineStyle(1, 0xffefbd, 0.65).lineBetween(sx + 8, sy + 16, sx + TILE - 8, sy + 16);
+      overlayGraphics.fillStyle(0x07101d, 0.35).fillRect(sx + 5, sy + 5, TILE - 10, TILE - 10);
+      overlayGraphics.fillStyle(color, 0.95).fillRect(sx + 7, sy + 12, TILE - 14, 8);
+      overlayGraphics.lineStyle(1, 0xffefbd, 0.65).lineBetween(sx + 8, sy + 16, sx + TILE - 8, sy + 16);
     }
   }
 
-  private drawWorldRoadOverlays(startX: number, endX: number, startY: number, endY: number, tileCam: Vec) {
+  private drawWorldRoadOverlays(startX: number, endX: number, startY: number, endY: number, tileCam: Vec, overlayGraphics: Phaser.GameObjects.Graphics) {
     const visibleRoads = this.generatedWorld?.roadVisuals.filter((road) => road.x >= startX && road.x <= endX && road.y >= startY && road.y <= endY) ?? [];
     for (const road of visibleRoads) {
       const cx = road.x * TILE - tileCam.x + TILE / 2;
       const cy = road.y * TILE - tileCam.y + TILE / 2;
       const mask = road.mask || road.roadMask || road.endpointMask;
-      this.g.lineStyle(6, 0x8a6335, 0.72);
-      this.drawRoadMaskLines(cx, cy, mask);
-      this.g.lineStyle(3, 0xc89955, 0.88);
-      this.drawRoadMaskLines(cx, cy, mask);
-      this.g.fillStyle(0xd7ac63, 0.9).fillCircle(cx, cy, 3);
+      overlayGraphics.lineStyle(6, 0x8a6335, 0.72);
+      this.drawRoadMaskLines(overlayGraphics, cx, cy, mask);
+      overlayGraphics.lineStyle(3, 0xc89955, 0.88);
+      this.drawRoadMaskLines(overlayGraphics, cx, cy, mask);
+      overlayGraphics.fillStyle(0xd7ac63, 0.9).fillCircle(cx, cy, 3);
     }
   }
 
-  private drawRoadMaskLines(cx: number, cy: number, mask: number) {
+  private drawRoadMaskLines(overlayGraphics: Phaser.GameObjects.Graphics, cx: number, cy: number, mask: number) {
     const length = TILE / 2 + 1;
     if (!mask) {
-      this.g.lineBetween(cx - length, cy, cx + length, cy);
+      overlayGraphics.lineBetween(cx - length, cy, cx + length, cy);
       return;
     }
-    if (mask & ROAD_N) this.g.lineBetween(cx, cy, cx, cy - length);
-    if (mask & ROAD_E) this.g.lineBetween(cx, cy, cx + length, cy);
-    if (mask & ROAD_S) this.g.lineBetween(cx, cy, cx, cy + length);
-    if (mask & ROAD_W) this.g.lineBetween(cx, cy, cx - length, cy);
+    if (mask & ROAD_N) overlayGraphics.lineBetween(cx, cy, cx, cy - length);
+    if (mask & ROAD_E) overlayGraphics.lineBetween(cx, cy, cx + length, cy);
+    if (mask & ROAD_S) overlayGraphics.lineBetween(cx, cy, cx, cy + length);
+    if (mask & ROAD_W) overlayGraphics.lineBetween(cx, cy, cx - length, cy);
   }
 
   private drawSemanticDebugOverlay(startX: number, endX: number, startY: number, endY: number, tileCam: Vec) {
     if (!this.generatedWorld || this.semanticDebugOverlay === "off") return;
     const semantic = this.generatedWorld.semantic;
+    const debugGraphics = this.worldOverlay;
     const colorForIsland = (id: number) => {
       const colors = [0x000000, 0x5ee38a, 0xf2c86d, 0xaee8ff, 0xd0a1ff, 0xff8fb3, 0xfff08f, 0x8fffd9, 0xc6ff8f, 0xb1b7ff];
       return colors[id % colors.length];
     };
+    if (this.semanticDebugOverlay === "edgeDebug") {
+      this.drawSemanticEdgeDebugOverlay(semantic, startX, endX, startY, endY, tileCam);
+    }
     if (this.semanticDebugOverlay === "masks") {
       for (let y = startY; y <= endY; y += 1) {
         for (let x = startX; x <= endX; x += 1) {
@@ -5549,7 +5562,7 @@ Statuses: ${statuses}`;
             else if (semantic.layers.biome[i] === SEMANTIC_BIOME.SAND) color = 0xd2aa5c;
             else if (semantic.layers.biome[i] === SEMANTIC_BIOME.ICE) color = 0xcdf6ff;
           }
-          this.g.fillStyle(color, 0.4).fillRect(x * TILE - tileCam.x, y * TILE - tileCam.y, TILE, TILE);
+          debugGraphics.fillStyle(color, 0.4).fillRect(x * TILE - tileCam.x, y * TILE - tileCam.y, TILE, TILE);
         }
       }
     }
@@ -5560,22 +5573,22 @@ Statuses: ${statuses}`;
           const distance = semantic.layers.landMask[i] ? semantic.layers.distanceToWater[i] : semantic.layers.distanceToLand[i];
           const alpha = Math.max(0.12, Math.min(0.48, 0.52 - distance * 0.055));
           const color = semantic.layers.landMask[i] ? (distance <= 1 ? 0xffdc86 : 0x68d271) : semantic.layers.waterClass[i] === SEMANTIC_WATER.SHALLOW ? 0x6febff : 0x145087;
-          this.g.fillStyle(color, alpha).fillRect(x * TILE - tileCam.x, y * TILE - tileCam.y, TILE, TILE);
+          debugGraphics.fillStyle(color, alpha).fillRect(x * TILE - tileCam.x, y * TILE - tileCam.y, TILE, TILE);
           if (distance <= 5) this.text(x * TILE - tileCam.x + TILE / 2, y * TILE - tileCam.y + 9, `${distance}`, 8, "#ffffff", "center");
         }
       }
     }
     if (this.semanticDebugOverlay === "grid") {
-      this.g.lineStyle(1, 0xffffff, 0.12);
+      debugGraphics.lineStyle(1, 0xffffff, 0.12);
       for (let y = startY; y <= endY; y += 1) {
-        for (let x = startX; x <= endX; x += 1) this.g.strokeRect(x * TILE - tileCam.x, y * TILE - tileCam.y, TILE, TILE);
+        for (let x = startX; x <= endX; x += 1) debugGraphics.strokeRect(x * TILE - tileCam.x, y * TILE - tileCam.y, TILE, TILE);
       }
     }
     if (this.semanticDebugOverlay === "walkability") {
       for (let y = startY; y <= endY; y += 1) {
         for (let x = startX; x <= endX; x += 1) {
           const i = y * semantic.width + x;
-          this.g.fillStyle(semantic.layers.walkability[i] ? 0x64ff8a : 0xff405c, 0.28).fillRect(x * TILE - tileCam.x, y * TILE - tileCam.y, TILE, TILE);
+          debugGraphics.fillStyle(semantic.layers.walkability[i] ? 0x64ff8a : 0xff405c, 0.28).fillRect(x * TILE - tileCam.x, y * TILE - tileCam.y, TILE, TILE);
         }
       }
     }
@@ -5591,7 +5604,7 @@ Statuses: ${statuses}`;
           const i = y * semantic.width + x;
           const policy = semantic.layers.overlayCollisionPolicy[i];
           if (policy === "visualOnly" && !semantic.layers.roadMap[i] && !semantic.layers.riverMap[i]) continue;
-          this.g.fillStyle(policyColors[policy], policy === "visualOnly" ? 0.22 : 0.34).fillRect(x * TILE - tileCam.x, y * TILE - tileCam.y, TILE, TILE);
+          debugGraphics.fillStyle(policyColors[policy], policy === "visualOnly" ? 0.22 : 0.34).fillRect(x * TILE - tileCam.x, y * TILE - tileCam.y, TILE, TILE);
         }
       }
     }
@@ -5602,14 +5615,14 @@ Statuses: ${statuses}`;
           const score = semantic.layers.mountainCandidateScore[i];
           if (score <= 0.58) continue;
           const alpha = Math.min(0.42, Math.max(0.08, (score - 0.58) * 0.7));
-          this.g.fillStyle(0xff7b45, alpha).fillRect(x * TILE - tileCam.x, y * TILE - tileCam.y, TILE, TILE);
+          debugGraphics.fillStyle(0xff7b45, alpha).fillRect(x * TILE - tileCam.x, y * TILE - tileCam.y, TILE, TILE);
         }
       }
       for (const mountain of semantic.mountains) {
         if (mountain.x < startX || mountain.x > endX || mountain.y < startY || mountain.y > endY) continue;
         const sx = mountain.x * TILE - tileCam.x;
         const sy = mountain.y * TILE - tileCam.y;
-        this.g.lineStyle(3, mountain.kind === "snow_mountain" ? 0xeaffff : 0x381b10, 0.95).strokeRect(sx + 3, sy + 3, TILE - 6, TILE - 6);
+        debugGraphics.lineStyle(3, mountain.kind === "snow_mountain" ? 0xeaffff : 0x381b10, 0.95).strokeRect(sx + 3, sy + 3, TILE - 6, TILE - 6);
         this.text(sx + TILE / 2, sy - 6, `${mountain.score}`, 9, mountain.kind === "snow_mountain" ? "#eaffff" : "#ffd0a8", "center");
       }
     }
@@ -5618,8 +5631,8 @@ Statuses: ${statuses}`;
         for (let x = startX; x <= endX; x += 1) {
           const i = y * semantic.width + x;
           if (!semantic.layers.forestMap[i]) continue;
-          this.g.fillStyle(0x20df70, 0.32).fillRect(x * TILE - tileCam.x, y * TILE - tileCam.y, TILE, TILE);
-          if (!semantic.layers.walkability[i]) this.g.lineStyle(2, 0xff365c, 0.9).strokeRect(x * TILE - tileCam.x + 4, y * TILE - tileCam.y + 4, TILE - 8, TILE - 8);
+          debugGraphics.fillStyle(0x20df70, 0.32).fillRect(x * TILE - tileCam.x, y * TILE - tileCam.y, TILE, TILE);
+          if (!semantic.layers.walkability[i]) debugGraphics.lineStyle(2, 0xff365c, 0.9).strokeRect(x * TILE - tileCam.x + 4, y * TILE - tileCam.y + 4, TILE - 8, TILE - 8);
         }
       }
     }
@@ -5628,7 +5641,7 @@ Statuses: ${statuses}`;
         for (let x = startX; x <= endX; x += 1) {
           const id = semantic.layers.islandId[y * semantic.width + x];
           if (!id) continue;
-          this.g.fillStyle(colorForIsland(id), 0.25).fillRect(x * TILE - tileCam.x, y * TILE - tileCam.y, TILE, TILE);
+          debugGraphics.fillStyle(colorForIsland(id), 0.25).fillRect(x * TILE - tileCam.x, y * TILE - tileCam.y, TILE, TILE);
         }
       }
       for (const island of semantic.islands) {
@@ -5642,34 +5655,87 @@ Statuses: ${statuses}`;
         const radius = Math.floor(poi.footprint / 2);
         const sx = (poi.x - radius) * TILE - tileCam.x;
         const sy = (poi.y - radius) * TILE - tileCam.y;
-        this.g.lineStyle(2, 0xff4f8f, 0.85).strokeRect(sx, sy, poi.footprint * TILE, poi.footprint * TILE);
-        this.g.lineStyle(1, 0xffd36a, 0.5).strokeCircle(poi.x * TILE - tileCam.x + TILE / 2, poi.y * TILE - tileCam.y + TILE / 2, TILE * 1.5);
+        debugGraphics.lineStyle(2, 0xff4f8f, 0.85).strokeRect(sx, sy, poi.footprint * TILE, poi.footprint * TILE);
+        debugGraphics.lineStyle(1, 0xffd36a, 0.5).strokeCircle(poi.x * TILE - tileCam.x + TILE / 2, poi.y * TILE - tileCam.y + TILE / 2, TILE * 1.5);
         this.text(poi.x * TILE - tileCam.x + TILE / 2, poi.y * TILE - tileCam.y - 8, poi.id, 9, "#fff2a8", "center");
       }
     }
     if (this.semanticDebugOverlay === "roads") {
       for (const edge of semantic.roadGraph.edges) {
         if (!edge.connected) continue;
-        this.g.lineStyle(3, 0xffb347, 0.8);
+        debugGraphics.lineStyle(3, 0xffb347, 0.8);
         for (let i = 1; i < edge.path.length; i += 1) {
           const from = edge.path[i - 1];
           const to = edge.path[i];
           if ((from.x < startX || from.x > endX || from.y < startY || from.y > endY) && (to.x < startX || to.x > endX || to.y < startY || to.y > endY)) continue;
-          this.g.lineBetween(from.x * TILE - tileCam.x + TILE / 2, from.y * TILE - tileCam.y + TILE / 2, to.x * TILE - tileCam.x + TILE / 2, to.y * TILE - tileCam.y + TILE / 2);
+          debugGraphics.lineBetween(from.x * TILE - tileCam.x + TILE / 2, from.y * TILE - tileCam.y + TILE / 2, to.x * TILE - tileCam.x + TILE / 2, to.y * TILE - tileCam.y + TILE / 2);
         }
       }
     }
     if (this.semanticDebugOverlay === "rivers") {
       for (const river of semantic.rivers) {
-        this.g.lineStyle(4, 0x43d8ff, 0.88);
+        debugGraphics.lineStyle(4, 0x43d8ff, 0.88);
         for (let i = 1; i < river.path.length; i += 1) {
           const from = river.path[i - 1];
           const to = river.path[i];
           if ((from.x < startX || from.x > endX || from.y < startY || from.y > endY) && (to.x < startX || to.x > endX || to.y < startY || to.y > endY)) continue;
-          this.g.lineBetween(from.x * TILE - tileCam.x + TILE / 2, from.y * TILE - tileCam.y + TILE / 2, to.x * TILE - tileCam.x + TILE / 2, to.y * TILE - tileCam.y + TILE / 2);
+          debugGraphics.lineBetween(from.x * TILE - tileCam.x + TILE / 2, from.y * TILE - tileCam.y + TILE / 2, to.x * TILE - tileCam.x + TILE / 2, to.y * TILE - tileCam.y + TILE / 2);
         }
       }
     }
+  }
+
+  private drawSemanticEdgeDebugOverlay(semantic: GeneratedWorld["semantic"], startX: number, endX: number, startY: number, endY: number, tileCam: Vec) {
+    const directions = [
+      { side: "e" as const, dx: 1, dy: 0 },
+      { side: "s" as const, dx: 0, dy: 1 }
+    ];
+    for (let y = startY; y <= endY; y += 1) {
+      for (let x = startX; x <= endX; x += 1) {
+        const i = y * semantic.width + x;
+        for (const direction of directions) {
+          const nx = x + direction.dx;
+          const ny = y + direction.dy;
+          if (nx < 0 || ny < 0 || nx >= semantic.width || ny >= semantic.height) continue;
+          const color = this.semanticEdgeDebugColor(semantic, i, ny * semantic.width + nx);
+          if (color === undefined) continue;
+          this.drawSemanticEdgeDebugStrip(x, y, direction.side, color, tileCam);
+        }
+      }
+    }
+  }
+
+  private semanticEdgeDebugColor(semantic: GeneratedWorld["semantic"], a: number, b: number): number | undefined {
+    const landA = semantic.layers.landMask[a] === 1;
+    const landB = semantic.layers.landMask[b] === 1;
+    if (landA !== landB) {
+      const landBiome = landA ? semantic.layers.biome[a] : semantic.layers.biome[b];
+      return this.isSandLikeSemanticBiome(landBiome) ? 0x4eefff : undefined;
+    }
+    if (!landA || !landB) return undefined;
+    const biomeA = semantic.layers.biome[a];
+    const biomeB = semantic.layers.biome[b];
+    if (biomeA === biomeB) return undefined;
+    const sandGrass = (this.isSandLikeSemanticBiome(biomeA) && biomeB === SEMANTIC_BIOME.GRASS) || (this.isSandLikeSemanticBiome(biomeB) && biomeA === SEMANTIC_BIOME.GRASS);
+    if (sandGrass) return 0xff4fff;
+    const sandIce = (this.isSandLikeSemanticBiome(biomeA) && biomeB === SEMANTIC_BIOME.ICE) || (this.isSandLikeSemanticBiome(biomeB) && biomeA === SEMANTIC_BIOME.ICE);
+    if (sandIce) return 0xffffff;
+    const grassIce = (biomeA === SEMANTIC_BIOME.GRASS && biomeB === SEMANTIC_BIOME.ICE) || (biomeB === SEMANTIC_BIOME.GRASS && biomeA === SEMANTIC_BIOME.ICE);
+    if (grassIce) return 0x5ea7ff;
+    return undefined;
+  }
+
+  private isSandLikeSemanticBiome(value: number): boolean {
+    return value === SEMANTIC_BIOME.BEACH || value === SEMANTIC_BIOME.SAND;
+  }
+
+  private drawSemanticEdgeDebugStrip(x: number, y: number, side: "e" | "s", color: number, tileCam: Vec) {
+    const width = 4;
+    const sx = x * TILE - tileCam.x;
+    const sy = y * TILE - tileCam.y;
+    this.worldOverlay.fillStyle(color, 0.78);
+    if (side === "e") this.worldOverlay.fillRect(sx + TILE - width, sy, width, TILE);
+    else this.worldOverlay.fillRect(sx, sy + TILE - width, TILE, width);
   }
 
   private drawWorldObjectCell(objectId: WorldObjectId | undefined, sx: number, sy: number, width: number, height: number, alpha = 1): boolean {
@@ -5714,19 +5780,15 @@ Statuses: ${statuses}`;
 
   private rebuildWorldTerrainCache() {
     this.worldTerrainCacheSeed = "";
-    if (this.generatedWorld) {
-      createSemanticTerrainTexture(this, this.generatedWorld.semantic, {
-        tileSize: TILE,
-        textureKey: this.worldTerrainCacheKey
-      });
-      this.textures.get(this.worldTerrainCacheKey).setFilter(Phaser.Textures.FilterMode.NEAREST);
-      this.worldTerrainCacheSeed = this.worldSeed;
-      if (import.meta.env.DEV) {
-        console.info("Semantic terrain mask texture rendered; atlas tile terrain available through F6 rawTiles debug.");
-      }
+    this.semanticEdgeOverlayCacheSeed = "";
+    if (!this.world.length) {
+      this.rebuildSemanticEdgeOverlayCache();
       return;
     }
-    if (!this.world.length || !this.textures.exists(WORLD_ATLAS.textureKey)) return;
+    if (!this.textures.exists(WORLD_ATLAS.textureKey)) {
+      this.rebuildSemanticEdgeOverlayCache();
+      return;
+    }
     this.assertWorldTilesetTextureSize();
     const mapWidth = this.world[0].length * TILE;
     const mapHeight = this.world.length * TILE;
@@ -5740,12 +5802,10 @@ Statuses: ${statuses}`;
     const atlasSource = this.textures.get(WORLD_ATLAS.textureKey).getSourceImage() as CanvasImageSource & { width: number; height: number };
     for (let y = 0; y < this.world.length; y += 1) {
       for (let x = 0; x < this.world[y].length; x += 1) {
-        const roadVisual = this.roadVisualAt(x, y);
-        const tile = WORLD_TILES[roadVisual?.sourceTileId ?? this.world[y][x]];
+        const tile = WORLD_TILES[this.world[y][x]];
         if (!tile) throw new Error(`Cannot render unknown world tile ${this.world[y][x]} at ${x},${y}.`);
         const rect = this.worldTileSourceRect(tile);
-        if (roadVisual?.rotation) this.drawRotatedWorldTileToCache(ctx, atlasSource, rect, x * TILE, y * TILE, roadVisual.rotation);
-        else ctx.drawImage(atlasSource, rect.x, rect.y, rect.width, rect.height, x * TILE, y * TILE, TILE, TILE);
+        ctx.drawImage(atlasSource, rect.x, rect.y, rect.width, rect.height, x * TILE, y * TILE, TILE, TILE);
       }
     }
 
@@ -5753,8 +5813,26 @@ Statuses: ${statuses}`;
     this.textures.addCanvas(this.worldTerrainCacheKey, canvas);
     this.textures.get(this.worldTerrainCacheKey).setFilter(Phaser.Textures.FilterMode.NEAREST);
     this.worldTerrainCacheSeed = this.worldSeed;
+    this.rebuildSemanticEdgeOverlayCache();
     if (import.meta.env.DEV) {
-      console.info(`Atlas v3 terrain cache rendered with source inset ${ATLAS_V3_SOURCE_INSET}; post-placement seam blending disabled.`);
+      console.info(`Atlas v3 terrain cache rendered with source inset ${ATLAS_V3_SOURCE_INSET}; semantic edge overlay rendered separately.`);
+    }
+  }
+
+  private rebuildSemanticEdgeOverlayCache() {
+    this.semanticEdgeOverlayCacheSeed = "";
+    if (!this.generatedWorld) {
+      if (this.textures.exists(this.semanticEdgeOverlayCacheKey)) this.textures.remove(this.semanticEdgeOverlayCacheKey);
+      return;
+    }
+    createSemanticEdgeOverlayTexture(this, this.generatedWorld.semantic, {
+      tileSize: TILE,
+      textureKey: this.semanticEdgeOverlayCacheKey
+    });
+    this.textures.get(this.semanticEdgeOverlayCacheKey).setFilter(Phaser.Textures.FilterMode.NEAREST);
+    this.semanticEdgeOverlayCacheSeed = this.worldSeed;
+    if (import.meta.env.DEV) {
+      console.info("Semantic edge overlay texture rendered above atlas terrain tiles.");
     }
   }
 
@@ -5807,6 +5885,30 @@ Statuses: ${statuses}`;
         `expected display=${cropWidth * PIXEL_ART_SCALE}x${cropHeight * PIXEL_ART_SCALE}`
       );
     }
+    return true;
+  }
+
+  private drawCachedSemanticEdgeOverlay(tileCam: Vec): boolean {
+    if (this.semanticEdgeOverlayCacheSeed !== this.worldSeed || !this.textures.exists(this.semanticEdgeOverlayCacheKey)) return false;
+    const mapWidth = (this.world[0]?.length ?? 0) * TILE;
+    const mapHeight = this.world.length * TILE;
+    const cropX = Math.round(Phaser.Math.Clamp(tileCam.x, 0, Math.max(0, mapWidth - WIDTH)));
+    const cropY = Math.round(Phaser.Math.Clamp(tileCam.y, 0, Math.max(0, mapHeight - HEIGHT)));
+    const cropWidth = Math.min(WIDTH, mapWidth - cropX);
+    const cropHeight = Math.min(HEIGHT, mapHeight - cropY);
+    if (cropWidth <= 0 || cropHeight <= 0) return false;
+
+    const viewFrameKey = `${this.semanticEdgeOverlayCacheKey}_view`;
+    const texture = this.textures.get(this.semanticEdgeOverlayCacheKey);
+    if (texture.has(viewFrameKey)) texture.remove(viewFrameKey);
+    texture.add(viewFrameKey, 0, cropX, cropY, cropWidth, cropHeight);
+
+    const image = this.add.image(0, 0, this.semanticEdgeOverlayCacheKey, viewFrameKey);
+    image.setOrigin(0, 0);
+    image.setDisplaySize(cropWidth * PIXEL_ART_SCALE, cropHeight * PIXEL_ART_SCALE);
+    image.setDepth(LAYER_WORLD_IMAGE + 0.25);
+    image.setScrollFactor(0);
+    this.images.push(image);
     return true;
   }
 

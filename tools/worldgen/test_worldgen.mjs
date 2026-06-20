@@ -1,12 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { generateWorld, getIslandAt, isWorldPositionWalkable } from "../../src/world/worldGenerator.ts";
+import { SEMANTIC_BASE_TILE_PALETTE, TERRAIN_VARIANT_MODE, generateWorld, getIslandAt, isWorldPositionWalkable } from "../../src/world/worldGenerator.ts";
 import { WORLD_ATLAS, WORLD_TILE_IDS, isWorldTileWalkable, worldTileById } from "../../src/data/worldTiles.ts";
 import { WORLD_OBJECT_ATLAS, WORLD_OBJECT_ID_SET } from "../../src/data/worldObjects.ts";
 import { DUNGEON_ATLAS } from "../../src/data/dungeonTiles.ts";
 import { SEMANTIC_BIOME, SEMANTIC_WATER } from "../../src/world/semantic/semanticTypes.ts";
-import { describeSemanticTerrainRenderPlan } from "../../src/world/semantic/semanticTerrainRenderer.ts";
+import { describeSemanticEdgeOverlayRenderPlan } from "../../src/world/semantic/semanticTerrainRenderer.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -86,11 +86,12 @@ function validateSemanticWorldgen() {
   assert(worldA.objectOverlays.every((overlay) => ["visualOnly", "softTerrain", "hardBlock", "poiBlock"].includes(overlay.collisionPolicy)), "Object overlays are missing collision policies.");
 
   validateIslandOverlayRules(worldA);
+  validateCanonicalTerrainPalette(worldA);
   validateBeachBand(worldA);
   validatePois(worldA);
   validateRoadConnections(worldA);
   validateRoadAndForestPolicies(worldA);
-  validateSemanticTerrainRendererPlan(worldA);
+  validateSemanticEdgeOverlayRendererPlan(worldA);
 }
 
 function validateIslandOverlayRules(world) {
@@ -113,6 +114,44 @@ function validateIslandOverlayRules(world) {
   assert((snowCounts.get("greenhaven") ?? 0) === 0, "Greenhaven must not have snow mountains.");
   assert((snowCounts.get("coralreach") ?? 0) === 0, "Coralreach must not have snow mountains.");
   assert((mountainCounts.get("greenhaven") ?? 0) <= 2, "Greenhaven has too many mountains.");
+}
+
+function validateCanonicalTerrainPalette(world) {
+  assert(TERRAIN_VARIANT_MODE === "off", `Normal terrain variant mode must be off, got ${TERRAIN_VARIANT_MODE}.`);
+  const tilesBySemantic = {
+    deepOcean: new Set(),
+    shallowWater: new Set(),
+    beach: new Set(),
+    grassland: new Set(),
+    sand: new Set(),
+    ice: new Set()
+  };
+  for (let y = 0; y < world.height; y += 1) {
+    for (let x = 0; x < world.width; x += 1) {
+      const i = y * world.width + x;
+      const tile = world.tiles[y][x];
+      if (!world.semantic.layers.landMask[i]) {
+        if (world.semantic.layers.waterClass[i] === SEMANTIC_WATER.SHALLOW) tilesBySemantic.shallowWater.add(tile);
+        else tilesBySemantic.deepOcean.add(tile);
+        continue;
+      }
+      if (world.semantic.layers.lakeMap[i]) {
+        tilesBySemantic.shallowWater.add(tile);
+        continue;
+      }
+      const biome = world.semantic.layers.biome[i];
+      if (biome === SEMANTIC_BIOME.BEACH) tilesBySemantic.beach.add(tile);
+      else if (biome === SEMANTIC_BIOME.SAND) tilesBySemantic.sand.add(tile);
+      else if (biome === SEMANTIC_BIOME.ICE) tilesBySemantic.ice.add(tile);
+      else if (biome === SEMANTIC_BIOME.GRASS) tilesBySemantic.grassland.add(tile);
+    }
+  }
+  assertSingleTileSet(tilesBySemantic.deepOcean, SEMANTIC_BASE_TILE_PALETTE.deepOcean, "deep ocean");
+  assertSingleTileSet(tilesBySemantic.shallowWater, SEMANTIC_BASE_TILE_PALETTE.shallowWater, "shallow water");
+  assertSingleTileSet(tilesBySemantic.beach, SEMANTIC_BASE_TILE_PALETTE.beach, "beach");
+  assertSingleTileSet(tilesBySemantic.grassland, SEMANTIC_BASE_TILE_PALETTE.grassland, "grassland");
+  assertSingleTileSet(tilesBySemantic.sand, SEMANTIC_BASE_TILE_PALETTE.sand, "sand/desert");
+  assertSingleTileSet(tilesBySemantic.ice, SEMANTIC_BASE_TILE_PALETTE.ice, "ice/snow");
 }
 
 function validateBeachBand(world) {
@@ -174,19 +213,21 @@ function validateRoadAndForestPolicies(world) {
   }
 }
 
-function validateSemanticTerrainRendererPlan(world) {
+function validateSemanticEdgeOverlayRendererPlan(world) {
   const before = stableSummary(world);
-  const plan = describeSemanticTerrainRenderPlan(world.semantic, { tileSize: 7 });
+  const plan = describeSemanticEdgeOverlayRenderPlan(world.semantic, { tileSize: 7 });
   const after = stableSummary(world);
-  assert(plan.width === world.width * 7, `Semantic terrain texture width expected ${world.width * 7}, got ${plan.width}.`);
-  assert(plan.height === world.height * 7, `Semantic terrain texture height expected ${world.height * 7}, got ${plan.height}.`);
-  assert(plan.pixelStep === 1, `Small semantic terrain texture should render with 1px detail step, got ${plan.pixelStep}.`);
-  assert(plan.landCells > 0, "Semantic terrain renderer plan found no land cells.");
-  assert(plan.shallowCells > 0, "Semantic terrain renderer plan found no shallow-water halo cells.");
-  assert(plan.beachCells > 0, "Semantic terrain renderer plan found no beach cells.");
-  assert(plan.coastlineCells > 0, "Semantic terrain renderer plan found no coastline cells.");
-  assert(plan.biomeBoundaryCells > 0, "Semantic terrain renderer plan found no biome boundary cells.");
-  assert(before === after, "Semantic terrain renderer planning mutated the generated world.");
+  assert(plan.width === world.width * 7, `Semantic edge overlay texture width expected ${world.width * 7}, got ${plan.width}.`);
+  assert(plan.height === world.height * 7, `Semantic edge overlay texture height expected ${world.height * 7}, got ${plan.height}.`);
+  assert(plan.pixelStep === 1, `Small semantic edge overlay should render with 1px detail step, got ${plan.pixelStep}.`);
+  assert(plan.landCells > 0, "Semantic edge overlay plan found no land cells.");
+  assert(plan.shallowCells > 0, "Semantic edge overlay plan found no shallow-water halo cells.");
+  assert(plan.beachCells > 0, "Semantic edge overlay plan found no beach cells.");
+  assert(plan.coastlineCells > 0, "Semantic edge overlay plan found no coastline cells.");
+  assert(plan.biomeBoundaryCells > 0, "Semantic edge overlay plan found no biome boundary cells.");
+  assert(plan.waterBeachBoundaryCells > 0, "Semantic edge overlay plan found no water/beach boundaries.");
+  assert(plan.sandGrassBoundaryCells > 0, "Semantic edge overlay plan found no sand/grass boundaries.");
+  assert(before === after, "Semantic edge overlay planning mutated the generated world.");
 }
 
 function stableSummary(world) {
@@ -243,4 +284,9 @@ function readPngDimensions(filePath) {
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
+}
+
+function assertSingleTileSet(tileSet, expectedTileId, label) {
+  assert(tileSet.size > 0, `No ${label} cells were found for canonical tile validation.`);
+  assert(tileSet.size === 1 && tileSet.has(expectedTileId), `${label} should use only ${expectedTileId}; got ${[...tileSet].join(", ")}.`);
 }
