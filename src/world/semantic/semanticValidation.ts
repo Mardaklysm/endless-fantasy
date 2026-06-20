@@ -22,6 +22,7 @@ export function validateSemanticWorld(world: SemanticWorld) {
   if (world.stats.mountainCells > landCount * 0.16) warnings.push("Mountain overlays cover more than 16% of land.");
   if (world.rivers.some((river) => hasDuplicateCells(river.path))) errors.push("A river path contains a loop.");
   if (world.rivers.length === 0) warnings.push("No rivers survived validation.");
+  validateMountainRules(world, errors, warnings);
 
   const starterIsland = world.islands.find((island) => island.id === world.profile.startingIslandId);
   if (!starterIsland) errors.push(`Starter island ${world.profile.startingIslandId} is missing.`);
@@ -38,8 +39,9 @@ export function validateSemanticWorld(world: SemanticWorld) {
   for (const edge of world.roadGraph.edges) {
     if (!edge.connected) warnings.push(`Road edge ${edge.from} -> ${edge.to} could not be connected.`);
   }
+  validatePortRoadConnectivity(world, errors);
   validateBeachBuffer(world, errors);
-  validateForestRoadSeparation(world, errors);
+  validateOverlaySpacingAndWalkability(world, errors);
 
   return { ok: errors.length === 0, errors, warnings };
 }
@@ -52,8 +54,39 @@ function validatePoi(world: SemanticWorld, poi: SemanticPoi, errors: string[]) {
   }
   if (!world.layers.landMask[i] && poi.type !== "port") errors.push(`POI ${poi.id} is not on land.`);
   if (world.layers.waterClass[i] !== SEMANTIC_WATER.NONE) errors.push(`POI ${poi.id} is on blocked water.`);
+  if (!hasAdjacentWalkable(world, poi.x, poi.y) && !isWalkable(world, poi.x, poi.y)) errors.push(`POI ${poi.id} has no adjacent walkable approach cell.`);
   if (poi.type === "port" && !hasAdjacentWater(world, poi.x, poi.y, SEMANTIC_WATER.SHALLOW)) {
     errors.push(`Port ${poi.id} is not adjacent to shallow water.`);
+  }
+}
+
+function validateMountainRules(world: SemanticWorld, errors: string[], warnings: string[]) {
+  for (const island of world.islands) {
+    const islandMountains = world.mountains.filter((mountain) => mountain.islandId === island.id);
+    if (islandMountains.length > island.overlayRules.mountainCap) {
+      errors.push(`${island.id} has ${islandMountains.length} mountain overlays, above cap ${island.overlayRules.mountainCap}.`);
+    }
+    const snowMountains = islandMountains.filter((mountain) => mountain.kind === "snow_mountain");
+    if (!island.overlayRules.allowSnowMountains && snowMountains.length) {
+      errors.push(`${island.id} has snow mountains but its theme does not allow them.`);
+    }
+    for (const mountain of snowMountains) {
+      const i = index(world.width, mountain.x, mountain.y);
+      if (world.layers.biome[i] !== SEMANTIC_BIOME.ICE) errors.push(`Snow mountain on ${island.id} at ${mountain.x},${mountain.y} is not on ice/snow terrain.`);
+    }
+    if (island.id === "highspire" && islandMountains.length < 3) warnings.push("Highspire has fewer than 3 mountain overlays.");
+  }
+}
+
+function validatePortRoadConnectivity(world: SemanticWorld, errors: string[]) {
+  for (const island of world.islands.filter((candidate) => candidate.major)) {
+    const settlement = world.poiList.find((poi) => poi.islandId === island.id && poi.role === "settlement");
+    const port = world.harbors.find((poi) => poi.islandId === island.id);
+    if (!settlement || !port) continue;
+    const edge = world.roadGraph.edges.find((candidate) => {
+      return (candidate.from === settlement.id && candidate.to === port.id) || (candidate.from === port.id && candidate.to === settlement.id);
+    });
+    if (!edge?.connected) errors.push(`Port ${port.id} is not road-connected to settlement ${settlement.id}.`);
   }
 }
 
@@ -68,9 +101,19 @@ function validateBeachBuffer(world: SemanticWorld, errors: string[]) {
   }
 }
 
-function validateForestRoadSeparation(world: SemanticWorld, errors: string[]) {
+function validateOverlaySpacingAndWalkability(world: SemanticWorld, errors: string[]) {
   for (let i = 0; i < world.layers.forestMap.length; i += 1) {
-    if (world.layers.forestMap[i] && world.layers.roadMap[i]) errors.push("Forest overlaps a road.");
+    const x = i % world.width;
+    const y = Math.floor(i / world.width);
+    if (world.layers.forestMap[i] && !world.layers.walkability[i]) errors.push(`Forest soft-terrain cell blocks walking at ${x},${y}.`);
+    if (world.layers.forestMap[i] && nearbyCount(world, world.layers.roadMap, x, y, 1) > 0) errors.push(`Forest overlaps or crowds a road corridor at ${x},${y}.`);
+    if (world.layers.roadMap[i] && !world.layers.walkability[i]) errors.push(`Road cell is blocked by terrain or overlay at ${x},${y}.`);
+    if (world.layers.roadMap[i] && world.layers.mountainMap[i]) errors.push(`Mountain overlaps road at ${x},${y}.`);
+  }
+  for (const poi of world.poiList) {
+    const clearance = poi.role === "settlement" || poi.role === "port" ? 2 : 1;
+    if (nearbyCount(world, world.layers.mountainMap, poi.x, poi.y, clearance) > 0) errors.push(`Mountain crowds POI ${poi.id}.`);
+    if (nearbyCount(world, world.layers.forestMap, poi.x, poi.y, 1) > 0) errors.push(`Forest crowds POI ${poi.id}.`);
   }
 }
 
@@ -80,6 +123,21 @@ function isWalkable(world: SemanticWorld, x: number, y: number): boolean {
 
 function hasAdjacentWater(world: SemanticWorld, x: number, y: number, value: number): boolean {
   return neighbors4(x, y).some((next) => inBounds(world, next.x, next.y) && world.layers.waterClass[index(world.width, next.x, next.y)] === value);
+}
+
+function hasAdjacentWalkable(world: SemanticWorld, x: number, y: number): boolean {
+  return neighbors4(x, y).some((next) => inBounds(world, next.x, next.y) && isWalkable(world, next.x, next.y));
+}
+
+function nearbyCount(world: SemanticWorld, map: Uint8Array, x: number, y: number, radius: number): number {
+  let count = 0;
+  for (let yy = y - radius; yy <= y + radius; yy += 1) {
+    for (let xx = x - radius; xx <= x + radius; xx += 1) {
+      if (!inBounds(world, xx, yy)) continue;
+      if (Math.hypot(xx - x, yy - y) <= radius && map[index(world.width, xx, yy)]) count += 1;
+    }
+  }
+  return count;
 }
 
 function hasDuplicateCells(path: { x: number; y: number }[]): boolean {

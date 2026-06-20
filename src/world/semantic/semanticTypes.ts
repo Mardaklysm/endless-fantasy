@@ -26,6 +26,7 @@ export type MajorIslandId = "greenhaven" | "coralreach" | "frostmere" | "highspi
 export type SemanticIslandId = MajorIslandId | `minor_${number}`;
 export type IslandTheme = "grassland" | "sand_coast" | "ice" | "mixed_highland" | "minor";
 export type IslandRole = "starter" | "coastal_trade" | "snow_shrine" | "mountain_ruins" | "harbor" | "treasure" | "shrine" | "cave" | "resource";
+export type OverlayCollisionPolicy = "visualOnly" | "softTerrain" | "hardBlock" | "poiBlock";
 
 export type SemanticPoiType =
   | "town"
@@ -49,6 +50,15 @@ export interface WorldProfile {
   startingIslandId: MajorIslandId;
 }
 
+export interface IslandOverlayRules {
+  mountainCap: number;
+  allowSnowMountains: boolean;
+  mountainSpacing: number;
+  forestDensity: number;
+  forestPoiClearance: number;
+  forestRoadClearance: number;
+}
+
 export interface IslandProfile {
   id: MajorIslandId;
   name: string;
@@ -61,6 +71,7 @@ export interface IslandProfile {
   coldBias: number;
   mountainBias: number;
   forestBias: number;
+  overlayRules: IslandOverlayRules;
   requiredPois: RequiredPoiSpec[];
   requiredHarbors: number;
   allowRoads: boolean;
@@ -92,6 +103,7 @@ export interface SemanticIslandRecord {
   coldBias: number;
   mountainBias: number;
   forestBias: number;
+  overlayRules: IslandOverlayRules;
   requiredPois: RequiredPoiSpec[];
   requiredHarbors: number;
   allowRoads: boolean;
@@ -103,6 +115,7 @@ export interface SemanticMountain extends SemanticVec {
   islandId: SemanticIslandId;
   elevation: number;
   ridge: number;
+  score: number;
 }
 
 export interface SemanticLake extends SemanticVec {
@@ -153,11 +166,13 @@ export interface SemanticWorldLayers {
   temperature: Float32Array;
   coldness: Float32Array;
   ridge: Float32Array;
+  mountainCandidateScore: Float32Array;
   mountainMap: Uint8Array;
   lakeMap: Uint8Array;
   riverMap: Uint8Array;
   forestMap: Uint8Array;
   roadMap: Uint8Array;
+  overlayCollisionPolicy: OverlayCollisionPolicy[];
   walkability: Uint8Array;
 }
 

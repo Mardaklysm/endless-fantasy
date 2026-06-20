@@ -19,6 +19,14 @@ export const CAMPAIGN_WORLD_PROFILE: WorldProfile = {
       coldBias: -0.08,
       mountainBias: -0.06,
       forestBias: 0.26,
+      overlayRules: {
+        mountainCap: 2,
+        allowSnowMountains: false,
+        mountainSpacing: 8,
+        forestDensity: 0.62,
+        forestPoiClearance: 3,
+        forestRoadClearance: 1
+      },
       requiredHarbors: 1,
       allowRoads: true,
       allowRivers: true,
@@ -41,6 +49,14 @@ export const CAMPAIGN_WORLD_PROFILE: WorldProfile = {
       coldBias: -0.12,
       mountainBias: 0.04,
       forestBias: -0.04,
+      overlayRules: {
+        mountainCap: 3,
+        allowSnowMountains: false,
+        mountainSpacing: 7,
+        forestDensity: 0.22,
+        forestPoiClearance: 2,
+        forestRoadClearance: 1
+      },
       requiredHarbors: 1,
       allowRoads: true,
       allowRivers: true,
@@ -63,6 +79,14 @@ export const CAMPAIGN_WORLD_PROFILE: WorldProfile = {
       coldBias: 0.46,
       mountainBias: 0.18,
       forestBias: 0.04,
+      overlayRules: {
+        mountainCap: 9,
+        allowSnowMountains: true,
+        mountainSpacing: 4,
+        forestDensity: 0.3,
+        forestPoiClearance: 2,
+        forestRoadClearance: 1
+      },
       requiredHarbors: 1,
       allowRoads: true,
       allowRivers: true,
@@ -85,6 +109,14 @@ export const CAMPAIGN_WORLD_PROFILE: WorldProfile = {
       coldBias: 0.14,
       mountainBias: 0.36,
       forestBias: 0.02,
+      overlayRules: {
+        mountainCap: 13,
+        allowSnowMountains: true,
+        mountainSpacing: 4,
+        forestDensity: 0.34,
+        forestPoiClearance: 2,
+        forestRoadClearance: 1
+      },
       requiredHarbors: 1,
       allowRoads: true,
       allowRivers: true,

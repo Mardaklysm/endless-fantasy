@@ -58,11 +58,13 @@ export function serializeWorld(world) {
       moisture: row(world.layers.moisture, round),
       coldness: row(world.layers.coldness, round),
       ridge: row(world.layers.ridge, round),
+      mountainCandidateScore: row(world.layers.mountainCandidateScore, round),
       mountainMap: row(world.layers.mountainMap),
       lakeMap: row(world.layers.lakeMap),
       riverMap: row(world.layers.riverMap),
       forestMap: row(world.layers.forestMap),
       roadMap: row(world.layers.roadMap),
+      overlayCollisionPolicy: row(world.layers.overlayCollisionPolicy),
       walkability: row(world.layers.walkability)
     }
   };

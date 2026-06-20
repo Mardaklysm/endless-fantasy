@@ -50,7 +50,7 @@ npm test
 - Shift: move faster while exploring
 - M: mute
 - F: fullscreen
-- F6: cycle semantic world debug overlays
+- F6: cycle semantic world debug overlays, including walkability, overlay policy, mountain candidates, forests, island themes, POIs, roads, and rivers
 - F9: hidden debug menu for testing
 
 ## Saving
@@ -60,7 +60,7 @@ The game saves to `localStorage`. You can save from the menu on the overworld or
 ## Gameplay Summary
 
 - Three-character party: Arlen, Mira, and Kael
-- Seeded semantic archipelago overworld using generated land/water masks, island IDs, coast bands, grass/sand/ice biomes, walkability, road/river overlays, and POIs, rendered through the 8x8 `atlas_v3` terrain atlas plus transparent object overlays
+- Seeded semantic archipelago overworld using generated land/water masks, island IDs, coast bands, grass/sand/ice biomes, walkability, overlay collision policy, road/river overlays, and POIs, rendered through the 8x8 `atlas_v3` terrain atlas plus transparent object overlays
 - Atlas-backed city/town interiors and dungeons using `dungeon_atlas` for medieval stone, cave, ice, ruin, volcanic, cursed, chest, gate, switch, stair, and boss-seal tiles
 - Four major themed islands: Greenhaven, Coralreach, Frostmere, and Highspire, with deterministic world seeds and harbor travel between charted routes
 - Procedural room-and-corridor dungeons derived from the world seed and dungeon id

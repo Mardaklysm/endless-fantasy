@@ -38,6 +38,10 @@ This runs `tools/worldgen/test_worldgen.mjs`. It validates the active semantic r
 - generated POIs never spawn on blocked water and are walkable
 - required settlement-to-port/dungeon/gate/final road graph edges connect
 - runtime roads, rivers, mountain overlays, and forest overlays exist
+- overlay collision policies tag mountains as `hardBlock`, forests as `softTerrain`, and POI cells as `poiBlock`
+- forests remain walkable, while mountains remain blocked
+- Greenhaven and Coralreach do not receive snow mountains, Greenhaven respects its mountain cap, and every island respects its configured mountain cap
+- roads are walkable and not overlapped by mountain/forest overlays
 
 To write a human-readable generation report and PNG minimap preview:
 
@@ -188,6 +192,8 @@ Expected:
 - Confirm pressing south while already standing on Greenhaven's south gate exits to the overworld.
 - Confirm the overworld is mostly ocean with four major islands plus minor islands, beach/coast edges, shallow-water/route overlays, road and river overlays, harbor markers, landmark markers, and transparent object overlays for dungeons/landmarks/ocean details.
 - Walk on world terrain.
+- Confirm the player can walk through normal tree/forest overlays for now.
+- Confirm mountains still block movement.
 - Enter a town/location by stepping onto it.
 - Confirm town/dungeon/location entry occurs after the tile step completes, not mid-step.
 - Confirm random encounters trigger only after completed steps, not mid-step.
@@ -197,6 +203,7 @@ Expected:
 - Confirm the overworld leader remains readable when standing on a town/location marker.
 - Confirm `atlas_v3` terrain uses the new coast, road, shallow-water, forest, and mountain cells; dark seams can come from actual atlas cell edge pixels and should not be debug grid overlays.
 - Confirm water blocks movement while generated roads suppress encounters and harbors enable boat travel.
+- Use F6 semantic debug overlays to inspect walkability, overlay policy, mountain candidates/accepted cells, forest soft-terrain cells, island themes, POI clearance, roads, and rivers.
 - At Greenhaven Harbor, confirm Coralreach costs 10 gold, deducts gold, moves the player to Coralreach harbor, and can return by harbor.
 - Confirm new games produce different world seeds and load restores the same saved world.
 

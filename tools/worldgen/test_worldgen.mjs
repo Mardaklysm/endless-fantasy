@@ -75,13 +75,42 @@ function validateSemanticWorldgen() {
   const mountainIndex = worldA.semantic.layers.mountainMap.findIndex((value) => value === 1);
   assert(mountainIndex >= 0, "No semantic mountain collision cells were generated.");
   assert(!isWorldPositionWalkable(worldA, mountainIndex % worldA.width, Math.floor(mountainIndex / worldA.width)), "Mountain overlay cell should block walking.");
+  assert(worldA.semantic.layers.overlayCollisionPolicy[mountainIndex] === "hardBlock", "Mountain overlay should be tagged hardBlock.");
   const forestIndex = worldA.semantic.layers.forestMap.findIndex((value, index) => value === 1 && worldA.semantic.layers.roadMap[index] === 0);
-  assert(forestIndex >= 0, "No semantic forest collision cells were generated.");
-  assert(!isWorldPositionWalkable(worldA, forestIndex % worldA.width, Math.floor(forestIndex / worldA.width)), "Dense forest overlay cell should block walking.");
+  assert(forestIndex >= 0, "No semantic forest soft-terrain cells were generated.");
+  assert(isWorldPositionWalkable(worldA, forestIndex % worldA.width, Math.floor(forestIndex / worldA.width)), "Forest overlay cell should stay walkable.");
+  assert(worldA.semantic.layers.overlayCollisionPolicy[forestIndex] === "softTerrain", "Forest overlay should be tagged softTerrain.");
+  const poiPolicyIndex = worldA.pois[0].y * worldA.width + worldA.pois[0].x;
+  assert(worldA.semantic.layers.overlayCollisionPolicy[poiPolicyIndex] === "poiBlock", "POI cells should be tagged poiBlock for debug/interaction policy.");
+  assert(worldA.objectOverlays.every((overlay) => ["visualOnly", "softTerrain", "hardBlock", "poiBlock"].includes(overlay.collisionPolicy)), "Object overlays are missing collision policies.");
 
+  validateIslandOverlayRules(worldA);
   validateBeachBand(worldA);
   validatePois(worldA);
   validateRoadConnections(worldA);
+  validateRoadAndForestPolicies(worldA);
+}
+
+function validateIslandOverlayRules(world) {
+  const mountainCounts = new Map();
+  const snowCounts = new Map();
+  for (const mountain of world.semantic.mountains) {
+    mountainCounts.set(mountain.islandId, (mountainCounts.get(mountain.islandId) ?? 0) + 1);
+    if (mountain.kind === "snow_mountain") snowCounts.set(mountain.islandId, (snowCounts.get(mountain.islandId) ?? 0) + 1);
+    const island = world.semantic.islands.find((candidate) => candidate.id === mountain.islandId);
+    assert(island, `Mountain references missing island ${mountain.islandId}.`);
+    const i = mountain.y * world.width + mountain.x;
+    if (mountain.kind === "snow_mountain") {
+      assert(island.overlayRules.allowSnowMountains, `Snow mountain appeared on non-snow island ${island.id}.`);
+      assert(world.semantic.layers.biome[i] === SEMANTIC_BIOME.ICE, `Snow mountain on ${island.id} is not on snow/ice terrain.`);
+    }
+  }
+  for (const island of world.semantic.islands) {
+    assert((mountainCounts.get(island.id) ?? 0) <= island.overlayRules.mountainCap, `${island.id} exceeded mountain cap.`);
+  }
+  assert((snowCounts.get("greenhaven") ?? 0) === 0, "Greenhaven must not have snow mountains.");
+  assert((snowCounts.get("coralreach") ?? 0) === 0, "Coralreach must not have snow mountains.");
+  assert((mountainCounts.get("greenhaven") ?? 0) <= 2, "Greenhaven has too many mountains.");
 }
 
 function validateBeachBand(world) {
@@ -103,6 +132,7 @@ function validatePois(world) {
     assert(world.semantic.layers.waterClass[i] === SEMANTIC_WATER.NONE, `POI ${poi.id} spawned on blocked water.`);
     assert(world.semantic.layers.landMask[i] === 1, `POI ${poi.id} is not on land.`);
     assert(isWorldPositionWalkable(world, poi.x, poi.y), `POI ${poi.id} is not reachable/walkable.`);
+    assert(hasAdjacentWalkable(world, poi.x, poi.y) || isWorldPositionWalkable(world, poi.x, poi.y), `POI ${poi.id} has no walkable approach.`);
   }
 }
 
@@ -116,6 +146,29 @@ function validateRoadConnections(world) {
   for (const edge of requiredEdges) {
     assert(edge.connected, `Required road edge ${edge.from} -> ${edge.to} is disconnected.`);
     assert(edge.path.length > 1, `Required road edge ${edge.from} -> ${edge.to} has no path.`);
+  }
+  for (const islandId of MAJOR_ISLAND_IDS) {
+    const settlement = world.semantic.poiList.find((poi) => poi.islandId === islandId && poi.role === "settlement");
+    const port = world.semantic.poiList.find((poi) => poi.islandId === islandId && poi.role === "port");
+    assert(settlement && port, `${islandId} is missing settlement or port.`);
+    const edge = world.semantic.roadGraph.edges.find((candidate) => candidate.from === settlement.id && candidate.to === port.id);
+    assert(edge?.connected, `${islandId} settlement is not road-connected to its port.`);
+  }
+}
+
+function validateRoadAndForestPolicies(world) {
+  for (let y = 0; y < world.height; y += 1) {
+    for (let x = 0; x < world.width; x += 1) {
+      const i = y * world.width + x;
+      if (world.semantic.layers.roadMap[i]) {
+        assert(isWorldPositionWalkable(world, x, y), `Road at ${x},${y} is blocked.`);
+        assert(!world.semantic.layers.mountainMap[i], `Mountain overlaps road at ${x},${y}.`);
+        assert(!world.semantic.layers.forestMap[i], `Forest overlaps road at ${x},${y}.`);
+      }
+      if (world.semantic.layers.forestMap[i]) {
+        assert(isWorldPositionWalkable(world, x, y), `Forest at ${x},${y} blocks walking.`);
+      }
+    }
   }
 }
 
@@ -136,6 +189,13 @@ function hasAdjacentWater(world, x, y, value) {
   return neighbors4(x, y).some((next) => {
     if (next.x < 0 || next.y < 0 || next.x >= world.width || next.y >= world.height) return false;
     return world.semantic.layers.waterClass[next.y * world.width + next.x] === value;
+  });
+}
+
+function hasAdjacentWalkable(world, x, y) {
+  return neighbors4(x, y).some((next) => {
+    if (next.x < 0 || next.y < 0 || next.x >= world.width || next.y >= world.height) return false;
+    return isWorldPositionWalkable(world, next.x, next.y);
   });
 }
 

@@ -3,7 +3,7 @@ import { WORLD_OBJECT_IDS, type WorldObjectId } from "../data/worldObjects.ts";
 import { hashNoise } from "./seededRng.ts";
 import { generateSemanticWorld } from "./semantic/semanticGenerator.ts";
 import { CAMPAIGN_WORLD_PROFILE } from "./semantic/semanticProfiles.ts";
-import { SEMANTIC_BIOME, SEMANTIC_WATER, type SemanticPoi, type SemanticVec, type SemanticWorld } from "./semantic/semanticTypes.ts";
+import { SEMANTIC_BIOME, SEMANTIC_WATER, type OverlayCollisionPolicy, type SemanticPoi, type SemanticVec, type SemanticWorld } from "./semantic/semanticTypes.ts";
 
 export const DEFAULT_WORLD_WIDTH = 96;
 export const DEFAULT_WORLD_HEIGHT = 64;
@@ -45,6 +45,7 @@ export interface WorldObjectOverlay extends WorldVec {
   id: string;
   objectId: WorldObjectId;
   scale: number;
+  collisionPolicy: OverlayCollisionPolicy;
 }
 
 export interface WorldEntryTrigger {
@@ -468,7 +469,8 @@ function buildObjectOverlays(semantic: SemanticWorld, reefs: WorldVec[]): WorldO
       x: mountain.x,
       y: mountain.y,
       objectId: mountain.kind === "snow_mountain" ? WORLD_OBJECT_IDS.snowyMountainPeak : WORLD_OBJECT_IDS.smallMountainPeak,
-      scale: 1.24
+      scale: 1.24,
+      collisionPolicy: "hardBlock"
     });
   }
   for (let y = 0; y < semantic.height; y += 1) {
@@ -476,14 +478,14 @@ function buildObjectOverlays(semantic: SemanticWorld, reefs: WorldVec[]): WorldO
       const i = y * semantic.width + x;
       if (!semantic.layers.forestMap[i]) continue;
       const objectId = semantic.layers.biome[i] === SEMANTIC_BIOME.ICE ? WORLD_OBJECT_IDS.darkPineTree : hashNoise(`${semantic.seed}:forest-object`, x, y) > 0.78 ? WORLD_OBJECT_IDS.denseJungleBush : WORLD_OBJECT_IDS.broadleafTree;
-      overlays.push({ id: `forest-${x}-${y}`, x, y, objectId, scale: 0.96 });
+      overlays.push({ id: `forest-${x}-${y}`, x, y, objectId, scale: 0.92, collisionPolicy: "softTerrain" });
     }
   }
   reefs.forEach((pos, index) => {
     const roll = hashNoise(`${semantic.seed}:ocean-object:${index}`, pos.x, pos.y);
     const objectId =
       roll > 0.88 ? WORLD_OBJECT_IDS.shipwreckDebris : roll > 0.72 ? WORLD_OBJECT_IDS.brokenMast : roll > 0.48 ? WORLD_OBJECT_IDS.coralClusterBlue : WORLD_OBJECT_IDS.fishingSpot;
-    overlays.push({ id: `reef-${index}-${pos.x}-${pos.y}`, x: pos.x, y: pos.y, objectId, scale: 1.15 });
+    overlays.push({ id: `reef-${index}-${pos.x}-${pos.y}`, x: pos.x, y: pos.y, objectId, scale: 1.15, collisionPolicy: "visualOnly" });
   });
   return overlays;
 }

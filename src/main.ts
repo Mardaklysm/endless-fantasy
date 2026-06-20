@@ -1499,7 +1499,7 @@ class CrystalOathScene extends Phaser.Scene {
   private audio = new SynthAudio();
   private generatedWorld?: GeneratedWorld;
   private roadVisualsByKey = new Map<string, WorldRoadVisual>();
-  private semanticDebugOverlay: "off" | "grid" | "walkability" | "islands" | "pois" | "roads" | "rivers" = "off";
+  private semanticDebugOverlay: "off" | "grid" | "walkability" | "policy" | "mountains" | "forests" | "islands" | "pois" | "roads" | "rivers" = "off";
   private worldSeed = "title-preview";
   private world: Terrain[][] = [];
   private worldTerrainCacheKey = "world_terrain_cache";
@@ -1680,7 +1680,7 @@ class CrystalOathScene extends Phaser.Scene {
   }
 
   private cycleSemanticDebugOverlay() {
-    const modes = ["off", "grid", "walkability", "islands", "pois", "roads", "rivers"] as const;
+    const modes = ["off", "grid", "walkability", "policy", "mountains", "forests", "islands", "pois", "roads", "rivers"] as const;
     const current = modes.indexOf(this.semanticDebugOverlay);
     this.semanticDebugOverlay = modes[(current + 1) % modes.length];
     this.flashMessage(`Semantic debug: ${this.semanticDebugOverlay}`);
@@ -2325,7 +2325,8 @@ class CrystalOathScene extends Phaser.Scene {
   private canOccupyExploreTile(mode: ExploreMode, x: number, y: number): boolean {
     if (mode === "world") {
       if (x < 0 || y < 0 || x >= WORLD_W || y >= WORLD_H) return false;
-      return (this.generatedWorld ? isWorldPositionWalkable(this.generatedWorld, x, y) : this.canEnterTerrain(this.world[y][x])) || !!this.locationAt(x, y);
+      if (this.generatedWorld) return isWorldPositionWalkable(this.generatedWorld, x, y);
+      return this.canEnterTerrain(this.world[y][x]) || !!this.locationAt(x, y);
     }
     if (mode === "town") return x >= 1 && x <= 19 && y >= 1 && y <= 13;
     const floor = this.dungeonFloorRows(this.currentDungeon, this.dungeonFloor);
@@ -5524,6 +5525,50 @@ Statuses: ${statuses}`;
         }
       }
     }
+    if (this.semanticDebugOverlay === "policy") {
+      const policyColors = {
+        visualOnly: 0x6fd6ff,
+        softTerrain: 0x56e878,
+        hardBlock: 0xff375f,
+        poiBlock: 0xffca4f
+      } as const;
+      for (let y = startY; y <= endY; y += 1) {
+        for (let x = startX; x <= endX; x += 1) {
+          const i = y * semantic.width + x;
+          const policy = semantic.layers.overlayCollisionPolicy[i];
+          if (policy === "visualOnly" && !semantic.layers.roadMap[i] && !semantic.layers.riverMap[i]) continue;
+          this.g.fillStyle(policyColors[policy], policy === "visualOnly" ? 0.22 : 0.34).fillRect(x * TILE - tileCam.x, y * TILE - tileCam.y, TILE, TILE);
+        }
+      }
+    }
+    if (this.semanticDebugOverlay === "mountains") {
+      for (let y = startY; y <= endY; y += 1) {
+        for (let x = startX; x <= endX; x += 1) {
+          const i = y * semantic.width + x;
+          const score = semantic.layers.mountainCandidateScore[i];
+          if (score <= 0.58) continue;
+          const alpha = Math.min(0.42, Math.max(0.08, (score - 0.58) * 0.7));
+          this.g.fillStyle(0xff7b45, alpha).fillRect(x * TILE - tileCam.x, y * TILE - tileCam.y, TILE, TILE);
+        }
+      }
+      for (const mountain of semantic.mountains) {
+        if (mountain.x < startX || mountain.x > endX || mountain.y < startY || mountain.y > endY) continue;
+        const sx = mountain.x * TILE - tileCam.x;
+        const sy = mountain.y * TILE - tileCam.y;
+        this.g.lineStyle(3, mountain.kind === "snow_mountain" ? 0xeaffff : 0x381b10, 0.95).strokeRect(sx + 3, sy + 3, TILE - 6, TILE - 6);
+        this.text(sx + TILE / 2, sy - 6, `${mountain.score}`, 9, mountain.kind === "snow_mountain" ? "#eaffff" : "#ffd0a8", "center");
+      }
+    }
+    if (this.semanticDebugOverlay === "forests") {
+      for (let y = startY; y <= endY; y += 1) {
+        for (let x = startX; x <= endX; x += 1) {
+          const i = y * semantic.width + x;
+          if (!semantic.layers.forestMap[i]) continue;
+          this.g.fillStyle(0x20df70, 0.32).fillRect(x * TILE - tileCam.x, y * TILE - tileCam.y, TILE, TILE);
+          if (!semantic.layers.walkability[i]) this.g.lineStyle(2, 0xff365c, 0.9).strokeRect(x * TILE - tileCam.x + 4, y * TILE - tileCam.y + 4, TILE - 8, TILE - 8);
+        }
+      }
+    }
     if (this.semanticDebugOverlay === "islands") {
       for (let y = startY; y <= endY; y += 1) {
         for (let x = startX; x <= endX; x += 1) {
@@ -5534,7 +5579,7 @@ Statuses: ${statuses}`;
       }
       for (const island of semantic.islands) {
         if (island.center.x < startX || island.center.x > endX || island.center.y < startY || island.center.y > endY) continue;
-        this.text(island.center.x * TILE - tileCam.x, island.center.y * TILE - tileCam.y, island.id, 9, "#ffffff", "center");
+        this.text(island.center.x * TILE - tileCam.x, island.center.y * TILE - tileCam.y, `${island.id}:${island.theme}`, 9, "#ffffff", "center");
       }
     }
     if (this.semanticDebugOverlay === "pois") {
@@ -5544,6 +5589,7 @@ Statuses: ${statuses}`;
         const sx = (poi.x - radius) * TILE - tileCam.x;
         const sy = (poi.y - radius) * TILE - tileCam.y;
         this.g.lineStyle(2, 0xff4f8f, 0.85).strokeRect(sx, sy, poi.footprint * TILE, poi.footprint * TILE);
+        this.g.lineStyle(1, 0xffd36a, 0.5).strokeCircle(poi.x * TILE - tileCam.x + TILE / 2, poi.y * TILE - tileCam.y + TILE / 2, TILE * 1.5);
         this.text(poi.x * TILE - tileCam.x + TILE / 2, poi.y * TILE - tileCam.y - 8, poi.id, 9, "#fff2a8", "center");
       }
     }
