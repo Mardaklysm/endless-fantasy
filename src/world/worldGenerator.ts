@@ -209,6 +209,7 @@ const GRASS_PATCH_TILES = [
   WORLD_TILE_IDS.trampledGrass
 ];
 const FOREST_TILES = [WORLD_TILE_IDS.lightForest, WORLD_TILE_IDS.denseForest];
+const FOREST_TILE_SET = new Set<WorldTileId>(FOREST_TILES);
 const BEACH_TILES = [WORLD_TILE_IDS.beachSand];
 const NORMAL_TREE_TILES = new Set<WorldTileId>([WORLD_TILE_IDS.lightForest, WORLD_TILE_IDS.denseForest, WORLD_TILE_IDS.deadForest, WORLD_TILE_IDS.ashForest]);
 const PALM_TREE_TILES = new Set<WorldTileId>([WORLD_TILE_IDS.jungle]);
@@ -397,7 +398,8 @@ function validateRoadVisuals(world: GeneratedWorld): { errors: string[]; warning
       const next = stepForRoadBit(road, bit);
       const nextKey = posKey(next);
       if (roadKeys.has(nextKey)) continue;
-      if ((visual.endpointMask & bit) !== 0 && isPoiFootprintAt(world.pois, next.x, next.y)) continue;
+      const endpointPoi = poiAtFootprint(world.pois, next.x, next.y);
+      if ((visual.endpointMask & bit) !== 0 && endpointPoi && isTownBottomRoadEndpoint(road, next, endpointPoi)) continue;
       errors.push(`Road ${key} visually connects toward ${roadBitName(bit)} into invalid terrain at ${next.x},${next.y}.`);
     }
     const connectionCount = roadConnectionCount(visual.mask);
@@ -471,6 +473,12 @@ function validateTreeClustering(world: GeneratedWorld): { errors: string[]; warn
     for (let x = 1; x < world.width - 1; x += 1) {
       const tile = world.tiles[y][x];
       if (PALM_TREE_TILES.has(tile)) errors.push(`Seed ${world.seed}: palm-looking terrain tile ${tile} remains at ${x},${y}; use palm overlays instead.`);
+      if (FOREST_TILE_SET.has(tile)) {
+        for (const next of neighbors8(x, y)) {
+          const neighborTile = world.tiles[next.y]?.[next.x];
+          if (FOREST_TILE_SET.has(neighborTile) && neighborTile !== tile) errors.push(`Seed ${world.seed}: mixed woodland terrain ${tile} at ${x},${y} touches ${neighborTile} at ${next.x},${next.y}.`);
+        }
+      }
       if (!NORMAL_TREE_TILES.has(tile)) continue;
       for (const next of neighbors8(x, y)) {
         if (PALM_TREE_TILES.has(world.tiles[next.y]?.[next.x])) errors.push(`Seed ${world.seed}: normal forest tile at ${x},${y} touches palm terrain at ${next.x},${next.y}.`);
@@ -494,6 +502,13 @@ function validateTreeClustering(world: GeneratedWorld): { errors: string[]; warn
         const neighbor = overlayByKey.get(posKey(next));
         if (neighbor && isNormalTreeOverlay(neighbor)) errors.push(`Seed ${world.seed}: palm overlay at ${overlay.x},${overlay.y} touches normal tree overlay at ${next.x},${next.y}.`);
         if (NORMAL_TREE_TILES.has(world.tiles[next.y]?.[next.x])) errors.push(`Seed ${world.seed}: palm overlay at ${overlay.x},${overlay.y} touches normal forest terrain at ${next.x},${next.y}.`);
+      }
+    } else if (isNormalTreeOverlay(overlay)) {
+      for (const next of neighbors8(overlay.x, overlay.y)) {
+        const neighbor = overlayByKey.get(posKey(next));
+        if (neighbor && isNormalTreeOverlay(neighbor) && neighbor.objectId !== overlay.objectId) {
+          errors.push(`Seed ${world.seed}: mixed normal tree overlay ${overlay.objectId} at ${overlay.x},${overlay.y} touches ${neighbor.objectId} at ${next.x},${next.y}.`);
+        }
       }
     }
   }
@@ -583,6 +598,7 @@ function generateWorldAttempt(seed: string, width: number, height: number): Gene
 
   for (const state of states) paintIsland(seed, tiles, biomes, islandByTile, state);
   addTinyIslets(seed, tiles, biomes, islandByTile, rng.fork("islets"));
+  for (const state of states) normalizeForestPatches(seed, tiles, biomes, state);
   normalizeBeachBand(tiles, biomes, islandByTile);
 
   const pois: WorldPoi[] = [];
@@ -747,6 +763,36 @@ function ensureIslandGrove(seed: string, tiles: WorldTileId[][], biomes: WorldBi
       if (d > radius + 0.15) continue;
       setWorldTile(tiles, biomes, x, y, pickByNoise(pool, `${seed}:${state.template.id}:grove-pick`, x, y), "forest");
     }
+  }
+}
+
+function normalizeForestPatches(seed: string, tiles: WorldTileId[][], biomes: WorldBiome[][], state: IslandBuildState) {
+  const visited = new Set<string>();
+  for (const key of state.land) {
+    if (visited.has(key)) continue;
+    const start = parseKey(key);
+    if (!FOREST_TILE_SET.has(tiles[start.y]?.[start.x])) continue;
+    const component: WorldVec[] = [];
+    const queue = [start];
+    visited.add(key);
+    while (queue.length) {
+      const current = queue.shift()!;
+      component.push(current);
+      for (const next of neighbors8(current.x, current.y)) {
+        const nextKey = posKey(next);
+        if (visited.has(nextKey) || !state.land.has(nextKey) || !FOREST_TILE_SET.has(tiles[next.y]?.[next.x])) continue;
+        visited.add(nextKey);
+        queue.push(next);
+      }
+    }
+    const center = component.reduce(
+      (sum, pos) => ({ x: sum.x + pos.x / component.length, y: sum.y + pos.y / component.length }),
+      { x: 0, y: 0 }
+    );
+    const patchTile = hashNoise(`${seed}:${state.template.id}:forest-patch-style`, Math.round(center.x), Math.round(center.y)) > 0.48
+      ? WORLD_TILE_IDS.lightForest
+      : WORLD_TILE_IDS.denseForest;
+    for (const pos of component) setWorldTile(tiles, biomes, pos.x, pos.y, patchTile, "forest");
   }
 }
 
@@ -1154,6 +1200,12 @@ function roadApproachPoint(
     }
   }
   const pool = inlandCandidates.length ? inlandCandidates : candidates;
+  if (poi.kind === "town") {
+    const bottomCandidates = townBottomRoadCandidates(tiles, islandByTile, islandId, poi, blockedKeys);
+    if (bottomCandidates.length) {
+      return bottomCandidates.sort((a, b) => Math.abs(a.x - poi.x) - Math.abs(b.x - poi.x) || a.y - b.y || a.x - b.x)[0];
+    }
+  }
   if (pool.length) {
     return pool.sort((a, b) => {
       const da = Math.hypot(a.x - anchor.x, a.y - anchor.y);
@@ -1194,14 +1246,47 @@ function nearestRoadAnchor(roadKeys: Set<string>, goal: WorldVec): WorldVec | un
 }
 
 function addRoadEndpointConnection(tiles: WorldTileId[][], roadEndpointMasks: Map<string, number>, roadPos: WorldVec, poi: WorldPoi) {
+  if (poi.kind !== "town") return;
   const key = posKey(roadPos);
   const footprintKeys = new Set(poiFootprintTiles(poi).map(posKey));
   let mask = roadEndpointMasks.get(key) ?? 0;
   for (const next of neighbors4(roadPos.x, roadPos.y)) {
     const nextTile = tiles[next.y]?.[next.x];
-    if (footprintKeys.has(posKey(next)) && nextTile && !isWaterTile(nextTile) && isWorldTileWalkable(nextTile)) mask |= directionMask(roadPos, next);
+    if (footprintKeys.has(posKey(next)) && nextTile && !isWaterTile(nextTile) && isWorldTileWalkable(nextTile) && isTownBottomRoadEndpoint(roadPos, next, poi)) {
+      mask |= directionMask(roadPos, next);
+    }
   }
   if (mask) roadEndpointMasks.set(key, mask);
+}
+
+function townBottomRoadCandidates(
+  tiles: WorldTileId[][],
+  islandByTile: (IslandId | null)[][],
+  islandId: IslandId,
+  poi: WorldPoi,
+  blockedKeys: Set<string>
+): WorldVec[] {
+  const footprint = poiFootprintTiles(poi);
+  const footprintKeys = new Set(footprint.map(posKey));
+  const bottomY = Math.max(...footprint.map((pos) => pos.y));
+  const seen = new Set<string>();
+  const candidates: WorldVec[] = [];
+  for (const tile of footprint.filter((pos) => pos.y === bottomY)) {
+    const next = { x: tile.x, y: tile.y + 1 };
+    const key = posKey(next);
+    if (seen.has(key) || footprintKeys.has(key) || blockedKeys.has(key)) continue;
+    if (!canRoadUseTile(tiles, islandByTile, islandId, next, key, "", "")) continue;
+    seen.add(key);
+    candidates.push(next);
+  }
+  return candidates;
+}
+
+function isTownBottomRoadEndpoint(roadPos: WorldVec, footprintPos: WorldVec, poi: WorldPoi): boolean {
+  if (poi.kind !== "town") return false;
+  const radius = Math.floor(poi.footprint / 2);
+  const bottomY = poi.y + radius;
+  return footprintPos.y === bottomY && roadPos.y === bottomY + 1 && roadPos.x === footprintPos.x;
 }
 
 function orientRoadTiles(tiles: WorldTileId[][], biomes: WorldBiome[][], roadKeys: Set<string>, roadEndpointMasks: Map<string, number>): WorldRoadVisual[] {
@@ -1306,8 +1391,8 @@ function roadConnectionCount(mask: number): number {
   return [ROAD_N, ROAD_E, ROAD_S, ROAD_W].filter((bit) => (mask & bit) !== 0).length;
 }
 
-function isPoiFootprintAt(pois: WorldPoi[], x: number, y: number): boolean {
-  return pois.some((poi) => pointInPoiFootprint(poi, x, y));
+function poiAtFootprint(pois: WorldPoi[], x: number, y: number): WorldPoi | undefined {
+  return pois.find((poi) => pointInPoiFootprint(poi, x, y));
 }
 
 function findIslandRoadPath(

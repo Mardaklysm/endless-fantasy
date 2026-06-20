@@ -46,6 +46,7 @@ const ROAD_BITS = [ROAD_N, ROAD_E, ROAD_S, ROAD_W];
 const PALM_OBJECT_IDS = new Set(["palm_tree", "dense_jungle_bush"]);
 const NORMAL_TREE_OBJECT_IDS = new Set(["broadleaf_tree", "dark_pine_tree"]);
 const NORMAL_TREE_TILES = new Set([WORLD_TILE_IDS.lightForest, WORLD_TILE_IDS.denseForest, WORLD_TILE_IDS.deadForest, WORLD_TILE_IDS.ashForest]);
+const WOODLAND_TERRAIN_TILES = new Set([WORLD_TILE_IDS.lightForest, WORLD_TILE_IDS.denseForest]);
 
 validateAtlasV3();
 validateWorldObjects();
@@ -300,7 +301,7 @@ function validateRuntimeDebugInsetConsistency() {
 
 function validateWorldgen() {
   const worldCount = 80;
-  const worldSeeds = ["archipelago-mqlgchkq-1646550", ...Array.from({ length: worldCount }, (_, i) => `atlas-v3-worldgen-test-${i}`)];
+  const worldSeeds = ["archipelago-mqlgchkq-1646550", "archipelago-mqm04aju-1m43css", ...Array.from({ length: worldCount }, (_, i) => `atlas-v3-worldgen-test-${i}`)];
   let firstSignature = "";
   let sawDifferentWorld = false;
 
@@ -375,11 +376,22 @@ function validateWorldgen() {
       assert((visual.roadMask | visual.endpointMask) === visual.mask, `World ${i} road ${road.x},${road.y} visual mask is not road+endpoint mask.`);
       assert(rotateRoadMask(visual.sourceMask, visual.rotation) === visual.mask, `World ${i} road ${road.x},${road.y} source/rotation does not match mask.`);
       assert(visual.sourceTileId !== WORLD_TILE_IDS.roadVertical, `World ${i} road ${road.x},${road.y} uses dirty road_vertical source art.`);
+      if (roadConnectionCount(visual.mask) === 1) {
+        assert(visual.sourceTileId === WORLD_TILE_IDS.roadDeadEndEast, `World ${i} road ${road.x},${road.y} has one connection but does not use the clean dead-end source tile.`);
+      }
       for (const bit of ROAD_BITS) {
         if ((visual.mask & bit) === 0) continue;
         const next = roadStep(road, bit);
         if (roadKeys.has(`${next.x},${next.y}`)) continue;
-        assert((visual.endpointMask & bit) !== 0 && isAnyPoiFootprint(world.pois, next.x, next.y), `World ${i} road ${road.x},${road.y} visually connects into invalid ${roadBitName(bit)} tile ${next.x},${next.y}.`);
+        const endpointPoi = poiAtFootprint(world.pois, next.x, next.y);
+        assert((visual.endpointMask & bit) !== 0 && endpointPoi && isTownBottomRoadEndpoint(road, next, endpointPoi), `World ${i} road ${road.x},${road.y} visually connects into invalid ${roadBitName(bit)} tile ${next.x},${next.y}.`);
+      }
+      for (const bit of ROAD_BITS) {
+        if ((visual.endpointMask & bit) === 0) continue;
+        const next = roadStep(road, bit);
+        const endpointPoi = poiAtFootprint(world.pois, next.x, next.y);
+        assert(endpointPoi?.kind === "town", `World ${i} road ${road.x},${road.y} visually connects to non-city POI ${endpointPoi?.id ?? "<none>"}.`);
+        assert(isTownBottomRoadEndpoint(road, next, endpointPoi), `World ${i} city road endpoint ${road.x},${road.y} is not connected to the town bottom.`);
       }
     }
     for (const poi of world.pois) {
@@ -431,6 +443,12 @@ function validateWorldgen() {
           assert(!worldTileHasTag(tile, "forest"), `World ${i} forest tile ${tile} at ${x},${y} directly touches water.`);
         }
         assert(tile !== WORLD_TILE_IDS.jungle, `World ${i} still uses palm-looking jungle terrain tile at ${x},${y}; palm trees should be overlays.`);
+        if (WOODLAND_TERRAIN_TILES.has(tile)) {
+          for (const neighbor of neighbors8(x, y)) {
+            const neighborTile = world.tiles[neighbor.y]?.[neighbor.x];
+            assert(!WOODLAND_TERRAIN_TILES.has(neighborTile) || neighborTile === tile, `World ${i} mixed woodland terrain ${tile} at ${x},${y} touches ${neighborTile} at ${neighbor.x},${neighbor.y}.`);
+          }
+        }
         if (NORMAL_TREE_TILES.has(tile)) {
           for (const neighbor of neighbors8(x, y)) {
             const overlay = overlayByKey.get(`${neighbor.x},${neighbor.y}`);
@@ -497,6 +515,17 @@ function hasAdjacentWater(world, poi) {
   return false;
 }
 
+function poiAtFootprint(pois, x, y) {
+  return pois.find((poi) => poiFootprintTiles(poi).some((tile) => tile.x === x && tile.y === y));
+}
+
+function isTownBottomRoadEndpoint(roadPos, footprintPos, poi) {
+  if (poi?.kind !== "town") return false;
+  const radius = Math.floor((poi.footprint ?? 1) / 2);
+  const bottomY = poi.y + radius;
+  return footprintPos.y === bottomY && roadPos.y === bottomY + 1 && roadPos.x === footprintPos.x;
+}
+
 function cardinalWaterNeighborCount(world, x, y) {
   return neighbors4(x, y).filter((pos) => worldTileHasTag(world.tiles[pos.y]?.[pos.x], "water")).length;
 }
@@ -538,6 +567,10 @@ function roadNeighborMask(roadKeys, x, y) {
   return mask;
 }
 
+function roadConnectionCount(mask) {
+  return ROAD_BITS.filter((bit) => (mask & bit) !== 0).length;
+}
+
 function rotateRoadMask(mask, rotation) {
   let rotated = mask;
   for (let i = 0; i < rotation / 90; i += 1) {
@@ -563,10 +596,6 @@ function roadBitName(bit) {
   if (bit === ROAD_E) return "east";
   if (bit === ROAD_S) return "south";
   return "west";
-}
-
-function isAnyPoiFootprint(pois, x, y) {
-  return pois.some((poi) => poiFootprintTiles(poi).some((tile) => tile.x === x && tile.y === y));
 }
 
 function assertNoActiveDeprecatedReference(file, text, value) {
