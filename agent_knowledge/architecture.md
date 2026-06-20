@@ -34,6 +34,11 @@ D:\Projects\Endless Fantasy\
       dungeonGenerator.ts
       seededRng.ts
       worldGenerator.ts
+      semantic/
+        semanticGenerator.ts
+        semanticProfiles.ts
+        semanticTypes.ts
+        semanticValidation.ts
     main.ts
     style.css
     vite-env.d.ts
@@ -79,9 +84,10 @@ Ignored/generated folders:
 - Imported world object overlay manifest from `src/data/worldObjects.ts` for the active `world_objects` atlas, 8x8 source rectangles, object IDs, categories, tags, and source metadata.
 - Imported dungeon/city tile manifest from `src/data/dungeonTiles.ts` for the active `dungeon_atlas`, 8x8 source rectangles, shared source-edge inset, tile IDs, categories, themes, and tags. The current atlas has 64 classified dungeon/city cells.
 - `src/world/seededRng.ts`: deterministic RNG/hash/noise helpers shared by map and dungeon generation.
-- `src/world/worldGenerator.ts`: seeded deterministic `atlas_v3_archipelago_world` generation. It starts from ocean, builds three irregular islands (Greenhaven, Coralreach, Ashfang Isle), tracks island metadata/tile maps, places towns/harbors/dungeons/landmarks as overlays on existing valid terrain, carves deduped road logic to approach tiles outside POI footprints, emits per-cell N/E/S/W `roadVisuals` masks with source-tile rotation for missing atlas orientations, uses dead-end caps for non-town road endpoints and bottom-only town endpoint connectors, enforces a continuous beach ring between land and water after terrain/road placement, records sea routes and dock markers, and validates island-local reachability, road visual-mask consistency, coastline/beach invariants, POI overlay placement, and tree clustering. Greenhaven/Coralreach use `medium_grass` as the dominant grass with clustered variants instead of per-tile random grass, and connected normal woodland terrain patches are normalized to one forest tile style.
+- `src/world/semantic/`: runtime-safe semantic overworld generator. `semanticProfiles.ts` defines the campaign profile with four major islands (Greenhaven, Coralreach, Frostmere, Highspire) plus seeded minor islands. `semanticGenerator.ts` builds land/water masks, island IDs, coast distance bands, grass/sand/ice biomes, elevation/ridges, rivers, forests, mountains, POIs, harbors, road graph, and walkability. `semanticValidation.ts` validates starter spawn, major islands, harbors, POIs, beach buffers, roads, rivers, and overlay separation.
+- `src/world/worldGenerator.ts`: compatibility facade adapting `SemanticWorld` into the existing Phaser-facing `GeneratedWorld` contract: atlas tile grid, biome grid, island records, POIs, harbor travel points, road visual masks, river paths, pier/bridge overlays, object overlays, sea route dots, start position, and validation. This keeps `src/main.ts` gameplay systems working while the geography source is semantic.
 - `src/world/dungeonGenerator.ts`: deterministic room-and-corridor dungeon floor generation from `worldSeed + dungeonId + tier`, including entrance/stairs, chests, switch/gate, and boss placement.
-- `tools/worldgen-lab/`: standalone Node/pngjs prototype for the reset overworld direction. It generates semantic masks/fields, debug PNGs, a placeholder rendered preview, semantic JSON, and design/asset reports without importing Phaser or changing active runtime worldgen.
+- `tools/worldgen-lab/`: standalone Node/pngjs preview/report tool for the semantic overworld direction. It imports the runtime-safe core from `src/world/semantic/`, but keeps pngjs/filesystem rendering outside Phaser.
 - `SynthAudio`: WebAudio helper for generated music loops and sound effects.
 - `CrystalOathScene`: main Phaser scene containing game state, input handling, map movement, battles, menus, save/load, and rendering.
 - Input helpers: `isUp`, `isDown`, `isLeft`, `isRight`, `isConfirm`, `isCancel`, `keyDirection`.
@@ -144,7 +150,7 @@ Render resolution is split into clear constants: `DESIGN_WIDTH = 1920`, `DESIGN_
 
 Texture filtering is per asset family: battle backgrounds use linear filtering and the canvas CSS uses `image-rendering: auto`; sprites, tiles, UI, icons, enemies, and class sheets use nearest-neighbor texture filtering.
 
-New games call the seeded archipelago generator. The generated world includes the tile grid, island ids per tile, island records, POI coordinates and object IDs, seed-derived ocean object overlays, clustered palm/normal tree overlays, start position, harbor docks, shallow-water/detail coordinates, sea routes, road visual masks, entry triggers, and validation result. `CrystalOathScene.locations()` adapts generated POIs back into town/dungeon/gate/final entry behavior and also exposes harbor/landmark overworld interactions.
+New games call the semantic campaign generator through `generateWorld()`. The generated world includes the tile grid, island IDs per tile, island records, POI coordinates and object IDs, seed-derived ocean object overlays, mountain/forest overlays, start position, harbor docks, shallow-water coordinates, sea routes, road visual masks, river paths, entry triggers, semantic layers, and validation result. `CrystalOathScene.locations()` adapts generated POIs back into town/dungeon/gate/final entry behavior and also exposes harbor/landmark overworld interactions.
 
 The terrain cache still draws atlas-v3 base tiles only, with a road exception: generated `roadVisuals` can draw a known-good road source cell rotated by 90/180/270 degrees so the visual connectors match the logical road mask even when the atlas lacks a dedicated orientation. Shallow water is now an atlas tile; `drawWorldOverlays` adds route dots, seed-derived `world_objects` ocean overlays, and pier-atlas dock/bridge cells over the cached map without modifying atlas pixels. `drawLocationIcon` prefers POI `objectId` values from `world_objects` for generated dungeons/landmarks/harbors, then falls back to legacy marker textures or generated art.
 

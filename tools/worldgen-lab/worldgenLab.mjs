@@ -128,7 +128,7 @@ ${command}
 
 ## Summary
 
-World Generator Lab is a standalone development utility for designing the next overworld direction from semantic data first. The attached reference image was used only as a broad style/layout target: archipelago composition, deep ocean, shallow coastal halos, beach bands, biome interiors, symbolic mountains/forests, roads, rivers, and POIs. The tool does not copy the reference image and does not replace the current runtime generator.
+World Generator Lab is a standalone PNG/report renderer for the semantic overworld direction. Its generator core is shared with the Phaser runtime through \`src/world/semantic/\`; the lab still keeps filesystem and pngjs preview code outside the game. The reference image is used only as a broad style/layout target: archipelago composition, deep ocean, shallow coastal halos, beach bands, biome interiors, symbolic mountains/forests, roads, rivers, and POIs. The tool does not copy the reference image.
 
 The generated world contains:
 
@@ -171,7 +171,7 @@ The output \`semantic_world.json\` is the inspectable semantic dump. The PNGs ar
 
 ## B. Island / Archipelago Generation
 
-The generator chooses seeded large-island anchors plus medium/small satellite islands. Each island is built from overlapping ellipse blobs with coast noise. The result is a semantic land mask, not a tile transition problem.
+The campaign profile defines four major islands: Greenhaven, Coralreach, Frostmere, and Highspire. It also adds seeded minor satellite islands. Each island is built from overlapping ellipse blobs with coast noise. The result is a semantic land mask, not a tile transition problem.
 
 The current prototype supports:
 

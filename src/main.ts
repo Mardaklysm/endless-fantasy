@@ -37,6 +37,7 @@ import {
   createWorldSeed,
   generateWorld,
   getIslandAt,
+  isWorldPositionWalkable,
   type GeneratedWorld,
   type IslandId,
   type RoadRotation,
@@ -355,7 +356,7 @@ interface TravelDestination {
   destinationIslandId: IslandId;
   displayName: string;
   costGold: number;
-  requiredUnlockFlag?: "unlockedIsland2" | "unlockedIsland3";
+  requiredUnlockFlag?: "unlockedIsland2" | "unlockedIsland3" | "unlockedFrostmere" | "unlockedHighspire";
 }
 
 type ServiceKind = "inn" | "item" | "arms" | "magic" | "clinic";
@@ -1498,6 +1499,7 @@ class CrystalOathScene extends Phaser.Scene {
   private audio = new SynthAudio();
   private generatedWorld?: GeneratedWorld;
   private roadVisualsByKey = new Map<string, WorldRoadVisual>();
+  private semanticDebugOverlay: "off" | "grid" | "walkability" | "islands" | "pois" | "roads" | "rivers" = "off";
   private worldSeed = "title-preview";
   private world: Terrain[][] = [];
   private worldTerrainCacheKey = "world_terrain_cache";
@@ -1528,8 +1530,12 @@ class CrystalOathScene extends Phaser.Scene {
     travel: {
       visitedIsland2: false,
       visitedIsland3: false,
+      visitedFrostmere: false,
+      visitedHighspire: false,
       unlockedIsland2: true,
-      unlockedIsland3: false
+      unlockedIsland3: false,
+      unlockedFrostmere: false,
+      unlockedHighspire: false
     }
   };
   private openedChests = new Set<string>();
@@ -1639,6 +1645,10 @@ class CrystalOathScene extends Phaser.Scene {
       this.openDebugMenu();
       return;
     }
+    if (event.code === "F6") {
+      this.cycleSemanticDebugOverlay();
+      return;
+    }
 
     if (this.mode === "title") this.handleTitle(event);
     else if (this.mode === "dialogue") this.handleDialogue(event);
@@ -1664,8 +1674,17 @@ class CrystalOathScene extends Phaser.Scene {
       isCancel(event) ||
       event.code === "KeyM" ||
       event.code === "KeyF" ||
+      event.code === "F6" ||
       event.code === "F9"
     );
+  }
+
+  private cycleSemanticDebugOverlay() {
+    const modes = ["off", "grid", "walkability", "islands", "pois", "roads", "rivers"] as const;
+    const current = modes.indexOf(this.semanticDebugOverlay);
+    this.semanticDebugOverlay = modes[(current + 1) % modes.length];
+    this.flashMessage(`Semantic debug: ${this.semanticDebugOverlay}`);
+    this.markDirty();
   }
 
   private rememberHeldDirection(direction: DirectionName) {
@@ -1921,8 +1940,12 @@ class CrystalOathScene extends Phaser.Scene {
       travel: {
         visitedIsland2: false,
         visitedIsland3: false,
+        visitedFrostmere: false,
+        visitedHighspire: false,
         unlockedIsland2: true,
-        unlockedIsland3: false
+        unlockedIsland3: false,
+        unlockedFrostmere: false,
+        unlockedHighspire: false
       }
     };
   }
@@ -1979,7 +2002,7 @@ class CrystalOathScene extends Phaser.Scene {
     if (id === "ashenKeep") {
       return {
         requires: () => this.flags.relics.root,
-        lockedText: "Ashfang's keep smolders behind root-sealed stone. Clear Greenhaven's cave first."
+        lockedText: "Stonefall Keep waits behind root-sealed highland stone. Clear Greenhaven's cave first."
       };
     }
     if (id === "skyglassTower") {
@@ -2034,7 +2057,7 @@ class CrystalOathScene extends Phaser.Scene {
         npcs: [
           { x: 6, y: 7, lines: ["Sailor: Jungle ruins lie inland. Pirates found something there and stopped laughing."] },
           { x: 15, y: 7, lines: ["Fisher: I saw a wreck south of the harbor. It might still have cargo."] },
-          { x: 11, y: 4, lines: ["Harbor Master: Ashfang passage is 10 gold when your nerve is ready."] }
+          { x: 11, y: 4, lines: ["Harbor Master: Frostmere and Highspire passages open once your charts are worthy."] }
         ]
       },
       elderleaf: {
@@ -2049,13 +2072,13 @@ class CrystalOathScene extends Phaser.Scene {
         spellStock: ["revive", "storm"],
         npcs: [
           { x: 5, y: 8, lines: ["Druid: Poison lingers after battle. Carry antidotes or rest at an inn."] },
-          { x: 14, y: 6, lines: ["Scout: Ashfang Keep opened when Rootlight returned. Ice cools proud flame."] },
+          { x: 14, y: 6, lines: ["Scout: Stonefall Keep opened when Rootlight returned. Ice cools proud flame."] },
           { x: 11, y: 10, lines: ["Child: I saw a hidden chest sparkle behind the cave's switch stone."] }
         ]
       },
       sunbarrow: {
         id: "sunbarrow",
-        name: "Ashfang Camp",
+        name: "Highspire Camp",
         palette: ["#6c4c22", "#d29a44", "#fff0ae"],
         innPrice: 32,
         clinicPrice: 55,
@@ -2064,7 +2087,7 @@ class CrystalOathScene extends Phaser.Scene {
         armorStock: ["ringMail", "sageMantle"],
         spellStock: ["starveil", "nova"],
         npcs: [
-          { x: 7, y: 7, lines: ["Miner: Ashfang's cliffs move like they are thinking. Stay on the paths."] },
+          { x: 7, y: 7, lines: ["Miner: Highspire's cliffs move like they are thinking. Stay on the paths."] },
           { x: 13, y: 9, lines: ["Trader: Starveil wins long fights. Nova ends short ones."] },
           { x: 10, y: 5, lines: ["Outrider: Four relics point to Starfall Gate, not the spire itself."] }
         ]
@@ -2124,7 +2147,7 @@ class CrystalOathScene extends Phaser.Scene {
       },
       ashenKeep: {
         id: "ashenKeep",
-        name: "Ashfang Keep",
+        name: "Stonefall Keep",
         relic: "flame",
         boss: "emberTyrant",
         palette: { floor: 0x522a22, wall: 0x1e1213, accent: 0xff6a38, chest: 0xd9a445, gate: 0x7b1d13 },
@@ -2302,7 +2325,7 @@ class CrystalOathScene extends Phaser.Scene {
   private canOccupyExploreTile(mode: ExploreMode, x: number, y: number): boolean {
     if (mode === "world") {
       if (x < 0 || y < 0 || x >= WORLD_W || y >= WORLD_H) return false;
-      return this.canEnterTerrain(this.world[y][x]) || !!this.locationAt(x, y);
+      return (this.generatedWorld ? isWorldPositionWalkable(this.generatedWorld, x, y) : this.canEnterTerrain(this.world[y][x])) || !!this.locationAt(x, y);
     }
     if (mode === "town") return x >= 1 && x <= 19 && y >= 1 && y <= 13;
     const floor = this.dungeonFloorRows(this.currentDungeon, this.dungeonFloor);
@@ -2668,7 +2691,8 @@ class CrystalOathScene extends Phaser.Scene {
     const islandId = this.generatedWorld?.islandByTile[y]?.[x] ?? this.currentIslandId;
     const biome = this.generatedWorld?.biomes[y]?.[x];
     if (biome === "forest") return islandId === "coralreach" ? "forest" : "forest";
-    if (islandId === "ashfang" && (biome === "darkland" || biome === "lava" || biome === "mountain")) return "final";
+    if (islandId === "highspire" && (biome === "darkland" || biome === "lava" || biome === "mountain")) return "final";
+    if (islandId === "frostmere" && (biome === "snow" || biome === "mountain")) return "hills";
     if (islandId === "coralreach" && biome === "desert") return "sand";
     return this.terrainEncounterKey(terrain);
   }
@@ -2716,17 +2740,29 @@ class CrystalOathScene extends Phaser.Scene {
 
   private getAvailableDestinations(currentIslandId: IslandId): TravelDestination[] {
     if (currentIslandId === "greenhaven") {
-      return [{ destinationIslandId: "coralreach", displayName: "Coralreach", costGold: 10, requiredUnlockFlag: "unlockedIsland2" }];
+      return [
+        { destinationIslandId: "coralreach", displayName: "Coralreach", costGold: 10, requiredUnlockFlag: "unlockedIsland2" },
+        { destinationIslandId: "highspire", displayName: "Highspire", costGold: 18, requiredUnlockFlag: "unlockedHighspire" }
+      ];
     }
     if (currentIslandId === "coralreach") {
       return [
         { destinationIslandId: "greenhaven", displayName: "Greenhaven", costGold: 10 },
-        { destinationIslandId: "ashfang", displayName: "Ashfang Isle", costGold: 10, requiredUnlockFlag: "unlockedIsland3" }
+        { destinationIslandId: "frostmere", displayName: "Frostmere", costGold: 14, requiredUnlockFlag: "unlockedFrostmere" },
+        { destinationIslandId: "highspire", displayName: "Highspire", costGold: 18, requiredUnlockFlag: "unlockedHighspire" }
+      ];
+    }
+    if (currentIslandId === "frostmere") {
+      return [
+        { destinationIslandId: "coralreach", displayName: "Coralreach", costGold: 14 },
+        { destinationIslandId: "highspire", displayName: "Highspire", costGold: 18, requiredUnlockFlag: "unlockedHighspire" },
+        { destinationIslandId: "greenhaven", displayName: "Greenhaven", costGold: 14 }
       ];
     }
     return [
-      { destinationIslandId: "coralreach", displayName: "Coralreach", costGold: 10 },
-      { destinationIslandId: "greenhaven", displayName: "Greenhaven", costGold: 10 }
+      { destinationIslandId: "frostmere", displayName: "Frostmere", costGold: 18 },
+      { destinationIslandId: "coralreach", displayName: "Coralreach", costGold: 18 },
+      { destinationIslandId: "greenhaven", displayName: "Greenhaven", costGold: 18 }
     ];
   }
 
@@ -2743,7 +2779,11 @@ class CrystalOathScene extends Phaser.Scene {
     this.gold -= destination.costGold;
     this.flags.boat = true;
     if (destination.destinationIslandId === "coralreach") this.flags.travel.visitedIsland2 = true;
-    if (destination.destinationIslandId === "ashfang") this.flags.travel.visitedIsland3 = true;
+    if (destination.destinationIslandId === "frostmere") this.flags.travel.visitedFrostmere = true;
+    if (destination.destinationIslandId === "highspire") {
+      this.flags.travel.visitedIsland3 = true;
+      this.flags.travel.visitedHighspire = true;
+    }
     this.currentIslandId = destination.destinationIslandId;
     this.worldPos = this.arrivalTileForIsland(destination.destinationIslandId);
     this.mode = "world";
@@ -2812,7 +2852,7 @@ class CrystalOathScene extends Phaser.Scene {
     if (landmarkKind === "monsterNest") {
       this.gold += Math.floor(rewardGold / 2);
       this.saveGame();
-      this.say([`${loc.name} stirs. Clearing it should make the island safer.`], () => this.startRandomBattle(this.currentIslandId === "ashfang" ? ["ashGolem", "coalKnight"] : ["greenWolf", "bandit"], undefined));
+      this.say([`${loc.name} stirs. Clearing it should make the island safer.`], () => this.startRandomBattle(this.currentIslandId === "highspire" ? ["ashGolem", "coalKnight"] : ["greenWolf", "bandit"], undefined));
       return;
     }
     if (landmarkKind === "secretMerchant") {
@@ -3876,7 +3916,9 @@ class CrystalOathScene extends Phaser.Scene {
       if (dungeonId === "tideShrine") {
         this.inventory.charteredCompass = Math.max(1, this.inventory.charteredCompass ?? 0);
         this.flags.travel.unlockedIsland3 = true;
-        extra.push("The boss drops a Chartered Compass. Ashfang routes are now charted.");
+        this.flags.travel.unlockedFrostmere = true;
+        this.flags.travel.unlockedHighspire = true;
+        extra.push("The boss drops a Chartered Compass. Frostmere and Highspire routes are now charted.");
       }
       if (dungeon.relic === "gale") {
         this.flags.skyship = true;
@@ -4216,6 +4258,13 @@ Statuses: ${statuses}`;
           action: () => this.startRandomBattle(WORLD_TABLES.plains)
         },
         {
+          label: () => `Semantic overlay: ${this.semanticDebugOverlay}`,
+          action: () => {
+            this.cycleSemanticDebugOverlay();
+            this.openDebugMenu();
+          }
+        },
+        {
           label: "Toggle relics",
           action: () => {
             const all = this.hasAllRelics();
@@ -4225,6 +4274,8 @@ Statuses: ${statuses}`;
             this.flags.gateOpen = !all;
             this.flags.travel.unlockedIsland2 = true;
             this.flags.travel.unlockedIsland3 = !all;
+            this.flags.travel.unlockedFrostmere = !all;
+            this.flags.travel.unlockedHighspire = !all;
             this.openDebugMenu();
           }
         },
@@ -4345,7 +4396,7 @@ Statuses: ${statuses}`;
       [
         "Controls: Arrow keys or WASD move and select. Enter, Space, or Z confirms.",
         "Escape or X cancels and opens the menu. Shift moves faster while exploring.",
-        "M toggles mute. F toggles fullscreen. F9 opens a hidden debug menu."
+        "M toggles mute. F toggles fullscreen. F6 cycles semantic overlays. F9 opens a hidden debug menu."
       ],
       done
     );
@@ -4790,6 +4841,7 @@ Statuses: ${statuses}`;
       }
     }
     this.drawWorldOverlays(startX, endX, startY, endY, tileCam);
+    this.drawSemanticDebugOverlay(startX, endX, startY, endY, tileCam);
     for (const loc of this.locations()) {
       const radius = Math.floor(this.locationFootprint(loc) / 2);
       if (loc.x + radius < startX || loc.x - radius > endX || loc.y + radius < startY || loc.y - radius > endY) continue;
@@ -5404,6 +5456,24 @@ Statuses: ${statuses}`;
         this.g.fillStyle(0xfff0a8, 0.62).fillCircle(sx + TILE / 2, sy + TILE / 2, 3);
       });
     }
+    for (const river of this.generatedWorld.rivers) {
+      const visiblePath = river.filter(inView);
+      if (!visiblePath.length) continue;
+      this.g.lineStyle(5, 0x163d9a, 0.9);
+      for (let i = 1; i < river.length; i += 1) {
+        const from = river[i - 1];
+        const to = river[i];
+        if (!inView(from) && !inView(to)) continue;
+        this.g.lineBetween(from.x * TILE - tileCam.x + TILE / 2, from.y * TILE - tileCam.y + TILE / 2, to.x * TILE - tileCam.x + TILE / 2, to.y * TILE - tileCam.y + TILE / 2);
+      }
+      this.g.lineStyle(2, 0x72d8ff, 0.9);
+      for (let i = 1; i < river.length; i += 1) {
+        const from = river[i - 1];
+        const to = river[i];
+        if (!inView(from) && !inView(to)) continue;
+        this.g.lineBetween(from.x * TILE - tileCam.x + TILE / 2, from.y * TILE - tileCam.y + TILE / 2, to.x * TILE - tileCam.x + TILE / 2, to.y * TILE - tileCam.y + TILE / 2);
+      }
+    }
     const hasObjectAtlas = this.hasTexture(WORLD_OBJECT_ATLAS.textureKey);
     for (const overlay of this.generatedWorld.objectOverlays) {
       if (!inView(overlay)) continue;
@@ -5430,6 +5500,75 @@ Statuses: ${statuses}`;
       this.g.fillStyle(0x07101d, 0.35).fillRect(sx + 5, sy + 5, TILE - 10, TILE - 10);
       this.g.fillStyle(color, 0.95).fillRect(sx + 7, sy + 12, TILE - 14, 8);
       this.g.lineStyle(1, 0xffefbd, 0.65).lineBetween(sx + 8, sy + 16, sx + TILE - 8, sy + 16);
+    }
+  }
+
+  private drawSemanticDebugOverlay(startX: number, endX: number, startY: number, endY: number, tileCam: Vec) {
+    if (!this.generatedWorld || this.semanticDebugOverlay === "off") return;
+    const semantic = this.generatedWorld.semantic;
+    const colorForIsland = (id: number) => {
+      const colors = [0x000000, 0x5ee38a, 0xf2c86d, 0xaee8ff, 0xd0a1ff, 0xff8fb3, 0xfff08f, 0x8fffd9, 0xc6ff8f, 0xb1b7ff];
+      return colors[id % colors.length];
+    };
+    if (this.semanticDebugOverlay === "grid") {
+      this.g.lineStyle(1, 0xffffff, 0.12);
+      for (let y = startY; y <= endY; y += 1) {
+        for (let x = startX; x <= endX; x += 1) this.g.strokeRect(x * TILE - tileCam.x, y * TILE - tileCam.y, TILE, TILE);
+      }
+    }
+    if (this.semanticDebugOverlay === "walkability") {
+      for (let y = startY; y <= endY; y += 1) {
+        for (let x = startX; x <= endX; x += 1) {
+          const i = y * semantic.width + x;
+          this.g.fillStyle(semantic.layers.walkability[i] ? 0x64ff8a : 0xff405c, 0.28).fillRect(x * TILE - tileCam.x, y * TILE - tileCam.y, TILE, TILE);
+        }
+      }
+    }
+    if (this.semanticDebugOverlay === "islands") {
+      for (let y = startY; y <= endY; y += 1) {
+        for (let x = startX; x <= endX; x += 1) {
+          const id = semantic.layers.islandId[y * semantic.width + x];
+          if (!id) continue;
+          this.g.fillStyle(colorForIsland(id), 0.25).fillRect(x * TILE - tileCam.x, y * TILE - tileCam.y, TILE, TILE);
+        }
+      }
+      for (const island of semantic.islands) {
+        if (island.center.x < startX || island.center.x > endX || island.center.y < startY || island.center.y > endY) continue;
+        this.text(island.center.x * TILE - tileCam.x, island.center.y * TILE - tileCam.y, island.id, 9, "#ffffff", "center");
+      }
+    }
+    if (this.semanticDebugOverlay === "pois") {
+      for (const poi of this.generatedWorld.pois) {
+        if (poi.x < startX || poi.x > endX || poi.y < startY || poi.y > endY) continue;
+        const radius = Math.floor(poi.footprint / 2);
+        const sx = (poi.x - radius) * TILE - tileCam.x;
+        const sy = (poi.y - radius) * TILE - tileCam.y;
+        this.g.lineStyle(2, 0xff4f8f, 0.85).strokeRect(sx, sy, poi.footprint * TILE, poi.footprint * TILE);
+        this.text(poi.x * TILE - tileCam.x + TILE / 2, poi.y * TILE - tileCam.y - 8, poi.id, 9, "#fff2a8", "center");
+      }
+    }
+    if (this.semanticDebugOverlay === "roads") {
+      for (const edge of semantic.roadGraph.edges) {
+        if (!edge.connected) continue;
+        this.g.lineStyle(3, 0xffb347, 0.8);
+        for (let i = 1; i < edge.path.length; i += 1) {
+          const from = edge.path[i - 1];
+          const to = edge.path[i];
+          if ((from.x < startX || from.x > endX || from.y < startY || from.y > endY) && (to.x < startX || to.x > endX || to.y < startY || to.y > endY)) continue;
+          this.g.lineBetween(from.x * TILE - tileCam.x + TILE / 2, from.y * TILE - tileCam.y + TILE / 2, to.x * TILE - tileCam.x + TILE / 2, to.y * TILE - tileCam.y + TILE / 2);
+        }
+      }
+    }
+    if (this.semanticDebugOverlay === "rivers") {
+      for (const river of semantic.rivers) {
+        this.g.lineStyle(4, 0x43d8ff, 0.88);
+        for (let i = 1; i < river.path.length; i += 1) {
+          const from = river.path[i - 1];
+          const to = river.path[i];
+          if ((from.x < startX || from.x > endX || from.y < startY || from.y > endY) && (to.x < startX || to.x > endX || to.y < startY || to.y > endY)) continue;
+          this.g.lineBetween(from.x * TILE - tileCam.x + TILE / 2, from.y * TILE - tileCam.y + TILE / 2, to.x * TILE - tileCam.x + TILE / 2, to.y * TILE - tileCam.y + TILE / 2);
+        }
+      }
     }
   }
 

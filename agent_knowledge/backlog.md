@@ -14,7 +14,7 @@ This backlog is practical project memory, not a full design document. Keep it sh
 - Add v2-quality art for later-region normal enemies not covered by the first twelve common roster crops.
 - Archipelago generation now uses real atlas-v3 road, beach/coast, shallow-water, forest, and volcanic support tiles, pier-atlas dock overlays, and the transparent world-objects atlas for generated dungeons, landmarks, harbors, reefs, wrecks, barrels, whirlpools, and clustered palm/normal tree overlays. Sea route dots remain lightweight generated overlays.
 - Overworld terrain selection now uses dominant base tiles with lower-frequency patches and avoids random fixed-direction coast stamps. Future coastline polish should add direction-aware transition placement or new neutral coast tiles, not map-level pixel blending.
-- Use `tools/worldgen-lab/` to prototype the reset overworld direction before touching runtime worldgen. The intended direction is semantic masks/fields plus overlay rendering, not a giant coastline-transition tileset.
+- Semantic overworld generation is now active in runtime through `src/world/semantic/`, with `tools/worldgen-lab/` sharing that core for preview PNGs/reports. Future polish should improve Phaser rendering and assets from the semantic layers rather than returning to giant coastline-transition tilesets.
 - Consider dynamic loading/code splitting for large JPEG battle backgrounds and large normalized class sheets if bundle size becomes painful.
 
 ## Asset Manifest Follow-Up
@@ -37,7 +37,7 @@ This backlog is practical project memory, not a full design document. Keep it sh
 - Save schema has no version/migration strategy.
 - Balance needs a full manual playthrough pass.
 - Archipelago travel economy and early dungeon rewards need a manual tuning pass after several real playthroughs.
-- Coralreach/Ashfang progression is implemented, but final relic ordering and island encounter balance need end-to-end verification.
+- Coralreach/Frostmere/Highspire progression is implemented through the semantic world profile, but final relic ordering, route unlock pacing, and island encounter balance need end-to-end verification.
 - Game over/load path should be tested with real defeat state.
 - Boss progression should be manually verified end-to-end after any dungeon or flag change.
 - Mouse menu support is minimal.

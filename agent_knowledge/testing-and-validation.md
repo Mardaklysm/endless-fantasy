@@ -22,39 +22,22 @@ Run from `D:\Projects\Endless Fantasy`:
 npm test
 ```
 
-This runs `tools/worldgen/test_worldgen.mjs`. It validates the active `atlas_v3` terrain path, generates deterministic worlds, and asserts:
+This runs `tools/worldgen/test_worldgen.mjs`. It validates the active semantic runtime world generator and lightweight asset prerequisites:
 
-- runtime atlas `src/assets/world/atlas_v3.png` exists and is a 1024x1024 PNG
-- active runtime metadata points to `atlas_v3`
-- the atlas is an 8x8 grid with 128x128 square source cells
-- the manifest has 64 non-empty terrain tiles and 0 active empty cells
-- every non-empty source rectangle uses exact 8x8 grid math and stays inside bounds
-- `ATLAS_V3_SOURCE_INSET` remains within each 128x128 source cell and is easy to test with values 1 through 4
-- inset source rectangle calculation is covered with an explicit inset-2 sample and with the active runtime inset
-- runtime cache rendering, fallback visible-tile drawing, and debug previews all use the same shared inset source-rect helper
-- runtime source no longer imports or calls the removed map-level seam repair module
-- runtime source files do not actively reference the failed classic tileset, `classicIsland`, old 10x10 atlas, or classic object renderer
-- start tile is walkable grass on Greenhaven
-- generated worlds contain at least three island records with island tile maps, towns, harbors, dungeons, and landmarks
-- required POIs are reachable on their own island and not on blocked/water terrain
-- harbors are coastal
-- water tiles are not walkable
-- blocked mountain, volcano, and lava tiles are not walkable
-- generated world edges are a deep-water ocean border
-- generated worlds include oriented roads, shallow-water terrain/tracking, pier-atlas docks/bridges, sea routes, beaches/coasts, forest/jungle biome hooks, reefs/ocean details, and no empty-cell references
-- generated worlds do not directly stamp fixed-orientation coast/foam tiles or wet beach sand, keep Greenhaven `medium_grass` dominant over grass patch variants, keep roads out of POI footprints, and record unique road positions that still point at road tiles
-- generated road visuals have exact N/E/S/W masks, source-tile rotations that render those masks, no zero-connection road cells, and every visible connector points into another road or an explicit POI endpoint. The test also guards the atlas quirk where N+S roads must use rotated `road_horizontal` art instead of the visually dirty `road_vertical` source.
-- generated road endpoint visuals validate that single-connector roads use the clean rotated `road_dead_end_e` cap, non-town landmarks do not get visual endpoint connectors, and town/city endpoint connectors enter only from the bottom of the town footprint; the screenshot regression seed `archipelago-mqm04aju-1m43css` is covered
-- generated coastline validates that every non-water tile touching water is beach sand, grass/forest never touch water directly, isolated/fixable beach holes are rejected, and the known regression seed `archipelago-mqlgchkq-1646550` remains covered
-- generated POIs are validated as overlays on existing terrain: normal POIs must not stamp terrain into the beach ring, enter water, or reach the coast; only harbors and shipwrecks are coastal exceptions
-- generated palm/normal tree placement is validated so palm-looking terrain tiles are not used, palm/normal overlays are clustered rather than checkerboard-adjacent, and tree overlays stay off water/beach tiles
-- generated normal woodland terrain validates that adjacent connected forest tiles do not mix `light_forest` and `dense_forest` in the same patch
-- runtime world object overlay atlas `src/assets/world/world_objects.png` exists as a 1024x1024 transparent PNG with a 64-cell `worldObjectAtlas.manifest.json`
-- generated non-town POIs have valid object overlay IDs, and generated ocean object overlays are deterministic, valid, and placed on water
-- runtime dungeon/city atlas `src/assets/world/dungeon_atlas.png` exists as a 1024x1024 opaque PNG with a 64-cell `dungeonAtlas.manifest.json`
-- dungeon atlas source inset math, tile ID lookup, and runtime references for dungeons/town shop pads, weighted dungeon/town tiles, centered small maps, dungeon wall-void culling, generated-marker dungeon entry/stair spawning, and invalid dungeon-position recovery are valid
-- same seed reproduces the same world
-- different seeds produce different tile grids
+- active world, object, and dungeon atlases exist at the expected 1024x1024 PNG sizes
+- required runtime terrain/object IDs exist for water, beach, grass, sand, snow, mountains, forests, and harbors
+- raw deep/shallow water tiles block walking while beach is walkable
+- same seed reproduces the same generated semantic world
+- different seeds produce different generated worlds
+- the campaign profile produces exactly four major islands: Greenhaven, Coralreach, Frostmere, and Highspire
+- Greenhaven starter island exists and the start position is walkable, on Greenhaven, and not on top of a POI
+- at least one settlement exists on Greenhaven
+- each major island has a harbor/travel point adjacent to shallow water
+- semantic validation has no errors
+- beach cells buffer land from water
+- generated POIs never spawn on blocked water and are walkable
+- required settlement-to-port/dungeon/gate/final road graph edges connect
+- runtime roads, rivers, mountain overlays, and forest overlays exist
 
 To write a human-readable generation report and PNG minimap preview:
 
@@ -203,7 +186,7 @@ Expected:
 - Confirm the camera follows the interpolated visual position without a visible reset.
 - Exit Greenhaven through the south gate.
 - Confirm pressing south while already standing on Greenhaven's south gate exits to the overworld.
-- Confirm the overworld is mostly ocean with three islands, beach/coast edges, shallow-water/route overlays, harbor markers, landmark markers, and transparent object overlays for dungeons/landmarks/ocean details.
+- Confirm the overworld is mostly ocean with four major islands plus minor islands, beach/coast edges, shallow-water/route overlays, road and river overlays, harbor markers, landmark markers, and transparent object overlays for dungeons/landmarks/ocean details.
 - Walk on world terrain.
 - Enter a town/location by stepping onto it.
 - Confirm town/dungeon/location entry occurs after the tile step completes, not mid-step.
@@ -270,7 +253,7 @@ Expected:
 - Use stairs.
 - Fight boss.
 - Confirm boss victory sets relic/story/cleared-dungeon flags and autosaves.
-- Confirm Coralreach boss awards Chartered Compass/unlocks Ashfang route.
+- Confirm Coralreach boss awards Chartered Compass/unlocks Frostmere and Highspire routes.
 
 This is longer than a quick smoke test; run when changing dungeon/progression/boss/save behavior.
 

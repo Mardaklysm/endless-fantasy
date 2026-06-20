@@ -50,6 +50,7 @@ npm test
 - Shift: move faster while exploring
 - M: mute
 - F: fullscreen
+- F6: cycle semantic world debug overlays
 - F9: hidden debug menu for testing
 
 ## Saving
@@ -59,9 +60,9 @@ The game saves to `localStorage`. You can save from the menu on the overworld or
 ## Gameplay Summary
 
 - Three-character party: Arlen, Mira, and Kael
-- Seeded procedural archipelago overworld using the 8x8 `atlas_v3` terrain atlas plus a transparent object overlay atlas for dungeons, landmarks, reefs, wrecks, harbor signs, beaches, shallow water, roads, harbors, pier overlays, and random encounters
+- Seeded semantic archipelago overworld using generated land/water masks, island IDs, coast bands, grass/sand/ice biomes, walkability, road/river overlays, and POIs, rendered through the 8x8 `atlas_v3` terrain atlas plus transparent object overlays
 - Atlas-backed city/town interiors and dungeons using `dungeon_atlas` for medieval stone, cave, ice, ruin, volcanic, cursed, chest, gate, switch, stair, and boss-seal tiles
-- Three major islands: Greenhaven, Coralreach, and Ashfang Isle, with 10 gold harbor passage and deterministic world seeds
+- Four major themed islands: Greenhaven, Coralreach, Frostmere, and Highspire, with deterministic world seeds and harbor travel between charted routes
 - Procedural room-and-corridor dungeons derived from the world seed and dungeon id
 - Turn-based battles with Attack, Skill, Magic, Item, Defend, and Run commands
 - Individual initiative turns, visible enemy intents, cooldown skills, status effects, elemental weaknesses, boss fights, XP/gold, drops, level-ups, equipment, shops, inns, clinics, and magic shops
@@ -89,6 +90,6 @@ All code, art, and audio are procedurally generated or created inside this proje
 - Inn restores HP/spell charges and saves.
 - Shops can buy items, gear, and spells.
 - Dungeons are procedurally generated and contain rooms, corridors, chests, a switch gate, stairs, random encounters, and bosses.
-- Harbor travel costs 10 gold, deducts correctly, and can return between visited islands.
+- Harbor travel deducts gold correctly and can return between charted islands.
 - Boss victory sets relic flags, cleared dungeon state, and later travel/progression rewards.
 - Save/load restores party, inventory, generated world seed, current island, position, settings, flags, discovered POIs, cleared dungeons, and opened chests.

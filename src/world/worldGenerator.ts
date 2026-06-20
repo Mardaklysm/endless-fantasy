@@ -1,28 +1,21 @@
-import {
-  WORLD_TILE_IDS,
-  WORLD_TILES,
-  isAtlasV3TileId,
-  isWorldTileWalkable,
-  worldTileById,
-  worldTileHasTag,
-  type WorldBiome,
-  type WorldEncounterFamily,
-  type WorldTileId
-} from "../data/worldTiles.ts";
+import { WORLD_TILE_IDS, WORLD_TILES, isWorldTileWalkable, type WorldBiome, type WorldTileId } from "../data/worldTiles.ts";
 import { WORLD_OBJECT_IDS, type WorldObjectId } from "../data/worldObjects.ts";
-import { createSeededRng, fbm, hashNoise, type SeededRng } from "./seededRng.ts";
+import { hashNoise } from "./seededRng.ts";
+import { generateSemanticWorld } from "./semantic/semanticGenerator.ts";
+import { CAMPAIGN_WORLD_PROFILE } from "./semantic/semanticProfiles.ts";
+import { SEMANTIC_BIOME, SEMANTIC_WATER, type SemanticPoi, type SemanticVec, type SemanticWorld } from "./semantic/semanticTypes.ts";
 
 export const DEFAULT_WORLD_WIDTH = 96;
 export const DEFAULT_WORLD_HEIGHT = 64;
-export const ACTIVE_WORLDGEN_MODE = "atlas_v3_archipelago_world" as const;
+export const ACTIVE_WORLDGEN_MODE = "semantic_campaign_archipelago_world" as const;
 
 export interface WorldVec {
   x: number;
   y: number;
 }
 
-export type IslandId = "greenhaven" | "coralreach" | "ashfang";
-export type IslandTheme = "temperate" | "tropical" | "volcanic";
+export type IslandId = "greenhaven" | "coralreach" | "frostmere" | "highspire" | `minor_${number}`;
+export type IslandTheme = "grassland" | "sand_coast" | "ice" | "mixed_highland" | "minor";
 export type WorldPoiKind = "town" | "harbor" | "dungeon" | "gate" | "final" | "landmark";
 export type WorldLandmarkKind =
   | "shipwreck"
@@ -81,6 +74,7 @@ export interface GeneratedIsland {
   name: string;
   difficultyTier: number;
   theme: IslandTheme;
+  major: boolean;
   bounds: { x: number; y: number; width: number; height: number };
   tileMap: WorldTileId[][];
   townPosition: WorldVec;
@@ -118,145 +112,33 @@ export interface GeneratedWorld {
   startPosition: WorldVec;
   entryTriggers: WorldEntryTrigger[];
   validation: WorldValidationResult;
+  semantic: SemanticWorld;
 }
 
-interface IslandTemplate {
-  id: IslandId;
-  name: string;
-  difficultyTier: number;
-  theme: IslandTheme;
-  cx: number;
-  cy: number;
-  rx: number;
-  ry: number;
-  centerJitter: number;
-  dungeonIds: string[];
-  townId: string;
-  townName: string;
-  harborId: string;
-  harborName: string;
-  landmarkKinds: WorldLandmarkKind[];
-}
-
-interface IslandBuildState {
-  template: IslandTemplate;
-  center: WorldVec;
-  land: Set<string>;
-  coast: WorldVec[];
-  pois: WorldPoi[];
-}
-
-const ISLAND_TEMPLATES: IslandTemplate[] = [
-  {
-    id: "greenhaven",
-    name: "Greenhaven",
-    difficultyTier: 1,
-    theme: "temperate",
-    cx: 0.23,
-    cy: 0.54,
-    rx: 14,
-    ry: 10,
-    centerJitter: 4,
-    dungeonIds: ["mossCave"],
-    townId: "dawnford",
-    townName: "Greenhaven",
-    harborId: "greenhavenHarbor",
-    harborName: "Greenhaven Harbor",
-    landmarkKinds: ["shipwreck", "shrine", "hiddenChest", "monsterNest"]
-  },
-  {
-    id: "coralreach",
-    name: "Coralreach",
-    difficultyTier: 2,
-    theme: "tropical",
-    cx: 0.56,
-    cy: 0.66,
-    rx: 16,
-    ry: 10,
-    centerJitter: 5,
-    dungeonIds: ["tideShrine"],
-    townId: "brinewick",
-    townName: "Coralreach",
-    harborId: "coralreachHarbor",
-    harborName: "Coralreach Harbor",
-    landmarkKinds: ["shipwreck", "ruins", "secretMerchant", "monsterNest"]
-  },
-  {
-    id: "ashfang",
-    name: "Ashfang Isle",
-    difficultyTier: 3,
-    theme: "volcanic",
-    cx: 0.76,
-    cy: 0.31,
-    rx: 15,
-    ry: 11,
-    centerJitter: 4,
-    dungeonIds: ["ashenKeep", "skyglassTower", "starfallGate", "eclipseSpire"],
-    townId: "sunbarrow",
-    townName: "Ashfang Camp",
-    harborId: "ashfangHarbor",
-    harborName: "Ashfang Harbor",
-    landmarkKinds: ["cave", "shrine", "resourceNode", "ancientDoor"]
-  }
-];
-
-const MAIN_GRASS_TILE = WORLD_TILE_IDS.mediumGrass;
-const GRASS_PATCH_TILES = [
-  WORLD_TILE_IDS.brightGrass,
-  WORLD_TILE_IDS.flowerMeadowGrass,
-  WORLD_TILE_IDS.lushCloverGrass,
-  WORLD_TILE_IDS.weedsGrass,
-  WORLD_TILE_IDS.trampledGrass
-];
-const FOREST_TILES = [WORLD_TILE_IDS.lightForest, WORLD_TILE_IDS.denseForest];
-const FOREST_TILE_SET = new Set<WorldTileId>(FOREST_TILES);
-const BEACH_TILES = [WORLD_TILE_IDS.beachSand];
-const NORMAL_TREE_TILES = new Set<WorldTileId>([WORLD_TILE_IDS.lightForest, WORLD_TILE_IDS.denseForest, WORLD_TILE_IDS.deadForest, WORLD_TILE_IDS.ashForest]);
-const PALM_TREE_TILES = new Set<WorldTileId>([WORLD_TILE_IDS.jungle]);
-const PALM_OBJECT_IDS = new Set<WorldObjectId>([WORLD_OBJECT_IDS.palmTree, WORLD_OBJECT_IDS.denseJungleBush]);
-const NORMAL_TREE_OBJECT_IDS = new Set<WorldObjectId>([WORLD_OBJECT_IDS.broadleafTree, WORLD_OBJECT_IDS.darkPineTree]);
-const WATER_OBJECT_IDS = new Set<WorldObjectId>([
-  WORLD_OBJECT_IDS.fishingSpot,
-  WORLD_OBJECT_IDS.octopusCache,
-  WORLD_OBJECT_IDS.coralClusterBlue,
-  WORLD_OBJECT_IDS.shipwreckDebris,
-  WORLD_OBJECT_IDS.brokenMast,
-  WORLD_OBJECT_IDS.floatingTreasureBarrel,
-  WORLD_OBJECT_IDS.whirlpoolSwirl
-]);
-const ROAD_TILE = WORLD_TILE_IDS.roadHorizontal;
 const ROAD_N = 1;
 const ROAD_E = 2;
 const ROAD_S = 4;
 const ROAD_W = 8;
-const HILL_TILES = [WORLD_TILE_IDS.grassStones, WORLD_TILE_IDS.gravelStoneGround, WORLD_TILE_IDS.rockyHills];
-const ASH_WALKABLE_TILES = [WORLD_TILE_IDS.deadCrackedEarth, WORLD_TILE_IDS.ashBlackGround, WORLD_TILE_IDS.volcanicAshGround, WORLD_TILE_IDS.ashForest];
-const MOUNTAIN_TILE = WORLD_TILE_IDS.rockyMountainGround;
-const LAVA_TILE = WORLD_TILE_IDS.lavaCrackedGround;
-const WATER_TILE = WORLD_TILE_IDS.deepWater;
-const SHALLOW_WATER_TILES = [WORLD_TILE_IDS.shallowWater];
 
 export function createWorldSeed(): string {
-  return `archipelago-${Date.now().toString(36)}-${Math.floor(Math.random() * 0xffffffff).toString(36)}`;
+  const random = Math.floor(Math.random() * 0xffffffff).toString(36);
+  return `semantic-${Date.now().toString(36)}-${random}`;
 }
 
 export function generateWorld(options: { seed?: string; width?: number; height?: number; maxAttempts?: number } = {}): GeneratedWorld {
-  const baseSeed = options.seed ?? createWorldSeed();
+  const requestedSeed = options.seed ?? createWorldSeed();
   const width = options.width ?? DEFAULT_WORLD_WIDTH;
   const height = options.height ?? DEFAULT_WORLD_HEIGHT;
-  const maxAttempts = options.maxAttempts ?? 32;
+  const maxAttempts = Math.max(1, options.maxAttempts ?? 3);
   let lastWorld: GeneratedWorld | undefined;
-
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const seed = attempt === 0 ? baseSeed : `${baseSeed}:attempt:${attempt}`;
-    const world = generateWorldAttempt(seed, width, height);
-    world.validation = validateGeneratedWorld(world);
-    lastWorld = world;
+    const seed = attempt === 0 ? requestedSeed : `${requestedSeed}:retry:${attempt}`;
+    const semantic = generateSemanticWorld({ seed, profile: CAMPAIGN_WORLD_PROFILE, width, height });
+    const world = adaptSemanticWorld(semantic);
     if (world.validation.valid) return world;
+    lastWorld = world;
   }
-
-  const errors = lastWorld?.validation.errors.join("; ") || "unknown validation failure";
-  throw new Error(`Unable to generate a valid archipelago world after ${maxAttempts} attempts: ${errors}`);
+  return lastWorld!;
 }
 
 export function getWorldTileAt(world: GeneratedWorld, x: number, y: number): WorldTileId | undefined {
@@ -264,6 +146,8 @@ export function getWorldTileAt(world: GeneratedWorld, x: number, y: number): Wor
 }
 
 export function isWorldPositionWalkable(world: GeneratedWorld, x: number, y: number): boolean {
+  if (x < 0 || y < 0 || x >= world.width || y >= world.height) return false;
+  if (world.semantic) return world.semantic.layers.walkability[y * world.width + x] === 1;
   return isWorldTileWalkable(getWorldTileAt(world, x, y));
 }
 
@@ -272,364 +156,59 @@ export function getPoiAt(world: GeneratedWorld, x: number, y: number): WorldPoi 
 }
 
 export function getIslandAt(world: GeneratedWorld, x: number, y: number): GeneratedIsland | undefined {
-  const islandId = world.islandByTile[y]?.[x];
-  return islandId ? world.islands.find((island) => island.id === islandId) : undefined;
-}
-
-export function worldEncounterFamilyForTile(tileId: WorldTileId): WorldEncounterFamily | undefined {
-  return worldTileById(tileId)?.encounterFamily;
+  const id = world.islandByTile[y]?.[x];
+  return id ? world.islands.find((island) => island.id === id) : undefined;
 }
 
 export function validateGeneratedWorld(world: GeneratedWorld): WorldValidationResult {
-  const errors: string[] = [];
-  const warnings: string[] = [];
-  const biomeCounts: Record<string, number> = {};
-  let landCount = 0;
-  let waterCount = 0;
-  let beachCount = 0;
-
-  if (world.mode !== ACTIVE_WORLDGEN_MODE) errors.push(`Unexpected worldgen mode: ${world.mode}.`);
-  if (world.islands.length < 3) errors.push("World must contain at least three islands.");
-
-  for (let y = 0; y < world.height; y += 1) {
-    for (let x = 0; x < world.width; x += 1) {
-      const tile = world.tiles[y]?.[x];
-      const biome = world.biomes[y]?.[x];
-      const def = worldTileById(tile);
-      if (!tile || !def || !isAtlasV3TileId(tile)) {
-        errors.push(`Generated tile ${tile ?? "<missing>"} at ${x},${y} is not a non-empty atlas_v3 tile.`);
-        continue;
-      }
-      biomeCounts[biome ?? def.biome] = (biomeCounts[biome ?? def.biome] ?? 0) + 1;
-      if (worldTileHasTag(tile, "water")) waterCount += 1;
-      else landCount += 1;
-      if (worldTileHasTag(tile, "sand")) beachCount += 1;
-      if ((x === 0 || y === 0 || x === world.width - 1 || y === world.height - 1) && !worldTileHasTag(tile, "water")) {
-        errors.push(`Land touches the outer border at ${x},${y}.`);
-      }
-    }
-  }
-
-  if (waterCount < world.width * world.height * 0.48) errors.push("Archipelago is not ocean-dominant enough.");
-  if (landCount < world.width * world.height * 0.16) warnings.push("Generated islands are quite small.");
-  if (beachCount < 24) errors.push("Generated islands do not have enough beach/coast sand.");
-  if (world.shallows.length < 60) errors.push("Generated world did not create enough shallow water.");
-  if (world.roads.length < 18) errors.push("Generated world did not create enough roads/paths.");
-  if (world.reefs.length < 8) warnings.push("Generated world has few ocean details.");
-
-  const startTile = getWorldTileAt(world, world.startPosition.x, world.startPosition.y);
-  if (!isWorldPositionWalkable(world, world.startPosition.x, world.startPosition.y)) errors.push("Start position is not walkable.");
-  if (world.islandByTile[world.startPosition.y]?.[world.startPosition.x] !== "greenhaven") errors.push("Start position is not on Greenhaven.");
-  if (worldTileHasTag(startTile, "water")) errors.push("Start position is on water.");
-
-  for (const island of world.islands) {
-    const islandPois = world.pois.filter((poi) => poi.islandId === island.id);
-    const town = islandPois.find((poi) => poi.kind === "town");
-    const harbor = islandPois.find((poi) => poi.kind === "harbor");
-    const dungeons = islandPois.filter((poi) => poi.kind === "dungeon" || poi.kind === "gate" || poi.kind === "final");
-    if (!town) errors.push(`${island.name} has no town.`);
-    if (!harbor) errors.push(`${island.name} has no harbor.`);
-    if (!dungeons.length) errors.push(`${island.name} has no dungeon.`);
-    if (harbor && !hasAdjacentWater(world, harbor)) errors.push(`${harbor.name} is not on or near the coast.`);
-    if (!town) continue;
-    const reachable = floodReachable(world, town, island.id);
-    for (const poi of islandPois) {
-      const tile = getWorldTileAt(world, poi.x, poi.y);
-      if (!tile) errors.push(`${poi.name} is outside the map.`);
-      else {
-        if (worldTileHasTag(tile, "water")) errors.push(`${poi.name} is on water.`);
-        if (!isWorldTileWalkable(tile)) errors.push(`${poi.name} is not on a walkable tile.`);
-      }
-      if (!poiFootprintTiles(poi).some((pos) => reachable.has(posKey(pos)))) errors.push(`${poi.name} is not reachable on ${island.name}.`);
-    }
-  }
-
-  const reachablePoiIds = world.pois
-    .filter((poi) => {
-      const island = world.islands.find((candidate) => candidate.id === poi.islandId);
-      if (!island) return false;
-      const start = world.pois.find((candidate) => candidate.islandId === island.id && candidate.kind === "town") ?? island.townPosition;
-      const reachable = floodReachable(world, start, island.id);
-      return poiFootprintTiles(poi).some((pos) => reachable.has(posKey(pos)));
-    })
-    .map((poi) => poi.id);
-
-  const roadValidation = validateRoadVisuals(world);
-  errors.push(...roadValidation.errors);
-  warnings.push(...roadValidation.warnings);
-  const coastlineValidation = validateCoastlineAndBeach(world);
-  errors.push(...coastlineValidation.errors);
-  warnings.push(...coastlineValidation.warnings);
-  const poiOverlayValidation = validatePoiOverlayPlacement(world);
-  errors.push(...poiOverlayValidation.errors);
-  warnings.push(...poiOverlayValidation.warnings);
-  const treeValidation = validateTreeClustering(world);
-  errors.push(...treeValidation.errors);
-  warnings.push(...treeValidation.warnings);
-
-  return { valid: errors.length === 0, errors, warnings, reachablePoiIds, biomeCounts };
-}
-
-function validateRoadVisuals(world: GeneratedWorld): { errors: string[]; warnings: string[] } {
-  const errors: string[] = [];
-  const warnings: string[] = [];
-  const roadKeys = new Set(world.roads.map(posKey));
-  const visualByKey = new Map(world.roadVisuals.map((visual) => [posKey(visual), visual]));
-  if (world.roadVisuals.length !== world.roads.length) {
-    errors.push(`Road visual count ${world.roadVisuals.length} does not match road count ${world.roads.length}.`);
-  }
-  for (const road of world.roads) {
-    const key = posKey(road);
-    const visual = visualByKey.get(key);
-    if (!visual) {
-      errors.push(`Road ${key} has no visual mask.`);
-      continue;
-    }
-    const roadMask = roadNeighborMask(roadKeys, road.x, road.y);
-    if (visual.roadMask !== roadMask) errors.push(`Road ${key} road mask ${visual.roadMask} does not match neighbor road mask ${roadMask}.`);
-    if ((visual.roadMask | visual.endpointMask) !== visual.mask) errors.push(`Road ${key} visual mask ${visual.mask} does not equal road+endpoint masks.`);
-    if (rotateRoadMask(visual.sourceMask, visual.rotation) !== visual.mask) {
-      errors.push(`Road ${key} source ${visual.sourceTileId} rotation ${visual.rotation} renders mask ${rotateRoadMask(visual.sourceMask, visual.rotation)}, expected ${visual.mask}.`);
-    }
-    if (visual.sourceTileId === WORLD_TILE_IDS.roadVertical) errors.push(`Road ${key} uses the dirty road_vertical source art.`);
-    if (visual.mask === 0) warnings.push(`Road ${key} has zero connections.`);
-    for (const bit of [ROAD_N, ROAD_E, ROAD_S, ROAD_W]) {
-      if ((visual.mask & bit) === 0) continue;
-      const next = stepForRoadBit(road, bit);
-      const nextKey = posKey(next);
-      if (roadKeys.has(nextKey)) continue;
-      const endpointPoi = poiAtFootprint(world.pois, next.x, next.y);
-      if ((visual.endpointMask & bit) !== 0 && endpointPoi && isTownBottomRoadEndpoint(road, next, endpointPoi)) continue;
-      errors.push(`Road ${key} visually connects toward ${roadBitName(bit)} into invalid terrain at ${next.x},${next.y}.`);
-    }
-    const connectionCount = roadConnectionCount(visual.mask);
-    if (connectionCount >= 3 && roadConnectionCount(visual.roadMask | visual.endpointMask) !== connectionCount) {
-      errors.push(`Road ${key} uses a branch visual without a real logical branch.`);
-    }
-  }
-  return { errors, warnings };
-}
-
-function validateCoastlineAndBeach(world: GeneratedWorld): { errors: string[]; warnings: string[] } {
-  const errors: string[] = [];
-  const warnings: string[] = [];
-  for (let y = 1; y < world.height - 1; y += 1) {
-    for (let x = 1; x < world.width - 1; x += 1) {
-      const tile = world.tiles[y][x];
-      if (isWaterTile(tile)) continue;
-      const waterNeighbors = cardinalWaterNeighborCount(world.tiles, x, y);
-      const sandNeighbors = cardinalSandNeighborCount(world.tiles, x, y);
-      if (waterNeighbors > 0 && !isBeachTile(tile)) {
-        errors.push(`Seed ${world.seed}: land tile ${tile} at ${x},${y} touches water without beach sand.`);
-        if (worldTileHasTag(tile, "grass")) errors.push(`Seed ${world.seed}: grass tile ${tile} at ${x},${y} directly touches water.`);
-        if (worldTileHasTag(tile, "forest")) errors.push(`Seed ${world.seed}: forest tile ${tile} at ${x},${y} directly touches water.`);
-      }
-      if (isBeachTile(tile)) {
-        const diagonalWater = diagonalNeighbors(x, y).some((next) => isWaterTile(world.tiles[next.y]?.[next.x]));
-        const fixableThinBeach = thinBeachExpansionCandidates(world.tiles, x, y).length > 0;
-        if (sandNeighbors === 0 && (waterNeighbors > 0 || diagonalWater) && fixableThinBeach) errors.push(`Seed ${world.seed}: isolated beach tile at ${x},${y} has no cardinal beach neighbors.`);
-        else if (waterNeighbors > 0 && sandNeighbors < 2 && fixableThinBeach) warnings.push(`Seed ${world.seed}: thin beach tile at ${x},${y} has only ${sandNeighbors} cardinal beach neighbor(s).`);
-      }
-    }
-  }
-  return { errors, warnings };
-}
-
-function thinBeachExpansionCandidates(tiles: WorldTileId[][], x: number, y: number): WorldVec[] {
-  return neighbors4(x, y)
-    .filter((next) => inBounds(tiles[0].length, tiles.length, next.x, next.y))
-    .filter((next) => !isWaterTile(tiles[next.y]?.[next.x]) && isBeachCandidate(tiles[next.y]?.[next.x]) && !worldTileHasTag(tiles[next.y]?.[next.x], "road"));
-}
-
-function validatePoiOverlayPlacement(world: GeneratedWorld): { errors: string[]; warnings: string[] } {
-  const errors: string[] = [];
-  const warnings: string[] = [];
-  const coastalFeatureKinds = new Set<WorldLandmarkKind | undefined>(["shipwreck"]);
-  for (const poi of world.pois) {
-    const isCoastalFeature = poi.kind === "harbor" || coastalFeatureKinds.has(poi.landmarkKind);
-    const footprint = poiFootprintTiles(poi);
-    const coastFootprintTiles = footprint.filter((pos) => cardinalWaterNeighborCount(world.tiles, pos.x, pos.y) > 0);
-    if (!isCoastalFeature && coastFootprintTiles.length) {
-      errors.push(`Seed ${world.seed}: non-coastal POI ${poi.id} footprint reaches coastline at ${coastFootprintTiles[0].x},${coastFootprintTiles[0].y}.`);
-    }
-    for (const pos of footprint) {
-      const tile = world.tiles[pos.y]?.[pos.x];
-      if (!tile) continue;
-      if (isWaterTile(tile) && !isCoastalFeature) errors.push(`Seed ${world.seed}: POI ${poi.id} footprint includes water at ${pos.x},${pos.y}.`);
-      if (cardinalWaterNeighborCount(world.tiles, pos.x, pos.y) > 0 && !isBeachTile(tile) && !isCoastalFeature) {
-        errors.push(`Seed ${world.seed}: POI ${poi.id} footprint terrain ${tile} at ${pos.x},${pos.y} overwrites the beach ring.`);
-      }
-    }
-  }
-  return { errors, warnings };
-}
-
-function validateTreeClustering(world: GeneratedWorld): { errors: string[]; warnings: string[] } {
-  const errors: string[] = [];
-  const warnings: string[] = [];
-  const overlayByKey = new Map(world.objectOverlays.map((overlay) => [posKey(overlay), overlay]));
-
-  for (let y = 1; y < world.height - 1; y += 1) {
-    for (let x = 1; x < world.width - 1; x += 1) {
-      const tile = world.tiles[y][x];
-      if (PALM_TREE_TILES.has(tile)) errors.push(`Seed ${world.seed}: palm-looking terrain tile ${tile} remains at ${x},${y}; use palm overlays instead.`);
-      if (FOREST_TILE_SET.has(tile)) {
-        for (const next of neighbors8(x, y)) {
-          const neighborTile = world.tiles[next.y]?.[next.x];
-          if (FOREST_TILE_SET.has(neighborTile) && neighborTile !== tile) errors.push(`Seed ${world.seed}: mixed woodland terrain ${tile} at ${x},${y} touches ${neighborTile} at ${next.x},${next.y}.`);
-        }
-      }
-      if (!NORMAL_TREE_TILES.has(tile)) continue;
-      for (const next of neighbors8(x, y)) {
-        if (PALM_TREE_TILES.has(world.tiles[next.y]?.[next.x])) errors.push(`Seed ${world.seed}: normal forest tile at ${x},${y} touches palm terrain at ${next.x},${next.y}.`);
-        const overlay = overlayByKey.get(posKey(next));
-        if (overlay && isPalmOverlay(overlay)) errors.push(`Seed ${world.seed}: normal forest tile at ${x},${y} touches palm overlay at ${next.x},${next.y}.`);
-      }
-    }
-  }
-
-  for (const overlay of world.objectOverlays) {
-    const tile = world.tiles[overlay.y]?.[overlay.x];
-    if (isWaterObjectOverlay(overlay)) {
-      if (!isWaterTile(tile)) errors.push(`Seed ${world.seed}: water object ${overlay.id} sits on non-water tile ${tile} at ${overlay.x},${overlay.y}.`);
-      continue;
-    }
-    if ((isPalmOverlay(overlay) || isNormalTreeOverlay(overlay)) && (isWaterTile(tile) || isBeachTile(tile))) {
-      errors.push(`Seed ${world.seed}: tree overlay ${overlay.id} sits on coastal/water tile ${tile} at ${overlay.x},${overlay.y}.`);
-    }
-    if (isPalmOverlay(overlay)) {
-      for (const next of neighbors8(overlay.x, overlay.y)) {
-        const neighbor = overlayByKey.get(posKey(next));
-        if (neighbor && isNormalTreeOverlay(neighbor)) errors.push(`Seed ${world.seed}: palm overlay at ${overlay.x},${overlay.y} touches normal tree overlay at ${next.x},${next.y}.`);
-        if (NORMAL_TREE_TILES.has(world.tiles[next.y]?.[next.x])) errors.push(`Seed ${world.seed}: palm overlay at ${overlay.x},${overlay.y} touches normal forest terrain at ${next.x},${next.y}.`);
-      }
-    } else if (isNormalTreeOverlay(overlay)) {
-      for (const next of neighbors8(overlay.x, overlay.y)) {
-        const neighbor = overlayByKey.get(posKey(next));
-        if (neighbor && isNormalTreeOverlay(neighbor) && neighbor.objectId !== overlay.objectId) {
-          errors.push(`Seed ${world.seed}: mixed normal tree overlay ${overlay.objectId} at ${overlay.x},${overlay.y} touches ${neighbor.objectId} at ${next.x},${next.y}.`);
-        }
-      }
-    }
-  }
-
-  return { errors, warnings };
-}
-
-function isWaterObjectOverlay(overlay: Pick<WorldObjectOverlay, "objectId">): boolean {
-  return WATER_OBJECT_IDS.has(overlay.objectId);
-}
-
-function isPalmOverlay(overlay: Pick<WorldObjectOverlay, "objectId">): boolean {
-  return PALM_OBJECT_IDS.has(overlay.objectId);
-}
-
-function isNormalTreeOverlay(overlay: Pick<WorldObjectOverlay, "objectId">): boolean {
-  return NORMAL_TREE_OBJECT_IDS.has(overlay.objectId);
+  return buildValidationResult(world.semantic, world.pois);
 }
 
 export function buildWorldDebugReport(world: GeneratedWorld): string {
-  const validation = world.validation.valid ? "valid" : "invalid";
-  const islandLines = world.islands
-    .map(
-      (island) =>
-        `- ${island.name} (${island.id}) tier ${island.difficultyTier}, theme ${island.theme}, town ${island.townPosition.x},${island.townPosition.y}, harbor ${island.harborPosition.x},${island.harborPosition.y}`
-    )
-    .join("\n");
-  const poiLines = world.pois
-    .map((poi) => `- ${poi.name} (${poi.id}, ${poi.kind}${poi.landmarkKind ? `/${poi.landmarkKind}` : ""}${poi.objectId ? `, object ${poi.objectId}` : ""}) on ${poi.islandId} at ${poi.x},${poi.y}`)
-    .join("\n");
-  const biomeLines = Object.entries(world.validation.biomeCounts)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([biome, count]) => `- ${biome}: ${count}`)
-    .join("\n");
-  return `# Generated World Debug Report
-
-Worldgen mode: \`${world.mode}\`
-Active world tileset: \`atlas_v3\`
-Grid: 8x8
-Using empty cells: false
-Using classic special tileset: false
-Using old 10x10 atlas: false
-Seed: \`${world.seed}\`
-Map size: ${world.width}x${world.height}
-Validation: ${validation}
-Start position: ${world.startPosition.x},${world.startPosition.y}
-Island count: ${world.islands.length}
-Road tiles carved: ${world.roads.length}
-Shallow-water tiles tracked: ${world.shallows.length}
-Reef/detail tiles tracked: ${world.reefs.length}
-Object overlays: ${world.objectOverlays.length}
-Sea route count: ${world.seaRoutes.length}
-Bridge/dock count: ${world.bridges.length}
-
-## Islands
-
-${islandLines}
-
-## POIs
-
-${poiLines}
-
-## Biome Counts
-
-${biomeLines}
-
-## Reachability
-
-Reachable POIs: ${world.validation.reachablePoiIds.join(", ")}
-
-## Validation Errors
-
-${world.validation.errors.map((error) => `- ${error}`).join("\n") || "- none"}
-
-## Validation Warnings
-
-${world.validation.warnings.map((warning) => `- ${warning}`).join("\n") || "- none"}
-`;
+  const lines = [
+    `# Semantic World Debug Report`,
+    ``,
+    `Mode: ${world.mode}`,
+    `Seed: ${world.seed}`,
+    `Size: ${world.width}x${world.height}`,
+    `Islands: ${world.islands.length}`,
+    `Major islands: ${world.islands.filter((island) => island.major).map((island) => island.name).join(", ")}`,
+    `POIs: ${world.pois.length}`,
+    `Harbors: ${world.pois.filter((poi) => poi.kind === "harbor").length}`,
+    `Road cells: ${world.roads.length}`,
+    `Rivers: ${world.rivers.length}`,
+    `Shallows: ${world.shallows.length}`,
+    ``,
+    `## Validation`,
+    ``,
+    `Valid: ${world.validation.valid ? "yes" : "no"}`,
+    `Errors: ${world.validation.errors.length ? world.validation.errors.join("; ") : "none"}`,
+    `Warnings: ${world.validation.warnings.length ? world.validation.warnings.join("; ") : "none"}`
+  ];
+  return `${lines.join("\n")}\n`;
 }
 
-function generateWorldAttempt(seed: string, width: number, height: number): GeneratedWorld {
-  const rng = createSeededRng(seed);
-  const tiles = Array.from({ length: height }, () => Array.from({ length: width }, () => WATER_TILE));
-  const biomes = Array.from({ length: height }, () => Array.from({ length: width }, () => "water" as WorldBiome));
-  const islandByTile = Array.from({ length: height }, () => Array.from<IslandId | null>({ length: width }).fill(null));
-  const states = ISLAND_TEMPLATES.map((template) => buildIslandMask(seed, width, height, template, rng.fork(template.id)));
-
-  for (const state of states) paintIsland(seed, tiles, biomes, islandByTile, state);
-  addTinyIslets(seed, tiles, biomes, islandByTile, rng.fork("islets"));
-  for (const state of states) normalizeForestPatches(seed, tiles, biomes, state);
-  normalizeBeachBand(tiles, biomes, islandByTile);
-
-  const pois: WorldPoi[] = [];
-  const roadKeys = new Set<string>();
-  const roadEndpointMasks = new Map<string, number>();
-  const bridges: WorldBridge[] = [];
-  for (const state of states) {
-    const islandPois = placeIslandPois(seed, tiles, biomes, islandByTile, state, rng.fork(`${state.template.id}:pois`));
-    state.pois = islandPois;
-    pois.push(...islandPois);
-    carveIslandRoads(tiles, biomes, islandByTile, state.template.id, islandPois, roadKeys, roadEndpointMasks);
-    bridges.push(...dockTilesForHarbor(tiles, state.template.id, islandPois.find((poi) => poi.kind === "harbor")));
-  }
-  normalizeBeachBand(tiles, biomes, islandByTile, roadKeys);
-  const roadVisuals = orientRoadTiles(tiles, biomes, roadKeys, roadEndpointMasks);
+function adaptSemanticWorld(semantic: SemanticWorld): GeneratedWorld {
+  const tiles = buildTiles(semantic);
+  const biomes = buildBiomes(semantic);
+  const islandByTile = buildIslandByTile(semantic);
+  const pois = semantic.poiList.map((poi) => adaptPoi(poi));
+  const roadVisuals = buildRoadVisuals(semantic);
   const roads = roadVisuals.map(({ x, y }) => ({ x, y }));
-
-  const shallows = markShallowWater(tiles, biomes);
-  const reefs = decorateOcean(seed, tiles, pois, shallows, rng.fork("ocean-details"));
-  const objectOverlays = [...buildWorldObjectOverlays(seed, reefs), ...buildNatureObjectOverlays(seed, tiles, states, pois, rng.fork("nature-overlays"))];
+  const rivers = semantic.rivers.map((river) => river.path.map((cell) => ({ x: cell.x, y: cell.y })));
+  const shallows = collectCells(semantic, (i) => semantic.layers.waterClass[i] === SEMANTIC_WATER.SHALLOW);
+  const reefs = pickReefs(semantic, shallows);
+  const objectOverlays = buildObjectOverlays(semantic, reefs);
+  const bridges = buildDockTiles(semantic, pois, tiles);
   const seaRoutes = buildSeaRoutes(pois);
-  const islands = buildGeneratedIslands(tiles, states, pois);
-  const dawnford = pois.find((poi) => poi.id === "dawnford") ?? pois[0];
-  const startPosition = findStartPosition(tiles, biomes, islandByTile, dawnford);
-  const entryTriggers = pois.flatMap((poi) => poiFootprintTiles(poi).map((tile) => ({ poiId: poi.id, x: tile.x, y: tile.y })));
-
-  return {
+  const entryTriggers = pois.map((poi) => ({ poiId: poi.id, x: poi.x, y: poi.y }));
+  const islands = semantic.islands.map((island) => adaptIsland(semantic, tiles, pois, island.id as IslandId));
+  const startPosition = chooseStartPosition(semantic, pois);
+  const world: GeneratedWorld = {
     mode: ACTIVE_WORLDGEN_MODE,
-    width,
-    height,
-    seed,
+    width: semantic.width,
+    height: semantic.height,
+    seed: semantic.seed,
     tiles,
     biomes,
     islands,
@@ -637,7 +216,7 @@ function generateWorldAttempt(seed: string, width: number, height: number): Gene
     pois,
     roads,
     roadVisuals,
-    rivers: [],
+    rivers,
     bridges,
     objectOverlays,
     shallows,
@@ -645,676 +224,192 @@ function generateWorldAttempt(seed: string, width: number, height: number): Gene
     seaRoutes,
     startPosition,
     entryTriggers,
-    validation: { valid: false, errors: [], warnings: [], reachablePoiIds: [], biomeCounts: {} }
+    validation: buildValidationResult(semantic, pois),
+    semantic
   };
+  return world;
 }
 
-function buildIslandMask(seed: string, width: number, height: number, template: IslandTemplate, rng: SeededRng): IslandBuildState {
-  const center = {
-    x: Math.round(template.cx * (width - 1) + rng.int(-template.centerJitter, template.centerJitter)),
-    y: Math.round(template.cy * (height - 1) + rng.int(-template.centerJitter, template.centerJitter))
-  };
-  const land = new Set<string>();
-  const margin = 4;
-  for (let y = margin; y < height - margin; y += 1) {
-    for (let x = margin; x < width - margin; x += 1) {
-      const nx = (x - center.x) / template.rx;
-      const ny = (y - center.y) / template.ry;
-      const distance = Math.sqrt(nx * nx + ny * ny);
-      const coastNoise = fbm(`${seed}:${template.id}:coast`, x / 5.2, y / 5.2, 4, 2.08);
-      const coveNoise = fbm(`${seed}:${template.id}:coves`, x / 2.9, y / 2.9, 2, 2.2);
-      const lobe = Math.sin(Math.atan2(ny, nx) * 3 + hashNoise(seed, template.rx, template.ry) * Math.PI) * 0.06;
-      if (distance < 0.94 + (coastNoise - 0.5) * 0.34 + (coveNoise - 0.5) * 0.12 + lobe) land.add(posKey({ x, y }));
+function buildTiles(semantic: SemanticWorld): WorldTileId[][] {
+  const rows: WorldTileId[][] = [];
+  for (let y = 0; y < semantic.height; y += 1) {
+    const row: WorldTileId[] = [];
+    for (let x = 0; x < semantic.width; x += 1) row.push(tileForSemanticCell(semantic, x, y));
+    rows.push(row);
+  }
+  return rows;
+}
+
+function tileForSemanticCell(semantic: SemanticWorld, x: number, y: number): WorldTileId {
+  const i = y * semantic.width + x;
+  if (semantic.layers.lakeMap[i]) return WORLD_TILE_IDS.shallowWater;
+  if (!semantic.layers.landMask[i]) {
+    return semantic.layers.waterClass[i] === SEMANTIC_WATER.SHALLOW ? WORLD_TILE_IDS.shallowWater : WORLD_TILE_IDS.deepWater;
+  }
+  if (semantic.layers.biome[i] === SEMANTIC_BIOME.BEACH) return WORLD_TILE_IDS.beachSand;
+  if (semantic.layers.biome[i] === SEMANTIC_BIOME.SAND) return pickByNoise([WORLD_TILE_IDS.brightSand, WORLD_TILE_IDS.duneSand, WORLD_TILE_IDS.rockySand], semantic.seed, "sand", x, y);
+  if (semantic.layers.biome[i] === SEMANTIC_BIOME.ICE) return pickByNoise([WORLD_TILE_IDS.cleanSnow, WORLD_TILE_IDS.packedSnow, WORLD_TILE_IDS.icySnow], semantic.seed, "ice", x, y);
+  return pickByNoise([WORLD_TILE_IDS.mediumGrass, WORLD_TILE_IDS.brightGrass, WORLD_TILE_IDS.lushCloverGrass, WORLD_TILE_IDS.flowerMeadowGrass], semantic.seed, "grass", x, y, [0.76, 0.08, 0.1, 0.06]);
+}
+
+function buildBiomes(semantic: SemanticWorld): WorldBiome[][] {
+  const rows: WorldBiome[][] = [];
+  for (let y = 0; y < semantic.height; y += 1) {
+    const row: WorldBiome[] = [];
+    for (let x = 0; x < semantic.width; x += 1) {
+      const i = y * semantic.width + x;
+      if (!semantic.layers.landMask[i] || semantic.layers.waterClass[i] !== SEMANTIC_WATER.NONE || semantic.layers.lakeMap[i]) row.push("water");
+      else if (semantic.layers.mountainMap[i]) row.push("mountain");
+      else if (semantic.layers.forestMap[i]) row.push("forest");
+      else if (semantic.layers.biome[i] === SEMANTIC_BIOME.SAND || semantic.layers.biome[i] === SEMANTIC_BIOME.BEACH) row.push("desert");
+      else if (semantic.layers.biome[i] === SEMANTIC_BIOME.ICE) row.push("snow");
+      else row.push("grassland");
     }
+    rows.push(row);
   }
-  smoothIslandMask(land, width, height);
-  const coast = [...land].map(parseKey).filter((pos) => neighbors8(pos.x, pos.y).some((next) => !land.has(posKey(next))));
-  return { template, center, land, coast, pois: [] };
+  return rows;
 }
 
-function smoothIslandMask(land: Set<string>, width: number, height: number) {
-  for (let pass = 0; pass < 2; pass += 1) {
-    const next = new Set<string>();
-    for (let y = 2; y < height - 2; y += 1) {
-      for (let x = 2; x < width - 2; x += 1) {
-        const key = `${x},${y}`;
-        const count = neighbors8(x, y).filter((pos) => land.has(posKey(pos))).length;
-        if (land.has(key) ? count >= 3 : count >= 5) next.add(key);
-      }
+function buildIslandByTile(semantic: SemanticWorld): (IslandId | null)[][] {
+  const rows: (IslandId | null)[][] = [];
+  for (let y = 0; y < semantic.height; y += 1) {
+    const row: (IslandId | null)[] = [];
+    for (let x = 0; x < semantic.width; x += 1) {
+      const numericId = semantic.layers.islandId[y * semantic.width + x];
+      row.push((semantic.islandIndexToId.get(numericId) as IslandId | undefined) ?? null);
     }
-    land.clear();
-    next.forEach((key) => land.add(key));
+    rows.push(row);
   }
+  return rows;
 }
 
-function paintIsland(
-  seed: string,
-  tiles: WorldTileId[][],
-  biomes: WorldBiome[][],
-  islandByTile: (IslandId | null)[][],
-  state: IslandBuildState
-) {
-  const { template, land } = state;
-  for (const key of land) {
-    const { x, y } = parseKey(key);
-    const detail = fbm(`${seed}:${template.id}:detail`, x / 12, y / 12, 3, 2);
-    const hill = fbm(`${seed}:${template.id}:hills`, x / 9.5, y / 9.5, 3, 2.1);
-    const volcanic = fbm(`${seed}:${template.id}:volcano`, x / 7.5, y / 7.5, 3, 2.2);
-    const coastal = isCoastalLand(land, x, y);
-    islandByTile[y][x] = template.id;
-    if (coastal) {
-      setWorldTile(tiles, biomes, x, y, beachTileFor(seed, x, y), "desert");
-      continue;
-    }
-    if (template.theme === "volcanic") {
-      if (volcanic > 0.9) setWorldTile(tiles, biomes, x, y, pickByNoise([LAVA_TILE, WORLD_TILE_IDS.lavaRockTransition], seed, x, y), "lava");
-      else if (volcanic > 0.78) setWorldTile(tiles, biomes, x, y, MOUNTAIN_TILE, "mountain");
-      else if (hill > 0.77) setWorldTile(tiles, biomes, x, y, WORLD_TILE_IDS.gravelStoneGround, "mountain");
-      else if (detail > 0.71) setWorldTile(tiles, biomes, x, y, pickByNoise(ASH_WALKABLE_TILES, seed, x, y), "darkland");
-      else setWorldTile(tiles, biomes, x, y, WORLD_TILE_IDS.volcanicAshGround, "darkland");
-    } else if (template.theme === "tropical") {
-      if (hill > 0.84) setWorldTile(tiles, biomes, x, y, WORLD_TILE_IDS.gravelStoneGround, "mountain");
-      else if (detail > 0.57) setWorldTile(tiles, biomes, x, y, WORLD_TILE_IDS.trampledGrass, "forest");
-      else if (detail < 0.22) setWorldTile(tiles, biomes, x, y, grassPatchTileFor(seed, x, y), "grassland");
-      else setWorldTile(tiles, biomes, x, y, MAIN_GRASS_TILE, "grassland");
-    } else {
-      if (hill > 0.84) setWorldTile(tiles, biomes, x, y, pickByNoise(HILL_TILES, seed, x, y), "mountain");
-      else if (detail > 0.62) setWorldTile(tiles, biomes, x, y, pickByNoise(FOREST_TILES, seed, x, y), "forest");
-      else if (detail < 0.18) setWorldTile(tiles, biomes, x, y, grassPatchTileFor(seed, x, y), "grassland");
-      else setWorldTile(tiles, biomes, x, y, MAIN_GRASS_TILE, "grassland");
-    }
-  }
-  ensureIslandGrove(seed, tiles, biomes, state);
-}
-
-function isCoastalLand(land: Set<string>, x: number, y: number): boolean {
-  const cardinalWater = neighbors4(x, y).some((pos) => !land.has(posKey(pos)));
-  if (cardinalWater) return true;
-  const diagonalWater = neighbors8(x, y).filter((pos) => !land.has(posKey(pos))).length;
-  return diagonalWater >= 2;
-}
-
-function beachTileFor(seed: string, x: number, y: number): WorldTileId {
-  return BEACH_TILES[0];
-}
-
-function grassPatchTileFor(seed: string, x: number, y: number): WorldTileId {
-  return pickByNoise(GRASS_PATCH_TILES, `${seed}:grass-patch`, x, y);
-}
-
-function ensureIslandGrove(seed: string, tiles: WorldTileId[][], biomes: WorldBiome[][], state: IslandBuildState) {
-  if (state.template.theme === "volcanic") return;
-  const land = [...state.land].map(parseKey);
-  const forestCount = land.filter((pos) => biomes[pos.y]?.[pos.x] === "forest").length;
-  const targetCount = Math.max(8, Math.floor(land.length * 0.035));
-  if (forestCount >= targetCount) return;
-
-  const candidates = land
-    .filter((pos) => !isCoastalLand(state.land, pos.x, pos.y) && isWorldTileWalkable(tiles[pos.y]?.[pos.x]))
-    .map((pos) => ({ pos, score: fbm(`${seed}:${state.template.id}:grove`, pos.x / 7, pos.y / 7, 3, 2) }))
-    .sort((a, b) => b.score - a.score);
-  const center = candidates[0]?.pos ?? state.center;
-  const pool = state.template.theme === "tropical" ? [WORLD_TILE_IDS.trampledGrass, WORLD_TILE_IDS.lushCloverGrass] : FOREST_TILES;
-  const radius = state.template.theme === "tropical" ? 3 : 2;
-  for (let y = center.y - radius; y <= center.y + radius; y += 1) {
-    for (let x = center.x - radius; x <= center.x + radius; x += 1) {
-      if (!state.land.has(posKey({ x, y })) || isCoastalLand(state.land, x, y)) continue;
-      const d = Math.hypot(x - center.x, y - center.y);
-      if (d > radius + 0.15) continue;
-      setWorldTile(tiles, biomes, x, y, pickByNoise(pool, `${seed}:${state.template.id}:grove-pick`, x, y), "forest");
-    }
-  }
-}
-
-function normalizeForestPatches(seed: string, tiles: WorldTileId[][], biomes: WorldBiome[][], state: IslandBuildState) {
-  const visited = new Set<string>();
-  for (const key of state.land) {
-    if (visited.has(key)) continue;
-    const start = parseKey(key);
-    if (!FOREST_TILE_SET.has(tiles[start.y]?.[start.x])) continue;
-    const component: WorldVec[] = [];
-    const queue = [start];
-    visited.add(key);
-    while (queue.length) {
-      const current = queue.shift()!;
-      component.push(current);
-      for (const next of neighbors8(current.x, current.y)) {
-        const nextKey = posKey(next);
-        if (visited.has(nextKey) || !state.land.has(nextKey) || !FOREST_TILE_SET.has(tiles[next.y]?.[next.x])) continue;
-        visited.add(nextKey);
-        queue.push(next);
-      }
-    }
-    const center = component.reduce(
-      (sum, pos) => ({ x: sum.x + pos.x / component.length, y: sum.y + pos.y / component.length }),
-      { x: 0, y: 0 }
-    );
-    const patchTile = hashNoise(`${seed}:${state.template.id}:forest-patch-style`, Math.round(center.x), Math.round(center.y)) > 0.48
-      ? WORLD_TILE_IDS.lightForest
-      : WORLD_TILE_IDS.denseForest;
-    for (const pos of component) setWorldTile(tiles, biomes, pos.x, pos.y, patchTile, "forest");
-  }
-}
-
-function addTinyIslets(
-  seed: string,
-  tiles: WorldTileId[][],
-  biomes: WorldBiome[][],
-  islandByTile: (IslandId | null)[][],
-  rng: SeededRng
-) {
-  for (let i = 0; i < 8; i += 1) {
-    const x = rng.int(5, tiles[0].length - 6);
-    const y = rng.int(5, tiles.length - 6);
-    if (nearestLandDistance(tiles, x, y, 6) < 5) continue;
-    const radius = rng.int(1, 2);
-    for (let yy = y - radius; yy <= y + radius; yy += 1) {
-      for (let xx = x - radius; xx <= x + radius; xx += 1) {
-        if (Math.hypot(xx - x, yy - y) > radius + 0.25 || !inBounds(tiles[0].length, tiles.length, xx, yy)) continue;
-        islandByTile[yy][xx] = null;
-        const beach = rng.chance(0.55);
-        setWorldTile(tiles, biomes, xx, yy, beach ? WORLD_TILE_IDS.beachSand : MAIN_GRASS_TILE, beach ? "desert" : "grassland");
-      }
-    }
-  }
-}
-
-function normalizeBeachBand(
-  tiles: WorldTileId[][],
-  biomes: WorldBiome[][],
-  islandByTile: (IslandId | null)[][],
-  roadKeys?: Set<string>
-) {
-  for (let pass = 0; pass < 3; pass += 1) {
-    enforceCoastalBeachTiles(tiles, biomes, islandByTile, roadKeys);
-    fillDiagonalBeachGaps(tiles, biomes, islandByTile, roadKeys);
-    widenThinBeachSegments(tiles, biomes, islandByTile, roadKeys);
-  }
-  enforceCoastalBeachTiles(tiles, biomes, islandByTile, roadKeys);
-}
-
-function enforceCoastalBeachTiles(
-  tiles: WorldTileId[][],
-  biomes: WorldBiome[][],
-  islandByTile: (IslandId | null)[][],
-  roadKeys?: Set<string>
-) {
-  const toBeach: WorldVec[] = [];
-  for (let y = 1; y < tiles.length - 1; y += 1) {
-    for (let x = 1; x < tiles[y].length - 1; x += 1) {
-      const tile = tiles[y][x];
-      if (!isBeachCandidate(tile)) continue;
-      if (neighbors4(x, y).some((next) => isWaterTile(tiles[next.y]?.[next.x]))) toBeach.push({ x, y });
-    }
-  }
-  for (const pos of toBeach) setBeachTile(tiles, biomes, islandByTile, pos, roadKeys);
-}
-
-function fillDiagonalBeachGaps(
-  tiles: WorldTileId[][],
-  biomes: WorldBiome[][],
-  islandByTile: (IslandId | null)[][],
-  roadKeys?: Set<string>
-) {
-  const toBeach: WorldVec[] = [];
-  for (let y = 1; y < tiles.length - 1; y += 1) {
-    for (let x = 1; x < tiles[y].length - 1; x += 1) {
-      const tile = tiles[y][x];
-      if (!isBeachCandidate(tile)) continue;
-      const diagonalWater = diagonalNeighbors(x, y).some((next) => isWaterTile(tiles[next.y]?.[next.x]));
-      if (!diagonalWater) continue;
-      const sandNeighbors = cardinalSandNeighborCount(tiles, x, y);
-      const waterNeighbors = cardinalWaterNeighborCount(tiles, x, y);
-      if (sandNeighbors > 0 || waterNeighbors > 0) toBeach.push({ x, y });
-    }
-  }
-  for (const pos of toBeach) setBeachTile(tiles, biomes, islandByTile, pos, roadKeys);
-}
-
-function widenThinBeachSegments(
-  tiles: WorldTileId[][],
-  biomes: WorldBiome[][],
-  islandByTile: (IslandId | null)[][],
-  roadKeys?: Set<string>
-) {
-  const toBeach: WorldVec[] = [];
-  const queued = new Set<string>();
-  for (let y = 1; y < tiles.length - 1; y += 1) {
-    for (let x = 1; x < tiles[y].length - 1; x += 1) {
-      const tile = tiles[y][x];
-      if (!isBeachTile(tile) || cardinalWaterNeighborCount(tiles, x, y) === 0) continue;
-      let needed = Math.max(0, 2 - cardinalSandNeighborCount(tiles, x, y));
-      if (!needed) continue;
-      const candidates = neighbors4(x, y)
-        .filter((next) => inBounds(tiles[0].length, tiles.length, next.x, next.y))
-        .filter((next) => !isWaterTile(tiles[next.y]?.[next.x]) && isBeachCandidate(tiles[next.y]?.[next.x]))
-        .filter((next) => !roadKeys?.has(posKey(next)))
-        .sort((a, b) => cardinalSandNeighborCount(tiles, b.x, b.y) - cardinalSandNeighborCount(tiles, a.x, a.y) || a.y - b.y || a.x - b.x);
-      for (const candidate of candidates) {
-        if (!needed) break;
-        const key = posKey(candidate);
-        if (queued.has(key)) continue;
-        queued.add(key);
-        toBeach.push(candidate);
-        needed -= 1;
-      }
-    }
-  }
-  for (const pos of toBeach) setBeachTile(tiles, biomes, islandByTile, pos, roadKeys);
-}
-
-function setBeachTile(
-  tiles: WorldTileId[][],
-  biomes: WorldBiome[][],
-  islandByTile: (IslandId | null)[][],
-  pos: WorldVec,
-  roadKeys?: Set<string>
-) {
-  if (!tiles[pos.y]?.[pos.x] || isWaterTile(tiles[pos.y][pos.x])) return;
-  roadKeys?.delete(posKey(pos));
-  setWorldTile(tiles, biomes, pos.x, pos.y, WORLD_TILE_IDS.beachSand, "desert");
-  if (!islandByTile[pos.y][pos.x]) {
-    const neighborIsland = neighbors8(pos.x, pos.y).map((next) => islandByTile[next.y]?.[next.x]).find((id): id is IslandId => !!id);
-    if (neighborIsland) islandByTile[pos.y][pos.x] = neighborIsland;
-  }
-}
-
-function isBeachCandidate(tile?: WorldTileId): boolean {
-  return !!tile && !isWaterTile(tile) && !isBeachTile(tile);
-}
-
-function isBeachTile(tile?: WorldTileId): boolean {
-  return worldTileHasTag(tile, "sand");
-}
-
-function placeIslandPois(
-  seed: string,
-  tiles: WorldTileId[][],
-  biomes: WorldBiome[][],
-  islandByTile: (IslandId | null)[][],
-  state: IslandBuildState,
-  rng: SeededRng
-): WorldPoi[] {
-  const template = state.template;
-  const placed: WorldPoi[] = [];
-  const town = findInteriorPoiTile(tiles, islandByTile, state.center, template.id, placed, 3);
-  placed.push(makePoi(template.townId, template.townName, "town", template, town, 3));
-
-  const harbor = findHarborTile(tiles, islandByTile, state, placed, rng);
-  placed.push(makePoi(template.harborId, template.harborName, "harbor", template, harbor, 3));
-
-  for (const dungeonId of template.dungeonIds) {
-    const target = farthestValidTile(tiles, islandByTile, template.id, [town, harbor, ...placed.map((poi) => ({ x: poi.x, y: poi.y }))], placed, 3);
-    placed.push(makePoi(dungeonId, dungeonNameForId(dungeonId), dungeonKindForId(dungeonId), template, target, 3));
-  }
-
-  for (let i = 0; i < template.landmarkKinds.length; i += 1) {
-    const kind = template.landmarkKinds[i];
-    const target =
-      kind === "shipwreck"
-        ? findHarborTile(tiles, islandByTile, state, placed, rng)
-        : farthestValidTile(tiles, islandByTile, template.id, placed.map((poi) => ({ x: poi.x, y: poi.y })), placed, 3);
-    placed.push({
-      ...makePoi(`${template.id}-${kind}-${i}`, landmarkName(kind, template.name), "landmark", template, target, 3),
-      landmarkKind: kind,
-      objectId: landmarkObjectForKind(kind, template.id, i)
-    });
-  }
-
-  return placed;
-}
-
-function makePoi(id: string, name: string, kind: WorldPoiKind, template: IslandTemplate, pos: WorldVec, footprint: number): WorldPoi {
-  const objectId = poiObjectForId(id, kind);
+function adaptPoi(poi: SemanticPoi): WorldPoi {
   return {
-    id,
-    name,
-    kind,
-    islandId: template.id,
-    x: pos.x,
-    y: pos.y,
-    footprint,
-    difficultyTier: template.difficultyTier,
-    ...(objectId ? { objectId } : {})
+    id: poi.id,
+    name: poi.name,
+    kind: poiKind(poi),
+    islandId: poi.islandId as IslandId,
+    x: poi.x,
+    y: poi.y,
+    footprint: poi.type === "port" ? 3 : poi.role === "landmark" ? 3 : 3,
+    landmarkKind: landmarkKind(poi),
+    objectId: objectIdForPoi(poi),
+    difficultyTier: poi.difficultyTier
   };
 }
 
-function poiObjectForId(id: string, kind: WorldPoiKind): WorldObjectId | undefined {
-  if (kind === "town") return undefined;
-  if (kind === "harbor") return WORLD_OBJECT_IDS.harborSignpost;
-  if (id === "mossCave") return WORLD_OBJECT_IDS.mossyCaveEntrance;
-  if (id === "tideShrine") return WORLD_OBJECT_IDS.jungleRuinsStairs;
-  if (id === "ashenKeep") return WORLD_OBJECT_IDS.volcanicTempleEntrance;
-  if (id === "skyglassTower") return WORLD_OBJECT_IDS.ancientStandingStones;
-  if (id === "starfallGate") return WORLD_OBJECT_IDS.ancientSealedDoor;
-  if (id === "eclipseSpire") return WORLD_OBJECT_IDS.darkBossPortal;
-  if (kind === "gate") return WORLD_OBJECT_IDS.ancientSealedDoor;
-  if (kind === "final") return WORLD_OBJECT_IDS.darkBossPortal;
-  if (kind === "dungeon") return WORLD_OBJECT_IDS.mossyCaveEntrance;
+function poiKind(poi: SemanticPoi): WorldPoiKind {
+  if (poi.type === "port") return "harbor";
+  if (poi.role === "settlement") return "town";
+  if (poi.role === "gate") return "gate";
+  if (poi.role === "final") return "final";
+  if (poi.role === "dungeon") return "dungeon";
+  return "landmark";
+}
+
+function landmarkKind(poi: SemanticPoi): WorldLandmarkKind | undefined {
+  if (poi.role !== "landmark") return undefined;
+  if (poi.type === "shrine") return "shrine";
+  if (poi.type === "cave") return "cave";
+  if (poi.type === "ruins") return "ruins";
+  if (poi.type === "resource") return "resourceNode";
+  if (poi.type === "treasure") return poi.id.toLowerCase().includes("wreck") ? "shipwreck" : "hiddenChest";
+  return "ruins";
+}
+
+function objectIdForPoi(poi: SemanticPoi): WorldObjectId | undefined {
+  if (poi.type === "port") return WORLD_OBJECT_IDS.harborSignpost;
+  if (poi.id === "mossCave") return WORLD_OBJECT_IDS.mossyCaveEntrance;
+  if (poi.id === "tideShrine") return WORLD_OBJECT_IDS.jungleRuinsStairs;
+  if (poi.id === "ashenKeep") return WORLD_OBJECT_IDS.cursedFortressGate;
+  if (poi.id === "skyglassTower") return WORLD_OBJECT_IDS.glowingMagicShrine;
+  if (poi.id === "starfallGate") return WORLD_OBJECT_IDS.ancientSealedDoor;
+  if (poi.id === "eclipseSpire") return WORLD_OBJECT_IDS.darkBossPortal;
+  if (poi.type === "shrine") return poi.islandId === "frostmere" ? WORLD_OBJECT_IDS.ancientStandingStones : WORLD_OBJECT_IDS.glowingMagicShrine;
+  if (poi.type === "ruins") return WORLD_OBJECT_IDS.ruinedArchway;
+  if (poi.type === "cave") return WORLD_OBJECT_IDS.mossyCaveEntrance;
+  if (poi.type === "resource") return WORLD_OBJECT_IDS.oreNode;
+  if (poi.type === "treasure") return poi.id.toLowerCase().includes("wreck") ? WORLD_OBJECT_IDS.shipwreckDebris : WORLD_OBJECT_IDS.closedTreasureChest;
   return undefined;
 }
 
-function landmarkObjectForKind(kind: WorldLandmarkKind, islandId: IslandId, index: number): WorldObjectId {
-  if (kind === "shipwreck") return index % 2 === 0 ? WORLD_OBJECT_IDS.shipwreckDebris : WORLD_OBJECT_IDS.brokenMast;
-  if (kind === "shrine") return islandId === "coralreach" ? WORLD_OBJECT_IDS.jungleIdolShrine : WORLD_OBJECT_IDS.glowingMagicShrine;
-  if (kind === "hiddenChest") return WORLD_OBJECT_IDS.mossyLockedCache;
-  if (kind === "monsterNest") return WORLD_OBJECT_IDS.monsterNest;
-  if (kind === "ruins") return index % 2 === 0 ? WORLD_OBJECT_IDS.ruinedArchway : WORLD_OBJECT_IDS.smallBrokenRuins;
-  if (kind === "cave") return WORLD_OBJECT_IDS.pirateGrottoEntrance;
-  if (kind === "resourceNode") return islandId === "ashfang" ? WORLD_OBJECT_IDS.blackAshRockCluster : WORLD_OBJECT_IDS.oreNode;
-  if (kind === "secretMerchant") return WORLD_OBJECT_IDS.secretMerchantTent;
-  if (kind === "ancientDoor") return WORLD_OBJECT_IDS.ancientSealedDoor;
-  return WORLD_OBJECT_IDS.discoverySparkle;
-}
-
-function dungeonKindForId(id: string): WorldPoiKind {
-  if (id === "starfallGate") return "gate";
-  if (id === "eclipseSpire") return "final";
-  return "dungeon";
-}
-
-function dungeonNameForId(id: string): string {
-  return (
-    {
-      mossCave: "Mossy Cave",
-      tideShrine: "Coralreach Ruins",
-      ashenKeep: "Ashfang Keep",
-      skyglassTower: "Skyglass Tower",
-      starfallGate: "Starfall Gate",
-      eclipseSpire: "Eclipse Spire"
-    }[id] ?? id
-  );
-}
-
-function landmarkName(kind: WorldLandmarkKind, islandName: string): string {
-  const names: Record<WorldLandmarkKind, string> = {
-    shipwreck: "Weathered Shipwreck",
-    shrine: "Saltwind Shrine",
-    hiddenChest: "Hidden Cache",
-    monsterNest: "Monster Nest",
-    ruins: "Old Ruins",
-    cave: "Blackstone Cave",
-    resourceNode: "Glittering Ore",
-    secretMerchant: "Secret Merchant",
-    ancientDoor: "Ancient Door"
+function adaptIsland(semantic: SemanticWorld, tiles: WorldTileId[][], pois: WorldPoi[], islandId: IslandId): GeneratedIsland {
+  const island = semantic.islands.find((candidate) => candidate.id === islandId)!;
+  const islandNumber = island.order + 1;
+  const tileMap: WorldTileId[][] = [];
+  for (let y = island.bounds.minY; y <= island.bounds.maxY; y += 1) {
+    const row: WorldTileId[] = [];
+    for (let x = island.bounds.minX; x <= island.bounds.maxX; x += 1) {
+      row.push(semantic.layers.islandId[y * semantic.width + x] === islandNumber ? tiles[y][x] : WORLD_TILE_IDS.deepWater);
+    }
+    tileMap.push(row);
+  }
+  const islandPois = pois.filter((poi) => poi.islandId === islandId);
+  const town = islandPois.find((poi) => poi.kind === "town") ?? islandPois[0];
+  const harbor = islandPois.find((poi) => poi.kind === "harbor") ?? town;
+  return {
+    id: islandId,
+    name: island.name,
+    difficultyTier: island.major ? island.order + 1 : 1,
+    theme: island.theme,
+    major: island.major,
+    bounds: {
+      x: island.bounds.minX,
+      y: island.bounds.minY,
+      width: island.bounds.maxX - island.bounds.minX + 1,
+      height: island.bounds.maxY - island.bounds.minY + 1
+    },
+    tileMap,
+    townPosition: town ? { x: town.x, y: town.y } : { x: Math.round(island.center.x), y: Math.round(island.center.y) },
+    harborPosition: harbor ? { x: harbor.x, y: harbor.y } : { x: Math.round(island.center.x), y: Math.round(island.center.y) },
+    dungeonPositions: islandPois.filter((poi) => poi.kind === "dungeon" || poi.kind === "gate" || poi.kind === "final").map((poi) => ({ x: poi.x, y: poi.y })),
+    specialLandmarkPositions: islandPois.filter((poi) => poi.kind === "landmark").map((poi) => ({ x: poi.x, y: poi.y }))
   };
-  return `${islandName} ${names[kind]}`;
 }
 
-function findInteriorPoiTile(
-  tiles: WorldTileId[][],
-  islandByTile: (IslandId | null)[][],
-  target: WorldVec,
-  islandId: IslandId,
-  placed: WorldPoi[],
-  footprint: number
-): WorldVec {
-  const width = tiles[0].length;
-  const height = tiles.length;
-  let best: { pos: WorldVec; score: number } | undefined;
-  for (let y = 3; y < height - 3; y += 1) {
-    for (let x = 3; x < width - 3; x += 1) {
-      if (!canPlacePoiAt(tiles, islandByTile, islandId, x, y, footprint, placed)) continue;
-      if (hasAdjacentWaterAt(tiles, x, y, 2)) continue;
-      const score = Math.hypot(x - target.x, y - target.y);
-      if (!best || score < best.score) best = { pos: { x, y }, score };
-    }
-  }
-  return best?.pos ?? target;
-}
-
-function findHarborTile(
-  tiles: WorldTileId[][],
-  islandByTile: (IslandId | null)[][],
-  state: IslandBuildState,
-  placed: WorldPoi[],
-  rng: SeededRng
-): WorldVec {
-  const candidates: { pos: WorldVec; score: number }[] = [];
-  for (const pos of state.coast) {
-    if (islandByTile[pos.y]?.[pos.x] !== state.template.id || !isWorldTileWalkable(tiles[pos.y][pos.x])) continue;
-    if (placed.some((other) => Math.hypot(pos.x - other.x, pos.y - other.y) < 7)) continue;
-    if (!hasAdjacentWaterAt(tiles, pos.x, pos.y, 1)) continue;
-    const facingScore = state.template.id === "greenhaven" ? -pos.x : state.template.id === "coralreach" ? Math.abs(pos.x - state.center.x) - pos.y * 0.2 : -pos.y;
-    candidates.push({ pos, score: facingScore + rng.float(0, 3) });
-  }
-  candidates.sort((a, b) => a.score - b.score);
-  return candidates[0]?.pos ?? findInteriorPoiTile(tiles, islandByTile, state.center, state.template.id, placed, 3);
-}
-
-function farthestValidTile(
-  tiles: WorldTileId[][],
-  islandByTile: (IslandId | null)[][],
-  islandId: IslandId,
-  anchors: WorldVec[],
-  placed: WorldPoi[],
-  footprint: number
-): WorldVec {
-  let best: { pos: WorldVec; score: number } | undefined;
-  for (let y = 3; y < tiles.length - 3; y += 1) {
-    for (let x = 3; x < tiles[y].length - 3; x += 1) {
-      if (!canPlacePoiAt(tiles, islandByTile, islandId, x, y, footprint, placed)) continue;
-      if (hasAdjacentWaterAt(tiles, x, y, 1)) continue;
-      const score = anchors.reduce((sum, anchor) => sum + Math.hypot(x - anchor.x, y - anchor.y), 0);
-      if (!best || score > best.score) best = { pos: { x, y }, score };
-    }
-  }
-  return best?.pos ?? anchors[0] ?? { x: 8, y: 8 };
-}
-
-function canPlacePoiAt(
-  tiles: WorldTileId[][],
-  islandByTile: (IslandId | null)[][],
-  islandId: IslandId,
-  x: number,
-  y: number,
-  footprint: number,
-  placed: WorldPoi[]
-): boolean {
-  const radius = Math.floor(footprint / 2);
-  for (let yy = y - radius; yy <= y + radius; yy += 1) {
-    for (let xx = x - radius; xx <= x + radius; xx += 1) {
-      if (!inBounds(tiles[0].length, tiles.length, xx, yy)) return false;
-      if (isWaterTile(tiles[yy][xx]) || islandByTile[yy][xx] !== islandId) return false;
-      if (!isClearPoiGroundTile(tiles[yy][xx])) return false;
-      if (hasAdjacentWaterAt(tiles, xx, yy, 1)) return false;
-    }
-  }
-  for (const other of placed) {
-    if (Math.hypot(x - other.x, y - other.y) < 7) return false;
-  }
-  return true;
-}
-
-function isClearPoiGroundTile(tile?: WorldTileId): boolean {
-  if (!tile || !isWorldTileWalkable(tile)) return false;
-  if (worldTileHasTag(tile, "water") || worldTileHasTag(tile, "forest") || worldTileHasTag(tile, "blocked")) return false;
-  return true;
-}
-
-function carveIslandRoads(
-  tiles: WorldTileId[][],
-  biomes: WorldBiome[][],
-  islandByTile: (IslandId | null)[][],
-  islandId: IslandId,
-  pois: WorldPoi[],
-  roadKeys: Set<string>,
-  roadEndpointMasks: Map<string, number>
-) {
-  const town = pois.find((poi) => poi.kind === "town");
-  const harbor = pois.find((poi) => poi.kind === "harbor");
-  const important = pois.filter((poi) => poi.kind === "dungeon" || poi.kind === "gate" || poi.kind === "final");
-  if (!town || !harbor) return;
-
-  const footprintKeys = poiFootprintKeySet(pois);
-  const islandRoadKeys = new Set<string>();
-  const destinations = [harbor, ...important].sort((a, b) => {
-    const rank = (poi: WorldPoi) => (poi.kind === "harbor" ? 0 : poi.kind === "dungeon" ? 1 : poi.kind === "gate" ? 2 : 3);
-    return rank(a) - rank(b) || Math.hypot(a.x - town.x, a.y - town.y) - Math.hypot(b.x - town.x, b.y - town.y);
-  });
-  const townApproach = roadApproachPoint(tiles, islandByTile, islandId, town, harbor, footprintKeys);
-  addIslandRoadTile(tiles, biomes, islandByTile, islandId, townApproach, roadKeys, islandRoadKeys, footprintKeys);
-  addRoadEndpointConnection(tiles, roadEndpointMasks, townApproach, town);
-
-  for (const destination of destinations) {
-    const destinationApproach = roadApproachPoint(tiles, islandByTile, islandId, destination, townApproach, footprintKeys);
-    const start = nearestRoadAnchor(islandRoadKeys, destinationApproach) ?? townApproach;
-    const path = findIslandRoadPath(tiles, islandByTile, islandId, start, destinationApproach, {
-      roadKeys: islandRoadKeys,
-      blockedKeys: footprintKeys
-    });
-    for (const pos of path) {
-      addIslandRoadTile(tiles, biomes, islandByTile, islandId, pos, roadKeys, islandRoadKeys, footprintKeys);
-    }
-    addRoadEndpointConnection(tiles, roadEndpointMasks, destinationApproach, destination);
-  }
-}
-
-function poiFootprintKeySet(pois: WorldPoi[]): Set<string> {
-  const keys = new Set<string>();
-  for (const poi of pois) {
-    for (const pos of poiFootprintTiles(poi)) keys.add(posKey(pos));
-  }
-  return keys;
-}
-
-function roadApproachPoint(
-  tiles: WorldTileId[][],
-  islandByTile: (IslandId | null)[][],
-  islandId: IslandId,
-  poi: WorldPoi,
-  anchor: WorldVec,
-  blockedKeys: Set<string>
-): WorldVec {
-  const footprint = poiFootprintTiles(poi);
-  const footprintKeys = new Set(footprint.map(posKey));
-  const candidates: WorldVec[] = [];
-  const inlandCandidates: WorldVec[] = [];
-  for (const tile of footprint) {
-    for (const next of neighbors4(tile.x, tile.y)) {
-      const key = posKey(next);
-      if (footprintKeys.has(key) || blockedKeys.has(key)) continue;
-      if (!canRoadUseTile(tiles, islandByTile, islandId, next, key, "", "")) continue;
-      candidates.push(next);
-      if (!hasAdjacentWaterAt(tiles, next.x, next.y, 1)) inlandCandidates.push(next);
-    }
-  }
-  const pool = inlandCandidates.length ? inlandCandidates : candidates;
-  if (poi.kind === "town") {
-    const bottomCandidates = townBottomRoadCandidates(tiles, islandByTile, islandId, poi, blockedKeys);
-    if (bottomCandidates.length) {
-      return bottomCandidates.sort((a, b) => Math.abs(a.x - poi.x) - Math.abs(b.x - poi.x) || a.y - b.y || a.x - b.x)[0];
-    }
-  }
-  if (pool.length) {
-    return pool.sort((a, b) => {
-      const da = Math.hypot(a.x - anchor.x, a.y - anchor.y);
-      const db = Math.hypot(b.x - anchor.x, b.y - anchor.y);
-      return da - db || a.y - b.y || a.x - b.x;
-    })[0];
-  }
-  return (
-    footprint.find((pos) => {
-      const key = posKey(pos);
-      return canRoadUseTile(tiles, islandByTile, islandId, pos, key, key, key);
-    }) ?? { x: poi.x, y: poi.y }
-  );
-}
-
-function addIslandRoadTile(
-  tiles: WorldTileId[][],
-  biomes: WorldBiome[][],
-  islandByTile: (IslandId | null)[][],
-  islandId: IslandId,
-  pos: WorldVec,
-  roadKeys: Set<string>,
-  islandRoadKeys: Set<string>,
-  blockedKeys: Set<string>
-) {
-  const key = posKey(pos);
-  if (!canRoadUseTile(tiles, islandByTile, islandId, pos, key, "", "")) return;
-  if (blockedKeys.has(key)) return;
-  setWorldTile(tiles, biomes, pos.x, pos.y, ROAD_TILE, "grassland");
-  roadKeys.add(key);
-  islandRoadKeys.add(key);
-}
-
-function nearestRoadAnchor(roadKeys: Set<string>, goal: WorldVec): WorldVec | undefined {
-  return [...roadKeys]
-    .map(parseKey)
-    .sort((a, b) => Math.hypot(a.x - goal.x, a.y - goal.y) - Math.hypot(b.x - goal.x, b.y - goal.y) || a.y - b.y || a.x - b.x)[0];
-}
-
-function addRoadEndpointConnection(tiles: WorldTileId[][], roadEndpointMasks: Map<string, number>, roadPos: WorldVec, poi: WorldPoi) {
-  if (poi.kind !== "town") return;
-  const key = posKey(roadPos);
-  const footprintKeys = new Set(poiFootprintTiles(poi).map(posKey));
-  let mask = roadEndpointMasks.get(key) ?? 0;
-  for (const next of neighbors4(roadPos.x, roadPos.y)) {
-    const nextTile = tiles[next.y]?.[next.x];
-    if (footprintKeys.has(posKey(next)) && nextTile && !isWaterTile(nextTile) && isWorldTileWalkable(nextTile) && isTownBottomRoadEndpoint(roadPos, next, poi)) {
-      mask |= directionMask(roadPos, next);
-    }
-  }
-  if (mask) roadEndpointMasks.set(key, mask);
-}
-
-function townBottomRoadCandidates(
-  tiles: WorldTileId[][],
-  islandByTile: (IslandId | null)[][],
-  islandId: IslandId,
-  poi: WorldPoi,
-  blockedKeys: Set<string>
-): WorldVec[] {
-  const footprint = poiFootprintTiles(poi);
-  const footprintKeys = new Set(footprint.map(posKey));
-  const bottomY = Math.max(...footprint.map((pos) => pos.y));
-  const seen = new Set<string>();
-  const candidates: WorldVec[] = [];
-  for (const tile of footprint.filter((pos) => pos.y === bottomY)) {
-    const next = { x: tile.x, y: tile.y + 1 };
-    const key = posKey(next);
-    if (seen.has(key) || footprintKeys.has(key) || blockedKeys.has(key)) continue;
-    if (!canRoadUseTile(tiles, islandByTile, islandId, next, key, "", "")) continue;
-    seen.add(key);
-    candidates.push(next);
-  }
-  return candidates;
-}
-
-function isTownBottomRoadEndpoint(roadPos: WorldVec, footprintPos: WorldVec, poi: WorldPoi): boolean {
-  if (poi.kind !== "town") return false;
-  const radius = Math.floor(poi.footprint / 2);
-  const bottomY = poi.y + radius;
-  return footprintPos.y === bottomY && roadPos.y === bottomY + 1 && roadPos.x === footprintPos.x;
-}
-
-function orientRoadTiles(tiles: WorldTileId[][], biomes: WorldBiome[][], roadKeys: Set<string>, roadEndpointMasks: Map<string, number>): WorldRoadVisual[] {
+function buildRoadVisuals(semantic: SemanticWorld): WorldRoadVisual[] {
   const visuals: WorldRoadVisual[] = [];
-  for (const key of roadKeys) {
-    const pos = parseKey(key);
-    if (!worldTileHasTag(tiles[pos.y]?.[pos.x], "road")) continue;
-    const roadMask = roadNeighborMask(roadKeys, pos.x, pos.y);
-    const endpointMask = roadEndpointMasks.get(key) ?? 0;
-    const mask = roadMask | endpointMask;
-    const visual = roadVisualForMask(mask);
-    setWorldTile(tiles, biomes, pos.x, pos.y, visual.sourceTileId, WORLD_TILES[visual.sourceTileId].biome);
-    visuals.push({ ...pos, mask, roadMask, endpointMask, ...visual });
+  for (let y = 0; y < semantic.height; y += 1) {
+    for (let x = 0; x < semantic.width; x += 1) {
+      const i = y * semantic.width + x;
+      if (!semantic.layers.roadMap[i]) continue;
+      const roadMask = roadMaskAt(semantic, x, y);
+      const endpointMask = endpointMaskAt(semantic, x, y);
+      const mask = roadMask | endpointMask;
+      const visual = roadVisualForMask(mask || ROAD_E | ROAD_W);
+      visuals.push({ x, y, mask, roadMask, endpointMask, sourceMask: visual.sourceMask, sourceTileId: visual.sourceTileId, rotation: visual.rotation });
+    }
   }
-  return visuals.sort((a, b) => a.y - b.y || a.x - b.x);
+  return visuals;
 }
 
-function roadNeighborMask(roadKeys: Set<string>, x: number, y: number): number {
+function roadMaskAt(semantic: SemanticWorld, x: number, y: number): number {
   let mask = 0;
-  if (roadKeys.has(posKey({ x, y: y - 1 }))) mask |= ROAD_N;
-  if (roadKeys.has(posKey({ x: x + 1, y }))) mask |= ROAD_E;
-  if (roadKeys.has(posKey({ x, y: y + 1 }))) mask |= ROAD_S;
-  if (roadKeys.has(posKey({ x: x - 1, y }))) mask |= ROAD_W;
+  if (isRoad(semantic, x, y - 1)) mask |= ROAD_N;
+  if (isRoad(semantic, x + 1, y)) mask |= ROAD_E;
+  if (isRoad(semantic, x, y + 1)) mask |= ROAD_S;
+  if (isRoad(semantic, x - 1, y)) mask |= ROAD_W;
   return mask;
 }
 
+function endpointMaskAt(semantic: SemanticWorld, x: number, y: number): number {
+  let mask = 0;
+  for (const poi of semantic.poiList) {
+    if (Math.abs(poi.x - x) + Math.abs(poi.y - y) !== 1) continue;
+    if (poi.y === y - 1) mask |= ROAD_N;
+    if (poi.x === x + 1) mask |= ROAD_E;
+    if (poi.y === y + 1) mask |= ROAD_S;
+    if (poi.x === x - 1) mask |= ROAD_W;
+  }
+  return mask;
+}
+
+function isRoad(semantic: SemanticWorld, x: number, y: number): boolean {
+  return x >= 0 && y >= 0 && x < semantic.width && y < semantic.height && semantic.layers.roadMap[y * semantic.width + x] === 1;
+}
+
 function roadVisualForMask(mask: number): Pick<WorldRoadVisual, "sourceMask" | "sourceTileId" | "rotation"> {
-  switch (mask & 15) {
+  switch (mask) {
     case ROAD_N:
       return { sourceTileId: WORLD_TILE_IDS.roadDeadEndEast, sourceMask: ROAD_W, rotation: 90 };
     case ROAD_E:
@@ -1324,8 +419,6 @@ function roadVisualForMask(mask: number): Pick<WorldRoadVisual, "sourceMask" | "
     case ROAD_W:
       return { sourceTileId: WORLD_TILE_IDS.roadDeadEndEast, sourceMask: ROAD_W, rotation: 0 };
     case ROAD_N | ROAD_S:
-      // The atlas cell named road_vertical has a small side spur in the art.
-      // Rotate the clean horizontal source so the rendered connector mask stays exact.
       return { sourceTileId: WORLD_TILE_IDS.roadHorizontal, sourceMask: ROAD_E | ROAD_W, rotation: 90 };
     case ROAD_E | ROAD_W:
       return { sourceTileId: WORLD_TILE_IDS.roadHorizontal, sourceMask: ROAD_E | ROAD_W, rotation: 0 };
@@ -1352,380 +445,134 @@ function roadVisualForMask(mask: number): Pick<WorldRoadVisual, "sourceMask" | "
   }
 }
 
-function directionMask(from: WorldVec, to: WorldVec): number {
-  if (to.x === from.x && to.y === from.y - 1) return ROAD_N;
-  if (to.x === from.x + 1 && to.y === from.y) return ROAD_E;
-  if (to.x === from.x && to.y === from.y + 1) return ROAD_S;
-  if (to.x === from.x - 1 && to.y === from.y) return ROAD_W;
-  return 0;
-}
-
-function rotateRoadMask(mask: number, rotation: RoadRotation): number {
-  let rotated = mask;
-  for (let i = 0; i < rotation / 90; i += 1) {
-    let next = 0;
-    if (rotated & ROAD_N) next |= ROAD_E;
-    if (rotated & ROAD_E) next |= ROAD_S;
-    if (rotated & ROAD_S) next |= ROAD_W;
-    if (rotated & ROAD_W) next |= ROAD_N;
-    rotated = next;
-  }
-  return rotated;
-}
-
-function stepForRoadBit(pos: WorldVec, bit: number): WorldVec {
-  if (bit === ROAD_N) return { x: pos.x, y: pos.y - 1 };
-  if (bit === ROAD_E) return { x: pos.x + 1, y: pos.y };
-  if (bit === ROAD_S) return { x: pos.x, y: pos.y + 1 };
-  return { x: pos.x - 1, y: pos.y };
-}
-
-function roadBitName(bit: number): string {
-  if (bit === ROAD_N) return "north";
-  if (bit === ROAD_E) return "east";
-  if (bit === ROAD_S) return "south";
-  return "west";
-}
-
-function roadConnectionCount(mask: number): number {
-  return [ROAD_N, ROAD_E, ROAD_S, ROAD_W].filter((bit) => (mask & bit) !== 0).length;
-}
-
-function poiAtFootprint(pois: WorldPoi[], x: number, y: number): WorldPoi | undefined {
-  return pois.find((poi) => pointInPoiFootprint(poi, x, y));
-}
-
-function findIslandRoadPath(
-  tiles: WorldTileId[][],
-  islandByTile: (IslandId | null)[][],
-  islandId: IslandId,
-  start: WorldVec,
-  goal: WorldVec,
-  options: { roadKeys: Set<string>; blockedKeys: Set<string> }
-): WorldVec[] {
-  const startKey = posKey(start);
-  const goalKey = posKey(goal);
-  const queue: { pos: WorldVec; score: number }[] = [{ pos: start, score: 0 }];
-  const cameFrom = new Map<string, string>();
-  const costByKey = new Map<string, number>([[startKey, 0]]);
-  const seen = new Set<string>();
-  while (queue.length) {
-    queue.sort((a, b) => a.score - b.score || a.pos.y - b.pos.y || a.pos.x - b.pos.x);
-    const current = queue.shift()!.pos;
-    const currentKey = posKey(current);
-    if (seen.has(currentKey)) continue;
-    seen.add(currentKey);
-    if (currentKey === goalKey) break;
-    const nextSteps = neighbors4(current.x, current.y).sort((a, b) => Math.hypot(a.x - goal.x, a.y - goal.y) - Math.hypot(b.x - goal.x, b.y - goal.y));
-    for (const next of nextSteps) {
-      const key = posKey(next);
-      if (!canRoadUseTile(tiles, islandByTile, islandId, next, key, startKey, goalKey)) continue;
-      if (options.blockedKeys.has(key) && key !== startKey && key !== goalKey) continue;
-      const currentCost = costByKey.get(currentKey) ?? 0;
-      const nextCost = currentCost + roadStepCost(tiles[next.y][next.x], options.roadKeys.has(key)) + roadTurnCost(cameFrom, currentKey, key);
-      if (nextCost >= (costByKey.get(key) ?? Number.POSITIVE_INFINITY)) continue;
-      costByKey.set(key, nextCost);
-      cameFrom.set(key, currentKey);
-      queue.push({ pos: next, score: nextCost + Math.hypot(next.x - goal.x, next.y - goal.y) });
+function collectCells(semantic: SemanticWorld, predicate: (i: number) => boolean): WorldVec[] {
+  const cells: WorldVec[] = [];
+  for (let y = 0; y < semantic.height; y += 1) {
+    for (let x = 0; x < semantic.width; x += 1) {
+      const i = y * semantic.width + x;
+      if (predicate(i)) cells.push({ x, y });
     }
   }
-  if (!cameFrom.has(goalKey)) return carveLinePath(start, goal);
-  const path: WorldVec[] = [];
-  let current = goalKey;
-  while (current !== startKey) {
-    path.push(parseKey(current));
-    current = cameFrom.get(current)!;
-  }
-  path.push(start);
-  return path.reverse();
+  return cells;
 }
 
-function canRoadUseTile(
-  tiles: WorldTileId[][],
-  islandByTile: (IslandId | null)[][],
-  islandId: IslandId,
-  pos: WorldVec,
-  key: string,
-  startKey: string,
-  goalKey: string
-): boolean {
-  if (!inBounds(tiles[0].length, tiles.length, pos.x, pos.y)) return false;
-  if (key !== startKey && key !== goalKey && islandByTile[pos.y][pos.x] !== islandId) return false;
-  if (key !== startKey && key !== goalKey && hasAdjacentWaterAt(tiles, pos.x, pos.y, 1)) return false;
-  const tile = tiles[pos.y][pos.x];
-  return !isWaterTile(tile) && isWorldTileWalkable(tile);
+function pickReefs(semantic: SemanticWorld, shallows: WorldVec[]): WorldVec[] {
+  return shallows.filter((pos) => hashNoise(`${semantic.seed}:reef`, pos.x, pos.y) > 0.92).slice(0, 22);
 }
 
-function roadStepCost(tile: WorldTileId, existingRoad: boolean): number {
-  if (existingRoad || worldTileHasTag(tile, "road")) return 0.2;
-  if (worldTileHasTag(tile, "forest")) return 3.1;
-  if (worldTileHasTag(tile, "sand")) return 2.6;
-  if (worldTileHasTag(tile, "rock")) return 2.2;
-  if (worldTileHasTag(tile, "grass")) return 1;
-  return 1.45;
-}
-
-function roadTurnCost(cameFrom: Map<string, string>, currentKey: string, nextKey: string): number {
-  const previousKey = cameFrom.get(currentKey);
-  if (!previousKey) return 0;
-  const previous = parseKey(previousKey);
-  const current = parseKey(currentKey);
-  const next = parseKey(nextKey);
-  const dirA = { x: current.x - previous.x, y: current.y - previous.y };
-  const dirB = { x: next.x - current.x, y: next.y - current.y };
-  return dirA.x === dirB.x && dirA.y === dirB.y ? 0 : 0.55;
-}
-
-function dockTilesForHarbor(tiles: WorldTileId[][], islandId: IslandId, harbor?: WorldPoi): WorldBridge[] {
-  if (!harbor) return [];
-  const result: WorldBridge[] = [];
-  for (const next of neighbors4(harbor.x, harbor.y)) {
-    if (!inBounds(tiles[0].length, tiles.length, next.x, next.y) || !isWaterTile(tiles[next.y][next.x])) continue;
-    result.push({ ...next, orientation: next.x === harbor.x ? "vertical" : "horizontal", material: islandId === "ashfang" ? "stone" : "wood" });
-    break;
-  }
-  return result;
-}
-
-function markShallowWater(tiles: WorldTileId[][], biomes: WorldBiome[][]): WorldVec[] {
-  const shallows: WorldVec[] = [];
-  for (let y = 1; y < tiles.length - 1; y += 1) {
-    for (let x = 1; x < tiles[y].length - 1; x += 1) {
-      if (!isWaterTile(tiles[y][x])) continue;
-      const nearLand = nearestLandDistance(tiles, x, y, 3);
-      if (nearLand > 0 && nearLand <= 2) {
-        shallows.push({ x, y });
-        setWorldTile(tiles, biomes, x, y, pickByNoise(SHALLOW_WATER_TILES, "shallows", x, y), "water");
-      }
-    }
-  }
-  return shallows;
-}
-
-function decorateOcean(seed: string, tiles: WorldTileId[][], pois: WorldPoi[], shallows: WorldVec[], rng: SeededRng): WorldVec[] {
-  const reefs: WorldVec[] = [];
-  const shallowKeys = new Set(shallows.map(posKey));
-  for (const pos of rng.shuffle(shallows).slice(0, 18)) {
-    if (rng.chance(0.55)) reefs.push(pos);
-  }
-  for (let i = 0; i < 18; i += 1) {
-    const pos = { x: rng.int(3, tiles[0].length - 4), y: rng.int(3, tiles.length - 4) };
-    if (!isWaterTile(tiles[pos.y][pos.x]) || shallowKeys.has(posKey(pos))) continue;
-    if (pois.some((poi) => Math.hypot(pos.x - poi.x, pos.y - poi.y) < 5)) continue;
-    if (hashNoise(`${seed}:reef`, pos.x, pos.y) > 0.34) reefs.push(pos);
-  }
-  return reefs;
-}
-
-function buildWorldObjectOverlays(seed: string, reefs: WorldVec[]): WorldObjectOverlay[] {
-  return reefs.map((pos, index) => ({
-    id: `ocean-object-${index}-${pos.x}-${pos.y}`,
-    x: pos.x,
-    y: pos.y,
-    objectId: oceanObjectForPosition(seed, pos, index),
-    scale: 1.24
-  }));
-}
-
-function buildNatureObjectOverlays(
-  seed: string,
-  tiles: WorldTileId[][],
-  states: IslandBuildState[],
-  pois: WorldPoi[],
-  rng: SeededRng
-): WorldObjectOverlay[] {
+function buildObjectOverlays(semantic: SemanticWorld, reefs: WorldVec[]): WorldObjectOverlay[] {
   const overlays: WorldObjectOverlay[] = [];
-  const blocked = expandedPoiBlockKeys(pois, 2);
-  const used = new Set<string>();
-
-  for (const state of states) {
-    if (state.template.theme === "volcanic") continue;
-    const isPalmIsland = state.template.theme === "tropical";
-    const clusterCount = isPalmIsland ? 3 : 2;
-    const radius = isPalmIsland ? 3 : 2;
-    const candidates = [...state.land]
-      .map(parseKey)
-      .filter((pos) => canPlaceNatureOverlay(tiles, state, pos, blocked))
-      .map((pos) => ({ pos, score: fbm(`${seed}:${state.template.id}:nature-cluster`, pos.x / 6.5, pos.y / 6.5, 3, 2.05) + rng.float(0, 0.08) }))
-      .sort((a, b) => b.score - a.score);
-
-    const centers: WorldVec[] = [];
-    for (const candidate of candidates) {
-      if (centers.some((center) => Math.hypot(center.x - candidate.pos.x, center.y - candidate.pos.y) < radius * 3.2)) continue;
-      centers.push(candidate.pos);
-      if (centers.length >= clusterCount) break;
-    }
-
-    centers.forEach((center, clusterIndex) => {
-      const clusterStyle = isPalmIsland
-        ? WORLD_OBJECT_IDS.palmTree
-        : hashNoise(`${seed}:${state.template.id}:normal-tree-style`, center.x, center.y) > 0.35
-          ? WORLD_OBJECT_IDS.broadleafTree
-          : WORLD_OBJECT_IDS.darkPineTree;
-      for (let y = center.y - radius; y <= center.y + radius; y += 1) {
-        for (let x = center.x - radius; x <= center.x + radius; x += 1) {
-          const pos = { x, y };
-          const key = posKey(pos);
-          if (used.has(key) || !canPlaceNatureOverlay(tiles, state, pos, blocked)) continue;
-          const distance = Math.hypot(x - center.x, y - center.y);
-          const density = isPalmIsland ? 0.78 : 0.68;
-          if (distance > radius + 0.2 || hashNoise(`${seed}:${state.template.id}:nature-density:${clusterIndex}`, x, y) > density - distance * 0.1) continue;
-          used.add(key);
-          overlays.push({
-            id: `nature-${state.template.id}-${clusterIndex}-${x}-${y}`,
-            x,
-            y,
-            objectId:
-              isPalmIsland && hashNoise(`${seed}:${state.template.id}:jungle-bush:${clusterIndex}`, x, y) > 0.78
-                ? WORLD_OBJECT_IDS.denseJungleBush
-                : clusterStyle,
-            scale: isPalmIsland ? 1.08 : 1
-          });
-        }
-      }
+  for (const mountain of semantic.mountains) {
+    overlays.push({
+      id: `mountain-${mountain.x}-${mountain.y}`,
+      x: mountain.x,
+      y: mountain.y,
+      objectId: mountain.kind === "snow_mountain" ? WORLD_OBJECT_IDS.snowyMountainPeak : WORLD_OBJECT_IDS.smallMountainPeak,
+      scale: 1.24
     });
   }
-
+  for (let y = 0; y < semantic.height; y += 1) {
+    for (let x = 0; x < semantic.width; x += 1) {
+      const i = y * semantic.width + x;
+      if (!semantic.layers.forestMap[i]) continue;
+      const objectId = semantic.layers.biome[i] === SEMANTIC_BIOME.ICE ? WORLD_OBJECT_IDS.darkPineTree : hashNoise(`${semantic.seed}:forest-object`, x, y) > 0.78 ? WORLD_OBJECT_IDS.denseJungleBush : WORLD_OBJECT_IDS.broadleafTree;
+      overlays.push({ id: `forest-${x}-${y}`, x, y, objectId, scale: 0.96 });
+    }
+  }
+  reefs.forEach((pos, index) => {
+    const roll = hashNoise(`${semantic.seed}:ocean-object:${index}`, pos.x, pos.y);
+    const objectId =
+      roll > 0.88 ? WORLD_OBJECT_IDS.shipwreckDebris : roll > 0.72 ? WORLD_OBJECT_IDS.brokenMast : roll > 0.48 ? WORLD_OBJECT_IDS.coralClusterBlue : WORLD_OBJECT_IDS.fishingSpot;
+    overlays.push({ id: `reef-${index}-${pos.x}-${pos.y}`, x: pos.x, y: pos.y, objectId, scale: 1.15 });
+  });
   return overlays;
 }
 
-function expandedPoiBlockKeys(pois: WorldPoi[], padding: number): Set<string> {
-  const keys = new Set<string>();
-  for (const poi of pois) {
-    const radius = Math.floor(poi.footprint / 2) + padding;
-    for (let y = poi.y - radius; y <= poi.y + radius; y += 1) {
-      for (let x = poi.x - radius; x <= poi.x + radius; x += 1) keys.add(posKey({ x, y }));
+function buildDockTiles(semantic: SemanticWorld, pois: WorldPoi[], tiles: WorldTileId[][]): WorldBridge[] {
+  const bridges: WorldBridge[] = [];
+  for (const harbor of pois.filter((poi) => poi.kind === "harbor")) {
+    for (const next of neighbors4(harbor.x, harbor.y)) {
+      if (!inBounds(semantic.width, semantic.height, next.x, next.y)) continue;
+      if (!isWaterTile(tiles[next.y][next.x])) continue;
+      bridges.push({
+        x: next.x,
+        y: next.y,
+        orientation: next.x === harbor.x ? "vertical" : "horizontal",
+        material: harbor.islandId === "highspire" || harbor.islandId === "frostmere" ? "stone" : "wood"
+      });
+      break;
     }
   }
-  return keys;
-}
-
-function canPlaceNatureOverlay(tiles: WorldTileId[][], state: IslandBuildState, pos: WorldVec, blocked: Set<string>): boolean {
-  const tile = tiles[pos.y]?.[pos.x];
-  if (!tile || blocked.has(posKey(pos)) || !state.land.has(posKey(pos))) return false;
-  if (!isWorldTileWalkable(tile) || isWaterTile(tile) || isBeachTile(tile) || worldTileHasTag(tile, "road") || worldTileHasTag(tile, "blocked")) return false;
-  if (hasAdjacentWaterAt(tiles, pos.x, pos.y, 2)) return false;
-  return true;
-}
-
-function oceanObjectForPosition(seed: string, pos: WorldVec, index: number): WorldObjectId {
-  const noise = hashNoise(`${seed}:world-object-overlay:${index}`, pos.x, pos.y);
-  if (noise > 0.94) return WORLD_OBJECT_IDS.whirlpoolSwirl;
-  if (noise > 0.85) return WORLD_OBJECT_IDS.floatingTreasureBarrel;
-  if (noise > 0.75) return WORLD_OBJECT_IDS.brokenMast;
-  if (noise > 0.61) return WORLD_OBJECT_IDS.shipwreckDebris;
-  if (noise > 0.49) return WORLD_OBJECT_IDS.octopusCache;
-  return WORLD_OBJECT_IDS.coralClusterBlue;
+  return bridges;
 }
 
 function buildSeaRoutes(pois: WorldPoi[]): WorldVec[][] {
-  const harbor = (id: string) => pois.find((poi) => poi.id === id)!;
-  return [
-    carveLinePath(harbor("greenhavenHarbor"), harbor("coralreachHarbor")),
-    carveLinePath(harbor("coralreachHarbor"), harbor("ashfangHarbor"))
+  const harborByIsland = new Map(pois.filter((poi) => poi.kind === "harbor").map((poi) => [poi.islandId, poi]));
+  const routePairs: [IslandId, IslandId][] = [
+    ["greenhaven", "coralreach"],
+    ["coralreach", "frostmere"],
+    ["frostmere", "highspire"],
+    ["highspire", "greenhaven"]
   ];
+  return routePairs
+    .map(([fromId, toId]) => {
+      const from = harborByIsland.get(fromId);
+      const to = harborByIsland.get(toId);
+      return from && to ? carveLinePath(from, to) : [];
+    })
+    .filter((route) => route.length > 0);
 }
 
-function buildGeneratedIslands(tiles: WorldTileId[][], states: IslandBuildState[], pois: WorldPoi[]): GeneratedIsland[] {
-  return states.map((state) => {
-    const land = [...state.land].map(parseKey);
-    const minX = Math.min(...land.map((pos) => pos.x));
-    const maxX = Math.max(...land.map((pos) => pos.x));
-    const minY = Math.min(...land.map((pos) => pos.y));
-    const maxY = Math.max(...land.map((pos) => pos.y));
-    const islandPois = pois.filter((poi) => poi.islandId === state.template.id);
-    return {
-      id: state.template.id,
-      name: state.template.name,
-      difficultyTier: state.template.difficultyTier,
-      theme: state.template.theme,
-      bounds: { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 },
-      tileMap: tiles.slice(minY, maxY + 1).map((row) => row.slice(minX, maxX + 1)),
-      townPosition: pickPoiPosition(islandPois, "town"),
-      harborPosition: pickPoiPosition(islandPois, "harbor"),
-      dungeonPositions: islandPois.filter((poi) => poi.kind === "dungeon" || poi.kind === "gate" || poi.kind === "final").map((poi) => ({ x: poi.x, y: poi.y })),
-      specialLandmarkPositions: islandPois.filter((poi) => poi.kind === "landmark").map((poi) => ({ x: poi.x, y: poi.y }))
-    };
-  });
-}
-
-function pickPoiPosition(pois: WorldPoi[], kind: WorldPoiKind): WorldVec {
-  const poi = pois.find((candidate) => candidate.kind === kind);
-  return poi ? { x: poi.x, y: poi.y } : { x: 0, y: 0 };
-}
-
-function findStartPosition(
-  tiles: WorldTileId[][],
-  biomes: WorldBiome[][],
-  islandByTile: (IslandId | null)[][],
-  dawnford: WorldPoi
-): WorldVec {
-  const candidates = [
-    { x: dawnford.x, y: dawnford.y + 2 },
-    { x: dawnford.x - 1, y: dawnford.y + 2 },
-    { x: dawnford.x + 1, y: dawnford.y + 2 },
-    { x: dawnford.x, y: dawnford.y }
-  ];
-  for (const pos of candidates) {
-    if (!tiles[pos.y]?.[pos.x] || isWaterTile(tiles[pos.y][pos.x])) continue;
-    if (!worldTileHasTag(tiles[pos.y][pos.x], "road")) setWorldTile(tiles, biomes, pos.x, pos.y, MAIN_GRASS_TILE, "grassland");
-    islandByTile[pos.y][pos.x] = "greenhaven";
-    return pos;
+function chooseStartPosition(semantic: SemanticWorld, pois: WorldPoi[]): WorldVec {
+  const starterTown = pois.find((poi) => poi.islandId === CAMPAIGN_WORLD_PROFILE.startingIslandId && poi.kind === "town");
+  if (starterTown) {
+    const candidates = [
+      { x: starterTown.x, y: starterTown.y + 2 },
+      { x: starterTown.x - 2, y: starterTown.y },
+      { x: starterTown.x + 2, y: starterTown.y },
+      { x: starterTown.x, y: starterTown.y - 2 },
+      { x: starterTown.x, y: starterTown.y + 1 },
+      { x: starterTown.x - 1, y: starterTown.y },
+      { x: starterTown.x + 1, y: starterTown.y }
+    ];
+    const poiKeys = new Set(pois.map((poi) => `${poi.x},${poi.y}`));
+    const valid = candidates.find((candidate) => isSemanticWalkable(semantic, candidate.x, candidate.y) && !poiKeys.has(`${candidate.x},${candidate.y}`));
+    if (valid) return valid;
   }
-  return { x: dawnford.x, y: dawnford.y };
-}
-
-function floodReachable(world: GeneratedWorld, start: WorldVec, islandId: IslandId): Set<string> {
-  const seen = new Set<string>();
-  const queue = [start];
-  while (queue.length) {
-    const current = queue.shift()!;
-    const key = posKey(current);
-    if (seen.has(key)) continue;
-    if (!inBounds(world.width, world.height, current.x, current.y)) continue;
-    if (world.islandByTile[current.y][current.x] !== islandId || !isWorldPositionWalkable(world, current.x, current.y)) continue;
-    seen.add(key);
-    for (const next of neighbors4(current.x, current.y)) {
-      if (!seen.has(posKey(next))) queue.push(next);
-    }
-  }
-  return seen;
-}
-
-function hasAdjacentWater(world: GeneratedWorld, poi: WorldPoi): boolean {
-  return poiFootprintTiles(poi).some((tile) => neighbors4(tile.x, tile.y).some((next) => isWaterTile(world.tiles[next.y]?.[next.x])));
-}
-
-function hasAdjacentWaterAt(tiles: WorldTileId[][], x: number, y: number, radius: number): boolean {
-  for (let yy = y - radius; yy <= y + radius; yy += 1) {
-    for (let xx = x - radius; xx <= x + radius; xx += 1) {
-      if (!inBounds(tiles[0].length, tiles.length, xx, yy)) continue;
-      if (isWaterTile(tiles[yy][xx])) return true;
-    }
-  }
-  return false;
-}
-
-function nearestLandDistance(tiles: WorldTileId[][], x: number, y: number, maxDistance: number): number {
-  for (let distance = 1; distance <= maxDistance; distance += 1) {
-    for (let yy = y - distance; yy <= y + distance; yy += 1) {
-      for (let xx = x - distance; xx <= x + distance; xx += 1) {
-        if (!inBounds(tiles[0].length, tiles.length, xx, yy)) continue;
-        if (Math.abs(xx - x) !== distance && Math.abs(yy - y) !== distance) continue;
-        if (!isWaterTile(tiles[yy][xx])) return distance;
+  const starterIsland = semantic.islands.find((island) => island.id === CAMPAIGN_WORLD_PROFILE.startingIslandId);
+  if (starterIsland) {
+    for (let radius = 0; radius < 14; radius += 1) {
+      for (let y = Math.round(starterIsland.center.y) - radius; y <= Math.round(starterIsland.center.y) + radius; y += 1) {
+        for (let x = Math.round(starterIsland.center.x) - radius; x <= Math.round(starterIsland.center.x) + radius; x += 1) {
+          if (isSemanticWalkable(semantic, x, y)) return { x, y };
+        }
       }
     }
   }
-  return 0;
+  return { x: 10, y: 22 };
 }
 
-function poiFootprintTiles(poi: Pick<WorldPoi, "x" | "y" | "footprint">): WorldVec[] {
-  const radius = Math.floor(poi.footprint / 2);
-  const tiles: WorldVec[] = [];
-  for (let y = poi.y - radius; y <= poi.y + radius; y += 1) {
-    for (let x = poi.x - radius; x <= poi.x + radius; x += 1) tiles.push({ x, y });
+function buildValidationResult(semantic: SemanticWorld, pois: WorldPoi[]): WorldValidationResult {
+  const biomeCounts: Record<string, number> = {};
+  for (const row of buildBiomes(semantic)) {
+    for (const biome of row) biomeCounts[biome] = (biomeCounts[biome] ?? 0) + 1;
   }
-  return tiles;
+  const reachablePoiIds = pois.filter((poi) => isSemanticWalkable(semantic, poi.x, poi.y)).map((poi) => poi.id);
+  const errors = [...semantic.validation.errors];
+  const warnings = [...semantic.validation.warnings];
+  const start = chooseStartPosition(semantic, pois);
+  if (!isSemanticWalkable(semantic, start.x, start.y)) errors.push("Start position is not walkable.");
+  return {
+    valid: errors.length === 0,
+    errors,
+    warnings,
+    reachablePoiIds,
+    biomeCounts
+  };
+}
+
+function isSemanticWalkable(semantic: SemanticWorld, x: number, y: number): boolean {
+  return inBounds(semantic.width, semantic.height, x, y) && semantic.layers.walkability[y * semantic.width + x] === 1;
 }
 
 function pointInPoiFootprint(poi: WorldPoi, x: number, y: number): boolean {
@@ -1733,80 +580,47 @@ function pointInPoiFootprint(poi: WorldPoi, x: number, y: number): boolean {
   return x >= poi.x - radius && x <= poi.x + radius && y >= poi.y - radius && y <= poi.y + radius;
 }
 
-function carveLinePath(from: WorldVec, to: WorldVec): WorldVec[] {
-  const path: WorldVec[] = [];
-  let x = from.x;
-  let y = from.y;
-  path.push({ x, y });
-  while (x !== to.x || y !== to.y) {
-    const dx = to.x - x;
-    const dy = to.y - y;
-    if (Math.abs(dx) >= Math.abs(dy) && dx !== 0) x += Math.sign(dx);
-    else if (dy !== 0) y += Math.sign(dy);
-    path.push({ x, y });
+function pickByNoise(ids: WorldTileId[], seed: string, salt: string, x: number, y: number, weights?: number[]): WorldTileId {
+  const value = hashNoise(`${seed}:${salt}`, x, y);
+  if (!weights?.length) return ids[Math.floor(value * ids.length) % ids.length];
+  let total = 0;
+  for (const weight of weights) total += weight;
+  let cursor = value * total;
+  for (let i = 0; i < ids.length; i += 1) {
+    cursor -= weights[i] ?? 0;
+    if (cursor <= 0) return ids[i];
   }
-  return path;
+  return ids[0];
 }
 
-function setWorldTile(tiles: WorldTileId[][], biomes: WorldBiome[][], x: number, y: number, tile: WorldTileId, biome?: WorldBiome) {
-  if (!tiles[y]?.[x]) return;
-  tiles[y][x] = tile;
-  biomes[y][x] = biome ?? WORLD_TILES[tile].biome;
-}
-
-function pickByNoise(pool: readonly WorldTileId[], seed: string, x: number, y: number): WorldTileId {
-  return pool[Math.floor(hashNoise(`${seed}:pick`, x, y) * pool.length) % pool.length];
-}
-
-function isWaterTile(tile?: WorldTileId): boolean {
-  return worldTileHasTag(tile, "water");
+function isWaterTile(tile: WorldTileId | undefined): boolean {
+  return !!tile && WORLD_TILES[tile]?.biome === "water";
 }
 
 function neighbors4(x: number, y: number): WorldVec[] {
   return [
+    { x, y: y - 1 },
     { x: x + 1, y },
-    { x: x - 1, y },
     { x, y: y + 1 },
-    { x, y: y - 1 }
+    { x: x - 1, y }
   ];
 }
 
-function neighbors8(x: number, y: number): WorldVec[] {
-  return [
-    ...neighbors4(x, y),
-    { x: x + 1, y: y + 1 },
-    { x: x - 1, y: y - 1 },
-    { x: x + 1, y: y - 1 },
-    { x: x - 1, y: y + 1 }
-  ];
-}
-
-function diagonalNeighbors(x: number, y: number): WorldVec[] {
-  return [
-    { x: x + 1, y: y + 1 },
-    { x: x - 1, y: y - 1 },
-    { x: x + 1, y: y - 1 },
-    { x: x - 1, y: y + 1 }
-  ];
-}
-
-function cardinalSandNeighborCount(tiles: WorldTileId[][], x: number, y: number): number {
-  return neighbors4(x, y).filter((next) => isBeachTile(tiles[next.y]?.[next.x])).length;
-}
-
-function cardinalWaterNeighborCount(tiles: WorldTileId[][], x: number, y: number): number {
-  return neighbors4(x, y).filter((next) => isWaterTile(tiles[next.y]?.[next.x])).length;
+function carveLinePath(from: WorldVec, to: WorldVec): WorldVec[] {
+  const path: WorldVec[] = [];
+  let x = from.x;
+  let y = from.y;
+  const steps = Math.max(Math.abs(to.x - from.x), Math.abs(to.y - from.y), 1);
+  for (let step = 0; step <= steps; step += 1) {
+    const t = step / steps;
+    x = Math.round(from.x + (to.x - from.x) * t);
+    y = Math.round(from.y + (to.y - from.y) * t);
+    const current = { x, y };
+    if (!path.some((cell) => cell.x === current.x && cell.y === current.y)) path.push(current);
+  }
+  return path;
 }
 
 function inBounds(width: number, height: number, x: number, y: number): boolean {
   return x >= 0 && y >= 0 && x < width && y < height;
-}
-
-function posKey(pos: WorldVec): string {
-  return `${pos.x},${pos.y}`;
-}
-
-function parseKey(key: string): WorldVec {
-  const [x, y] = key.split(",").map((value) => Number(value));
-  return { x, y };
 }

@@ -22,8 +22,8 @@ The player starts in Greenhaven on a seeded archipelago overworld, explores isla
 
 ## High-Level Content Structure
 
-- Islands/towns: Greenhaven, Coralreach, Ashfang Isle/Ashfang Camp, Elderleaf, Starfall Gate.
-- Dungeons: Mossy Cave, Coralreach Ruins, Ashfang Keep, Skyglass Tower, Eclipse Spire.
+- Islands/towns: Greenhaven, Coralreach, Frostmere/Frostmere Haven, Highspire/Highspire Camp, Starfall Gate.
+- Dungeons: Mossy Cave, Coralreach Ruins, Stonefall Keep (`ashenKeep`), Skyglass Tower, Eclipse Spire.
 - Systems: title/new/load, seeded archipelago overworld, harbor travel, landmarks/points of interest, towns, procedural dungeons, menu/status/items/magic/equipment/settings, battle, shops, inns, clinics, game over, ending.
 - Current art/audio: PNG/JPEG assets are loaded from `assets/`, `assets_v2/`, and checked-in runtime atlases under `src/assets/world/`, with generated code fallbacks still present. Audio remains generated in code.
 

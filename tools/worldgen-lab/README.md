@@ -1,6 +1,6 @@
 # World Generator Lab
 
-World Generator Lab is an isolated development utility for prototyping the next overworld generation direction. It is not part of the Phaser runtime and does not replace the current game world generator.
+World Generator Lab is an isolated development utility for previewing the semantic overworld generator. Its PNG/report renderer stays outside Phaser, but the generator core now lives in `src/world/semantic/` and is shared with the active game runtime.
 
 The lab starts with semantic map generation:
 
