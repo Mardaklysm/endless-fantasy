@@ -8,6 +8,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "test": "node tools/worldgen/test_worldgen.mjs",
+    "island:kernel": "node tools/island-kernel-lab/islandKernelLab.mjs",
     "debug:worldgen": "node tools/worldgen/write_worldgen_debug.mjs",
     "import:atlas-v3": "node tools/art_import/import_atlas_v3.mjs",
     "import:world-objects": "node tools/art_import/import_world_objects.mjs",
@@ -17,6 +18,7 @@
     "phaser": "^3.90.0"
   },
   "devDependencies": {
+    "pngjs": "^7.0.0",
     "typescript": "^6.0.3",
     "vite": "^8.0.16"
   }

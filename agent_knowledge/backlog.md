@@ -28,6 +28,7 @@ This backlog is practical project memory, not a full design document. Keep it sh
 - Dungeon/city tiles are wired through the active `src/assets/world/dungeon_atlas.png` sheet; older individual dungeon PNGs remain fallback only.
 - Dungeon/city atlas rendering now uses weighted base/accent selection; future dungeon polish should focus on room dressing and clearer wall/floor transition art rather than adding more evenly random tile variants.
 - Keep the archived classic tileset pack out of active runtime unless a future task explicitly reopens that direction. Active terrain should continue to use only non-empty `atlas_v3` cells.
+- Before replacing or refactoring runtime island/world rendering with generated Greenhaven kernel art, vet candidate kernels with `npm run island:kernel`; the lab is only a preview tool until a separate integration task is approved.
 
 ## Gameplay Gaps
 

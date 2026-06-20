@@ -26,6 +26,10 @@ Reusable scripts live in `tools/art_import/`:
 - `import_world_atlas.mjs`: legacy importer for the older final PNG source `C:\Users\Marku\Downloads\master_overworld_tileset_atlas_10x10.png`. It can still recreate `src/assets/world/world_atlas.normalized.png` and debug atlas outputs, but that 10x10 generated atlas is no longer active runtime terrain.
 - `import_classic_world_tileset.mjs`: archived importer for the complex classic sheet `C:\Users\Marku\Downloads\57105.png`. The classic sheet is not active runtime terrain.
 
+Independent art preview tools:
+
+- `tools/island-kernel-lab/islandKernelLab.mjs` runs through `npm run island:kernel -- --input <png>`. It is a standalone PNG slicing/composition lab for generated Greenhaven island kernels and is not part of Phaser runtime, current worldgen, or the active map renderer.
+
 Manual crop maps live in `tools/art_import/crop_maps/`. The active overworld uses only the fixed 8x8 `atlas_v3` path, not the old crop-map/JPEG normalization path, the legacy 10x10 atlas, or the classic special sheet.
 
 The source folder `D:\Projects\new_artwork` contained 63 PNGs and no ZIPs. No extraction into `D:\Projects\new_artwork_extracted` was needed.
@@ -80,6 +84,7 @@ Legacy/reference world atlas:
 - Active pier atlas: source `D:\Projects\new_artwork\pier_atlas.jpeg`, runtime `src/assets/world/pier_atlas.png`, 1024x1024 PNG, 4 columns x 4 rows, 256x256 logical cells.
 - Active world object atlas: source `D:\Projects\new_artwork\world_objects_atlas.jpeg`, runtime `src/assets/world/world_objects.png`, 1024x1024 transparent PNG, 8 columns x 8 rows, 128x128 logical cells, 64 overlay object cells.
 - Active dungeon atlas: source `D:\Projects\new_artwork\dungeon_atlas.jpeg`, runtime `src/assets/world/dungeon_atlas.png`, 1024x1024 opaque PNG, 8 columns x 8 rows, 128x128 logical cells, 64 dungeon/city cells.
+- Greenhaven island kernel lab format: source PNGs are 1152x1152, 9 columns x 9 rows, 128x128 logical cells. Generated lab previews under `tmp/island-kernel-lab/` are disposable and should not be committed.
 - Legacy world atlas: 10 columns x 10 rows, 256x256 cells, 2560x2560 opaque PNG. It is not active gameplay terrain.
 - V2 town tiles: 32x32 opaque PNGs.
 - Class character sheets: 5 columns x 2 rows, 704x512 cells, 3520x1024 sheet size, transparent PNG. Manifest anchor is bodyCenterX=352 and feetBaselineY=464.

@@ -121,6 +121,14 @@ npm run import:dungeon-atlas
 
 Check `src/assets/world/dungeon_atlas.png`, `src/assets/world/dungeonAtlas.manifest.json`, and `docs/debug/dungeon-atlas/dungeon-atlas-import-report.md`. The current importer uses ImageMagick resize only and keeps the sheet opaque. Do not run rembg or transparency removal on this atlas.
 
+For generated Greenhaven island kernel art, use Island Kernel Lab before any runtime integration work:
+
+```powershell
+npm run island:kernel -- --input "D:\island_kernel_greenhaven_v1_1152.png" --out "tmp/island-kernel-lab/greenhaven"
+```
+
+The lab validates the official 9x9, 128px-cell, 1152x1152 PNG format, writes a sliced debug sheet, recomposes the kernel exactly, and produces disposable island and archipelago previews under `tmp/island-kernel-lab/`.
+
 For the legacy 10x10 overworld atlas, run only if intentionally regenerating that archived asset:
 
 ```powershell
