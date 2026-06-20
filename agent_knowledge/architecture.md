@@ -37,6 +37,12 @@ D:\Projects\Endless Fantasy\
     main.ts
     style.css
     vite-env.d.ts
+  tools/
+    worldgen-lab/
+      worldgenLab.mjs
+      generator.mjs
+      renderPreview.mjs
+      README.md
 ```
 
 Ignored/generated folders:
@@ -75,6 +81,7 @@ Ignored/generated folders:
 - `src/world/seededRng.ts`: deterministic RNG/hash/noise helpers shared by map and dungeon generation.
 - `src/world/worldGenerator.ts`: seeded deterministic `atlas_v3_archipelago_world` generation. It starts from ocean, builds three irregular islands (Greenhaven, Coralreach, Ashfang Isle), tracks island metadata/tile maps, places towns/harbors/dungeons/landmarks as overlays on existing valid terrain, carves deduped road logic to approach tiles outside POI footprints, emits per-cell N/E/S/W `roadVisuals` masks with source-tile rotation for missing atlas orientations, uses dead-end caps for non-town road endpoints and bottom-only town endpoint connectors, enforces a continuous beach ring between land and water after terrain/road placement, records sea routes and dock markers, and validates island-local reachability, road visual-mask consistency, coastline/beach invariants, POI overlay placement, and tree clustering. Greenhaven/Coralreach use `medium_grass` as the dominant grass with clustered variants instead of per-tile random grass, and connected normal woodland terrain patches are normalized to one forest tile style.
 - `src/world/dungeonGenerator.ts`: deterministic room-and-corridor dungeon floor generation from `worldSeed + dungeonId + tier`, including entrance/stairs, chests, switch/gate, and boss placement.
+- `tools/worldgen-lab/`: standalone Node/pngjs prototype for the reset overworld direction. It generates semantic masks/fields, debug PNGs, a placeholder rendered preview, semantic JSON, and design/asset reports without importing Phaser or changing active runtime worldgen.
 - `SynthAudio`: WebAudio helper for generated music loops and sound effects.
 - `CrystalOathScene`: main Phaser scene containing game state, input handling, map movement, battles, menus, save/load, and rendering.
 - Input helpers: `isUp`, `isDown`, `isLeft`, `isRight`, `isConfirm`, `isCancel`, `keyDirection`.

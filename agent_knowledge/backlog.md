@@ -14,6 +14,7 @@ This backlog is practical project memory, not a full design document. Keep it sh
 - Add v2-quality art for later-region normal enemies not covered by the first twelve common roster crops.
 - Archipelago generation now uses real atlas-v3 road, beach/coast, shallow-water, forest, and volcanic support tiles, pier-atlas dock overlays, and the transparent world-objects atlas for generated dungeons, landmarks, harbors, reefs, wrecks, barrels, whirlpools, and clustered palm/normal tree overlays. Sea route dots remain lightweight generated overlays.
 - Overworld terrain selection now uses dominant base tiles with lower-frequency patches and avoids random fixed-direction coast stamps. Future coastline polish should add direction-aware transition placement or new neutral coast tiles, not map-level pixel blending.
+- Use `tools/worldgen-lab/` to prototype the reset overworld direction before touching runtime worldgen. The intended direction is semantic masks/fields plus overlay rendering, not a giant coastline-transition tileset.
 - Consider dynamic loading/code splitting for large JPEG battle backgrounds and large normalized class sheets if bundle size becomes painful.
 
 ## Asset Manifest Follow-Up
@@ -29,6 +30,7 @@ This backlog is practical project memory, not a full design document. Keep it sh
 - Dungeon/city atlas rendering now uses weighted base/accent selection; future dungeon polish should focus on room dressing and clearer wall/floor transition art rather than adding more evenly random tile variants.
 - Keep the archived classic tileset pack out of active runtime unless a future task explicitly reopens that direction. Active terrain should continue to use only non-empty `atlas_v3` cells.
 - Before replacing or refactoring runtime island/world rendering with generated Greenhaven kernel art, vet candidate kernels with `npm run island:kernel`; the lab is only a preview tool until a separate integration task is approved.
+- Before replacing the active atlas-v3 archipelago generator, iterate in `npm run worldgen:lab` and define final fill/brush/object assets from `worldgen_asset_requirements.md`.
 
 ## Gameplay Gaps
 

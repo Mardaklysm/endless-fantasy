@@ -129,6 +129,14 @@ npm run island:kernel -- --input "D:\island_kernel_greenhaven_v1_1152.png" --out
 
 The lab validates the official 9x9, 128px-cell, 1152x1152 PNG format, writes a sliced debug sheet, recomposes the kernel exactly, and produces disposable island and archipelago previews under `tmp/island-kernel-lab/`.
 
+For the reset semantic overworld direction, use World Generator Lab:
+
+```powershell
+npm run worldgen:lab -- --seed test-greenhaven --out tmp/worldgen-lab/test-greenhaven
+```
+
+Check `semantic_map_debug.png`, `distance_bands_debug.png`, `elevation_debug.png`, `rivers_roads_debug.png`, `rendered_world_preview.png`, `semantic_world.json`, `worldgen_algorithm_report.md`, and `worldgen_asset_requirements.md`. These are disposable outputs under `tmp/worldgen-lab/` and are not runtime assets.
+
 For the legacy 10x10 overworld atlas, run only if intentionally regenerating that archived asset:
 
 ```powershell

@@ -29,6 +29,7 @@ Reusable scripts live in `tools/art_import/`:
 Independent art preview tools:
 
 - `tools/island-kernel-lab/islandKernelLab.mjs` runs through `npm run island:kernel -- --input <png>`. It is a standalone PNG slicing/composition lab for generated Greenhaven island kernels and is not part of Phaser runtime, current worldgen, or the active map renderer.
+- `tools/worldgen-lab/worldgenLab.mjs` runs through `npm run worldgen:lab -- --seed <seed> --out <dir>`. It is a standalone semantic overworld-generation lab, not Phaser runtime. It previews the reset world direction using generated masks/fields first, then placeholder rendering and asset requirement reports.
 
 Manual crop maps live in `tools/art_import/crop_maps/`. The active overworld uses only the fixed 8x8 `atlas_v3` path, not the old crop-map/JPEG normalization path, the legacy 10x10 atlas, or the classic special sheet.
 
@@ -84,6 +85,7 @@ Legacy/reference world atlas:
 - Active pier atlas: source `D:\Projects\new_artwork\pier_atlas.jpeg`, runtime `src/assets/world/pier_atlas.png`, 1024x1024 PNG, 4 columns x 4 rows, 256x256 logical cells.
 - Active world object atlas: source `D:\Projects\new_artwork\world_objects_atlas.jpeg`, runtime `src/assets/world/world_objects.png`, 1024x1024 transparent PNG, 8 columns x 8 rows, 128x128 logical cells, 64 overlay object cells.
 - Active dungeon atlas: source `D:\Projects\new_artwork\dungeon_atlas.jpeg`, runtime `src/assets/world/dungeon_atlas.png`, 1024x1024 opaque PNG, 8 columns x 8 rows, 128x128 logical cells, 64 dungeon/city cells.
+- World Generator Lab default preview model: 192x120 semantic cells rendered at 6px per cell to disposable PNGs under `tmp/worldgen-lab/`.
 - Greenhaven island kernel lab format: source PNGs are 1152x1152, 9 columns x 9 rows, 128x128 logical cells. Generated lab previews under `tmp/island-kernel-lab/` are disposable and should not be committed.
 - Legacy world atlas: 10 columns x 10 rows, 256x256 cells, 2560x2560 opaque PNG. It is not active gameplay terrain.
 - V2 town tiles: 32x32 opaque PNGs.
@@ -104,6 +106,7 @@ Legacy/reference world atlas:
 - Active dungeon/city slicing starts from exact 8x8 atlas math from `dungeonAtlas.manifest.json`, then applies the shared source inset: `sx = tile.source.x + 3`, `sy = tile.source.y + 3`, `sw = tile.source.width - 6`, `sh = tile.source.height - 6`. Do not run rembg or chroma-key this opaque atlas.
 - Dungeons and town interiors should not pick all floor/wall atlas variants evenly. Keep one dominant base tile per theme and use sparse accents. Small dungeon maps should be centered, and unused dungeon filler should render as void unless adjacent to carved rooms/corridors.
 - Generated overworld terrain should avoid using fixed-orientation coast/foam cells as random stamps. Keep the single bright `beach_sand` tile as the hard land/water buffer and simple shallow water unless a future task implements direction-aware coast tile selection.
+- The reset overworld direction should start from semantic masks/fields: archipelago land masks, shallow-water halos, beach bands, grass/sand/ice biomes, elevation/ridges, river/road overlays, forest/mountain object overlays, and POI placement. Do not start this direction by designing a huge transition tileset.
 - Roads, beaches/coasts, shallow water, forests/jungle, and volcanic support now have real atlas cells. Generated fallback art still remains for missing textures and for lightweight non-atlas overlays such as sea route dots and optional ocean details.
 - Generated POIs carry optional `objectId` values, ocean object overlays are seed-derived from reef/detail positions, and palm/normal tree groves use `world_objects` overlays instead of palm-looking terrain tiles. `drawLocationIcon` and `drawWorldOverlays` prefer `world_objects` for those objects, then fall back to older marker textures or generated Graphics.
 - Do not implement runtime map-level seam blending for `atlas_v3`. Runtime and debug previews should crop valid source cells inward and must not mutate cached map pixels by mixing water/grass or other neighboring terrain colors after placement.
