@@ -204,7 +204,7 @@ Expected:
 - Confirm the overworld leader remains readable when standing on a town/location marker.
 - Confirm `atlas_v3` terrain uses the new coast, road, shallow-water, forest, and mountain cells; dark seams can come from actual atlas cell edge pixels and should not be debug grid overlays.
 - Confirm water blocks movement while generated roads suppress encounters and harbors enable boat travel.
-- Confirm normal overworld terrain is the generated mask/field texture: shallow-water halos surround land, beaches sit between water and inland terrain, and grass/sand/ice boundaries are softened instead of hard square biome tiles.
+- Confirm normal overworld terrain is the generated crisp semantic texture: water/beach/grass/sand/ice interiors remain readable and pixel-like, shallow-water halos surround land, beaches sit between water and inland terrain, and only actual terrain boundaries receive narrow pixel-art transition overlays.
 - Use F6 semantic debug overlays to inspect raw square tiles, semantic masks, distance bands, walkability, overlay policy, mountain candidates/accepted cells, forest soft-terrain cells, island themes, POI clearance, roads, and rivers.
 - At Greenhaven Harbor, confirm Coralreach costs 10 gold, deducts gold, moves the player to Coralreach harbor, and can return by harbor.
 - Confirm new games produce different world seeds and load restores the same saved world.

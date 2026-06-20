@@ -21,25 +21,40 @@ export interface SemanticTerrainRenderPlan {
 }
 
 type Rgb = [number, number, number];
+type EdgeSide = "n" | "e" | "s" | "w";
 
 const COLORS = {
-  deepOcean: [18, 65, 103] as Rgb,
-  deepOceanDark: [11, 46, 82] as Rgb,
-  shallow: [54, 153, 184] as Rgb,
-  shallowLight: [83, 187, 205] as Rgb,
-  foam: [226, 251, 244] as Rgb,
-  wetSand: [198, 170, 111] as Rgb,
-  beach: [232, 204, 138] as Rgb,
-  beachLight: [247, 228, 170] as Rgb,
-  grass: [87, 163, 76] as Rgb,
-  grassLight: [110, 184, 87] as Rgb,
-  grassDark: [61, 128, 62] as Rgb,
-  sand: [196, 163, 91] as Rgb,
-  sandLight: [219, 190, 116] as Rgb,
-  ice: [205, 235, 236] as Rgb,
-  iceBlue: [164, 211, 226] as Rgb,
-  edgeShadow: [116, 88, 57] as Rgb
+  deepOcean: [17, 71, 111] as Rgb,
+  deepOceanDark: [9, 43, 78] as Rgb,
+  deepWave: [33, 94, 134] as Rgb,
+  shallow: [48, 145, 174] as Rgb,
+  shallowLight: [91, 190, 208] as Rgb,
+  shallowDark: [32, 111, 151] as Rgb,
+  foam: [230, 252, 239] as Rgb,
+  wetSand: [190, 163, 101] as Rgb,
+  beach: [229, 202, 133] as Rgb,
+  beachLight: [245, 224, 162] as Rgb,
+  beachDark: [182, 146, 82] as Rgb,
+  grass: [83, 156, 71] as Rgb,
+  grassLight: [107, 180, 82] as Rgb,
+  grassDark: [54, 121, 55] as Rgb,
+  grassEdge: [72, 136, 55] as Rgb,
+  sand: [194, 160, 87] as Rgb,
+  sandLight: [218, 188, 112] as Rgb,
+  sandDark: [158, 126, 67] as Rgb,
+  ice: [203, 234, 235] as Rgb,
+  iceLight: [228, 247, 247] as Rgb,
+  iceBlue: [151, 203, 222] as Rgb,
+  iceEdge: [126, 178, 199] as Rgb,
+  edgeShadow: [106, 82, 55] as Rgb
 };
+
+const DIRECTIONS: { side: EdgeSide; dx: number; dy: number }[] = [
+  { side: "n", dx: 0, dy: -1 },
+  { side: "e", dx: 1, dy: 0 },
+  { side: "s", dx: 0, dy: 1 },
+  { side: "w", dx: -1, dy: 0 }
+];
 
 export function createSemanticTerrainTexture(scene: Phaser.Scene, world: SemanticWorld, options: SemanticTerrainRenderOptions): string {
   const textureKey = options.textureKey ?? `semantic-terrain-${world.seed}`;
@@ -58,13 +73,11 @@ export function createSemanticTerrainCanvas(world: SemanticWorld, options: Seman
   if (!ctx) throw new Error("Unable to create semantic terrain canvas.");
   ctx.imageSmoothingEnabled = false;
 
-  for (let y = 0; y < plan.height; y += plan.pixelStep) {
-    for (let x = 0; x < plan.width; x += plan.pixelStep) {
-      const color = terrainColorAtPixel(world, x + plan.pixelStep / 2, y + plan.pixelStep / 2, plan.tileSize);
-      ctx.fillStyle = rgbCss(color);
-      ctx.fillRect(x, y, plan.pixelStep, plan.pixelStep);
-    }
-  }
+  drawTerrainFill(ctx, world, plan);
+  drawShallowEdgeOverlay(ctx, world, plan);
+  drawCoastEdgeOverlay(ctx, world, plan);
+  drawBeachInlandEdgeOverlay(ctx, world, plan);
+  drawBiomeBoundaryOverlay(ctx, world, plan);
 
   return canvas;
 }
@@ -99,182 +112,315 @@ export function describeSemanticTerrainRenderPlan(world: SemanticWorld, options:
   };
 }
 
-function terrainColorAtPixel(world: SemanticWorld, px: number, py: number, tileSize: number): Rgb {
-  const gx = px / tileSize - 0.5;
-  const gy = py / tileSize - 0.5;
-  const land = sampleScalar(world, world.layers.landMask, gx, gy);
-  const dLand = sampleScalar(world, world.layers.distanceToLand, gx, gy);
-  const dWater = sampleScalar(world, world.layers.distanceToWater, gx, gy);
-  const noise = sampleNoise(world.seed, gx, gy);
-  const landThreshold = 0.5 + (noise - 0.5) * 0.16;
-  const isLand = land > landThreshold;
-  const coastBand = clamp01(1 - Math.abs(land - 0.5) / 0.2);
+function drawTerrainFill(ctx: CanvasRenderingContext2D, world: SemanticWorld, plan: SemanticTerrainRenderPlan) {
+  ctx.fillStyle = rgbCss(COLORS.deepOceanDark);
+  ctx.fillRect(0, 0, plan.width, plan.height);
 
-  if (!isLand) {
-    const shallow = clamp01(1 - dLand / 5.2) * 0.82 + clamp01((land - 0.12) / 0.4) * 0.34;
-    let color = mixColor(COLORS.deepOceanDark, COLORS.deepOcean, 0.66 + noise * 0.2);
-    color = mixColor(color, mixColor(COLORS.shallow, COLORS.shallowLight, noise * 0.5), clamp01(shallow));
-    if (coastBand > 0.2) color = mixColor(color, COLORS.foam, coastBand * 0.38);
-    return addNoise(color, noise, 8);
+  forEachCell(world, (x, y, i) => {
+    const color = baseColorForCell(world, i);
+    const sx = x * plan.tileSize;
+    const sy = y * plan.tileSize;
+    ctx.fillStyle = rgbCss(color);
+    ctx.fillRect(sx, sy, plan.tileSize, plan.tileSize);
+    drawCellPattern(ctx, world, x, y, i, plan);
+  });
+}
+
+function baseColorForCell(world: SemanticWorld, i: number): Rgb {
+  if (!world.layers.landMask[i]) {
+    return world.layers.waterClass[i] === SEMANTIC_WATER.SHALLOW ? COLORS.shallow : COLORS.deepOcean;
+  }
+  switch (world.layers.biome[i]) {
+    case SEMANTIC_BIOME.BEACH:
+      return COLORS.beach;
+    case SEMANTIC_BIOME.SAND:
+      return COLORS.sand;
+    case SEMANTIC_BIOME.ICE:
+      return COLORS.ice;
+    case SEMANTIC_BIOME.GRASS:
+    default:
+      return COLORS.grass;
+  }
+}
+
+function drawCellPattern(ctx: CanvasRenderingContext2D, world: SemanticWorld, x: number, y: number, i: number, plan: SemanticTerrainRenderPlan) {
+  const unit = plan.pixelStep;
+  const sx = x * plan.tileSize;
+  const sy = y * plan.tileSize;
+  const n0 = hashNoise(`${world.seed}:terrain-crisp`, x, y, 0);
+
+  if (!world.layers.landMask[i]) {
+    const shallow = world.layers.waterClass[i] === SEMANTIC_WATER.SHALLOW;
+    ctx.fillStyle = rgbaCss(shallow ? COLORS.shallowLight : COLORS.deepWave, shallow ? 0.32 : 0.24);
+    const waves = shallow ? 2 : 3;
+    for (let n = 0; n < waves; n += 1) {
+      const noise = hashNoise(`${world.seed}:terrain-water`, x, y, n);
+      const px = sx + snap(Math.floor(noise * plan.tileSize), unit);
+      const py = sy + snap(Math.floor(hashNoise(`${world.seed}:terrain-water-y`, x, y, n) * plan.tileSize), unit);
+      const length = Math.max(unit * 2, Math.min(plan.tileSize - unit, unit * (2 + Math.floor(noise * 3))));
+      ctx.fillRect(px, py, length, unit);
+    }
+    if (n0 > 0.74) {
+      ctx.fillStyle = rgbaCss(shallow ? COLORS.shallowDark : COLORS.deepOceanDark, 0.22);
+      ctx.fillRect(sx + unit, sy + plan.tileSize - unit * 2, plan.tileSize - unit * 2, unit);
+    }
+    return;
   }
 
-  const weights = biomeWeights(world, gx, gy);
-  const nearCoastBeach = clamp01(1 - dWater / 2.2);
-  weights.beach = Math.max(weights.beach, nearCoastBeach * 0.86);
-  const total = weights.beach + weights.grass + weights.sand + weights.ice || 1;
-  const normalized = {
-    beach: weights.beach / total,
-    grass: weights.grass / total,
-    sand: weights.sand / total,
-    ice: weights.ice / total
-  };
-
-  let color = weightedColor([
-    [mixColor(COLORS.beach, COLORS.beachLight, noise * 0.55), normalized.beach],
-    [mixColor(COLORS.grassDark, COLORS.grassLight, 0.35 + noise * 0.45), normalized.grass],
-    [mixColor(COLORS.sand, COLORS.sandLight, noise * 0.56), normalized.sand],
-    [mixColor(COLORS.iceBlue, COLORS.ice, 0.42 + noise * 0.4), normalized.ice]
-  ]);
-
-  if (normalized.beach > 0.18 && normalized.beach < 0.74) {
-    color = mixColor(color, COLORS.wetSand, 0.16);
+  const biome = world.layers.biome[i];
+  if (biome === SEMANTIC_BIOME.GRASS) {
+    ctx.fillStyle = rgbaCss(n0 > 0.5 ? COLORS.grassLight : COLORS.grassDark, 0.32);
+    for (let n = 0; n < 4; n += 1) {
+      const px = sx + snap(Math.floor(hashNoise(`${world.seed}:terrain-grass-x`, x, y, n) * plan.tileSize), unit);
+      const py = sy + snap(Math.floor(hashNoise(`${world.seed}:terrain-grass-y`, x, y, n) * plan.tileSize), unit);
+      ctx.fillRect(px, py, unit * (n % 2 === 0 ? 2 : 1), unit);
+    }
+    return;
   }
-  if (coastBand > 0.18) {
-    color = mixColor(color, COLORS.foam, coastBand * 0.22);
-    color = mixColor(color, COLORS.edgeShadow, coastBand * 0.08);
+
+  if (biome === SEMANTIC_BIOME.BEACH || biome === SEMANTIC_BIOME.SAND) {
+    ctx.fillStyle = rgbaCss(biome === SEMANTIC_BIOME.BEACH ? COLORS.beachLight : COLORS.sandLight, 0.25);
+    for (let n = 0; n < 3; n += 1) {
+      const px = sx + snap(Math.floor(hashNoise(`${world.seed}:terrain-sand-x`, x, y, n) * plan.tileSize), unit);
+      const py = sy + snap(Math.floor(hashNoise(`${world.seed}:terrain-sand-y`, x, y, n) * plan.tileSize), unit);
+      ctx.fillRect(px, py, unit, unit);
+    }
+    if (n0 < 0.34) {
+      ctx.fillStyle = rgbaCss(biome === SEMANTIC_BIOME.BEACH ? COLORS.beachDark : COLORS.sandDark, 0.24);
+      ctx.fillRect(sx + unit * 2, sy + unit * 4, unit * 2, unit);
+    }
+    return;
   }
-  const boundaryStrength = 1 - Math.max(normalized.beach, normalized.grass, normalized.sand, normalized.ice);
-  if (boundaryStrength > 0.22) color = mixColor(color, COLORS.beachLight, boundaryStrength * 0.16);
-  return addNoise(color, noise, 10);
+
+  if (biome === SEMANTIC_BIOME.ICE) {
+    ctx.fillStyle = rgbaCss(n0 > 0.5 ? COLORS.iceLight : COLORS.iceBlue, 0.28);
+    for (let n = 0; n < 3; n += 1) {
+      const px = sx + snap(Math.floor(hashNoise(`${world.seed}:terrain-ice-x`, x, y, n) * plan.tileSize), unit);
+      const py = sy + snap(Math.floor(hashNoise(`${world.seed}:terrain-ice-y`, x, y, n) * plan.tileSize), unit);
+      ctx.fillRect(px, py, unit * 2, unit);
+      if (unit > 1) ctx.fillRect(px + unit, py + unit, unit, unit);
+    }
+  }
 }
 
-function biomeWeights(world: SemanticWorld, gx: number, gy: number) {
-  return {
-    beach: sampleBiome(world, gx, gy, SEMANTIC_BIOME.BEACH),
-    grass: sampleBiome(world, gx, gy, SEMANTIC_BIOME.GRASS),
-    sand: sampleBiome(world, gx, gy, SEMANTIC_BIOME.SAND),
-    ice: sampleBiome(world, gx, gy, SEMANTIC_BIOME.ICE)
-  };
+function drawShallowEdgeOverlay(ctx: CanvasRenderingContext2D, world: SemanticWorld, plan: SemanticTerrainRenderPlan) {
+  const width = Math.max(1, plan.pixelStep);
+  forEachCell(world, (x, y, i) => {
+    if (world.layers.landMask[i] || world.layers.waterClass[i] !== SEMANTIC_WATER.SHALLOW) return;
+    for (const direction of DIRECTIONS) {
+      const nx = x + direction.dx;
+      const ny = y + direction.dy;
+      if (!inBounds(world, nx, ny)) continue;
+      const ni = indexOf(world, nx, ny);
+      if (!world.layers.landMask[ni] && world.layers.waterClass[ni] !== SEMANTIC_WATER.SHALLOW) {
+        drawDitheredEdgeStrip(ctx, world, x, y, direction.side, COLORS.shallowLight, 0.34, width, plan, 10);
+      }
+    }
+  });
 }
 
-function sampleBiome(world: SemanticWorld, gx: number, gy: number, biome: number): number {
-  return sampleVirtualScalar(world, gx, gy, (i) => (world.layers.biome[i] === biome ? 1 : 0));
+function drawCoastEdgeOverlay(ctx: CanvasRenderingContext2D, world: SemanticWorld, plan: SemanticTerrainRenderPlan) {
+  const wetWidth = Math.max(2, plan.pixelStep);
+  const foamWidth = Math.max(1, Math.floor(plan.pixelStep / 2) || 1);
+  forEachCell(world, (x, y, i) => {
+    if (!world.layers.landMask[i]) return;
+    for (const direction of DIRECTIONS) {
+      const nx = x + direction.dx;
+      const ny = y + direction.dy;
+      if (!inBounds(world, nx, ny)) continue;
+      const ni = indexOf(world, nx, ny);
+      if (world.layers.landMask[ni]) continue;
+      drawDitheredEdgeStrip(ctx, world, x, y, direction.side, COLORS.wetSand, 0.5, wetWidth, plan, 20);
+      drawDitheredEdgeStrip(ctx, world, nx, ny, oppositeSide(direction.side), COLORS.foam, 0.78, foamWidth, plan, 21);
+      drawDitheredEdgeStrip(ctx, world, nx, ny, oppositeSide(direction.side), COLORS.shallowLight, 0.24, wetWidth + foamWidth, plan, 22);
+    }
+  });
 }
 
-function sampleScalar(world: SemanticWorld, array: ArrayLike<number>, gx: number, gy: number): number {
-  return sampleVirtualScalar(world, gx, gy, (i) => array[i]);
+function drawBeachInlandEdgeOverlay(ctx: CanvasRenderingContext2D, world: SemanticWorld, plan: SemanticTerrainRenderPlan) {
+  const width = Math.max(1, plan.pixelStep);
+  forEachCell(world, (x, y, i) => {
+    if (!world.layers.landMask[i]) return;
+    const biome = world.layers.biome[i];
+    for (const direction of DIRECTIONS) {
+      const nx = x + direction.dx;
+      const ny = y + direction.dy;
+      if (!inBounds(world, nx, ny)) continue;
+      const ni = indexOf(world, nx, ny);
+      if (!world.layers.landMask[ni]) continue;
+      const neighborBiome = world.layers.biome[ni];
+      if (biome === SEMANTIC_BIOME.BEACH && neighborBiome !== SEMANTIC_BIOME.BEACH) {
+        drawDitheredEdgeStrip(ctx, world, x, y, direction.side, COLORS.beachLight, 0.32, width, plan, 30);
+      }
+      if (biome !== SEMANTIC_BIOME.BEACH && neighborBiome === SEMANTIC_BIOME.BEACH) {
+        drawDitheredEdgeStrip(ctx, world, x, y, direction.side, biomeEdgeColor(biome), 0.34, width, plan, 31);
+      }
+    }
+  });
 }
 
-function sampleVirtualScalar(world: SemanticWorld, gx: number, gy: number, valueAt: (i: number) => number): number {
-  const x0 = Math.floor(gx);
-  const y0 = Math.floor(gy);
-  const tx = gx - x0;
-  const ty = gy - y0;
-  const v00 = valueAt(clampedIndex(world, x0, y0));
-  const v10 = valueAt(clampedIndex(world, x0 + 1, y0));
-  const v01 = valueAt(clampedIndex(world, x0, y0 + 1));
-  const v11 = valueAt(clampedIndex(world, x0 + 1, y0 + 1));
-  const top = lerp(v00, v10, tx);
-  const bottom = lerp(v01, v11, tx);
-  return lerp(top, bottom, ty);
+function drawBiomeBoundaryOverlay(ctx: CanvasRenderingContext2D, world: SemanticWorld, plan: SemanticTerrainRenderPlan) {
+  const width = Math.max(1, plan.pixelStep);
+  forEachCell(world, (x, y, i) => {
+    if (!world.layers.landMask[i]) return;
+    const biome = world.layers.biome[i];
+    if (biome === SEMANTIC_BIOME.BEACH) return;
+    for (const direction of DIRECTIONS) {
+      const nx = x + direction.dx;
+      const ny = y + direction.dy;
+      if (!inBounds(world, nx, ny)) continue;
+      const ni = indexOf(world, nx, ny);
+      if (!world.layers.landMask[ni]) continue;
+      const neighborBiome = world.layers.biome[ni];
+      if (neighborBiome === biome || neighborBiome === SEMANTIC_BIOME.BEACH) continue;
+      drawDitheredEdgeStrip(ctx, world, x, y, direction.side, biomeBoundaryColor(biome, neighborBiome), 0.28, width, plan, 40);
+    }
+  });
 }
 
-function clampedIndex(world: SemanticWorld, x: number, y: number): number {
-  const cx = Math.max(0, Math.min(world.width - 1, x));
-  const cy = Math.max(0, Math.min(world.height - 1, y));
-  return cy * world.width + cx;
+function drawDitheredEdgeStrip(
+  ctx: CanvasRenderingContext2D,
+  world: SemanticWorld,
+  x: number,
+  y: number,
+  side: EdgeSide,
+  color: Rgb,
+  alpha: number,
+  width: number,
+  plan: SemanticTerrainRenderPlan,
+  z: number
+) {
+  const stripWidth = Math.max(1, Math.min(width, Math.floor(plan.tileSize / 3)));
+  drawEdgeStrip(ctx, x, y, side, color, alpha * 0.45, stripWidth, plan.tileSize);
+  const unit = plan.pixelStep;
+  const segments = Math.max(1, Math.ceil(plan.tileSize / unit));
+  ctx.fillStyle = rgbaCss(color, alpha);
+  for (let s = 0; s < segments; s += 1) {
+    const noise = hashNoise(`${world.seed}:terrain-edge`, x * 7 + s, y * 11 + side.charCodeAt(0), z);
+    if (noise < 0.34) continue;
+    const length = unit * (noise > 0.78 ? 2 : 1);
+    const segmentWidth = Math.max(1, stripWidth - (noise > 0.62 ? 0 : Math.floor(stripWidth / 2)));
+    drawEdgeSegment(ctx, x, y, side, s * unit, length, segmentWidth, plan.tileSize);
+  }
 }
 
-function sampleNoise(seed: string, gx: number, gy: number): number {
-  const bx = Math.floor(gx * 2);
-  const by = Math.floor(gy * 2);
-  const tx = gx * 2 - bx;
-  const ty = gy * 2 - by;
-  const n00 = hashNoise(`${seed}:semantic-terrain`, bx, by);
-  const n10 = hashNoise(`${seed}:semantic-terrain`, bx + 1, by);
-  const n01 = hashNoise(`${seed}:semantic-terrain`, bx, by + 1);
-  const n11 = hashNoise(`${seed}:semantic-terrain`, bx + 1, by + 1);
-  return lerp(lerp(n00, n10, smooth(tx)), lerp(n01, n11, smooth(tx)), smooth(ty));
+function drawEdgeStrip(ctx: CanvasRenderingContext2D, x: number, y: number, side: EdgeSide, color: Rgb, alpha: number, width: number, tileSize: number) {
+  ctx.fillStyle = rgbaCss(color, alpha);
+  const sx = x * tileSize;
+  const sy = y * tileSize;
+  switch (side) {
+    case "n":
+      ctx.fillRect(sx, sy, tileSize, width);
+      break;
+    case "e":
+      ctx.fillRect(sx + tileSize - width, sy, width, tileSize);
+      break;
+    case "s":
+      ctx.fillRect(sx, sy + tileSize - width, tileSize, width);
+      break;
+    case "w":
+      ctx.fillRect(sx, sy, width, tileSize);
+      break;
+  }
+}
+
+function drawEdgeSegment(ctx: CanvasRenderingContext2D, x: number, y: number, side: EdgeSide, offset: number, length: number, width: number, tileSize: number) {
+  const sx = x * tileSize;
+  const sy = y * tileSize;
+  const clippedLength = Math.max(1, Math.min(length, tileSize - offset));
+  switch (side) {
+    case "n":
+      ctx.fillRect(sx + offset, sy, clippedLength, width);
+      break;
+    case "e":
+      ctx.fillRect(sx + tileSize - width, sy + offset, width, clippedLength);
+      break;
+    case "s":
+      ctx.fillRect(sx + offset, sy + tileSize - width, clippedLength, width);
+      break;
+    case "w":
+      ctx.fillRect(sx, sy + offset, width, clippedLength);
+      break;
+  }
+}
+
+function biomeEdgeColor(biome: number): Rgb {
+  switch (biome) {
+    case SEMANTIC_BIOME.SAND:
+      return COLORS.sandDark;
+    case SEMANTIC_BIOME.ICE:
+      return COLORS.iceEdge;
+    case SEMANTIC_BIOME.GRASS:
+    default:
+      return COLORS.grassEdge;
+  }
+}
+
+function biomeBoundaryColor(biome: number, neighborBiome: number): Rgb {
+  if (biome === SEMANTIC_BIOME.ICE || neighborBiome === SEMANTIC_BIOME.ICE) return COLORS.iceEdge;
+  if (biome === SEMANTIC_BIOME.SAND || neighborBiome === SEMANTIC_BIOME.SAND) return COLORS.sandDark;
+  return COLORS.grassDark;
 }
 
 function touchesDifferentBiome(world: SemanticWorld, x: number, y: number): boolean {
-  const i = y * world.width + x;
+  const i = indexOf(world, x, y);
   if (!world.layers.landMask[i]) return false;
   const biome = world.layers.biome[i];
-  return neighbors4(x, y).some((next) => {
-    if (!inBounds(world, next.x, next.y)) return false;
-    const ni = next.y * world.width + next.x;
+  return DIRECTIONS.some((direction) => {
+    const nx = x + direction.dx;
+    const ny = y + direction.dy;
+    if (!inBounds(world, nx, ny)) return false;
+    const ni = indexOf(world, nx, ny);
     return world.layers.landMask[ni] && world.layers.biome[ni] !== biome;
   });
 }
 
 function touchesLandWaterBoundary(world: SemanticWorld, x: number, y: number): boolean {
-  const i = y * world.width + x;
-  return neighbors4(x, y).some((next) => {
-    if (!inBounds(world, next.x, next.y)) return false;
-    const ni = next.y * world.width + next.x;
+  const i = indexOf(world, x, y);
+  return DIRECTIONS.some((direction) => {
+    const nx = x + direction.dx;
+    const ny = y + direction.dy;
+    if (!inBounds(world, nx, ny)) return false;
+    const ni = indexOf(world, nx, ny);
     return world.layers.landMask[i] !== world.layers.landMask[ni];
   });
 }
 
 function forEachCell(world: SemanticWorld, fn: (x: number, y: number, i: number) => void) {
   for (let y = 0; y < world.height; y += 1) {
-    for (let x = 0; x < world.width; x += 1) fn(x, y, y * world.width + x);
+    for (let x = 0; x < world.width; x += 1) fn(x, y, indexOf(world, x, y));
   }
 }
 
-function neighbors4(x: number, y: number) {
-  return [
-    { x, y: y - 1 },
-    { x: x + 1, y },
-    { x, y: y + 1 },
-    { x: x - 1, y }
-  ];
+function indexOf(world: SemanticWorld, x: number, y: number): number {
+  return y * world.width + x;
 }
 
 function inBounds(world: SemanticWorld, x: number, y: number): boolean {
   return x >= 0 && y >= 0 && x < world.width && y < world.height;
 }
 
-function weightedColor(entries: [Rgb, number][]): Rgb {
-  let total = 0;
-  const color: Rgb = [0, 0, 0];
-  for (const [entryColor, weight] of entries) {
-    total += weight;
-    color[0] += entryColor[0] * weight;
-    color[1] += entryColor[1] * weight;
-    color[2] += entryColor[2] * weight;
+function oppositeSide(side: EdgeSide): EdgeSide {
+  switch (side) {
+    case "n":
+      return "s";
+    case "e":
+      return "w";
+    case "s":
+      return "n";
+    case "w":
+      return "e";
   }
-  if (total <= 0) return COLORS.grass;
-  return [color[0] / total, color[1] / total, color[2] / total].map(clamp255) as Rgb;
 }
 
-function mixColor(a: Rgb, b: Rgb, t: number): Rgb {
-  const value = clamp01(t);
-  return [lerp(a[0], b[0], value), lerp(a[1], b[1], value), lerp(a[2], b[2], value)].map(clamp255) as Rgb;
-}
-
-function addNoise(color: Rgb, noise: number, amount: number): Rgb {
-  const delta = (noise - 0.5) * amount;
-  return [color[0] + delta, color[1] + delta, color[2] + delta].map(clamp255) as Rgb;
+function snap(value: number, unit: number): number {
+  return Math.floor(value / unit) * unit;
 }
 
 function rgbCss(color: Rgb): string {
   return `rgb(${color[0]},${color[1]},${color[2]})`;
 }
 
-function lerp(a: number, b: number, t: number): number {
-  return a + (b - a) * t;
-}
-
-function smooth(t: number): number {
-  return t * t * (3 - 2 * t);
-}
-
-function clamp01(value: number): number {
-  return Math.max(0, Math.min(1, value));
-}
-
-function clamp255(value: number): number {
-  return Math.max(0, Math.min(255, Math.round(value)));
+function rgbaCss(color: Rgb, alpha: number): string {
+  return `rgba(${color[0]},${color[1]},${color[2]},${Math.max(0, Math.min(1, alpha))})`;
 }

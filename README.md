@@ -60,7 +60,7 @@ The game saves to `localStorage`. You can save from the menu on the overworld or
 ## Gameplay Summary
 
 - Three-character party: Arlen, Mira, and Kael
-- Seeded semantic archipelago overworld using generated land/water masks, island IDs, coast bands, grass/sand/ice biomes, walkability, overlay collision policy, road/river overlays, and POIs. Normal gameplay renders the base terrain as a generated mask/field texture with soft coast and biome boundaries, while overlays stay separate.
+- Seeded semantic archipelago overworld using generated land/water masks, island IDs, coast bands, grass/sand/ice biomes, walkability, overlay collision policy, road/river overlays, and POIs. Normal gameplay renders the base terrain as a crisp generated texture with pixel-pattern fills and edge-only coast/biome overlays, while objects and route overlays stay separate.
 - Atlas-backed city/town interiors and dungeons using `dungeon_atlas` for medieval stone, cave, ice, ruin, volcanic, cursed, chest, gate, switch, stair, and boss-seal tiles
 - Four major themed islands: Greenhaven, Coralreach, Frostmere, and Highspire, with deterministic world seeds and harbor travel between charted routes
 - Procedural room-and-corridor dungeons derived from the world seed and dungeon id
@@ -83,7 +83,7 @@ All code, art, and audio are procedurally generated or created inside this proje
 - Title screen appears and New Game starts in Greenhaven.
 - Intro dialogue advances with Enter/Z.
 - Player moves smoothly with keyboard, can exit town through the south gate, and sees an ocean-based archipelago on the overworld.
-- Normal overworld terrain shows shallow-water halos, beaches, and softened grass/sand/ice edges instead of hard square biome tiles.
+- Normal overworld terrain shows crisp grass/sand/ice/water interiors, shallow-water halos, beaches, and narrow pixel-art edge overlays instead of global blur or hard square biome seams.
 - Menu opens with Escape and Settings can toggle encounters and XP multiplier.
 - Random or debug encounters enter battle.
 - Battle shows one current actor at a time, enemy intent, and the Skill command; party actions resolve immediately and enemies act on initiative turns.

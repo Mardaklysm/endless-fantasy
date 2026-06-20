@@ -39,7 +39,7 @@ Keep all paths lowercase snake_case. Use PNG for most raster art. Battle/backgro
 
 ## Loading Strategy
 
-Current note: the Phaser scene already has a `preload()` image loader. The active overworld terrain uses the `atlas_v3` texture from `src/assets/world/atlas_v3.png`, imported manifest `src/assets/world/atlasV3.manifest.json`, and tile metadata in `src/data/worldTiles.ts`; individual root `assets/tiles/world/*` files are fallback/legacy references. The terrain cache and fallback draw path use `ATLAS_V3_SOURCE_INSET = 3` to crop dirty source-cell edges while drawing each valid tile into the full destination tile. Harbor dock overlays use `src/assets/world/pier_atlas.png`. Generated POI and ocean-detail object overlays use the transparent `src/assets/world/world_objects.png` sheet plus `src/data/worldObjects.ts`. Dungeon/city tiles use the opaque `src/assets/world/dungeon_atlas.png` sheet plus `src/data/dungeonTiles.ts`, cropped with `DUNGEON_ATLAS_SOURCE_INSET = 3`. Runtime must not run map-level seam blending or mutate cached terrain pixels with neighboring terrain colors.
+Current note: the Phaser scene already has a `preload()` image loader. Normal overworld terrain is generated at runtime by `src/world/semantic/semanticTerrainRenderer.ts` as a crisp semantic background texture: full-cell terrain fills first, then narrow edge-only pixel overlays. The `atlas_v3` texture from `src/assets/world/atlas_v3.png`, imported manifest `src/assets/world/atlasV3.manifest.json`, and tile metadata in `src/data/worldTiles.ts` remain active for raw-tile debug rendering, fallback drawing, and semantic compatibility; individual root `assets/tiles/world/*` files are fallback/legacy references. Raw/fallback atlas draws use `ATLAS_V3_SOURCE_INSET = 3` to crop dirty source-cell edges while drawing each valid tile into the full destination tile. Harbor dock overlays use `src/assets/world/pier_atlas.png`. Generated POI and ocean-detail object overlays use the transparent `src/assets/world/world_objects.png` sheet plus `src/data/worldObjects.ts`. Dungeon/city tiles use the opaque `src/assets/world/dungeon_atlas.png` sheet plus `src/data/dungeonTiles.ts`, cropped with `DUNGEON_ATLAS_SOURCE_INSET = 3`. Runtime must not run map-level seam blending or mutate cached terrain pixels with neighboring terrain colors.
 
 For future asset families, extend the existing loader incrementally:
 
@@ -82,7 +82,7 @@ This lets the game remain playable after every partial art import.
 
 | Code Area | Current Function | Future Asset Hook | Risk |
 |---|---|---|---|
-| World terrain | `drawWorldTile` | `src/assets/world/atlas_v3.png` + `src/assets/world/atlasV3.manifest.json` + `src/data/worldTiles.ts` | Active path; exact 8x8 atlas cells render into 32px display tiles; all 64 cells are classified terrain |
+| World terrain | `createSemanticTerrainTexture`, `drawWorldTile` fallback/debug | `src/world/semantic/semanticTerrainRenderer.ts`; `src/assets/world/atlas_v3.png` + `src/assets/world/atlasV3.manifest.json` + `src/data/worldTiles.ts` for raw/fallback tiles | Active normal path is crisp semantic texture generation; exact 8x8 atlas cells remain available for F6 raw tile debug and fallback draws |
 | Harbor docks | `drawPierDockTile` | `src/assets/world/pier_atlas.png` | Low; 4x4 atlas cells are cropped into generated harbor dock markers with generated fallback |
 | World object overlays | `drawWorldObjectCell`, `drawLocationIcon`, `drawWorldOverlays` | `src/assets/world/world_objects.png` + `src/assets/world/worldObjectAtlas.manifest.json` + `src/data/worldObjects.ts` | Active path; generated POIs carry object IDs and ocean detail overlays are seed-derived from reef positions; generated marker fallback remains |
 | Location markers | `drawLocationIcon` | `assets/tiles/markers/*` | Low; town markers and missing object-overlay assets still use this/fallback path |
@@ -142,7 +142,7 @@ This lets the game remain playable after every partial art import.
 ## Safe Incremental Replacement Order
 
 1. Add folder structure and loader keys for Phase 1 assets.
-2. Replace `drawWorldTile` with atlas/manifest-backed rendering. Done for `atlas_v3`; generated terrain drawing remains fallback.
+2. Replace `drawWorldTile` with atlas/manifest-backed rendering. Done for `atlas_v3`; normal overworld terrain now uses semantic texture generation while raw atlas drawing remains fallback/debug.
 3. Add world object overlay atlas rendering for generated dungeons, landmarks, harbors, and ocean detail POIs. Done for `world_objects`; generated marker drawing remains fallback.
 4. Replace or extend class sprite rendering through `src/data/characterSprites.ts` and `drawCharacterSpriteFrame`.
 5. Replace `drawPanel` and menu cursor with UI assets.
