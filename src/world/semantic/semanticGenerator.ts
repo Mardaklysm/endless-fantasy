@@ -1094,49 +1094,18 @@ function traceRivers(
     const end = path[path.length - 1];
     const endIndex = index(width, end.x, end.y);
     if (waterClass[endIndex] === SEMANTIC_WATER.NONE && !lakeMap[endIndex] && distanceToWater[endIndex] > 1) continue;
-    writeRiverRibbon(width, height, seed, rivers.length, path, landMask, waterClass, lakeMap, mountainMap, poiBlocked, riverMap);
+    writeRiverCenterline(width, path, riverMap);
     rivers.push({ id: `river_${rivers.length + 1}`, islandId: sourceIsland.id, source: { x: source.x, y: source.y }, mouth: end, path });
   }
   return rivers;
 }
 
-function writeRiverRibbon(
+function writeRiverCenterline(
   width: number,
-  height: number,
-  seed: string,
-  riverIndex: number,
   path: SemanticVec[],
-  landMask: Uint8Array,
-  waterClass: Uint8Array,
-  lakeMap: Uint8Array,
-  mountainMap: Uint8Array,
-  poiBlocked: Set<string>,
   riverMap: Uint8Array
 ) {
-  const longRiverBonus = path.length >= 28 ? 0.5 : path.length >= 16 ? 0.25 : 0;
-  for (let step = 0; step < path.length; step += 1) {
-    const cell = path[step];
-    const centerIndex = index(width, cell.x, cell.y);
-    const middle = path.length <= 1 ? 0 : 1 - Math.abs(step / (path.length - 1) - 0.5) * 2;
-    const baseRadius = 1.05 + longRiverBonus + middle * 0.28;
-    const maxRadius = Math.ceil(baseRadius + 0.8);
-    for (let dy = -maxRadius; dy <= maxRadius; dy += 1) {
-      for (let dx = -maxRadius; dx <= maxRadius; dx += 1) {
-        const x = cell.x + dx;
-        const y = cell.y + dy;
-        if (!inBounds(width, height, x, y)) continue;
-        const i = index(width, x, y);
-        const isCenter = i === centerIndex;
-        const isExistingWater = waterClass[i] !== SEMANTIC_WATER.NONE || lakeMap[i] > 0;
-        if (!isCenter && !landMask[i] && !isExistingWater) continue;
-        if (waterClass[i] !== SEMANTIC_WATER.NONE && !isCenter) continue;
-        if (mountainMap[i] || poiBlocked.has(posKey({ x, y }))) continue;
-        const edgeNoise = hashNoise(`${seed}:semantic-river-ribbon:${riverIndex}:${step}`, x, y) * 0.55;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        if (isCenter || distance <= baseRadius + edgeNoise - 0.28) riverMap[i] = 1;
-      }
-    }
-  }
+  for (const cell of path) riverMap[index(width, cell.x, cell.y)] = 1;
 }
 
 function traceRiverPath(
@@ -1159,6 +1128,7 @@ function traceRiverPath(
   const path: SemanticVec[] = [];
   const seen = new Set<string>();
   let current = { x: source.x, y: source.y };
+  let previous: SemanticVec | undefined;
   for (let step = 0; step < 160; step += 1) {
     const key = posKey(current);
     if (seen.has(key)) return [];
@@ -1167,23 +1137,36 @@ function traceRiverPath(
     const i = index(width, current.x, current.y);
     if (step > 0 && (!landMask[i] || waterClass[i] !== SEMANTIC_WATER.NONE || lakeMap[i] || distanceToWater[i] <= 0)) return path;
     if (step > 0 && riverMap[i]) return path;
+    const currentDirection = previous ? { x: current.x - previous.x, y: current.y - previous.y } : undefined;
     const neighbors = cardinalNeighbors(current.x, current.y)
       .filter((next) => inBounds(width, height, next.x, next.y))
       .map((next) => {
         const ni = index(width, next.x, next.y);
         if (waterClass[ni] === SEMANTIC_WATER.NONE && (mountainMap[ni] || poiBlocked.has(posKey(next)))) return { ...next, cost: Infinity };
+        const nextKey = posKey(next);
+        if (seen.has(nextKey)) return { ...next, cost: Infinity };
+        const joinsExistingRiver = riverMap[ni] > 0;
+        if (!joinsExistingRiver && hasAdjacentRiverCell(width, height, riverMap, next.x, next.y)) return { ...next, cost: Infinity };
         const islandPenalty = islandId[ni] !== sourceIslandNumber && waterClass[ni] === SEMANTIC_WATER.NONE ? 5 : 0;
         const downhill = elevation[ni] - elevation[i];
         const waterPull = distanceToWater[ni] * 0.025;
         const noise = hashNoise(`${seed}:semantic-river:${riverIndex}`, next.x, next.y) * 0.045;
-        return { ...next, cost: downhill + waterPull + noise + islandPenalty };
+        const direction = { x: next.x - current.x, y: next.y - current.y };
+        const reversePenalty = currentDirection && direction.x === -currentDirection.x && direction.y === -currentDirection.y ? 3.5 : 0;
+        const turnPenalty = currentDirection && (direction.x !== currentDirection.x || direction.y !== currentDirection.y) ? 0.12 : -0.04;
+        return { ...next, cost: downhill + waterPull + noise + islandPenalty + reversePenalty + turnPenalty };
       })
       .filter((next) => Number.isFinite(next.cost))
       .sort((a, b) => a.cost - b.cost);
     if (!neighbors.length) return [];
+    previous = current;
     current = { x: neighbors[0].x, y: neighbors[0].y };
   }
   return [];
+}
+
+function hasAdjacentRiverCell(width: number, height: number, riverMap: Uint8Array, x: number, y: number): boolean {
+  return cardinalNeighbors(x, y).some((next) => inBounds(width, height, next.x, next.y) && riverMap[index(width, next.x, next.y)] > 0);
 }
 
 function placePois(
@@ -1225,7 +1208,7 @@ function placePois(
         y: candidate.y,
         difficultyTier: island.major ? island.order + 1 : 1
       };
-      reservePoi(occupied, poi, spec.role === "port" ? 1 : 2);
+      reservePoi(occupied, poi, poiReserveRadius(spec));
       poiList.push(poi);
       if (poi.type === "port") harbors.push(poi);
     }
@@ -1254,6 +1237,7 @@ function poiScore(
   const y = Math.floor(i / width);
   if (!landMask[i] || lakeMap[i] || occupied.has(posKey({ x, y }))) return -Infinity;
   if (tooCloseToOccupied(occupied, x, y, spec.role === "port" ? 3 : 5)) return -Infinity;
+  if (!isPoiFootprintValid(width, height, spec, x, y, landMask, waterClass, distanceToWater, mountainMap, lakeMap, occupied)) return -Infinity;
   if (spec.role === "port") {
     if (distanceToWater[i] > 1 || biome[i] !== SEMANTIC_BIOME.BEACH) return -Infinity;
     if (!hasAdjacentWater(width, height, waterClass, x, y, SEMANTIC_WATER.SHALLOW)) return -Infinity;
@@ -1267,6 +1251,32 @@ function poiScore(
   const center = centerScore(x, y, island.center.x, island.center.y, island.area);
   const specialSpacing = spec.role === "gate" || spec.role === "final" ? Math.hypot(x - island.center.x, y - island.center.y) / Math.max(10, Math.sqrt(island.area)) : 0;
   return preferred + center + mountainScore + forestScore + specialSpacing + hashNoise(`${seed}:semantic-poi:${spec.id}`, x, y) * 0.22;
+}
+
+function isPoiFootprintValid(
+  width: number,
+  height: number,
+  spec: RequiredPoiSpec,
+  x: number,
+  y: number,
+  landMask: Uint8Array,
+  waterClass: Uint8Array,
+  distanceToWater: Int16Array,
+  mountainMap: Uint8Array,
+  lakeMap: Uint8Array,
+  occupied: Set<string>
+): boolean {
+  const radius = poiFootprintRadius(spec);
+  for (let yy = y - radius; yy <= y + radius; yy += 1) {
+    for (let xx = x - radius; xx <= x + radius; xx += 1) {
+      if (!inBounds(width, height, xx, yy)) return false;
+      const cellIndex = index(width, xx, yy);
+      if (!landMask[cellIndex] || waterClass[cellIndex] !== SEMANTIC_WATER.NONE || lakeMap[cellIndex] || mountainMap[cellIndex]) return false;
+      if (occupied.has(`${xx},${yy}`)) return false;
+      if (spec.role !== "port" && distanceToWater[cellIndex] < 2) return false;
+    }
+  }
+  return true;
 }
 
 function buildRoadGraph(
@@ -1652,6 +1662,15 @@ function reservePoi(occupied: Set<string>, poi: SemanticVec, radius: number) {
   for (let y = poi.y - radius; y <= poi.y + radius; y += 1) {
     for (let x = poi.x - radius; x <= poi.x + radius; x += 1) occupied.add(`${x},${y}`);
   }
+}
+
+function poiFootprintRadius(spec: RequiredPoiSpec): number {
+  if (spec.role === "settlement" || spec.role === "final") return 1;
+  return 0;
+}
+
+function poiReserveRadius(spec: RequiredPoiSpec): number {
+  return poiFootprintRadius(spec) + (spec.role === "port" ? 1 : 2);
 }
 
 function tooCloseToOccupied(occupied: Set<string>, x: number, y: number, radius: number): boolean {

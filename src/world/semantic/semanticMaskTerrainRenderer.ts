@@ -180,20 +180,18 @@ function classifySample(world: SemanticWorld, sampleX: number, sampleY: number):
   const noiseX = Math.floor(sampleX * 8);
   const noiseY = Math.floor(sampleY * 8);
   const boundaryNoise = hashNoise(`${world.seed}:mask-terrain-boundary`, noiseX, noiseY, 0) - 0.5;
-  const freshWaterScore = Math.max(
-    samplePredicate(world, world.layers.riverMap, sampleX, sampleY, (value) => value > 0),
-    samplePredicate(world, world.layers.lakeMap, sampleX, sampleY, (value) => value > 0)
-  );
-  if (freshWaterScore + boundaryNoise * 0.08 > 0.32) return TERRAIN_CLASS_IDS.freshWater;
+  if (routeMaskSample(world, world.layers.roadMap, sampleX, sampleY, 0.16)) return TERRAIN_CLASS_IDS.road;
+
+  const lakeScore = samplePredicate(world, world.layers.lakeMap, sampleX, sampleY, (value) => value > 0);
+  if (routeMaskSample(world, world.layers.riverMap, sampleX, sampleY, 0.28) || lakeScore + boundaryNoise * 0.08 > 0.32) {
+    return TERRAIN_CLASS_IDS.freshWater;
+  }
 
   const landScore = samplePredicate(world, world.layers.landMask, sampleX, sampleY, (value) => value > 0);
   if (landScore + boundaryNoise * 0.14 < 0.48) {
     const shallowScore = samplePredicate(world, world.layers.waterClass, sampleX, sampleY, (value) => value === SEMANTIC_WATER.SHALLOW || value === SEMANTIC_WATER.LAKE);
     return shallowScore + boundaryNoise * 0.08 > 0.36 ? TERRAIN_CLASS_IDS.shallowWater : TERRAIN_CLASS_IDS.deepOcean;
   }
-
-  const roadScore = samplePredicate(world, world.layers.roadMap, sampleX, sampleY, (value) => value > 0);
-  if (roadScore + boundaryNoise * 0.06 > 0.34) return TERRAIN_CLASS_IDS.road;
 
   const beachScore = sampleBiome(world, sampleX, sampleY, SEMANTIC_BIOME.BEACH);
   const grassScore = sampleBiome(world, sampleX, sampleY, SEMANTIC_BIOME.GRASS);
@@ -207,6 +205,32 @@ function classifySample(world: SemanticWorld, sampleX: number, sampleY: number):
   if (iceScore >= grassScore && iceScore >= sandScore) return TERRAIN_CLASS_IDS.ice;
   if (sandScore >= grassScore && sandScore >= iceScore) return TERRAIN_CLASS_IDS.sand;
   return TERRAIN_CLASS_IDS.grassland;
+}
+
+function routeMaskSample(world: SemanticWorld, values: ArrayLike<number>, sampleX: number, sampleY: number, halfWidth: number): boolean {
+  const x = clampInt(Math.floor(sampleX), 0, world.width - 1);
+  const y = clampInt(Math.floor(sampleY), 0, world.height - 1);
+  if (values[y * world.width + x] <= 0) return false;
+  const localX = sampleX - x;
+  const localY = sampleY - y;
+  const centeredX = Math.abs(localX - 0.5);
+  const centeredY = Math.abs(localY - 0.5);
+  const north = routeCellAt(world, values, x, y - 1);
+  const east = routeCellAt(world, values, x + 1, y);
+  const south = routeCellAt(world, values, x, y + 1);
+  const west = routeCellAt(world, values, x - 1, y);
+  const hasNeighbor = north || east || south || west;
+  if (!hasNeighbor) return Math.hypot(centeredX, centeredY) <= halfWidth * 1.45;
+  if (Math.hypot(centeredX, centeredY) <= halfWidth * 1.2) return true;
+  if (north && centeredX <= halfWidth && localY <= 0.5) return true;
+  if (south && centeredX <= halfWidth && localY >= 0.5) return true;
+  if (west && centeredY <= halfWidth && localX <= 0.5) return true;
+  if (east && centeredY <= halfWidth && localX >= 0.5) return true;
+  return false;
+}
+
+function routeCellAt(world: SemanticWorld, values: ArrayLike<number>, x: number, y: number): boolean {
+  return x >= 0 && y >= 0 && x < world.width && y < world.height && values[y * world.width + x] > 0;
 }
 
 function createTerrainFillStyles(

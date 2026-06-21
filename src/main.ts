@@ -36,6 +36,7 @@ import { generateDungeonFloors } from "./world/dungeonGenerator.ts";
 import { createSemanticMaskTerrainTexture, type SemanticMaskTerrainClass, type SemanticMaskTerrainSources } from "./world/semantic/semanticMaskTerrainRenderer.ts";
 import { createSemanticRouteOverlayTexture, type SemanticRouteOverlayMode } from "./world/semantic/semanticRouteRenderer.ts";
 import { SEMANTIC_BIOME, SEMANTIC_WATER } from "./world/semantic/semanticTypes.ts";
+import { hashNoise } from "./world/seededRng.ts";
 import {
   ACTIVE_WORLDGEN_MODE,
   createWorldSeed,
@@ -4950,6 +4951,7 @@ Statuses: ${statuses}`;
       }
     }
     this.drawCachedWorldRouteOverlay(tileCam);
+    this.drawWorldPoiAprons(startX, endX, startY, endY, tileCam);
     this.drawWorldOverlays(startX, endX, startY, endY, tileCam);
     this.drawSemanticDebugOverlay(startX, endX, startY, endY, tileCam);
     for (const loc of this.locations()) {
@@ -5591,6 +5593,45 @@ Statuses: ${statuses}`;
       const sy = (overlay.y + (overlay.offsetY ?? 0)) * TILE - tileCam.y + TILE / 2 - displaySize / 2;
       this.drawWorldObjectCell(overlay.objectId, sx, sy, displaySize, displaySize, overlay.alpha ?? 0.92);
     }
+  }
+
+  private drawWorldPoiAprons(startX: number, endX: number, startY: number, endY: number, tileCam: Vec) {
+    if (!this.generatedWorld) return;
+    const semantic = this.generatedWorld.semantic;
+    for (const poi of this.generatedWorld.pois) {
+      const radius = Math.floor(this.locationFootprint(poi) / 2);
+      const apronRadius = poi.kind === "town" || poi.kind === "harbor" || poi.kind === "final" ? radius + 1 : 1;
+      if (poi.x + apronRadius < startX || poi.x - apronRadius > endX || poi.y + apronRadius < startY || poi.y - apronRadius > endY) continue;
+      const colors = this.poiApronColors(poi);
+      for (let y = poi.y - apronRadius; y <= poi.y + apronRadius; y += 1) {
+        for (let x = poi.x - apronRadius; x <= poi.x + apronRadius; x += 1) {
+          if (x < 0 || y < 0 || x >= semantic.width || y >= semantic.height) continue;
+          const distance = Math.hypot(x - poi.x, y - poi.y);
+          if (distance > apronRadius + 0.15) continue;
+          if (distance > radius + 0.2 && hashNoise(`${this.worldSeed}:poi-apron-edge:${poi.id}`, x, y) < 0.42) continue;
+          const i = y * semantic.width + x;
+          if (!semantic.layers.landMask[i] || semantic.layers.waterClass[i] !== SEMANTIC_WATER.NONE || semantic.layers.lakeMap[i] || semantic.layers.riverMap[i] || semantic.layers.roadMap[i]) continue;
+          if (poi.kind !== "harbor" && semantic.layers.biome[i] === SEMANTIC_BIOME.BEACH) continue;
+          const sx = x * TILE - tileCam.x;
+          const sy = y * TILE - tileCam.y;
+          const inset = distance <= radius + 0.15 ? 4 : 7;
+          const alpha = distance <= radius + 0.15 ? 0.34 : 0.22;
+          this.worldOverlay.fillStyle(colors.base, alpha).fillRect(sx + inset, sy + inset, TILE - inset * 2, TILE - inset * 2);
+          if (hashNoise(`${this.worldSeed}:poi-apron-fleck:${poi.id}`, x, y) > 0.62) {
+            this.worldOverlay.fillStyle(colors.accent, 0.2).fillRect(sx + 11, sy + 18, 10, 4);
+          }
+        }
+      }
+    }
+  }
+
+  private poiApronColors(poi: LocationDef): { base: number; accent: number } {
+    const islandId = poi.islandId ?? this.currentIslandId;
+    if (islandId === "frostmere") return { base: 0xd6e9ec, accent: 0x9fb9c7 };
+    if (islandId === "coralreach") return { base: 0xc99b5a, accent: 0xe0bd73 };
+    if (islandId === "highspire") return { base: 0x524c48, accent: 0x7a5e45 };
+    if (poi.kind === "harbor") return { base: 0xb98752, accent: 0xd0ac73 };
+    return { base: 0x8b6a3c, accent: 0xb08b55 };
   }
 
   private drawSemanticDebugOverlay(startX: number, endX: number, startY: number, endY: number, tileCam: Vec) {
@@ -6260,18 +6301,29 @@ Statuses: ${statuses}`;
   private locationVisualSize(loc: LocationDef, footprintSize: number, asset?: WorldCurrentAssetRecord): number {
     if (asset && !asset.placeholder) {
       const scale = this.locationManifestScale(loc, asset);
-      return Math.min(footprintSize * 1.04, Math.max(TILE * 1.55, footprintSize * scale));
+      const maxSize =
+        loc.kind === "town" || loc.kind === "harbor"
+          ? footprintSize * 1.04
+          : loc.kind === "final"
+            ? TILE * 2.35
+            : loc.kind === "gate"
+              ? TILE * 1.45
+              : loc.kind === "dungeon"
+                ? TILE * 1.35
+                : TILE * 1.22;
+      const minSize = loc.kind === "town" || loc.kind === "harbor" ? TILE * 1.55 : loc.kind === "final" ? TILE * 1.8 : TILE * 0.82;
+      return Math.min(maxSize, Math.max(minSize, footprintSize * scale));
     }
     const byKind: Record<WorldPoiKind, number> = {
       town: 2.45,
       harbor: 1.55,
-      dungeon: 2.15,
-      gate: 2.2,
+      dungeon: 1.2,
+      gate: 1.25,
       final: 2.35,
-      landmark: 1.55
+      landmark: 1.1
     };
-    if (loc.landmarkKind === "shipwreck" || loc.landmarkKind === "secretMerchant") return Math.min(footprintSize, TILE * 1.85);
-    if (loc.landmarkKind === "ancientDoor" || loc.landmarkKind === "ruins") return Math.min(footprintSize, TILE * 2);
+    if (loc.landmarkKind === "shipwreck" || loc.landmarkKind === "secretMerchant") return Math.min(footprintSize, TILE * 1.15);
+    if (loc.landmarkKind === "ancientDoor" || loc.landmarkKind === "ruins") return Math.min(footprintSize, TILE * 1.2);
     return Math.min(footprintSize, TILE * (byKind[loc.kind] ?? 1.75));
   }
 
@@ -6291,9 +6343,9 @@ Statuses: ${statuses}`;
     ) {
       return Math.max(recommended, 0.96);
     }
-    if (loc.kind === "gate" || loc.kind === "final") return Math.max(recommended, 0.9);
-    if (loc.kind === "dungeon") return Math.max(recommended, 0.84);
-    return Math.max(recommended, 0.74);
+    if (loc.kind === "gate" || loc.kind === "final") return Math.max(recommended, 0.86);
+    if (loc.kind === "dungeon") return Math.min(Math.max(recommended, 0.76), 1.05);
+    return Math.min(Math.max(recommended, 0.68), 0.98);
   }
 
   private locationVisualLift(loc: LocationDef): number {

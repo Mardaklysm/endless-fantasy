@@ -225,9 +225,9 @@ function adaptSemanticWorld(semantic: SemanticWorld): GeneratedWorld {
     x: bridge.x,
     y: bridge.y,
     orientation: bridge.orientation,
-    material: bridge.islandId === "highspire" || bridge.islandId === "frostmere" ? "stone" : "wood"
+    material: "wood"
   }));
-  const bridges = [...dockBridges, ...routeBridgeCandidates];
+  const bridges = dockBridges;
   const seaRoutes = buildSeaRoutes(pois);
   const entryTriggers = pois.map((poi) => ({ poiId: poi.id, x: poi.x, y: poi.y }));
   const islands = semantic.islands.map((island) => adaptIsland(semantic, tiles, pois, island.id as IslandId));
@@ -332,11 +332,16 @@ function adaptPoi(poi: SemanticPoi): WorldPoi {
     islandId: poi.islandId as IslandId,
     x: poi.x,
     y: poi.y,
-    footprint: poi.type === "port" ? 3 : poi.role === "landmark" ? 3 : 3,
+    footprint: poiFootprint(poi),
     landmarkKind: landmarkKind(poi),
     objectId: objectIdForPoi(poi),
     difficultyTier: poi.difficultyTier
   };
+}
+
+function poiFootprint(poi: SemanticPoi): number {
+  if (poi.role === "settlement" || poi.type === "port" || poi.role === "final") return 3;
+  return 1;
 }
 
 function poiKind(poi: SemanticPoi): WorldPoiKind {
@@ -506,14 +511,7 @@ function buildObjectOverlays(semantic: SemanticWorld, reefs: WorldVec[]): WorldO
   for (const range of [...semantic.mountainRanges].sort((a, b) => a.bounds.maxY - b.bounds.maxY || a.bounds.minX - b.bounds.minX)) {
     overlays.push(...buildMountainPatchOverlays(semantic, range));
   }
-  for (let y = 0; y < semantic.height; y += 1) {
-    for (let x = 0; x < semantic.width; x += 1) {
-      const i = y * semantic.width + x;
-      if (!semantic.layers.forestMap[i]) continue;
-      const objectId = semantic.layers.biome[i] === SEMANTIC_BIOME.ICE ? WORLD_OBJECT_IDS.darkPineTree : hashNoise(`${semantic.seed}:forest-object`, x, y) > 0.78 ? WORLD_OBJECT_IDS.denseJungleBush : WORLD_OBJECT_IDS.broadleafTree;
-      overlays.push({ id: `forest-${x}-${y}`, x, y, objectId, scale: 0.92, collisionPolicy: "softTerrain" });
-    }
-  }
+  overlays.push(...buildForestPatchOverlays(semantic));
   reefs.forEach((pos, index) => {
     const roll = hashNoise(`${semantic.seed}:ocean-object:${index}`, pos.x, pos.y);
     const objectId =
@@ -528,26 +526,107 @@ function buildMountainPatchOverlays(semantic: SemanticWorld, range: SemanticWorl
   if (!cells.length) return [];
   const overlays: WorldObjectOverlay[] = [];
   const rangeObjectId = mountainRangeObjectId(semantic, range);
-  for (let visualIndex = 0; visualIndex < cells.length; visualIndex += 1) {
-    const anchor = cells[visualIndex];
+  const visualCount = range.smallOutcrop ? 1 : Math.max(1, Math.min(5, Math.ceil(cells.length / 18)));
+  const anchors = pickSpreadAnchors(semantic.seed, range.id, cells, visualCount);
+  const width = range.bounds.maxX - range.bounds.minX + 1;
+  const height = range.bounds.maxY - range.bounds.minY + 1;
+  for (let visualIndex = 0; visualIndex < anchors.length; visualIndex += 1) {
+    const anchor = anchors[visualIndex];
     const scaleRoll = hashNoise(`${semantic.seed}:mountain-patch-scale:${range.id}:${visualIndex}`, anchor.x, anchor.y);
     const offsetRollX = hashNoise(`${semantic.seed}:mountain-patch-offset-x:${range.id}:${visualIndex}`, anchor.x, anchor.y);
     const offsetRollY = hashNoise(`${semantic.seed}:mountain-patch-offset-y:${range.id}:${visualIndex}`, anchor.x, anchor.y);
     const normalizedY = range.bounds.maxY === range.bounds.minY ? 0.5 : (anchor.y - range.bounds.minY) / (range.bounds.maxY - range.bounds.minY);
     const largeBackPeakBias = 1 - normalizedY;
+    const coverageScale = Math.min(4.35, Math.max(1.6, Math.sqrt(cells.length / Math.max(1, visualCount)) * 0.82, Math.min(width, height) * 0.48));
     overlays.push({
       id: `mountain-${range.id}-patch-${visualIndex}`,
       x: anchor.x,
       y: anchor.y,
       objectId: rangeObjectId,
-      scale: range.smallOutcrop ? 1.02 + scaleRoll * 0.1 : 1.14 + largeBackPeakBias * 0.08 + scaleRoll * 0.08,
-      offsetX: (offsetRollX - 0.5) * (range.smallOutcrop ? 0.12 : 0.18),
-      offsetY: (offsetRollY - 0.5) * (range.smallOutcrop ? 0.1 : 0.14) - largeBackPeakBias * 0.04,
+      scale: range.smallOutcrop ? 1.22 + scaleRoll * 0.16 : coverageScale + largeBackPeakBias * 0.16 + scaleRoll * 0.16,
+      offsetX: (offsetRollX - 0.5) * (range.smallOutcrop ? 0.1 : 0.3),
+      offsetY: (offsetRollY - 0.5) * (range.smallOutcrop ? 0.08 : 0.2) - largeBackPeakBias * 0.08,
       alpha: 0.96,
       collisionPolicy: "hardBlock"
     });
   }
   return overlays;
+}
+
+function buildForestPatchOverlays(semantic: SemanticWorld): WorldObjectOverlay[] {
+  const overlays: WorldObjectOverlay[] = [];
+  for (const component of connectedMaskComponents(semantic, semantic.layers.forestMap)) {
+    const objectId = forestObjectIdForComponent(semantic, component);
+    const visualCount = Math.max(1, Math.min(6, Math.ceil(component.length / 5)));
+    const anchors = pickSpreadAnchors(semantic.seed, `forest-${component[0]?.x ?? 0}-${component[0]?.y ?? 0}`, component, visualCount);
+    for (let indexValue = 0; indexValue < anchors.length; indexValue += 1) {
+      const anchor = anchors[indexValue];
+      const scaleRoll = hashNoise(`${semantic.seed}:forest-patch-scale:${component.length}:${indexValue}`, anchor.x, anchor.y);
+      overlays.push({
+        id: `forest-${anchor.x}-${anchor.y}-${indexValue}`,
+        x: anchor.x,
+        y: anchor.y,
+        objectId,
+        scale: component.length <= 2 ? 0.8 : 0.96 + scaleRoll * 0.12,
+        offsetX: (hashNoise(`${semantic.seed}:forest-patch-x:${indexValue}`, anchor.x, anchor.y) - 0.5) * 0.18,
+        offsetY: (hashNoise(`${semantic.seed}:forest-patch-y:${indexValue}`, anchor.x, anchor.y) - 0.5) * 0.14,
+        collisionPolicy: "softTerrain"
+      });
+    }
+  }
+  return overlays;
+}
+
+function forestObjectIdForComponent(semantic: SemanticWorld, cells: WorldVec[]): WorldObjectId {
+  const biomeCounts = new Map<number, number>();
+  const islandCounts = new Map<string, number>();
+  for (const cell of cells) {
+    const i = cell.y * semantic.width + cell.x;
+    biomeCounts.set(semantic.layers.biome[i], (biomeCounts.get(semantic.layers.biome[i]) ?? 0) + 1);
+    const islandId = semantic.islandIndexToId.get(semantic.layers.islandId[i]);
+    if (islandId) islandCounts.set(islandId, (islandCounts.get(islandId) ?? 0) + 1);
+  }
+  const dominantBiome = [...biomeCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const islandId = [...islandCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const island = semantic.islands.find((candidate) => candidate.id === islandId);
+  if (dominantBiome === SEMANTIC_BIOME.ICE || island?.theme === "ice") return WORLD_OBJECT_IDS.darkPineTree;
+  if (island?.theme === "sand_coast") return WORLD_OBJECT_IDS.palmTree;
+  return WORLD_OBJECT_IDS.broadleafTree;
+}
+
+function connectedMaskComponents(semantic: SemanticWorld, mask: Uint8Array): WorldVec[][] {
+  const seen = new Set<number>();
+  const components: WorldVec[][] = [];
+  for (let i = 0; i < mask.length; i += 1) {
+    if (!mask[i] || seen.has(i)) continue;
+    const component: WorldVec[] = [];
+    const queue = [{ x: i % semantic.width, y: Math.floor(i / semantic.width) }];
+    seen.add(i);
+    for (let head = 0; head < queue.length; head += 1) {
+      const cell = queue[head];
+      component.push(cell);
+      for (const next of neighbors4(cell.x, cell.y)) {
+        if (!inBounds(semantic.width, semantic.height, next.x, next.y)) continue;
+        const ni = next.y * semantic.width + next.x;
+        if (!mask[ni] || seen.has(ni)) continue;
+        seen.add(ni);
+        queue.push(next);
+      }
+    }
+    components.push(component);
+  }
+  return components;
+}
+
+function pickSpreadAnchors(seed: string, salt: string, cells: WorldVec[], count: number): WorldVec[] {
+  const sorted = [...cells].sort((a, b) => hashNoise(`${seed}:anchor:${salt}`, b.x, b.y) - hashNoise(`${seed}:anchor:${salt}`, a.x, a.y));
+  const anchors: WorldVec[] = [];
+  const minDistance = Math.max(1.6, Math.sqrt(cells.length / Math.max(1, count)) * 0.62);
+  for (const cell of sorted) {
+    if (anchors.every((anchor) => Math.hypot(anchor.x - cell.x, anchor.y - cell.y) >= minDistance)) anchors.push(cell);
+    if (anchors.length >= count) break;
+  }
+  return anchors.length ? anchors : [cells[Math.floor(cells.length / 2)]];
 }
 
 function mountainRangeObjectId(

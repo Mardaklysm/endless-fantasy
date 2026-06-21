@@ -54,9 +54,27 @@ function validatePoi(world: SemanticWorld, poi: SemanticPoi, errors: string[]) {
   }
   if (!world.layers.landMask[i] && poi.type !== "port") errors.push(`POI ${poi.id} is not on land.`);
   if (world.layers.waterClass[i] !== SEMANTIC_WATER.NONE) errors.push(`POI ${poi.id} is on blocked water.`);
+  validatePoiFootprint(world, poi, errors);
   if (!hasAdjacentWalkable(world, poi.x, poi.y) && !isWalkable(world, poi.x, poi.y)) errors.push(`POI ${poi.id} has no adjacent walkable approach cell.`);
   if (poi.type === "port" && !hasAdjacentWater(world, poi.x, poi.y, SEMANTIC_WATER.SHALLOW)) {
     errors.push(`Port ${poi.id} is not adjacent to shallow water.`);
+  }
+}
+
+function validatePoiFootprint(world: SemanticWorld, poi: SemanticPoi, errors: string[]) {
+  const radius = poi.role === "settlement" || poi.role === "final" ? 1 : 0;
+  for (let y = poi.y - radius; y <= poi.y + radius; y += 1) {
+    for (let x = poi.x - radius; x <= poi.x + radius; x += 1) {
+      if (!inBounds(world, x, y)) {
+        errors.push(`POI ${poi.id} footprint is out of bounds at ${x},${y}.`);
+        continue;
+      }
+      const i = index(world.width, x, y);
+      if (!world.layers.landMask[i] || world.layers.waterClass[i] !== SEMANTIC_WATER.NONE || world.layers.lakeMap[i] || world.layers.riverMap[i]) {
+        errors.push(`POI ${poi.id} footprint touches invalid water terrain at ${x},${y}.`);
+      }
+      if (world.layers.mountainMap[i]) errors.push(`POI ${poi.id} footprint overlaps mountain terrain at ${x},${y}.`);
+    }
   }
 }
 
