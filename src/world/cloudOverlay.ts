@@ -45,8 +45,8 @@ interface Rgb {
 interface RuntimeCloud {
   image: Phaser.GameObjects.Image;
   asset: WorldCloudAsset;
-  x: number;
-  y: number;
+  screenX: number;
+  screenY: number;
   displayWidth: number;
   displayHeight: number;
   baseSpeed: number;
@@ -55,6 +55,7 @@ interface RuntimeCloud {
 
 export class OverworldCloudOverlay {
   private clouds: RuntimeCloud[] = [];
+  private layer?: Phaser.GameObjects.Container;
   private rng: SeededRng = createSeededRng("world-cloud-overlay");
   private rngKey = "";
   private activePoolName?: string;
@@ -85,8 +86,12 @@ export class OverworldCloudOverlay {
     const active = context.active && context.enabled && resolution.assets.length > 0;
     if (!active) {
       this.destroyClouds();
+      this.layer?.setVisible(false);
       return;
     }
+
+    const layer = this.ensureLayer(context);
+    layer.setVisible(true);
 
     const rngKey = `${context.worldSeed}:${resolution.themeName}:${context.islandId ?? context.islandName ?? "open"}`;
     if (this.rngKey !== rngKey) {
@@ -95,12 +100,15 @@ export class OverworldCloudOverlay {
     }
 
     this.advanceThemeTransition(deltaMs);
-    this.moveClouds(deltaMs, context);
-    this.removeExitedClouds(context.viewportWidth);
-    if (this.clouds.length === 0) this.spawnCloud(context);
-    else if (this.clouds.length < 2 && this.clouds[0].x >= 0) {
-      this.spawnCloud(context);
+    if (deltaMs > 0) {
+      this.advanceCloudSimulation(deltaMs);
+      this.removeExitedClouds(context.viewportWidth);
+      if (this.clouds.length === 0) this.spawnCloud(context);
+      else if (this.clouds.length < 2 && this.clouds[0].screenX >= 0) {
+        this.spawnCloud(context);
+      }
     }
+    this.refreshCloudVisuals(context);
   }
 
   debugState(): OverworldCloudDebugState {
@@ -117,6 +125,32 @@ export class OverworldCloudOverlay {
 
   destroy(): void {
     this.destroyClouds();
+    this.layer?.destroy();
+    this.layer = undefined;
+  }
+
+  private ensureLayer(context: OverworldCloudOverlayContext): Phaser.GameObjects.Container {
+    if (!this.layer) {
+      this.layer = this.scene.add.container(0, 0);
+      this.layer.setScrollFactor(0, 0, true);
+    }
+    this.layer.setDepth(context.depth);
+    this.applyFixedScreenLayerTransform(this.layer);
+    return this.layer;
+  }
+
+  private applyFixedScreenLayerTransform(layer: Phaser.GameObjects.Container): void {
+    const camera = this.scene.cameras.main;
+    const zoomX = Math.max(camera.zoomX || camera.zoom || 1, 0.001);
+    const zoomY = Math.max(camera.zoomY || camera.zoom || 1, 0.001);
+    const originX = camera.width * camera.originX;
+    const originY = camera.height * camera.originY;
+
+    // Clouds are screen-space weather, not map-space parallax. Compensate for
+    // camera zoom/viewport changes so child screenX/screenY remain final pixels.
+    layer.setScale(1 / zoomX, 1 / zoomY);
+    layer.setPosition(originX - originX / zoomX, originY - originY / zoomY);
+    layer.setScrollFactor(0, 0, true);
   }
 
   private updateTargetTheme(config: WorldCloudTintConfig): void {
@@ -132,21 +166,17 @@ export class OverworldCloudOverlay {
     this.currentSpeedMultiplier = lerp(this.currentSpeedMultiplier, this.targetSpeedMultiplier, amount);
   }
 
-  private moveClouds(deltaMs: number, context: OverworldCloudOverlayContext): void {
+  private advanceCloudSimulation(deltaMs: number): void {
     const seconds = deltaMs / 1000;
     for (const cloud of this.clouds) {
-      cloud.x += cloud.baseSpeed * this.currentSpeedMultiplier * seconds;
-      cloud.image.setPosition(cloud.x * context.pixelScale, cloud.y * context.pixelScale);
-      cloud.image.setDepth(context.depth);
-      this.applyCloudVisuals(cloud);
-      cloud.image.setVisible(true);
+      cloud.screenX += cloud.baseSpeed * this.currentSpeedMultiplier * seconds;
     }
   }
 
   private removeExitedClouds(viewportWidth: number): void {
     const remaining: RuntimeCloud[] = [];
     for (const cloud of this.clouds) {
-      if (cloud.x > viewportWidth + 32) {
+      if (cloud.screenX > viewportWidth + 32) {
         cloud.image.destroy();
         continue;
       }
@@ -164,18 +194,30 @@ export class OverworldCloudOverlay {
     const displayWidth = context.viewportWidth * this.rng.float(0.32, 0.48) * scaleVariation;
     const displayHeight = displayWidth / aspect;
     const maxTopBandY = Math.max(8, context.viewportHeight * CLOUD_TOP_BAND_MAX - displayHeight * 0.55);
-    const y = this.rng.float(-displayHeight * 0.35, maxTopBandY);
-    const x = -displayWidth - this.rng.float(24, 80);
+    const screenY = this.rng.float(-displayHeight * 0.35, maxTopBandY);
+    const screenX = -displayWidth - this.rng.float(24, 80);
     const baseSpeed = this.rng.float(CLOUD_MIN_SPEED, CLOUD_MAX_SPEED) * this.rng.float(0.85, 1.15);
     const alphaOffset = this.rng.float(-0.06, 0.06);
-    const image = this.scene.add.image(x * context.pixelScale, y * context.pixelScale, asset.textureKey);
+    const image = this.scene.add.image(screenX * context.pixelScale, screenY * context.pixelScale, asset.textureKey);
     image.setOrigin(0, 0);
-    image.setDisplaySize(displayWidth * context.pixelScale, displayHeight * context.pixelScale);
-    image.setDepth(context.depth);
     image.setScrollFactor(0, 0);
-    const cloud: RuntimeCloud = { image, asset, x, y, displayWidth, displayHeight, baseSpeed, alphaOffset };
+    this.layer?.add(image);
+    const cloud: RuntimeCloud = { image, asset, screenX, screenY, displayWidth, displayHeight, baseSpeed, alphaOffset };
     this.applyCloudVisuals(cloud);
     this.clouds.push(cloud);
+  }
+
+  private refreshCloudVisuals(context: OverworldCloudOverlayContext): void {
+    if (!this.layer) return;
+    this.applyFixedScreenLayerTransform(this.layer);
+    this.layer.setDepth(context.depth);
+    for (const cloud of this.clouds) {
+      cloud.image.setPosition(cloud.screenX * context.pixelScale, cloud.screenY * context.pixelScale);
+      cloud.image.setDisplaySize(cloud.displayWidth * context.pixelScale, cloud.displayHeight * context.pixelScale);
+      cloud.image.setScrollFactor(0, 0);
+      this.applyCloudVisuals(cloud);
+      cloud.image.setVisible(true);
+    }
   }
 
   private applyCloudVisuals(cloud: RuntimeCloud): void {
