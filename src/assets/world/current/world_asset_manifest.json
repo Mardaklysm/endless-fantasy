@@ -16948,15 +16948,13 @@
       "world_current_object_premium_volcanic_fortress",
       "world_current_object_premium_dark_castle",
       "world_current_object_premium_haunted_black_fort",
-      "world_current_object_premium_island_fortress",
       "world_current_object_premium_black_mountain_gate",
       "world_current_object_premium_dark_haunted_castle"
     ],
     "harbor": [
       "world_current_object_premium_dock_village_small",
       "world_current_object_premium_desert_oasis_town",
-      "world_current_object_premium_swamp_village_stilts",
-      "world_current_object_premium_island_fortress"
+      "world_current_object_premium_swamp_village_stilts"
     ],
     "religious": [
       "world_current_object_premium_small_temple",

@@ -299,13 +299,12 @@ function renderMountains(image, world, scale) {
   for (const range of world.mountainRanges) {
     const cells = [...range.cells].sort((a, b) => a.y - b.y || a.x - b.x);
     if (!cells.length) continue;
-    const count = range.smallOutcrop ? 4 : clamp(Math.round(cells.length * 0.78 + 8), 12, 90);
-    for (let visualIndex = 0; visualIndex < count; visualIndex += 1) {
-      const baseIndex = Math.floor(noise(`${world.seed}:lab-mountain-anchor:${range.id}:${visualIndex}`, cells[0].x, cells[0].y) * cells.length) % cells.length;
-      const cell = cells[(baseIndex + visualIndex) % cells.length];
-      const ox = (noise(`${world.seed}:lab-mountain-x:${range.id}:${visualIndex}`, cell.x, cell.y) - 0.5) * (range.smallOutcrop ? 0.22 : 0.72);
-      const oy = (noise(`${world.seed}:lab-mountain-y:${range.id}:${visualIndex}`, cell.x, cell.y) - 0.5) * (range.smallOutcrop ? 0.18 : 0.58);
-      const scaleBoost = 0.9 + noise(`${world.seed}:lab-mountain-scale:${range.id}:${visualIndex}`, cell.x, cell.y) * 0.3;
+    for (let visualIndex = 0; visualIndex < cells.length; visualIndex += 1) {
+      const cell = cells[visualIndex];
+      const ox = (noise(`${world.seed}:lab-mountain-x:${range.id}:${visualIndex}`, cell.x, cell.y) - 0.5) * (range.smallOutcrop ? 0.12 : 0.18);
+      const oy = (noise(`${world.seed}:lab-mountain-y:${range.id}:${visualIndex}`, cell.x, cell.y) - 0.5) * (range.smallOutcrop ? 0.1 : 0.14);
+      const normalizedY = range.bounds.maxY === range.bounds.minY ? 0.5 : (cell.y - range.bounds.minY) / (range.bounds.maxY - range.bounds.minY);
+      const scaleBoost = range.smallOutcrop ? 1.02 : 1.12 + (1 - normalizedY) * 0.12;
       visuals.push({ x: cell.x + ox, y: cell.y + oy, kind: range.kind, scaleBoost });
     }
   }
@@ -323,11 +322,16 @@ function renderRoads(image, world, scale) {
 
 function renderRiverTiles(image, world, scale) {
   const source = loadFreshwaterAsset();
+  const waterWidth = Math.max(2, Math.round(scale * 0.52));
+  const bankWidth = Math.min(Math.max(1, scale - 1), Math.max(waterWidth + 1, Math.round(scale * 0.72)));
+  const highlightWidth = Math.max(1, Math.round(waterWidth * 0.32));
   forEachRiverTile(world, (x, y) => {
     const mask = riverConnectivityMaskAt(world, x, y);
-    const kind = riverTileKindForMask(mask);
-    const frame = riverAtlasFrameFor(world.seed, source, kind, mask, x, y);
-    blitNearestTile(image, source, frame.sx, frame.sy, frame.size, x * scale, y * scale, scale);
+    const px = x * scale;
+    const py = y * scale;
+    drawDirectionalRiverColorShape(image, px, py, scale, mask, bankWidth, [18, 75, 105, 132]);
+    drawDirectionalRiverMaterialShape(image, source, px, py, scale, mask, waterWidth);
+    drawDirectionalRiverColorShape(image, px, py, scale, mask, highlightWidth, [180, 235, 244, 80]);
   });
 }
 
@@ -464,78 +468,49 @@ function riverTileKindColor(kind) {
   return [62, 135, 228, 255];
 }
 
-function riverAtlasFrameFor(seed, source, kind, mask, x, y) {
-  const cols = Math.max(1, Math.floor(source.width / FRESHWATER_CELL_SIZE));
-  const rows = Math.max(1, Math.floor(source.height / FRESHWATER_CELL_SIZE));
-  const frames = riverAtlasFramesForKind(kind, mask, cols, rows);
-  const frameIndex = frames.length > 1 ? Math.floor(noise(`${seed}:river-tile-atlas:${kind}:${mask}`, x, y) * frames.length) % frames.length : 0;
-  const frame = frames[frameIndex] ?? { col: 0, row: 0 };
-  return {
-    sx: frame.col * FRESHWATER_CELL_SIZE,
-    sy: frame.row * FRESHWATER_CELL_SIZE,
-    size: FRESHWATER_CELL_SIZE
-  };
-}
-
-function riverAtlasFramesForKind(kind, mask, cols, rows) {
-  const preferredRows = {
-    isolated: 0,
-    end: 0,
-    straight: mask === (RIVER_NORTH | RIVER_SOUTH) ? 2 : 1,
-    corner: 3,
-    junction: 4,
-    cross: 5
-  };
-  const row = Math.min(rows - 1, preferredRows[kind] ?? 0);
-  const startCol = Math.min(cols - 1, kind === "corner" ? cornerColumn(mask) : kind === "end" ? endColumn(mask) : kind === "junction" ? junctionColumn(mask) : 0);
-  const frames = [];
-  for (let offset = 0; offset < Math.min(4, cols); offset += 1) frames.push({ col: (startCol + offset) % cols, row });
-  return frames;
-}
-
-function endColumn(mask) {
-  if (mask & RIVER_NORTH) return 0;
-  if (mask & RIVER_EAST) return 1;
-  if (mask & RIVER_SOUTH) return 2;
-  if (mask & RIVER_WEST) return 3;
-  return 0;
-}
-
-function cornerColumn(mask) {
-  if ((mask & RIVER_NORTH) && (mask & RIVER_EAST)) return 0;
-  if ((mask & RIVER_EAST) && (mask & RIVER_SOUTH)) return 1;
-  if ((mask & RIVER_SOUTH) && (mask & RIVER_WEST)) return 2;
-  if ((mask & RIVER_WEST) && (mask & RIVER_NORTH)) return 3;
-  return 0;
-}
-
-function junctionColumn(mask) {
-  if (!(mask & RIVER_NORTH)) return 0;
-  if (!(mask & RIVER_EAST)) return 1;
-  if (!(mask & RIVER_SOUTH)) return 2;
-  if (!(mask & RIVER_WEST)) return 3;
-  return 0;
-}
-
 function loadFreshwaterAsset() {
   if (!freshwaterAsset) freshwaterAsset = PNG.sync.read(fs.readFileSync(FRESHWATER_ASSET_PATH));
   return freshwaterAsset;
 }
 
-function blitNearestTile(image, source, sx, sy, sourceSize, dx, dy, size) {
-  for (let yy = 0; yy < size; yy += 1) {
-    const sampleY = sy + Math.min(sourceSize - 1, Math.floor((yy / size) * sourceSize));
-    for (let xx = 0; xx < size; xx += 1) {
-      const sampleX = sx + Math.min(sourceSize - 1, Math.floor((xx / size) * sourceSize));
-      const color = getPixel(source, sampleX, sampleY);
-      if (color[3] > 0) setPixel(image, dx + xx, dy + yy, color);
-    }
-  }
-}
-
 function getPixel(image, x, y) {
   const offset = (Math.floor(y) * image.width + Math.floor(x)) * 4;
   return [image.data[offset], image.data[offset + 1], image.data[offset + 2], image.data[offset + 3]];
+}
+
+function drawDirectionalRiverMaterialShape(image, source, px, py, tileSize, mask, width) {
+  drawDirectionalRiverShape(image, px, py, tileSize, mask, width, (xx, yy) => {
+    const sampleX = positiveModulo(Math.floor((xx * FRESHWATER_CELL_SIZE) / Math.max(1, tileSize)), source.width);
+    const sampleY = positiveModulo(Math.floor((yy * FRESHWATER_CELL_SIZE) / Math.max(1, tileSize)), source.height);
+    const color = getPixel(source, sampleX, sampleY);
+    if (color[3] > 0) setPixel(image, xx, yy, color);
+  });
+}
+
+function drawDirectionalRiverColorShape(image, px, py, tileSize, mask, width, color) {
+  drawDirectionalRiverShape(image, px, py, tileSize, mask, width, (xx, yy) => blendPixel(image, xx, yy, color));
+}
+
+function drawDirectionalRiverShape(image, px, py, tileSize, mask, width, paint) {
+  const half = Math.floor(tileSize / 2);
+  const radius = Math.floor(width / 2);
+  const centerX = px + half;
+  const centerY = py + half;
+  const left = centerX - radius;
+  const top = centerY - radius;
+  const size = Math.max(1, width);
+  paintRect(left, top, size, size);
+  if (mask === 0) return;
+  if (mask & RIVER_NORTH) paintRect(left, py, size, half + radius);
+  if (mask & RIVER_EAST) paintRect(centerX - radius, top, half + radius, size);
+  if (mask & RIVER_SOUTH) paintRect(left, centerY - radius, size, tileSize - half + radius);
+  if (mask & RIVER_WEST) paintRect(px, top, half + radius, size);
+
+  function paintRect(x, y, width, height) {
+    for (let yy = Math.floor(y); yy < Math.floor(y + height); yy += 1) {
+      for (let xx = Math.floor(x); xx < Math.floor(x + width); xx += 1) paint(xx, yy);
+    }
+  }
 }
 
 function bitCount(value) {
@@ -673,6 +648,20 @@ function setPixel(image, x, y, color) {
   image.data[offset + 1] = color[1];
   image.data[offset + 2] = color[2];
   image.data[offset + 3] = color[3];
+}
+
+function blendPixel(image, x, y, color) {
+  if (x < 0 || y < 0 || x >= image.width || y >= image.height) return;
+  const offset = (Math.floor(y) * image.width + Math.floor(x)) * 4;
+  const alpha = clamp((color[3] ?? 255) / 255, 0, 1);
+  image.data[offset] = Math.round(color[0] * alpha + image.data[offset] * (1 - alpha));
+  image.data[offset + 1] = Math.round(color[1] * alpha + image.data[offset + 1] * (1 - alpha));
+  image.data[offset + 2] = Math.round(color[2] * alpha + image.data[offset + 2] * (1 - alpha));
+  image.data[offset + 3] = 255;
+}
+
+function positiveModulo(value, modulo) {
+  return ((value % modulo) + modulo) % modulo;
 }
 
 function noise(seed, x, y) {

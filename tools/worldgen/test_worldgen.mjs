@@ -185,6 +185,11 @@ function validateCurrentWorldAssetManifest() {
     WORLD_CURRENT_OBJECT_TEXTURE_KEY_BY_ID.small_mountain_peak === WORLD_CURRENT_ASSET_MANIFEST.premiumObjectMappings.small_mountain_peak,
     "Resolved mountain object mapping should prefer the premium asset."
   );
+  const islandFortressTextureKey = "world_current_object_premium_island_fortress";
+  for (const role of ["city", "fortification", "harbor", "settlement"]) {
+    const variants = WORLD_CURRENT_ASSET_MANIFEST.premiumPoiVariantMappings?.[role] ?? [];
+    assert(!variants.includes(islandFortressTextureKey), `Island fortress must not appear in land/harbor premium POI variant role ${role}.`);
+  }
 }
 
 function validateWorldCloudManifest() {
@@ -270,12 +275,12 @@ function validateSemanticWorldgen() {
   assert(worldA.semantic.rivers.length > 0, "Semantic river data is missing.");
   assert(worldA.objectOverlays.some((overlay) => overlay.objectId === "small_mountain_peak" || overlay.objectId === "snowy_mountain_peak"), "No mountain overlays were generated.");
   const mountainVisualOverlays = worldA.objectOverlays.filter((overlay) => overlay.id.startsWith("mountain-"));
-  assert(mountainVisualOverlays.length >= Math.round(worldA.semantic.mountains.length * 0.45), "Mountain visual overlays should densely cover semantic mountain regions.");
+  assert(mountainVisualOverlays.length >= worldA.semantic.mountains.length, "Mountain visual overlays should densely cover every semantic mountain cell.");
   assert(mountainVisualOverlays.some((overlay) => Math.abs(overlay.offsetX ?? 0) > 0 || Math.abs(overlay.offsetY ?? 0) > 0), "Mountain visual overlays should use patch jitter.");
-  const nonSmallRange = worldA.semantic.mountainRanges.find((range) => !range.smallOutcrop);
-  if (nonSmallRange) {
-    const patchVisuals = mountainVisualOverlays.filter((overlay) => overlay.id.startsWith(`mountain-${nonSmallRange.id}-patch-`));
-    assert(patchVisuals.length >= 10, `${nonSmallRange.id} should render as a clustered mountain patch.`);
+  for (const range of worldA.semantic.mountainRanges) {
+    const patchVisuals = mountainVisualOverlays.filter((overlay) => overlay.id.startsWith(`mountain-${range.id}-patch-`));
+    assert(patchVisuals.length >= range.cells.length, `${range.id} should render at least one mountain visual per semantic mountain cell.`);
+    assert(new Set(patchVisuals.map((overlay) => overlay.objectId)).size === 1, `${range.id} should use one mountain asset across the whole massif.`);
   }
   assert(worldA.objectOverlays.some((overlay) => overlay.objectId === "broadleaf_tree" || overlay.objectId === "dark_pine_tree"), "No forest overlays were generated.");
   const mountainIndex = worldA.semantic.layers.mountainMap.findIndex((value) => value === 1);
@@ -515,7 +520,7 @@ function validateSemanticRiverTileRendererPlan(world) {
   assert(plan.height === world.height * 32, `Semantic river tile overlay texture height expected ${world.height * 32}, got ${plan.height}.`);
   assert(plan.riverTileCount === world.semantic.stats.riverCells, "River tile renderer count should match semantic river cells.");
   assert(classifiedRiverTiles === plan.riverTileCount, "River tile renderer classification counts should sum to all river cells.");
-  assert(plan.atlasMappedTileCount === plan.riverTileCount, "River tile renderer should map every river tile to the freshwater atlas source.");
+  assert(plan.sourceMappedTileCount === plan.riverTileCount, "River tile renderer should map every river tile to the freshwater material source.");
   assert(plan.fallbackTileCount === 0, "River tile renderer should not need fallback tiles when the freshwater source is supplied.");
   assert(plan.oldProgrammaticRiverSegments === 0, "River tile renderer should not use old programmatic river segments.");
   assert(plan.bridgeTileCount === world.semantic.bridgeCandidates.length, "River tile renderer bridge count should match semantic bridge candidates.");

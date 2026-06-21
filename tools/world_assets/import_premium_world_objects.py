@@ -208,11 +208,10 @@ PREMIUM_VARIANT_BASES = {
         "volcanic_fortress",
         "dark_castle",
         "haunted_black_fort",
-        "island_fortress",
         "black_mountain_gate",
         "dark_haunted_castle",
     ],
-    "harbor": ["dock_village_small", "desert_oasis_town", "swamp_village_stilts", "island_fortress"],
+    "harbor": ["dock_village_small", "desert_oasis_town", "swamp_village_stilts"],
     "religious": ["small_temple", "grand_temple", "monastery_village", "church_town", "ice_temple", "jungle_temple_village"],
     "settlement": [
         "hamlet_straw_huts",

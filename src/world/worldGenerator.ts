@@ -524,11 +524,10 @@ function buildObjectOverlays(semantic: SemanticWorld, reefs: WorldVec[]): WorldO
 function buildMountainPatchOverlays(semantic: SemanticWorld, range: SemanticWorld["mountainRanges"][number]): WorldObjectOverlay[] {
   const cells = [...range.cells].sort((a, b) => a.y - b.y || a.x - b.x);
   if (!cells.length) return [];
-  const visualCount = mountainPatchVisualCount(range, semantic);
   const overlays: WorldObjectOverlay[] = [];
-  for (let visualIndex = 0; visualIndex < visualCount; visualIndex += 1) {
-    const anchor = mountainPatchAnchorCell(semantic, range.id, cells, visualIndex);
-    const baseRoll = hashNoise(`${semantic.seed}:mountain-patch:${range.id}:${visualIndex}`, anchor.x, anchor.y);
+  const rangeObjectId = mountainRangeObjectId(semantic, range);
+  for (let visualIndex = 0; visualIndex < cells.length; visualIndex += 1) {
+    const anchor = cells[visualIndex];
     const scaleRoll = hashNoise(`${semantic.seed}:mountain-patch-scale:${range.id}:${visualIndex}`, anchor.x, anchor.y);
     const offsetRollX = hashNoise(`${semantic.seed}:mountain-patch-offset-x:${range.id}:${visualIndex}`, anchor.x, anchor.y);
     const offsetRollY = hashNoise(`${semantic.seed}:mountain-patch-offset-y:${range.id}:${visualIndex}`, anchor.x, anchor.y);
@@ -538,10 +537,10 @@ function buildMountainPatchOverlays(semantic: SemanticWorld, range: SemanticWorl
       id: `mountain-${range.id}-patch-${visualIndex}`,
       x: anchor.x,
       y: anchor.y,
-      objectId: mountainPatchObjectId(semantic, range, anchor, visualIndex, baseRoll),
-      scale: range.smallOutcrop ? 0.98 + scaleRoll * 0.22 : 1.03 + largeBackPeakBias * 0.22 + scaleRoll * 0.18,
-      offsetX: (offsetRollX - 0.5) * (range.smallOutcrop ? 0.26 : 0.82),
-      offsetY: (offsetRollY - 0.5) * (range.smallOutcrop ? 0.2 : 0.74) - largeBackPeakBias * 0.12,
+      objectId: rangeObjectId,
+      scale: range.smallOutcrop ? 1.02 + scaleRoll * 0.1 : 1.14 + largeBackPeakBias * 0.08 + scaleRoll * 0.08,
+      offsetX: (offsetRollX - 0.5) * (range.smallOutcrop ? 0.12 : 0.18),
+      offsetY: (offsetRollY - 0.5) * (range.smallOutcrop ? 0.1 : 0.14) - largeBackPeakBias * 0.04,
       alpha: 0.96,
       collisionPolicy: "hardBlock"
     });
@@ -549,27 +548,12 @@ function buildMountainPatchOverlays(semantic: SemanticWorld, range: SemanticWorl
   return overlays;
 }
 
-function mountainPatchVisualCount(range: SemanticWorld["mountainRanges"][number], semantic: SemanticWorld): number {
-  if (range.smallOutcrop) return 4 + Math.floor(hashNoise(`${semantic.seed}:mountain-outcrop-count:${range.id}`, range.bounds.minX, range.bounds.minY) * 3);
-  return clamp(Math.round(range.cells.length * 0.78 + 8), 12, 120);
-}
-
-function mountainPatchAnchorCell(seedWorld: SemanticWorld, rangeId: string, cells: WorldVec[], visualIndex: number): WorldVec {
-  const orderedIndex = Math.floor(hashNoise(`${seedWorld.seed}:mountain-anchor:${rangeId}:${visualIndex}`, cells[0].x, cells[0].y) * cells.length) % cells.length;
-  return cells[(orderedIndex + visualIndex) % cells.length];
-}
-
-function mountainPatchObjectId(
+function mountainRangeObjectId(
   semantic: SemanticWorld,
-  range: SemanticWorld["mountainRanges"][number],
-  cell: WorldVec,
-  visualIndex: number,
-  roll: number
+  range: SemanticWorld["mountainRanges"][number]
 ): WorldObjectId {
-  const biome = semantic.layers.biome[cell.y * semantic.width + cell.x];
-  if (range.kind === "snow_mountain" || biome === SEMANTIC_BIOME.ICE) return WORLD_OBJECT_IDS.snowyMountainPeak;
-  if (visualIndex > 0 && roll > 0.86) return WORLD_OBJECT_IDS.grayBoulderPile;
-  if (visualIndex > 0 && roll > 0.72) return WORLD_OBJECT_IDS.rockyHillObject;
+  const snowCells = range.cells.filter((cell) => semantic.layers.biome[cell.y * semantic.width + cell.x] === SEMANTIC_BIOME.ICE).length;
+  if (range.kind === "snow_mountain" || snowCells >= range.cells.length / 2) return WORLD_OBJECT_IDS.snowyMountainPeak;
   return WORLD_OBJECT_IDS.smallMountainPeak;
 }
 

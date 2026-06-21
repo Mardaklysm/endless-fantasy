@@ -230,7 +230,7 @@ Elevation is separate from biome. It combines inland distance, base island heigh
 
 ## F. Rivers And Lakes
 
-River sources are chosen from high-elevation or cold/ridge areas while avoiding mountain masks and POI footprints. Rivers greedily flow toward lower elevation and coast/lakes with cardinal seeded tie-breaking. Loops are discarded. Surviving rivers remain semantic masks/paths, then render through an asset tile overlay: each river cell computes north/east/south/west connectivity, selects a freshwater atlas cell, and blits that asset cell with nearest-neighbor sampling. The old styled river stroke renderer is disabled for normal output.
+River sources are chosen from high-elevation or cold/ridge areas while avoiding mountain masks and POI footprints. Rivers greedily flow toward lower elevation and coast/lakes with cardinal seeded tie-breaking. Loops are discarded. Surviving rivers remain semantic masks/paths, then render as connected cardinal river shapes filled with the freshwater material. The old styled river stroke renderer and full-square freshwater stamp path are disabled for normal output.
 
 Lakes are optional overlay masks in moist inland basins.
 
@@ -317,13 +317,13 @@ Recommended v1 approach:
 - semantic archipelago masks and fields
 - minimal terrain fills and brush-like edges
 - object overlays for mountains, forests, towns, ports, and dungeons
-- styled road overlays and asset river tile masks
+- styled road overlays and connected freshwater river masks
 - validation against logical world rules before visual polish
 
 ## Known Prototype Limitations
 
 - Roads are grid paths with simple A* costs; future visual smoothing should draw prettier curves over the same graph.
-- Rivers are greedy downhill paths; future versions should improve basin selection and add dedicated directional river art beyond the freshwater material sheet.
+- Rivers are greedy downhill paths; future versions should improve basin selection and add dedicated directional river edge masks or better freshwater material fills.
 - Mountain and forest art is procedural placeholder only.
 - Biome smoothing is simple and should eventually use connected-region cleanup.
   - This lab preview remains isolated from Phaser-specific rendering even though it shares the runtime-safe semantic generator core.

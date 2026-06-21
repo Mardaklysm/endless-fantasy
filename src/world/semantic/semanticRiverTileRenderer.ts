@@ -1,5 +1,4 @@
 import type Phaser from "phaser";
-import { hashNoise } from "../seededRng.ts";
 import type { SemanticWorld } from "./semanticTypes.ts";
 
 export type SemanticRiverTileKind = "isolated" | "end" | "straight" | "corner" | "junction" | "cross";
@@ -29,7 +28,7 @@ export interface SemanticRiverTileRenderPlan {
   junctionTileCount: number;
   crossingTileCount: number;
   bridgeTileCount: number;
-  atlasMappedTileCount: number;
+  sourceMappedTileCount: number;
   fallbackTileCount: number;
   oldProgrammaticRiverSegments: number;
   connectivityCounts: Record<string, number>;
@@ -40,6 +39,7 @@ const RIVER_EAST = 2;
 const RIVER_SOUTH = 4;
 const RIVER_WEST = 8;
 const DEFAULT_SOURCE_CELL_SIZE = 32;
+type RiverFillStyle = CanvasPattern | string;
 
 export function createSemanticRiverTileOverlayTexture(scene: Phaser.Scene, world: SemanticWorld, options: SemanticRiverTileRenderOptions): string {
   const textureKey = options.textureKey ?? `semantic-river-tile-overlay-${world.seed}`;
@@ -60,12 +60,17 @@ export function createSemanticRiverTileOverlayCanvas(world: SemanticWorld, optio
   ctx.clearRect(0, 0, plan.width, plan.height);
 
   const source = normalizedRiverTileSource(options.riverTileSource);
-  if (!source) return canvas;
+  const riverFill = createRiverMaterialFill(ctx, source);
+  const waterWidth = Math.max(10, Math.round(plan.tileSize * 0.52));
+  const bankWidth = Math.max(1, Math.min(Math.max(1, plan.tileSize - 2), Math.max(waterWidth + 6, Math.round(plan.tileSize * 0.72))));
+  const highlightWidth = Math.max(3, Math.round(waterWidth * 0.28));
   forEachRiverTile(world, (x, y) => {
     const mask = riverConnectivityMaskAt(world, x, y);
-    const kind = riverTileKindForMask(mask);
-    const frame = riverAtlasFrameFor(world.seed, source, kind, mask, x, y);
-    ctx.drawImage(source.image, frame.sx, frame.sy, frame.size, frame.size, x * plan.tileSize, y * plan.tileSize, plan.tileSize, plan.tileSize);
+    const px = x * plan.tileSize;
+    const py = y * plan.tileSize;
+    drawDirectionalRiverShape(ctx, px, py, plan.tileSize, mask, bankWidth, "rgba(20, 79, 111, 0.52)");
+    drawDirectionalRiverShape(ctx, px, py, plan.tileSize, mask, waterWidth, riverFill);
+    drawDirectionalRiverShape(ctx, px, py, plan.tileSize, mask, highlightWidth, "rgba(169, 225, 235, 0.22)");
   });
 
   return canvas;
@@ -106,7 +111,7 @@ export function describeSemanticRiverTileRenderPlan(world: SemanticWorld, option
     junctionTileCount,
     crossingTileCount,
     bridgeTileCount,
-    atlasMappedTileCount: source ? riverTileCount : 0,
+    sourceMappedTileCount: source ? riverTileCount : 0,
     fallbackTileCount: source ? 0 : riverTileCount,
     oldProgrammaticRiverSegments: 0,
     connectivityCounts
@@ -131,60 +136,6 @@ export function riverTileKindForMask(mask: number): SemanticRiverTileKind {
   return "cross";
 }
 
-function riverAtlasFrameFor(seed: string, source: Required<SemanticRiverTileSource>, kind: SemanticRiverTileKind, mask: number, x: number, y: number) {
-  const cellSize = source.cellSize;
-  const cols = Math.max(1, Math.floor(source.width / cellSize));
-  const rows = Math.max(1, Math.floor(source.height / cellSize));
-  const frames = riverAtlasFramesForKind(kind, mask, cols, rows);
-  const frameIndex = frames.length > 1 ? Math.floor(hashNoise(`${seed}:river-tile-atlas:${kind}:${mask}`, x, y) * frames.length) % frames.length : 0;
-  const frame = frames[frameIndex] ?? { col: 0, row: 0 };
-  return {
-    sx: frame.col * cellSize,
-    sy: frame.row * cellSize,
-    size: cellSize
-  };
-}
-
-function riverAtlasFramesForKind(kind: SemanticRiverTileKind, mask: number, cols: number, rows: number): { col: number; row: number }[] {
-  const preferredRows: Record<SemanticRiverTileKind, number> = {
-    isolated: 0,
-    end: 0,
-    straight: mask === (RIVER_NORTH | RIVER_SOUTH) ? 2 : 1,
-    corner: 3,
-    junction: 4,
-    cross: 5
-  };
-  const row = Math.min(rows - 1, preferredRows[kind]);
-  const startCol = Math.min(cols - 1, kind === "corner" ? cornerColumn(mask) : kind === "end" ? endColumn(mask) : kind === "junction" ? junctionColumn(mask) : 0);
-  const frames: { col: number; row: number }[] = [];
-  for (let offset = 0; offset < Math.min(4, cols); offset += 1) frames.push({ col: (startCol + offset) % cols, row });
-  return frames;
-}
-
-function endColumn(mask: number): number {
-  if (mask & RIVER_NORTH) return 0;
-  if (mask & RIVER_EAST) return 1;
-  if (mask & RIVER_SOUTH) return 2;
-  if (mask & RIVER_WEST) return 3;
-  return 0;
-}
-
-function cornerColumn(mask: number): number {
-  if ((mask & RIVER_NORTH) && (mask & RIVER_EAST)) return 0;
-  if ((mask & RIVER_EAST) && (mask & RIVER_SOUTH)) return 1;
-  if ((mask & RIVER_SOUTH) && (mask & RIVER_WEST)) return 2;
-  if ((mask & RIVER_WEST) && (mask & RIVER_NORTH)) return 3;
-  return 0;
-}
-
-function junctionColumn(mask: number): number {
-  if (!(mask & RIVER_NORTH)) return 0;
-  if (!(mask & RIVER_EAST)) return 1;
-  if (!(mask & RIVER_SOUTH)) return 2;
-  if (!(mask & RIVER_WEST)) return 3;
-  return 0;
-}
-
 function normalizedRiverTileSource(source?: SemanticRiverTileSource): Required<SemanticRiverTileSource> | undefined {
   if (!source || source.width <= 0 || source.height <= 0) return undefined;
   const cellSize = Math.max(1, Math.floor(source.cellSize ?? DEFAULT_SOURCE_CELL_SIZE));
@@ -193,6 +144,37 @@ function normalizedRiverTileSource(source?: SemanticRiverTileSource): Required<S
     cellSize,
     label: source.label ?? "freshwater"
   };
+}
+
+function createRiverMaterialFill(ctx: CanvasRenderingContext2D, source?: Required<SemanticRiverTileSource>): RiverFillStyle {
+  if (!source) return "#2c8fbe";
+  return ctx.createPattern(source.image, "repeat") ?? "#2c8fbe";
+}
+
+function drawDirectionalRiverShape(
+  ctx: CanvasRenderingContext2D,
+  px: number,
+  py: number,
+  tileSize: number,
+  mask: number,
+  width: number,
+  fillStyle: RiverFillStyle
+) {
+  const half = Math.floor(tileSize / 2);
+  const radius = Math.floor(width / 2);
+  const centerX = px + half;
+  const centerY = py + half;
+  const left = centerX - radius;
+  const top = centerY - radius;
+  const size = Math.max(1, width);
+
+  ctx.fillStyle = fillStyle;
+  ctx.fillRect(left, top, size, size);
+  if (mask === 0) return;
+  if (mask & RIVER_NORTH) ctx.fillRect(left, py, size, half + radius);
+  if (mask & RIVER_EAST) ctx.fillRect(centerX - radius, top, half + radius, size);
+  if (mask & RIVER_SOUTH) ctx.fillRect(left, centerY - radius, size, tileSize - half + radius);
+  if (mask & RIVER_WEST) ctx.fillRect(px, top, half + radius, size);
 }
 
 function forEachRiverTile(world: SemanticWorld, callback: (x: number, y: number, i: number) => void) {
