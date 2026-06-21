@@ -32,6 +32,7 @@ This backlog is practical project memory, not a full design document. Keep it sh
 - Dungeon/city tiles are wired through the active `src/assets/world/dungeon_atlas.png` sheet; individual dungeon PNGs remain fallback only.
 - Dungeon/city atlas rendering now uses weighted base/accent selection; future dungeon polish should focus on room dressing and clearer wall/floor transition art rather than adding more evenly random tile variants.
 - Before replacing the active atlas-v3 archipelago generator, iterate in `npm run worldgen:lab` and define final fill/brush/object assets from `worldgen_asset_requirements.md`.
+- Review and regenerate missing entries from `D:\atlas\output\terrain_materials_v2_missing_materials.md` before considering the external terrain material pack complete. Do not promote rejected/debug crops into runtime assets; only approved `approved_materials/*.png` should be candidates for future renderer experiments.
 
 ## Gameplay Gaps
 
