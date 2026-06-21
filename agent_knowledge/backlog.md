@@ -56,7 +56,7 @@ This backlog is practical project memory, not a full design document. Keep it sh
 - Battle actions now have short lunge/step movement; future effect-sheet rendering can layer spell/item VFX on top of the timing path.
 - Battle backdrops now use v2 region panels; later tuning can reduce bundle weight with dynamic loading/code splitting.
 - Town service blocks now use v2 icon signs in one unlabeled five-marker row, with atlas-backed shop pads from `dungeon_atlas`.
-- Title logo and four-star decoration render; title background remains generated.
+- Title screen now uses full-screen image art. Future title polish should preserve live menu text, aspect-preserving letterboxing, and the simplified `Continue` / `New Game` title menu.
 - Audio is simple oscillator loops; no composed music assets are planned unless approved.
 
 ## Testing Gaps

@@ -74,7 +74,7 @@ Avoid replacing every `Graphics` draw call at once. Add asset support family by 
 - Missing enemy asset: use current `drawEnemySprite`.
 - Missing portrait: use current `drawPortrait`.
 - Missing UI asset: use current `drawPanel`, text cursor, and `drawBar`.
-- Missing title art: use current generated title crystals, stars, and live text.
+- Missing full title screen art: use current generated title crystals, stars, and live text.
 
 This lets the game remain playable after every partial art import.
 
@@ -93,7 +93,7 @@ This lets the game remain playable after every partial art import.
 | NPC sprites | `drawNpc` | `assets/characters/npc_*.png` | Medium, needs NPC type data or deterministic mapping |
 | Battle portraits | `drawPortrait` | `assets/portraits/battle_*.png` | Low, current layout already reserves portrait slots |
 | Enemy sprites | `drawEnemySprite` | `assets/enemies/*.png` | Medium, needs size/anchor rules so labels/bars stay aligned |
-| Title crystals/logo | `drawPixelCrystal`, `drawTitle` | `assets/title/*` | Low |
+| Title screen/crystals/logo | `drawPixelCrystal`, `drawTitle` | `assets/title/*` | Low; active `title_screen` uses contain-fit letterboxing, while crystals/logo remain fallback assets |
 | UI panels/bars | `drawPanel`, `drawBar` | `assets/ui/*` | Medium, 9-slice or manual tiling needed |
 | Effects | Battle action/spell resolution | `assets/effects/*` | Higher, because current battle has no visual effect timing system |
 
@@ -153,7 +153,7 @@ This lets the game remain playable after every partial art import.
 9. Replace battle portraits.
 10. Add item/equipment/relic icons to menus and HUD.
 11. Add boss sprites.
-12. Add title logo and title decoration.
+12. Add title screen, logo, and title decoration. Done for the full-screen title background; logo and decoration remain fallback-compatible.
 13. Add effects only after battle timing can display short animations without blocking input.
 
 ## What Can Stay Generated

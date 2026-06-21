@@ -199,6 +199,7 @@ Normal enemies can share base forms: blob, beast, wing, knight, serpent. Bosses 
 
 | Asset ID | Filename | Category | Size | Req | Priority | Used In | Tint/Recolor | Artist Notes | Replacement Target |
 |---|---|---:|---:|---|---|---|---|---|---|
+| title_screen | assets/title/title_screen.png | Full title background | 1672x941 PNG | Required | P3 | Title screen | No | Active title/loading image. Runtime preserves source aspect ratio with contain-fit scaling and black bars if needed. | `drawTitle` title background |
 | title_logo | assets/title/title_logo.png | Logo | 420x96 | Required | P3 | Title screen | No | Original readable pixel logo; no franchise mimicry. | `drawTitle` text logo |
 | title_stars_bg | assets/title/title_stars_bg.png | Background | 1920x1080, 16:9 | Optional | P3 | Title screen | Partial | Sparse starfield similar to current, less noisy. | `drawTitle` star loop |
 | title_four_crystals | assets/title/four_star_relics.png | Title decoration | 192x64 | Required | P3 | Title/ending/relic motif | Partial | Four original crystal/star shapes. | `drawPixelCrystal` |
@@ -283,6 +284,7 @@ The current Dawnford/town screen uses generated readable counters, signs, props,
 - [ ] Four relic icons
 - [ ] Arlen, Mira, Kael dialogue portraits
 - [ ] King Rovan portrait
+- [x] Full-screen title background
 - [ ] Title logo and four relic decoration
 
 ### Phase 4: Optional Polish

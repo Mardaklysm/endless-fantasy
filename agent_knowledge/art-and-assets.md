@@ -67,11 +67,12 @@ Rendered now from `assets_v2`:
 - Bosses: all five boss IDs use cleaned boss roster crops.
 - Battle backgrounds: forest path, plains, moss cave, ashen keep, tide shrine, eclipse spire.
 - UI: compact window panel skin, cursor, HP/MP/empty bars, buttons. Runtime text remains live Phaser text.
+- Title: `assets/title/title_screen.png` is the active full-screen title background. It is rendered contain-fit into the 16:9 layout with a black backing so any aspect mismatch letterboxes instead of cropping or stretching. The title menu remains live text.
 
 Fallback assets:
 
 - Later-region normal enemies not present in the new common roster: reef fang, bubble eye, drowned husk, sky mite, gale harpy, glass roc, eclipse shade, crown guard, void serpent.
-- Vehicles, inventory/equipment/relic icons, title art, and effects still use Batch 001 or generated fallbacks.
+- Vehicles, inventory/equipment/relic icons, and effects still use Batch 001 or generated fallbacks.
 - `command_window.png`, `target_window.png`, `party_status_window.png`, and `message_window.png` are reference/source-only because they include sample text or baked layout.
 
 Removed experimental world assets and old overworld atlas tools should not be restored. The active overworld asset set is `src/assets/world/current/` plus `world_asset_manifest.json`, all driven by semantic world data.
@@ -94,6 +95,7 @@ Removed experimental world assets and old overworld atlas tools should not be re
 - V2 normal enemies: 96x96 transparent PNGs.
 - V2 bosses: 192x192 transparent PNGs.
 - V2 battle backgrounds: 2752x1536 opaque JPEGs, rendered full-canvas at 16:9.
+- Active title screen: `assets/title/title_screen.png`, 1672x941 PNG, rendered full-screen with aspect-preserving contain fit.
 
 ## Current Runtime Presentation Notes
 
@@ -104,6 +106,7 @@ Removed experimental world assets and old overworld atlas tools should not be re
 - Active overworld object rendering also starts from `world_asset_manifest.json` texture keys. Premium object sprites are individual transparent PNGs under `current/objects_premium/` and win over curated backup objects under `current/objects/`; dense atlas previews remain debug-only and must not become runtime sources of truth.
 - Active overworld cloud rendering starts from `current/clouds/cloud_manifest.json`. The overlay is visual-only, remains active through world-backed dialogs/menus, and may be toggled with F7 for debugging; cloud texture selection and tint transitions must not consume gameplay RNG or alter semantic world generation.
 - Active dungeon/city slicing starts from exact 8x8 atlas math from `dungeonAtlas.manifest.json`, then applies the shared source inset: `sx = tile.source.x + 3`, `sy = tile.source.y + 3`, `sw = tile.source.width - 6`, `sh = tile.source.height - 6`. Do not run rembg or chroma-key this opaque atlas.
+- The title screen uses `title_screen` as the full-screen image, with black letterboxing if the source ratio does not exactly match the 16:9 canvas. Its title menu is `Continue` first and `New Game` second, with no title subtitle or controls/help line.
 - Dungeons and town interiors should not pick all floor/wall atlas variants evenly. Keep one dominant base tile per theme and use sparse accents. Small dungeon maps should be centered, and unused dungeon filler should render as void unless adjacent to carved rooms/corridors.
 - Generated overworld terrain should avoid using fixed-orientation coast/foam cells as random stamps. Normal gameplay uses semantic mask rendering with selected individual material PNGs and code-rendered pixel boundary accents for shallow water, beach, coast foam/tint, and grass/sand/ice boundaries. Do not return to square atlas tiles plus tiny edge strips as the normal terrain solution, random variant spam, direction-specific transition tile stamping, or global smoothing.
 - External terrain material packs from `D:\atlas\output` are source-of-truth individual PNG fills only after visual approval. Missing semantic material ideas are acceptable; roads, rivers, riverbanks, coastlines, forests, mountain ridges, towns, rocks, and landmarks remain renderer or overlay concerns and must not be baked into approved base materials.

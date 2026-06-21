@@ -62,6 +62,8 @@ const LAYOUT_HEIGHT = DESIGN_HEIGHT / PIXEL_ART_SCALE;
 const WIDTH = LAYOUT_WIDTH;
 const HEIGHT = LAYOUT_HEIGHT;
 const TILE = 32;
+const TITLE_MENU_START_Y = 418;
+const TITLE_MENU_ROW_HEIGHT = 38;
 const DEBUG_WORLD_LAYOUT = false;
 const SAVE_KEY = "crystal-oath-save-v1";
 const WORLD_W = 96;
@@ -513,6 +515,7 @@ const ASSET_PATHS = [
   ["fx_sleep", "effects/sleep.png"],
   ["fx_ward", "effects/ward.png"],
   ["fx_relic_restore", "effects/relic_restore.png"],
+  ["title_screen", "title/title_screen.png"],
   ["title_logo", "title/title_logo.png"],
   ["title_four_crystals", "title/four_star_relics.png"]
 ] as const;
@@ -1485,7 +1488,7 @@ class CrystalOathScene extends Phaser.Scene {
   private texts: Phaser.GameObjects.Text[] = [];
   private images: Phaser.GameObjects.Image[] = [];
   private mode: Mode = "title";
-  private titleOptions = ["New Game", "Load Game", "Controls"];
+  private titleOptions = ["Continue", "New Game"];
   private titleSelected = 0;
   private menu?: ActiveMenu;
   private dialogue?: Dialogue;
@@ -1743,13 +1746,13 @@ class CrystalOathScene extends Phaser.Scene {
 
   private handleTitlePointer(point: Vec): boolean {
     const optionIndex = this.titleOptions.findIndex((_, idx) => {
-      const rowY = 332 + idx * 34;
+      const rowY = TITLE_MENU_START_Y + idx * TITLE_MENU_ROW_HEIGHT;
       return Math.abs(point.x - WIDTH / 2) <= 180 && point.y >= rowY - 8 && point.y <= rowY + 28;
     });
     if (optionIndex < 0) return false;
     this.titleSelected = optionIndex;
     const option = this.titleOptions[this.titleSelected];
-    if (option === "Load Game" && !localStorage.getItem(SAVE_KEY)) {
+    if (option === "Continue" && !localStorage.getItem(SAVE_KEY)) {
       this.audio.blip("error");
       this.markDirty();
       return true;
@@ -1761,12 +1764,16 @@ class CrystalOathScene extends Phaser.Scene {
 
   private confirmTitleSelection() {
     const option = this.titleOptions[this.titleSelected];
+    if (option === "Continue") {
+      if (this.loadGame()) this.audio.blip("confirm");
+      else {
+        this.audio.blip("error");
+        this.flashMessage("No save found.");
+      }
+      return;
+    }
     this.audio.blip("confirm");
     if (option === "New Game") this.newGame();
-    if (option === "Load Game") {
-      if (!this.loadGame()) this.flashMessage("No save found.");
-    }
-    if (option === "Controls") this.showControls("title");
   }
 
   private handleGameOver(event: KeyboardEvent) {
@@ -4652,7 +4659,7 @@ Statuses: ${statuses}`;
   private configureTextureFiltering() {
     for (const [key] of ASSET_PATHS) {
       if (!this.textures.exists(key)) continue;
-      const filter = key.startsWith("battle_bg_") ? Phaser.Textures.FilterMode.LINEAR : Phaser.Textures.FilterMode.NEAREST;
+      const filter = key.startsWith("battle_bg_") || key === "title_screen" ? Phaser.Textures.FilterMode.LINEAR : Phaser.Textures.FilterMode.NEAREST;
       this.textures.get(key).setFilter(filter);
     }
     for (const asset of WORLD_CURRENT_ASSETS) {
@@ -4706,6 +4713,35 @@ Statuses: ${statuses}`;
     if (tint !== undefined) image.setTint(tint);
     this.images.push(image);
     return image;
+  }
+
+  private drawContainedTexture(
+    key: AssetKey,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    depth = LAYER_WORLD_IMAGE,
+    alpha = 1
+  ) {
+    const source = this.textures.get(key).getSourceImage() as { width?: number; height?: number } | undefined;
+    const sourceWidth = source?.width ?? 0;
+    const sourceHeight = source?.height ?? 0;
+    if (sourceWidth <= 0 || sourceHeight <= 0) {
+      return this.drawTexture(key, x, y, width, height, depth, alpha);
+    }
+    const scale = Math.min(width / sourceWidth, height / sourceHeight);
+    const displayWidth = sourceWidth * scale;
+    const displayHeight = sourceHeight * scale;
+    return this.drawTexture(
+      key,
+      x + (width - displayWidth) / 2,
+      y + (height - displayHeight) / 2,
+      displayWidth,
+      displayHeight,
+      depth,
+      alpha
+    );
   }
 
   private drawCroppedTexture(
@@ -4864,29 +4900,35 @@ Statuses: ${statuses}`;
   }
 
   private drawTitle() {
-    this.g.fillStyle(0x050812, 1).fillRect(0, 0, WIDTH, HEIGHT);
-    for (let i = 0; i < 120; i += 1) {
-      const x = (i * 73) % WIDTH;
-      const y = (i * 41) % HEIGHT;
-      const c = i % 3 === 0 ? 0xfff0a8 : i % 3 === 1 ? 0x83d6ff : 0xffffff;
-      this.g.fillStyle(c, i % 5 === 0 ? 0.42 : 0.28).fillRect(x, y, i % 5 === 0 ? 3 : 2, i % 5 === 0 ? 3 : 2);
-    }
-    if (this.hasTexture("title_four_crystals")) this.drawTexture("title_four_crystals", WIDTH / 2 - 96, 48, 192, 64, LAYER_WORLD_IMAGE);
-    else this.drawPixelCrystal(WIDTH / 2 - 24, 48, 2.4);
-    const hasTitleLogo = this.hasTexture("title_logo");
-    if (hasTitleLogo) this.drawTexture("title_logo", WIDTH / 2 - 210, 128, 420, 96, LAYER_WORLD_IMAGE);
+    this.g.fillStyle(0x000000, 1).fillRect(0, 0, WIDTH, HEIGHT);
+    const hasTitleScreen = this.hasTexture("title_screen");
+    if (hasTitleScreen) this.drawContainedTexture("title_screen", 0, 0, WIDTH, HEIGHT, LAYER_WORLD_IMAGE);
     else {
-      this.text(WIDTH / 2, 178, "CRYSTAL OATH", 44, "#fff2a8", "center");
-      this.text(WIDTH / 2, 226, "Dawn of the Four Stars", 24, "#a8ddff", "center");
+      this.g.fillStyle(0x050812, 1).fillRect(0, 0, WIDTH, HEIGHT);
+      for (let i = 0; i < 120; i += 1) {
+        const x = (i * 73) % WIDTH;
+        const y = (i * 41) % HEIGHT;
+        const c = i % 3 === 0 ? 0xfff0a8 : i % 3 === 1 ? 0x83d6ff : 0xffffff;
+        this.g.fillStyle(c, i % 5 === 0 ? 0.42 : 0.28).fillRect(x, y, i % 5 === 0 ? 3 : 2, i % 5 === 0 ? 3 : 2);
+      }
+      if (this.hasTexture("title_four_crystals")) this.drawTexture("title_four_crystals", WIDTH / 2 - 96, 48, 192, 64, LAYER_WORLD_IMAGE);
+      else this.drawPixelCrystal(WIDTH / 2 - 24, 48, 2.4);
+      const hasTitleLogo = this.hasTexture("title_logo");
+      if (hasTitleLogo) this.drawTexture("title_logo", WIDTH / 2 - 210, 128, 420, 96, LAYER_WORLD_IMAGE);
+      else {
+        this.text(WIDTH / 2, 178, "CRYSTAL OATH", 44, "#fff2a8", "center");
+        this.text(WIDTH / 2, 226, "Dawn of the Four Stars", 24, "#a8ddff", "center");
+      }
     }
-    this.text(WIDTH / 2, hasTitleLogo ? 268 : 276, "An original turn-based Asterra adventure", 16, "#cbd6ff", "center");
     const hasSave = !!localStorage.getItem(SAVE_KEY);
     this.titleOptions.forEach((option, idx) => {
-      const disabled = option === "Load Game" && !hasSave;
+      const disabled = option === "Continue" && !hasSave;
       const prefix = idx === this.titleSelected ? ">" : " ";
-      this.text(WIDTH / 2, 332 + idx * 34, `${prefix} ${option}`, 22, disabled ? "#657087" : "#ffffff", "center");
+      this
+        .text(WIDTH / 2, TITLE_MENU_START_Y + idx * TITLE_MENU_ROW_HEIGHT, `${prefix} ${option}`, 22, disabled ? "#8a91a2" : "#ffffff", "center")
+        .setStroke("#02040a", 5)
+        .setShadow(0, 2, "#02040a", 4, true, true);
     });
-    this.text(WIDTH / 2, 474, "Enter/Z confirms. M toggles mute.", 15, "#aab3c8", "center");
   }
 
   private drawWorld() {

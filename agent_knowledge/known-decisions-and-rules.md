@@ -49,6 +49,7 @@
 - The active overworld uses the `semantic_campaign_archipelago_world` generator plus separate POI/landmark/harbor marker rendering. It does not use removed landmark/object overlay experiments, extracted tile pools, or generated 10x10 tile IDs.
 - Greenhaven/town interiors use cleaned v2 floor, wall, exit, service sign, and prop PNGs. Service markers are icon-only in a five-marker row; do not add always-visible labels back onto the markers.
 - Battle presentation uses v2 opaque 16:9 JPEG backdrops, v2 enemies/bosses, normalized fighter/priest/wizard party battlers, and lower target/command/status panels. Redundant small party head portraits and standalone party battle PNGs are intentionally not drawn on the battlefield.
+- Title presentation uses `assets/title/title_screen.png` as a full-screen image, drawn with aspect-preserving contain fit over a black background. Keep the title menu as live text ordered `Continue`, then `New Game`, and do not reintroduce title-screen control/help subtitles.
 - The local rembg environment for this project is `D:\tools\rembg\venv_rembg\Scripts\rembg.exe` with `birefnet-general`; available ONNX Runtime providers were `DmlExecutionProvider` and `CPUExecutionProvider`. Do not add NVIDIA/CUDA assumptions.
 - Audio is generated in code.
 - Save data uses browser `localStorage` under `crystal-oath-save-v1`.
