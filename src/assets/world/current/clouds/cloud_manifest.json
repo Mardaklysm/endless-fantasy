@@ -1,0 +1,208 @@
+{
+  "schemaVersion": 2,
+  "id": "world_tinted_cloud_overlay_manifest_v1",
+  "runtimeRoot": "src/assets/world/current",
+  "sourceFolder": "D:\\Tools\\rembg\\bg_output_2",
+  "fallbackTheme": "grassland",
+  "baseClouds": [
+    {
+      "id": "cloud_base_01",
+      "textureKey": "world_cloud_base_01",
+      "filename": "clouds/cloud_base_01.png",
+      "path": "assets/world/current/clouds/cloud_base_01.png",
+      "sourceFile": "Create_a_single_overworld_cloud_202606212049 (1).png",
+      "cleanupMethod": "preserve_existing_alpha",
+      "topBand": true,
+      "dimensions": {
+        "width": 2672,
+        "height": 1043
+      },
+      "sourceDimensions": {
+        "width": 2752,
+        "height": 1536
+      },
+      "sourceCrop": {
+        "x": 44,
+        "y": 183,
+        "width": 2672,
+        "height": 1043
+      },
+      "notes": "Reusable base cloud mask; visible pixels preserved and transparent padding cropped."
+    },
+    {
+      "id": "cloud_base_02",
+      "textureKey": "world_cloud_base_02",
+      "filename": "clouds/cloud_base_02.png",
+      "path": "assets/world/current/clouds/cloud_base_02.png",
+      "sourceFile": "Create_a_single_overworld_cloud_202606212049 (2).png",
+      "cleanupMethod": "preserve_existing_alpha",
+      "topBand": true,
+      "dimensions": {
+        "width": 2701,
+        "height": 1446
+      },
+      "sourceDimensions": {
+        "width": 2752,
+        "height": 1536
+      },
+      "sourceCrop": {
+        "x": 42,
+        "y": 6,
+        "width": 2701,
+        "height": 1446
+      },
+      "notes": "Reusable base cloud mask; visible pixels preserved and transparent padding cropped."
+    },
+    {
+      "id": "cloud_base_03",
+      "textureKey": "world_cloud_base_03",
+      "filename": "clouds/cloud_base_03.png",
+      "path": "assets/world/current/clouds/cloud_base_03.png",
+      "sourceFile": "Create_a_single_overworld_cloud_202606212049 (3).png",
+      "cleanupMethod": "preserve_existing_alpha",
+      "topBand": true,
+      "dimensions": {
+        "width": 2602,
+        "height": 1066
+      },
+      "sourceDimensions": {
+        "width": 2752,
+        "height": 1536
+      },
+      "sourceCrop": {
+        "x": 68,
+        "y": 104,
+        "width": 2602,
+        "height": 1066
+      },
+      "notes": "Reusable base cloud mask; visible pixels preserved and transparent padding cropped."
+    },
+    {
+      "id": "cloud_base_04",
+      "textureKey": "world_cloud_base_04",
+      "filename": "clouds/cloud_base_04.png",
+      "path": "assets/world/current/clouds/cloud_base_04.png",
+      "sourceFile": "Create_a_single_overworld_cloud_202606212049 (4).png",
+      "cleanupMethod": "preserve_existing_alpha",
+      "topBand": true,
+      "dimensions": {
+        "width": 2506,
+        "height": 1117
+      },
+      "sourceDimensions": {
+        "width": 2752,
+        "height": 1536
+      },
+      "sourceCrop": {
+        "x": 154,
+        "y": 38,
+        "width": 2506,
+        "height": 1117
+      },
+      "notes": "Reusable base cloud mask; visible pixels preserved and transparent padding cropped."
+    },
+    {
+      "id": "cloud_base_05",
+      "textureKey": "world_cloud_base_05",
+      "filename": "clouds/cloud_base_05.png",
+      "path": "assets/world/current/clouds/cloud_base_05.png",
+      "sourceFile": "Create_a_single_overworld_cloud_202606212049.png",
+      "cleanupMethod": "preserve_existing_alpha",
+      "topBand": true,
+      "dimensions": {
+        "width": 2746,
+        "height": 1083
+      },
+      "sourceDimensions": {
+        "width": 2752,
+        "height": 1536
+      },
+      "sourceCrop": {
+        "x": 3,
+        "y": 207,
+        "width": 2746,
+        "height": 1083
+      },
+      "notes": "Reusable base cloud mask; visible pixels preserved and transparent padding cropped."
+    }
+  ],
+  "themeCloudPools": {
+    "grassland": [],
+    "jungle": [],
+    "snow": [],
+    "desert": [],
+    "swamp": [],
+    "volcanic": [],
+    "deadland": []
+  },
+  "themeTints": {
+    "grassland": {
+      "tint": "#FFFFFF",
+      "alpha": 0.5,
+      "speedMultiplier": 1.0,
+      "tintStrength": 0.12
+    },
+    "jungle": {
+      "tint": "#DFFFEA",
+      "alpha": 0.48,
+      "speedMultiplier": 0.9,
+      "tintStrength": 0.42
+    },
+    "snow": {
+      "tint": "#E5F7FF",
+      "alpha": 0.52,
+      "speedMultiplier": 0.85,
+      "tintStrength": 0.42
+    },
+    "desert": {
+      "tint": "#FFE7B8",
+      "alpha": 0.45,
+      "speedMultiplier": 1.05,
+      "tintStrength": 0.46
+    },
+    "swamp": {
+      "tint": "#C8D6B0",
+      "alpha": 0.44,
+      "speedMultiplier": 0.75,
+      "tintStrength": 0.55
+    },
+    "volcanic": {
+      "tint": "#A88A78",
+      "alpha": 0.42,
+      "speedMultiplier": 0.8,
+      "tintStrength": 0.58
+    },
+    "deadland": {
+      "tint": "#B7A8C8",
+      "alpha": 0.43,
+      "speedMultiplier": 0.8,
+      "tintStrength": 0.54
+    }
+  },
+  "islandThemeMap": {
+    "greenhaven": "grassland",
+    "Greenhaven": "grassland",
+    "coralreach": "jungle",
+    "Coralreach": "jungle",
+    "frostmere": "snow",
+    "Frostmere": "snow",
+    "highspire": "grassland",
+    "Highspire": "grassland",
+    "ashfall": "volcanic",
+    "Ashfall": "volcanic"
+  },
+  "semanticThemeMap": {
+    "grassland": "grassland",
+    "sand_coast": "desert",
+    "ice": "snow",
+    "mixed_highland": "grassland",
+    "minor": "grassland"
+  },
+  "fallbackRules": [
+    "Resolve island or semantic theme to a cloud tint theme.",
+    "Use a non-empty themeCloudPools entry when biome-specific cloud art exists.",
+    "Use baseClouds when the theme-specific pool is empty or missing.",
+    "Use fallbackTheme grassland when the island or theme is unknown.",
+    "Disable cloud overlay gracefully if no cloud sprites are available."
+  ]
+}

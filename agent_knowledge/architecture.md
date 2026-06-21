@@ -28,9 +28,11 @@ D:\Projects\Endless Fantasy\
     data/
       characterSprites.ts
       dungeonTiles.ts
+      worldCloudAssets.ts
       worldObjects.ts
       worldTiles.ts
     world/
+      cloudOverlay.ts
       dungeonGenerator.ts
       seededRng.ts
       worldGenerator.ts
@@ -83,11 +85,13 @@ Ignored/generated folders:
 - Imported class sprite manifest from `src/data/characterSprites.ts` for fighter/priest/wizard frame rectangles, anchors, and source metadata.
 - Imported world tile compatibility registry from `src/data/worldTiles.ts` for semantic tile IDs, walkability, movement cost, encounter family, and tags. It no longer contains overworld atlas source rectangles.
 - Imported current world asset manifest helpers from `src/data/worldCurrentAssets.ts` for selected terrain fill texture keys, overlay/POI/route mappings, placeholder status, and deprecated-source metadata.
+- Imported cloud manifest helpers from `src/data/worldCloudAssets.ts` for island/theme cloud-pool fallback resolution.
 - Imported world object ID registry from `src/data/worldObjects.ts` for stable semantic object IDs, categories, and tags. Object rendering resolves through current manifest mappings, not atlas source rectangles.
 - Imported dungeon/city tile manifest from `src/data/dungeonTiles.ts` for the active `dungeon_atlas`, 8x8 source rectangles, shared source-edge inset, tile IDs, categories, themes, and tags. The current atlas has 64 classified dungeon/city cells.
 - `src/world/seededRng.ts`: deterministic RNG/hash/noise helpers shared by map and dungeon generation.
 - `src/world/semantic/`: runtime-safe semantic overworld generator and renderer helpers. `semanticProfiles.ts` defines the campaign profile with four major islands (Greenhaven, Coralreach, Frostmere, Highspire) plus seeded minor islands and per-island overlay rules. `semanticGenerator.ts` builds land/water masks, island IDs, coast distance bands, grass/sand/ice biomes, elevation/ridges, rivers, passable forests, theme-capped mountain ranges, POIs, harbors, road graph, road-river bridge candidates, overlay collision policies, and walkability. `semanticMaskTerrainRenderer.ts` generates the normal Phaser terrain background as a crisp mask-rendered texture using selected individual material PNGs as repeating texture sources. `semanticRouteRenderer.ts` generates transparent styled road/river stroke overlays from semantic paths. `semanticValidation.ts` validates starter spawn, major islands, harbors, POIs, beach buffers, roads, rivers, mountain caps/ranges/snow rules, forest passability, and overlay separation.
 - `src/world/worldGenerator.ts`: compatibility facade adapting `SemanticWorld` into the existing Phaser-facing `GeneratedWorld` contract: semantic tile ID grid, biome grid, island records, POIs, harbor travel points, road visual masks, river paths, current-folder dock/bridge overlays, road-river bridge candidates, object overlays with collision policies, sea route dots, start position, and validation. This keeps `src/main.ts` gameplay systems working while the geography source is semantic.
+- `src/world/cloudOverlay.ts`: visual-only Phaser overlay controller for slow drifting overworld clouds. It selects from the active island/theme pool, falls back to the default grassland pool when region pools are empty, and renders above the world layers but below UI.
 - `src/world/dungeonGenerator.ts`: deterministic room-and-corridor dungeon floor generation from `worldSeed + dungeonId + tier`, including entrance/stairs, chests, switch/gate, and boss placement.
 - `tools/worldgen-lab/`: standalone Node/pngjs preview/report tool for the semantic overworld direction. It imports the runtime-safe core from `src/world/semantic/`, but keeps pngjs/filesystem rendering outside Phaser.
 - `SynthAudio`: WebAudio helper for generated music loops and sound effects.
@@ -159,6 +163,8 @@ Texture filtering is per asset family: battle backgrounds use linear filtering a
 New games call the semantic campaign generator through `generateWorld()`. The generated world includes the tile grid, island IDs per tile, island records, POI coordinates and object IDs, seed-derived ocean object overlays, mountain range/forest overlays with collision policies, start position, harbor docks, shallow-water coordinates, sea routes, road visual masks, river paths, road-river bridge candidates, entry triggers, semantic layers, and validation result. `CrystalOathScene.locations()` adapts generated POIs back into town/dungeon/gate/final entry behavior and also exposes harbor/landmark overworld interactions.
 
 Seed-derived ocean overlays, forests, mountain range cells, current-folder dock/bridge sprites, POIs, player, and UI are separate layers above the mask terrain background and styled route overlay. Road and river graph data remains in the semantic world and normal gameplay renders it through the styled stroke cache; F6 `roads` and F6 `rivers` show graph diagnostics only. `drawLocationIcon` prefers premium current POI texture mappings from `world_asset_manifest.json`, uses current asset scale/anchor metadata for approved object sprites, falls back to curated backup objects, then marker textures or generated art.
+
+The drifting cloud overlay is separate from generated world content. `CrystalOathScene` preloads cloud PNGs from `src/assets/world/current/clouds/`, passes island/theme context to `OverworldCloudOverlay` only in world mode, and places cloud sprites at `LAYER_UI_GRAPHICS - 1` so they sit above the map/world art and below HUD/menu panels. F7 toggles the overlay for debug checks.
 
 F6 semantic debug cycling includes normal/off, edge debug, raw square tiles, semantic masks, distance bands, walkability, overlay policy, mountain candidates/accepted range cells, forest soft-terrain cells, island themes, POI IDs/clearance, roads, and rivers. Edge debug draws water/beach edges cyan, sand/grass edges magenta, sand/ice edges white, and grass/ice edges blue.
 

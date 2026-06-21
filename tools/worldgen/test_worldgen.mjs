@@ -14,6 +14,7 @@ import {
   WORLD_CURRENT_TERRAIN_TEXTURE_KEYS,
   worldCurrentPoiTextureKeyFor
 } from "../../src/data/worldCurrentAssets.ts";
+import { WORLD_CLOUD_ASSET_BY_TEXTURE_KEY, WORLD_CLOUD_ASSETS, WORLD_CLOUD_MANIFEST, worldCloudPoolForContext, worldCloudThemeForContext } from "../../src/data/worldCloudAssets.ts";
 import { DUNGEON_ATLAS } from "../../src/data/dungeonTiles.ts";
 import { SEMANTIC_BIOME, SEMANTIC_WATER } from "../../src/world/semantic/semanticTypes.ts";
 import { SEMANTIC_MASK_TERRAIN_CLASSES, describeSemanticMaskTerrainRenderPlan } from "../../src/world/semantic/semanticMaskTerrainRenderer.ts";
@@ -32,6 +33,7 @@ console.log("semantic worldgen runtime validation passed.");
 function validateRuntimeAssets() {
   assertPng(DUNGEON_ATLAS.image, 1024, 1024, "active dungeon atlas");
   validateCurrentWorldAssetManifest();
+  validateWorldCloudManifest();
   validateNoDeprecatedRuntimeAtlasReferences();
   assert(worldTileById(WORLD_TILE_IDS.deepWater), "deep water tile is missing.");
   assert(worldTileById(WORLD_TILE_IDS.shallowWater), "shallow water tile is missing.");
@@ -179,6 +181,32 @@ function validateCurrentWorldAssetManifest() {
     WORLD_CURRENT_OBJECT_TEXTURE_KEY_BY_ID.small_mountain_peak === WORLD_CURRENT_ASSET_MANIFEST.premiumObjectMappings.small_mountain_peak,
     "Resolved mountain object mapping should prefer the premium asset."
   );
+}
+
+function validateWorldCloudManifest() {
+  assert(WORLD_CLOUD_MANIFEST.fallbackTheme === "grassland", "Cloud manifest should use grassland as the fallback tint theme.");
+  assert(WORLD_CLOUD_MANIFEST.baseClouds?.length === 5, `Expected 5 reusable base clouds, got ${WORLD_CLOUD_MANIFEST.baseClouds?.length ?? 0}.`);
+  for (const themeName of ["grassland", "jungle", "snow", "desert", "swamp", "volcanic", "deadland"]) {
+    assert(WORLD_CLOUD_MANIFEST.themeTints[themeName], `Cloud manifest should define a ${themeName} tint.`);
+    assert(typeof WORLD_CLOUD_MANIFEST.themeTints[themeName].alpha === "number", `${themeName} cloud tint should define alpha.`);
+    assert(typeof WORLD_CLOUD_MANIFEST.themeTints[themeName].speedMultiplier === "number", `${themeName} cloud tint should define speed multiplier.`);
+    assert(Array.isArray(WORLD_CLOUD_MANIFEST.themeCloudPools[themeName]), `Cloud manifest should define a future ${themeName} cloud pool.`);
+  }
+  for (const asset of WORLD_CLOUD_ASSETS) {
+    assert(WORLD_CLOUD_ASSET_BY_TEXTURE_KEY[asset.textureKey] === asset, `Cloud texture key lookup failed for ${asset.textureKey}.`);
+    assert(asset.id.startsWith("cloud_base_"), `${asset.id} should be a reusable base cloud mask.`);
+    assert(asset.filename.startsWith("clouds/"), `${asset.id} should live under current/clouds.`);
+    assert(asset.topBand, `${asset.id} should be marked as a top-band overlay.`);
+    assertPng(path.join(WORLD_CLOUD_MANIFEST.runtimeRoot, asset.filename), asset.dimensions.width, asset.dimensions.height, `world cloud ${asset.id}`);
+  }
+  assert(worldCloudThemeForContext({ islandId: "greenhaven", islandName: "Greenhaven", islandTheme: "grassland" }).themeName === "grassland", "Greenhaven should use grassland cloud tint.");
+  const coralreachClouds = worldCloudPoolForContext({ islandId: "coralreach", islandName: "Coralreach", islandTheme: "sand_coast" });
+  assert(coralreachClouds.themeName === "jungle" && coralreachClouds.usedBaseClouds, "Coralreach should use jungle cloud tint with the reusable base cloud pool.");
+  const frostmereClouds = worldCloudPoolForContext({ islandId: "frostmere", islandName: "Frostmere", islandTheme: "ice" });
+  assert(frostmereClouds.themeName === "snow" && frostmereClouds.usedBaseClouds, "Frostmere should use snow cloud tint with the reusable base cloud pool.");
+  const unknownClouds = worldCloudPoolForContext({ islandId: "unknown-island", islandTheme: "unknown-theme" });
+  assert(unknownClouds.themeName === "grassland" && unknownClouds.usedFallbackTheme, "Unknown cloud themes should gracefully fall back to grassland tint.");
+  assert(unknownClouds.usedBaseClouds, "Unknown cloud themes should still use the reusable base cloud pool.");
 }
 
 function validateNoDeprecatedRuntimeAtlasReferences() {

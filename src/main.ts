@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { CHARACTER_SPRITES, type CharacterSpriteClass, type CharacterSpriteFrameName } from "./data/characterSprites";
 import dungeonAtlasImageUrl from "./assets/world/dungeon_atlas.png";
+import { WORLD_CLOUD_ASSETS, WORLD_CLOUD_MANIFEST } from "./data/worldCloudAssets.ts";
 import {
   DUNGEON_ATLAS,
   DUNGEON_ATLAS_SOURCE_INSET,
@@ -43,11 +44,13 @@ import {
   isWorldPositionWalkable,
   type GeneratedWorld,
   type IslandId,
+  type IslandTheme,
   type RoadRotation,
   type WorldRoadVisual,
   type WorldLandmarkKind,
   type WorldPoiKind
 } from "./world/worldGenerator.ts";
+import { OverworldCloudOverlay } from "./world/cloudOverlay.ts";
 import "./style.css";
 
 const DESIGN_WIDTH = 1920;
@@ -1478,6 +1481,7 @@ class CrystalOathScene extends Phaser.Scene {
   private g!: Phaser.GameObjects.Graphics;
   private worldOverlay!: Phaser.GameObjects.Graphics;
   private ui!: Phaser.GameObjects.Graphics;
+  private cloudOverlay?: OverworldCloudOverlay;
   private texts: Phaser.GameObjects.Text[] = [];
   private images: Phaser.GameObjects.Image[] = [];
   private mode: Mode = "title";
@@ -1498,6 +1502,7 @@ class CrystalOathScene extends Phaser.Scene {
   private worldRouteOverlayCacheSeed = "";
   private routeOverlayMode: SemanticRouteOverlayMode = "styled";
   private riverOverlayMode: SemanticRouteOverlayMode = "styled";
+  private cloudOverlayEnabled = true;
   private party: CharacterState[] = [];
   private inventory: Record<string, number> = {};
   private gearBag: Record<string, number> = {};
@@ -1567,6 +1572,11 @@ class CrystalOathScene extends Phaser.Scene {
       if (url) this.load.image(asset.textureKey, url);
       else console.warn(`Missing current world asset module for ${asset.filename}`);
     }
+    for (const cloud of WORLD_CLOUD_ASSETS) {
+      const url = WORLD_CURRENT_ASSET_MODULES[`./assets/world/current/${cloud.filename}`];
+      if (url) this.load.image(cloud.textureKey, url);
+      else console.warn(`Missing current world cloud asset module for ${cloud.filename}`);
+    }
   }
 
   create() {
@@ -1576,6 +1586,7 @@ class CrystalOathScene extends Phaser.Scene {
     this.worldOverlay.setDepth(LAYER_WORLD_IMAGE + 0.5);
     this.ui = this.add.graphics();
     this.ui.setDepth(LAYER_UI_GRAPHICS);
+    this.cloudOverlay = new OverworldCloudOverlay(this);
     this.configureRenderResolution();
     this.logActiveWorldTileset();
     this.buildWorldFromSeed(this.worldSeed);
@@ -1607,6 +1618,7 @@ class CrystalOathScene extends Phaser.Scene {
         `Approved terrain fills: ${terrainAssets.length}`,
         `Premium world objects: ${premiumWorldObjectAssets.length}`,
         `Backup world objects: ${worldObjectAssets.length - premiumWorldObjectAssets.length}`,
+        `Cloud overlay fallback theme: ${WORLD_CLOUD_MANIFEST.fallbackTheme} (${WORLD_CLOUD_ASSETS.length} loaded base cloud assets)`,
         `Temporary current-folder placeholders: ${placeholderAssets.length}`,
         "World object resolution: premium objects_premium first, backup objects second, generated fallback last",
         `Deep ocean: ${WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.deepOcean}`,
@@ -1630,6 +1642,7 @@ class CrystalOathScene extends Phaser.Scene {
     this.updateMovement(dt);
     this.updateBattleFlow(dt);
     if (this.dirty) this.draw();
+    this.updateCloudOverlay(dt);
   }
 
   private handleKey(event: KeyboardEvent) {
@@ -1659,6 +1672,13 @@ class CrystalOathScene extends Phaser.Scene {
       this.cycleSemanticDebugOverlay();
       return;
     }
+    if (event.code === "F7") {
+      this.cloudOverlayEnabled = !this.cloudOverlayEnabled;
+      this.flashMessage(`Cloud overlay: ${this.cloudOverlayEnabled ? "on" : "off"}`);
+      this.updateCloudOverlay(0);
+      this.markDirty();
+      return;
+    }
 
     if (this.mode === "title") this.handleTitle(event);
     else if (this.mode === "dialogue") this.handleDialogue(event);
@@ -1685,6 +1705,7 @@ class CrystalOathScene extends Phaser.Scene {
       event.code === "KeyM" ||
       event.code === "KeyF" ||
       event.code === "F6" ||
+      event.code === "F7" ||
       event.code === "F9"
     );
   }
@@ -2720,6 +2741,10 @@ class CrystalOathScene extends Phaser.Scene {
 
   private currentIslandName(): string {
     return this.generatedWorld?.islands.find((island) => island.id === this.currentIslandId)?.name ?? "Open Sea";
+  }
+
+  private currentIslandTheme(): IslandTheme | undefined {
+    return this.generatedWorld?.islands.find((island) => island.id === this.currentIslandId)?.theme;
   }
 
   private interactWorldLocation(loc: LocationDef) {
@@ -4577,6 +4602,7 @@ Statuses: ${statuses}`;
     else if (this.mode === "battle") this.drawBattle();
     else if (this.mode === "gameOver") this.drawGameOver();
     else if (this.mode === "ending") this.drawEnding();
+    this.updateCloudOverlay(0);
   }
 
   private clearText() {
@@ -4632,6 +4658,24 @@ Statuses: ${statuses}`;
     for (const asset of WORLD_CURRENT_ASSETS) {
       if (this.textures.exists(asset.textureKey)) this.textures.get(asset.textureKey).setFilter(Phaser.Textures.FilterMode.NEAREST);
     }
+    for (const cloud of WORLD_CLOUD_ASSETS) {
+      if (this.textures.exists(cloud.textureKey)) this.textures.get(cloud.textureKey).setFilter(Phaser.Textures.FilterMode.LINEAR);
+    }
+  }
+
+  private updateCloudOverlay(deltaMs: number) {
+    this.cloudOverlay?.update(deltaMs, {
+      active: this.mode === "world",
+      enabled: this.cloudOverlayEnabled,
+      worldSeed: this.worldSeed,
+      islandId: this.currentIslandId,
+      islandName: this.currentIslandName(),
+      islandTheme: this.currentIslandTheme(),
+      viewportWidth: WIDTH,
+      viewportHeight: HEIGHT,
+      pixelScale: PIXEL_ART_SCALE,
+      depth: LAYER_UI_GRAPHICS - 1
+    });
   }
 
   private drawTexture(
@@ -4874,6 +4918,17 @@ Statuses: ${statuses}`;
       const mapPixelH = this.world.length;
       this.g.fillStyle(0xffffff, 0.5);
       this.text(16, HEIGHT - 32, `W${mapPixelW}x${mapPixelH}  cam ${tileCam.x},${tileCam.y}  player ${this.worldPos.x},${this.worldPos.y}`, 10, "#aaccff", "left");
+    }
+    if (this.semanticDebugOverlay !== "off") {
+      const cloudState = this.cloudOverlay?.debugState();
+      this.text(
+        16,
+        HEIGHT - 48,
+        `Clouds ${cloudState?.enabled ? "on" : "off"} theme ${cloudState?.themeName ?? "none"} tint ${cloudState?.activeTint ?? "none"} active ${cloudState?.activeCloudId ?? "none"}`,
+        10,
+        "#cfe8ff",
+        "left"
+      );
     }
   }
 
