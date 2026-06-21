@@ -163,15 +163,15 @@ The lab stores a logical world model separately from its rendered preview. The s
 - land mask
 - island id map and island records
 - distance-to-land and distance-to-water fields
-- water depth class: deep ocean, shallow coastal water, lake/river overlays
+- water depth class: deep ocean, shallow coastal water, and semantic freshwater masks
 - biome map: grassland, sand/beach/desert, ice/snow
 - moisture, temperature, and coldness fields
 - ridge/mountain field
-- mountain overlay map
+- mountain mask
 - mountain range records
-- river overlay map
+- river mask
 - forest overlay map
-- road overlay map and road graph
+- road mask and road graph
 - POI list and harbor list
 - walkability/logical terrain map
 
@@ -230,9 +230,9 @@ Elevation is separate from biome. It combines inland distance, base island heigh
 
 ## F. Rivers And Lakes
 
-River sources are chosen from high-elevation or cold/ridge areas while avoiding mountain masks and POI footprints. Rivers greedily flow toward lower elevation and coast/lakes with cardinal seeded tie-breaking. Loops are discarded. Surviving rivers remain semantic masks/paths, then render as connected cardinal river shapes filled with the freshwater material. The old styled river stroke renderer and full-square freshwater stamp path are disabled for normal output.
+River sources are chosen from high-elevation or cold/ridge areas while avoiding mountain masks and POI footprints. Rivers greedily flow toward lower elevation and coast/lakes with cardinal seeded tie-breaking, then expand into deterministic semantic freshwater ribbons before roads, bridges, collision, and rendering are resolved. Surviving river/lake masks render as freshwater terrain inside the semantic mask terrain renderer; the old styled river stroke renderer, connected river-tile overlay, and full-square freshwater stamp path are disabled for normal output.
 
-Lakes are optional overlay masks in moist inland basins.
+Lakes are optional freshwater terrain masks in moist inland basins.
 
 ## G. Forests
 
@@ -249,7 +249,7 @@ POIs are placed first. Roads are then generated from a graph between settlements
 - mountains: very high
 - water/lakes: blocked
 
-Roads are semantic paths rendered as styled warm dirt stroke overlays. They do not force terrain tiles, do not rewrite base terrain, and do not require a giant road atlas.
+Roads are semantic paths rendered as packed-dirt terrain masks in the same semantic mask terrain renderer as coast, biome, river, and lake water. They do not rewrite the semantic biome, and they do not use the old smooth route stroke in normal output.
 
 ## I. POI Placement
 
@@ -273,9 +273,9 @@ The prototype renderer draws in layers:
 3. land base color/terrain
 4. beach/coast band
 5. biome fills
-6. lakes
-7. asset river tile-mask overlay
-8. styled roads/bridges
+6. freshwater river/lake masks
+7. packed-dirt road masks
+8. bridges/docks
 9. forest overlays
 10. mountain range overlays
 11. towns/POIs/ports
@@ -317,13 +317,13 @@ Recommended v1 approach:
 - semantic archipelago masks and fields
 - minimal terrain fills and brush-like edges
 - object overlays for mountains, forests, towns, ports, and dungeons
-- styled road overlays and connected freshwater river masks
+- packed-dirt road masks and freshwater river/lake masks
 - validation against logical world rules before visual polish
 
 ## Known Prototype Limitations
 
-- Roads are grid paths with simple A* costs; future visual smoothing should draw prettier curves over the same graph.
-- Rivers are greedy downhill paths; future versions should improve basin selection and add dedicated directional river edge masks or better freshwater material fills.
+- Roads are grid paths with simple A* costs; future visual smoothing should improve the same semantic road mask and graph rather than normal route strokes.
+- Rivers are semantic freshwater ribbons rendered by the terrain mask; future versions should improve basin selection and add stronger bank/pass shaping where roads cross wide rivers.
 - Mountain and forest art is procedural placeholder only.
 - Biome smoothing is simple and should eventually use connected-region cleanup.
   - This lab preview remains isolated from Phaser-specific rendering even though it shares the runtime-safe semantic generator core.
@@ -363,16 +363,16 @@ function buildMountainComponentReport(world) {
 function buildRiverTileReport(world) {
   const metrics = riverTileMetrics(world);
   return `- River masks/paths: ${world.rivers.length}
-- River tile count: ${metrics.riverTileCount}
-- River source/end tiles: ${metrics.sourceEndTileCount}
-- River corner tiles: ${metrics.cornerTileCount}
-- River straight tiles: ${metrics.straightTileCount}
-- River junction tiles: ${metrics.junctionTileCount}
-- River crossing tiles: ${metrics.crossingTileCount}
+- River terrain mask cells: ${metrics.riverTileCount}
+- River source/end mask cells: ${metrics.sourceEndTileCount}
+- River corner mask cells: ${metrics.cornerTileCount}
+- River straight mask cells: ${metrics.straightTileCount}
+- River junction mask cells: ${metrics.junctionTileCount}
+- River crossing mask cells: ${metrics.crossingTileCount}
+- Rivers connected to coast/lake: ${metrics.connectedMouthCount}/${world.rivers.length}
 - Road/river crossings: ${metrics.roadRiverCrossings}
 - Bridges created/used: ${metrics.bridgeTileCount}
-- Old programmatic river renderer segments used: 0
-- River tiles lacking atlas mapping fallback: 0
+- Old river overlay renderer used in normal preview: 0
 - River connectivity masks: ${Object.entries(metrics.connectivityCounts)
     .sort(([a], [b]) => Number.parseInt(a, 16) - Number.parseInt(b, 16))
     .map(([mask, count]) => `${mask}:${count}`)
@@ -390,8 +390,13 @@ function riverTileMetrics(world) {
     crossingTileCount: 0,
     roadRiverCrossings: countMaskOverlap(world, world.layers.roadMap, world.layers.riverMap),
     bridgeTileCount: bridgeKeys.size,
+    connectedMouthCount: 0,
     connectivityCounts: {}
   };
+  for (const river of world.rivers ?? []) {
+    const mouth = river.mouth ?? river.path?.[river.path.length - 1];
+    if (mouth && riverMouthConnectsToWater(world, mouth.x, mouth.y)) metrics.connectedMouthCount += 1;
+  }
   forEachCell(world, (x, y, i) => {
     if (!world.layers.riverMap[i]) return;
     metrics.riverTileCount += 1;
@@ -406,6 +411,21 @@ function riverTileMetrics(world) {
     else if (kind === "cross") metrics.crossingTileCount += 1;
   });
   return metrics;
+}
+
+function riverMouthConnectsToWater(world, x, y) {
+  for (const next of [
+    { x, y },
+    { x: x - 1, y },
+    { x: x + 1, y },
+    { x, y: y - 1 },
+    { x, y: y + 1 }
+  ]) {
+    if (next.x < 0 || next.y < 0 || next.x >= world.width || next.y >= world.height) continue;
+    const i = next.y * world.width + next.x;
+    if (world.layers.waterClass[i] !== 0 || world.layers.lakeMap[i]) return true;
+  }
+  return false;
 }
 
 function riverConnectivityMaskAt(world, x, y) {
@@ -480,8 +500,8 @@ This list supports the semantic-mask world generator direction. It avoids asking
 | Grass fill texture | required now | tile/fill | Readable green interior terrain. |
 | Sand/beach fill texture | required now | tile/fill | Used for beaches and desert interiors. |
 | Snow/ice fill texture | required now | tile/fill | Used for cold/high regions. |
-| River water overlay | required now | asset tile mask | Uses the current freshwater material sheet by river connectivity mask. |
-| Lake water overlay | useful soon | brush/stamp | Small lake fills and edge highlights. |
+| Freshwater terrain fill | required now | semantic mask fill | Uses the current freshwater material sheet for river and lake masks. |
+| Lake edge accents | useful soon | mask accent | Small lake edge highlights beyond the shared freshwater mask. |
 
 ## 2. Edge / Mask Rendering Assets
 
@@ -491,7 +511,7 @@ This list supports the semantic-mask world generator direction. It avoids asking
 | Beach edge tint/outline | required now | brush/shader-like overlay | Minimal outline between beach and inland biome. |
 | Shallow-water halo brush | required now | mask/field overlay | Follows distance-to-land field. |
 | Biome boundary softening brush | useful soon | procedural brush | Softens grass/sand/ice boundaries without transition tiles. |
-| River edge highlight | useful soon | tile/mask overlay | Adds readability to narrow rivers without freehand stroke bodies. |
+| River edge highlight | useful soon | mask accent | Adds readability to narrow rivers without freehand stroke bodies. |
 
 ## 3. Overlay Objects
 
@@ -514,16 +534,16 @@ This list supports the semantic-mask world generator direction. It avoids asking
 | Bridge | useful soon | overlay sprite | Road/rivers crossing. |
 | Dock | useful soon | overlay sprite/stamp | Port detail. |
 
-## 4. Road / Route Overlays
+## 4. Road / Route Masks
 
 | Asset | Priority | Form | Notes |
 | --- | --- | --- | --- |
-| Dirt road line style | required now | procedural stroke/brush | Main grassland route. |
+| Dirt road terrain fill | required now | semantic mask fill | Main route material inside the terrain mask. |
 | Sandy trail style | useful soon | procedural stroke/brush | Desert/beach variant. |
 | Snowy trail style | useful soon | procedural stroke/brush | Ice/snow variant. |
 | Bridge overlay | useful soon | overlay sprite | Crosses rivers or narrow water. |
-| River tile variants | useful soon | directional tile cells | Dedicated end, straight, corner, junction, and crossing art beyond the freshwater material. |
-| Curved road brush | later | brush | Lets paths render smooth curves while logic stays grid/graph based. |
+| Road edge accents | useful soon | mask accent | Improves packed-dirt mask transitions against grass, sand, and snow. |
+| Curved road brush | later | debug/optional brush | Lets diagnostic paths render smooth curves while logic stays grid/graph based. |
 
 ## 5. Debug / Dev Assets
 
@@ -531,12 +551,12 @@ This list supports the semantic-mask world generator direction. It avoids asking
 | --- | --- | --- | --- |
 | Biome color palette | required now | constants | Stable debug colors for grass/sand/ice/beach/water. |
 | POI markers | required now | procedural icons | Debug symbols for placement review. |
-| Road graph overlay | required now | procedural lines | Shows path graph and connection failures. |
-| River graph overlay | required now | debug-only procedural lines | Shows sources, mouths, discarded/final rivers; normal rendering uses asset tiles. |
+| Road graph overlay | required now | debug-only procedural lines | Shows path graph and connection failures; normal rendering uses terrain masks. |
+| River graph overlay | required now | debug-only procedural lines | Shows sources, mouths, discarded/final rivers; normal rendering uses terrain masks. |
 
 ## Recommendation
 
-Make a small set of fills, masks, symbolic overlay sprites, and directional river tile variants first. Keep coastlines, biome boundaries, roads, and rivers driven by semantic masks/graphs; river bodies should render from asset tiles, with procedural river lines limited to debug views.
+Make a small set of fills, masks, symbolic overlay sprites, and bridge/dock variants first. Keep coastlines, biome boundaries, roads, and rivers driven by semantic masks/graphs; road and river bodies should render from terrain masks, with procedural graph lines limited to debug views.
 `;
 }
 

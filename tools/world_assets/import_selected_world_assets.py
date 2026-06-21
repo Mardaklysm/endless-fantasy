@@ -28,6 +28,8 @@ CANONICAL_TERRAIN_NAMES = {
 SEMANTIC_TERRAIN = {
     "deepOcean": "world_current_terrain_deep_ocean",
     "shallowWater": "world_current_terrain_shallow_water",
+    "freshWater": "world_current_terrain_freshwater",
+    "road": "world_current_terrain_packed_dirt_surface",
     "beach": "world_current_terrain_beach_sand",
     "grassland": "world_current_terrain_grassland",
     "sand": "world_current_terrain_desert_sand",
@@ -39,9 +41,9 @@ ROUTE_MAPPINGS = {
     "dockVertical": "world_current_object_dock_wooden_t_shape_01",
     "bridgeHorizontal": "world_current_object_bridge_stone_horizontal_01",
     "bridgeVertical": "world_current_object_bridge_stone_arch_01",
-    "riverRendering": "asset_tile_mask_freshwater",
+    "riverRendering": "semantic_mask_freshwater",
     "riverFreshwater": "world_current_terrain_freshwater",
-    "roadRendering": "procedural_styled_stroke",
+    "roadRendering": "semantic_mask_packed_dirt",
 }
 
 POI_MAPPINGS = {
@@ -235,7 +237,7 @@ def main() -> None:
         "rendererContract": {
             "semanticWorldGenerationIsGameplayTruth": True,
             "baseTerrainUsesSemanticMaskFills": True,
-            "roadsRiversCoastsMountainsForestsPoisAreOverlays": True,
+            "roadsRiversCoastsMountainsForestsPoisAreOverlays": False,
             "randomBaseTerrainVariantSpam": False,
             "giantTransitionTilesets": False,
         },
@@ -269,8 +271,8 @@ def main() -> None:
             },
             {
                 "role": "road/river/bridge art stamps",
-                "status": "river_asset_tiles_plus_placeholders",
-                "notes": "Rivers render from the freshwater material through semantic tile masks. Roads stay procedural styled strokes. Dock/bridge sprites use explicit current-folder placeholders.",
+                "status": "semantic_terrain_masks_plus_placeholders",
+                "notes": "Roads and rivers render from packed-dirt and freshwater materials through semantic terrain masks. Dock/bridge sprites use explicit current-folder placeholders.",
             },
         ],
         "assets": sorted(assets, key=lambda item: item["filename"]),

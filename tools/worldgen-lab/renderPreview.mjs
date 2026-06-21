@@ -1,15 +1,8 @@
-import fs from "node:fs";
-import path from "node:path";
 import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
 import { BIOME, WATER } from "./generator.mjs";
 
 const require = createRequire(import.meta.url);
 const { PNG } = require("pngjs");
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const FRESHWATER_ASSET_PATH = path.resolve(__dirname, "../../src/assets/world/current/terrain/terrain_freshwater.png");
-const FRESHWATER_CELL_SIZE = 32;
-let freshwaterAsset;
 
 const RIVER_NORTH = 1;
 const RIVER_EAST = 2;
@@ -202,9 +195,11 @@ export function renderRiverConnectivityDebug(world, scale = 6) {
 
 export function renderRiversRoads(world, scale = 6) {
   const image = renderSemanticMap(world, scale);
-  renderRiverTiles(image, world, scale);
+  overlayMask(image, world, world.layers.riverMap, scale, COLORS.river);
   for (const edge of world.roadGraph.edges) {
-    if (edge.connected) drawStyledRoadPath(image, edge.path, scale);
+    if (edge.connected) {
+      for (const segment of splitPathAroundRiver(world, edge.path)) drawStyledRoadPath(image, segment, scale);
+    }
   }
   renderBridgeCrossings(image, world, scale);
   for (const poi of world.poiList) {
@@ -219,8 +214,6 @@ export function renderWorldPreview(world, scale = 6) {
   renderOcean(image, world, scale);
   renderLand(image, world, scale);
   renderCoastOutline(image, world, scale);
-  renderLakes(image, world, scale);
-  renderRivers(image, world, scale);
   renderRoads(image, world, scale);
   renderForests(image, world, scale);
   renderMountains(image, world, scale);
@@ -237,6 +230,8 @@ function renderOcean(image, world, scale) {
     const n = noise(world.seed, x, y);
     let color = n > 0.54 ? COLORS.deepOceanAlt : COLORS.deepOcean;
     if (world.layers.waterClass[i] === WATER.SHALLOW) color = n > 0.5 ? COLORS.shallowAlt : COLORS.shallow;
+    if (world.layers.lakeMap[i]) color = COLORS.lake;
+    if (world.layers.riverMap[i]) color = n > 0.52 ? COLORS.shallow : COLORS.river;
     fillCell(image, x, y, scale, color);
     if (!world.layers.landMask[i] && (x + y * 3 + Math.floor(n * 11)) % 17 === 0) {
       const px = x * scale + Math.floor(scale * 0.25);
@@ -250,6 +245,14 @@ function renderLand(image, world, scale) {
   forEachCell(world, (x, y, i) => {
     if (!world.layers.landMask[i]) return;
     const n = noise(`${world.seed}:land`, x, y);
+    if (world.layers.lakeMap[i] || world.layers.riverMap[i]) {
+      fillCell(image, x, y, scale, world.layers.lakeMap[i] ? COLORS.lake : n > 0.52 ? COLORS.shallow : COLORS.river);
+      return;
+    }
+    if (world.layers.roadMap[i]) {
+      fillCell(image, x, y, scale, n > 0.52 ? [196, 151, 83, 255] : COLORS.road);
+      return;
+    }
     let color = COLORS.grass;
     if (world.layers.biome[i] === BIOME.BEACH) color = n > 0.5 ? COLORS.beachLight : COLORS.beach;
     else if (world.layers.biome[i] === BIOME.GRASS) color = n > 0.5 ? COLORS.grassAlt : COLORS.grass;
@@ -269,19 +272,11 @@ function renderCoastOutline(image, world, scale) {
     if (!touchesWater(world, x, y)) return;
     const px = x * scale;
     const py = y * scale;
-    if (!isLand(world, x, y - 1)) drawLine(image, px, py, px + scale - 1, py, [251, 237, 180, 210]);
-    if (!isLand(world, x + 1, y)) drawLine(image, px + scale - 1, py, px + scale - 1, py + scale - 1, [164, 126, 80, 190]);
-    if (!isLand(world, x, y + 1)) drawLine(image, px, py + scale - 1, px + scale - 1, py + scale - 1, [164, 126, 80, 190]);
-    if (!isLand(world, x - 1, y)) drawLine(image, px, py, px, py + scale - 1, [251, 237, 180, 210]);
+    if (isWaterForOutline(world, x, y - 1)) drawLine(image, px, py, px + scale - 1, py, [251, 237, 180, 210]);
+    if (isWaterForOutline(world, x + 1, y)) drawLine(image, px + scale - 1, py, px + scale - 1, py + scale - 1, [164, 126, 80, 190]);
+    if (isWaterForOutline(world, x, y + 1)) drawLine(image, px, py + scale - 1, px + scale - 1, py + scale - 1, [164, 126, 80, 190]);
+    if (isWaterForOutline(world, x - 1, y)) drawLine(image, px, py, px, py + scale - 1, [251, 237, 180, 210]);
   });
-}
-
-function renderLakes(image, world, scale) {
-  overlayMask(image, world, world.layers.lakeMap, scale, COLORS.lake);
-}
-
-function renderRivers(image, world, scale) {
-  renderRiverTiles(image, world, scale);
 }
 
 function renderForests(image, world, scale) {
@@ -313,32 +308,32 @@ function renderMountains(image, world, scale) {
 }
 
 function renderRoads(image, world, scale) {
-  for (const edge of world.roadGraph.edges) {
-    if (!edge.connected) continue;
-    drawStyledRoadPath(image, edge.path, scale);
-  }
   renderBridgeCrossings(image, world, scale);
 }
 
-function renderRiverTiles(image, world, scale) {
-  const source = loadFreshwaterAsset();
-  const waterWidth = Math.max(2, Math.round(scale * 0.52));
-  const bankWidth = Math.min(Math.max(1, scale - 1), Math.max(waterWidth + 1, Math.round(scale * 0.72)));
-  const highlightWidth = Math.max(1, Math.round(waterWidth * 0.32));
-  forEachRiverTile(world, (x, y) => {
-    const mask = riverConnectivityMaskAt(world, x, y);
-    const px = x * scale;
-    const py = y * scale;
-    drawDirectionalRiverColorShape(image, px, py, scale, mask, bankWidth, [18, 75, 105, 132]);
-    drawDirectionalRiverMaterialShape(image, source, px, py, scale, mask, waterWidth);
-    drawDirectionalRiverColorShape(image, px, py, scale, mask, highlightWidth, [180, 235, 244, 80]);
-  });
-}
-
 function drawStyledRoadPath(image, path, scale) {
+  if (path.length < 2) return;
   drawPath(image, path, scale, [72, 83, 47, 92], Math.max(3, Math.round(scale * 0.78)));
   drawPath(image, path, scale, COLORS.roadDark, Math.max(2, Math.round(scale * 0.55)));
   drawPath(image, path, scale, COLORS.road, Math.max(1, Math.round(scale * 0.34)));
+}
+
+function splitPathAroundRiver(world, path) {
+  const segments = [];
+  let current = [];
+  for (const cell of path) {
+    const i = cell.y * world.width + cell.x;
+    if (world.layers.riverMap[i]) {
+      if (current.length > 0) {
+        segments.push(current);
+        current = [];
+      }
+      continue;
+    }
+    current.push(cell);
+  }
+  if (current.length > 0) segments.push(current);
+  return segments;
 }
 
 function renderBridgeCrossings(image, world, scale) {
@@ -468,51 +463,6 @@ function riverTileKindColor(kind) {
   return [62, 135, 228, 255];
 }
 
-function loadFreshwaterAsset() {
-  if (!freshwaterAsset) freshwaterAsset = PNG.sync.read(fs.readFileSync(FRESHWATER_ASSET_PATH));
-  return freshwaterAsset;
-}
-
-function getPixel(image, x, y) {
-  const offset = (Math.floor(y) * image.width + Math.floor(x)) * 4;
-  return [image.data[offset], image.data[offset + 1], image.data[offset + 2], image.data[offset + 3]];
-}
-
-function drawDirectionalRiverMaterialShape(image, source, px, py, tileSize, mask, width) {
-  drawDirectionalRiverShape(image, px, py, tileSize, mask, width, (xx, yy) => {
-    const sampleX = positiveModulo(Math.floor((xx * FRESHWATER_CELL_SIZE) / Math.max(1, tileSize)), source.width);
-    const sampleY = positiveModulo(Math.floor((yy * FRESHWATER_CELL_SIZE) / Math.max(1, tileSize)), source.height);
-    const color = getPixel(source, sampleX, sampleY);
-    if (color[3] > 0) setPixel(image, xx, yy, color);
-  });
-}
-
-function drawDirectionalRiverColorShape(image, px, py, tileSize, mask, width, color) {
-  drawDirectionalRiverShape(image, px, py, tileSize, mask, width, (xx, yy) => blendPixel(image, xx, yy, color));
-}
-
-function drawDirectionalRiverShape(image, px, py, tileSize, mask, width, paint) {
-  const half = Math.floor(tileSize / 2);
-  const radius = Math.floor(width / 2);
-  const centerX = px + half;
-  const centerY = py + half;
-  const left = centerX - radius;
-  const top = centerY - radius;
-  const size = Math.max(1, width);
-  paintRect(left, top, size, size);
-  if (mask === 0) return;
-  if (mask & RIVER_NORTH) paintRect(left, py, size, half + radius);
-  if (mask & RIVER_EAST) paintRect(centerX - radius, top, half + radius, size);
-  if (mask & RIVER_SOUTH) paintRect(left, centerY - radius, size, tileSize - half + radius);
-  if (mask & RIVER_WEST) paintRect(px, top, half + radius, size);
-
-  function paintRect(x, y, width, height) {
-    for (let yy = Math.floor(y); yy < Math.floor(y + height); yy += 1) {
-      for (let xx = Math.floor(x); xx < Math.floor(x + width); xx += 1) paint(xx, yy);
-    }
-  }
-}
-
 function bitCount(value) {
   let count = 0;
   let working = value;
@@ -542,7 +492,13 @@ function drawMarkerSquare(image, x, y, scale, color) {
 }
 
 function touchesWater(world, x, y) {
-  return !isLand(world, x - 1, y) || !isLand(world, x + 1, y) || !isLand(world, x, y - 1) || !isLand(world, x, y + 1);
+  return isWaterForOutline(world, x - 1, y) || isWaterForOutline(world, x + 1, y) || isWaterForOutline(world, x, y - 1) || isWaterForOutline(world, x, y + 1);
+}
+
+function isWaterForOutline(world, x, y) {
+  if (x < 0 || y < 0 || x >= world.width || y >= world.height) return true;
+  const i = y * world.width + x;
+  return !world.layers.landMask[i] || world.layers.lakeMap[i] || world.layers.riverMap[i];
 }
 
 function isLand(world, x, y) {
@@ -648,20 +604,6 @@ function setPixel(image, x, y, color) {
   image.data[offset + 1] = color[1];
   image.data[offset + 2] = color[2];
   image.data[offset + 3] = color[3];
-}
-
-function blendPixel(image, x, y, color) {
-  if (x < 0 || y < 0 || x >= image.width || y >= image.height) return;
-  const offset = (Math.floor(y) * image.width + Math.floor(x)) * 4;
-  const alpha = clamp((color[3] ?? 255) / 255, 0, 1);
-  image.data[offset] = Math.round(color[0] * alpha + image.data[offset] * (1 - alpha));
-  image.data[offset + 1] = Math.round(color[1] * alpha + image.data[offset + 1] * (1 - alpha));
-  image.data[offset + 2] = Math.round(color[2] * alpha + image.data[offset + 2] * (1 - alpha));
-  image.data[offset + 3] = 255;
-}
-
-function positiveModulo(value, modulo) {
-  return ((value % modulo) + modulo) % modulo;
 }
 
 function noise(seed, x, y) {

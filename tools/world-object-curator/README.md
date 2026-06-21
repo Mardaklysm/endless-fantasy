@@ -58,6 +58,6 @@ The game manifest is updated at:
 src\assets\world\current\world_asset_manifest.json
 ```
 
-Roads remain procedural renderer overlays. Rivers render from semantic asset tile masks using the freshwater material. Approved bridge, dock, marker, POI, forest, mountain, resource, and prop sprites are transparent object overlays only.
+Roads and rivers render from semantic terrain masks using packed-dirt and freshwater materials. Approved bridge, dock, marker, POI, forest, mountain, resource, and prop sprites are transparent object overlays only.
 
 The raw-source pass compares exact black/white keys, edge-connected black/white flood fills, sampled edge-color flood fills, and existing alpha. Approved raw additions record their selected cleanup method in metadata, and `world_objects_v2_background_method_contactsheet.png` shows the method comparison for review.

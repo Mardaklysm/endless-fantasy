@@ -18,7 +18,6 @@ import { WORLD_CLOUD_ASSET_BY_TEXTURE_KEY, WORLD_CLOUD_ASSETS, WORLD_CLOUD_MANIF
 import { DUNGEON_ATLAS } from "../../src/data/dungeonTiles.ts";
 import { SEMANTIC_BIOME, SEMANTIC_WATER } from "../../src/world/semantic/semanticTypes.ts";
 import { SEMANTIC_MASK_TERRAIN_CLASSES, describeSemanticMaskTerrainRenderPlan } from "../../src/world/semantic/semanticMaskTerrainRenderer.ts";
-import { describeSemanticRiverTileRenderPlan } from "../../src/world/semantic/semanticRiverTileRenderer.ts";
 import { describeSemanticRouteRenderPlan } from "../../src/world/semantic/semanticRouteRenderer.ts";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -53,7 +52,7 @@ function validateRuntimeAssets() {
 function validateCurrentWorldAssetManifest() {
   assert(WORLD_CURRENT_ASSET_MANIFEST.rendererContract.semanticWorldGenerationIsGameplayTruth, "current world manifest must preserve semantic worldgen as truth.");
   assert(WORLD_CURRENT_ASSET_MANIFEST.rendererContract.baseTerrainUsesSemanticMaskFills, "current world manifest must mark semantic mask terrain fills active.");
-  assert(WORLD_CURRENT_ASSET_MANIFEST.rendererContract.roadsRiversCoastsMountainsForestsPoisAreOverlays, "current world manifest must keep roads/rivers/POIs as overlays.");
+  assert(!WORLD_CURRENT_ASSET_MANIFEST.rendererContract.roadsRiversCoastsMountainsForestsPoisAreOverlays, "current world manifest must not mark roads/rivers as normal overlays.");
   assert(!WORLD_CURRENT_ASSET_MANIFEST.rendererContract.randomBaseTerrainVariantSpam, "current world manifest must keep random base terrain variants disabled.");
   assert(WORLD_CURRENT_ASSET_MANIFEST.sourcePack.approvedTerrainMaterialCount === 37, "current world manifest should record 37 approved terrain fills.");
   const terrainAssets = WORLD_CURRENT_ASSETS.filter((asset) => asset.assetKind === "terrain fill");
@@ -156,9 +155,11 @@ function validateCurrentWorldAssetManifest() {
     assert(textureKey && WORLD_CURRENT_ASSET_BY_TEXTURE_KEY[textureKey], `Route key ${routeKey} lacks a current texture mapping.`);
     assert(WORLD_CURRENT_ASSET_BY_TEXTURE_KEY[textureKey].premium, `Route key ${routeKey} should prefer the premium object mapping.`);
   }
-  assert(WORLD_CURRENT_ROUTE_TEXTURE_KEYS.riverRendering === "asset_tile_mask_freshwater", "Current manifest should render rivers through the asset tile mask path.");
+  assert(WORLD_CURRENT_ROUTE_TEXTURE_KEYS.riverRendering === "semantic_mask_freshwater", "Current manifest should render rivers through the semantic terrain mask.");
   assert(WORLD_CURRENT_ROUTE_TEXTURE_KEYS.riverFreshwater === "world_current_terrain_freshwater", "Current manifest should map riverFreshwater to the freshwater terrain asset.");
   assert(WORLD_CURRENT_ASSET_BY_TEXTURE_KEY[WORLD_CURRENT_ROUTE_TEXTURE_KEYS.riverFreshwater], "River freshwater texture key must resolve to a current asset.");
+  assert(WORLD_CURRENT_ROUTE_TEXTURE_KEYS.roadRendering === "semantic_mask_packed_dirt", "Current manifest should render roads through the semantic terrain mask.");
+  assert(WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.road === "world_current_terrain_packed_dirt_surface", "Current terrain manifest should map road to the packed dirt material.");
   for (const textureKey of [
     WORLD_CURRENT_POI_TEXTURE_KEYS.town,
     WORLD_CURRENT_POI_TEXTURE_KEYS.harbor,
@@ -233,6 +234,9 @@ function validateNoDeprecatedRuntimeAtlasReferences() {
       assert(!text.includes(token), `${relativePath} still references deprecated runtime atlas token ${token}.`);
     }
   }
+  const mainText = fs.readFileSync(path.join(PROJECT_ROOT, "src/main.ts"), "utf8");
+  assert(!mainText.includes("createSemanticRiverTileOverlayTexture"), "Runtime main scene must not rebuild the old river overlay texture.");
+  assert(!mainText.includes("drawCachedWorldRiverOverlay"), "Runtime main scene must not draw the old river overlay cache.");
 }
 
 function validateSemanticWorldgen() {
@@ -322,7 +326,6 @@ function validateSemanticWorldgen() {
   validateRoadConnections(worldA);
   validateRoadAndForestPolicies(worldA);
   validateSemanticMaskTerrainRendererPlan(worldA);
-  validateSemanticRiverTileRendererPlan(worldA);
   validateSemanticRouteRendererPlan(worldA);
 }
 
@@ -493,39 +496,26 @@ function validateSemanticMaskTerrainRendererPlan(world) {
     assert(plan.classSamples[terrainClass] > 0, `Semantic mask terrain plan found no ${terrainClass} samples.`);
   }
   assert(plan.waterBeachBoundarySamples > 0, "Semantic mask terrain plan found no water/beach boundaries.");
+  assert(plan.waterGrassBoundarySamples + plan.waterIceBoundarySamples > 0, "Semantic mask terrain plan found no inland water/land boundaries.");
+  assert(plan.roadBoundarySamples > 0, "Semantic mask terrain plan found no road terrain boundaries.");
   assert(plan.sandGrassBoundarySamples > 0, "Semantic mask terrain plan found no sand/grass boundaries.");
   assert(before === after, "Semantic mask terrain planning mutated the generated world.");
 }
 
 function validateSemanticRouteRendererPlan(world) {
-  const styledPlan = describeSemanticRouteRenderPlan(world.semantic, { tileSize: 32 });
-  assert(styledPlan.width === world.width * 32, `Semantic route overlay texture width expected ${world.width * 32}, got ${styledPlan.width}.`);
-  assert(styledPlan.height === world.height * 32, `Semantic route overlay texture height expected ${world.height * 32}, got ${styledPlan.height}.`);
-  assert(styledPlan.styledRoadPathCount > 0, "Styled route renderer found no road paths.");
-  assert(styledPlan.riverOverlayMode === "hidden", "Normal route overlay should not render river bodies.");
-  assert(styledPlan.styledRiverPathCount === 0, "Normal route overlay should report zero styled river paths.");
-  assert(styledPlan.roadCellCount > 0, "Styled route renderer found no road cells.");
-  assert(styledPlan.riverCellCount > 0, "Route renderer plan found no semantic river cells.");
-  assert(!styledPlan.debugMarkersVisible, "Styled route renderer should not show debug markers in normal mode.");
+  const normalPlan = describeSemanticRouteRenderPlan(world.semantic, { tileSize: 32 });
+  assert(normalPlan.width === world.width * 32, `Semantic route overlay texture width expected ${world.width * 32}, got ${normalPlan.width}.`);
+  assert(normalPlan.height === world.height * 32, `Semantic route overlay texture height expected ${world.height * 32}, got ${normalPlan.height}.`);
+  assert(normalPlan.routeOverlayMode === "hidden", "Normal route overlay should not render road bodies.");
+  assert(normalPlan.riverOverlayMode === "hidden", "Normal route overlay should not render river bodies.");
+  assert(normalPlan.styledRoadPathCount === 0, "Normal route overlay should report zero styled road paths.");
+  assert(normalPlan.styledRiverPathCount === 0, "Normal route overlay should report zero styled river paths.");
+  assert(normalPlan.roadCellCount > 0, "Route renderer plan found no semantic road cells.");
+  assert(normalPlan.riverCellCount > 0, "Route renderer plan found no semantic river cells.");
+  assert(!normalPlan.debugMarkersVisible, "Normal route renderer should not show debug markers.");
 
   const debugPlan = describeSemanticRouteRenderPlan(world.semantic, { tileSize: 32, routeOverlayMode: "debug", riverOverlayMode: "debug" });
   assert(debugPlan.debugMarkersVisible, "Debug route renderer plan should expose route/river diagnostics.");
-}
-
-function validateSemanticRiverTileRendererPlan(world) {
-  const source = { image: {}, width: 256, height: 256, cellSize: 32, label: WORLD_CURRENT_ROUTE_TEXTURE_KEYS.riverFreshwater };
-  const plan = describeSemanticRiverTileRenderPlan(world.semantic, { tileSize: 32, riverTileSource: source });
-  const classifiedRiverTiles = plan.sourceEndTileCount + plan.cornerTileCount + plan.straightTileCount + plan.junctionTileCount + plan.crossingTileCount;
-  assert(plan.width === world.width * 32, `Semantic river tile overlay texture width expected ${world.width * 32}, got ${plan.width}.`);
-  assert(plan.height === world.height * 32, `Semantic river tile overlay texture height expected ${world.height * 32}, got ${plan.height}.`);
-  assert(plan.riverTileCount === world.semantic.stats.riverCells, "River tile renderer count should match semantic river cells.");
-  assert(classifiedRiverTiles === plan.riverTileCount, "River tile renderer classification counts should sum to all river cells.");
-  assert(plan.sourceMappedTileCount === plan.riverTileCount, "River tile renderer should map every river tile to the freshwater material source.");
-  assert(plan.fallbackTileCount === 0, "River tile renderer should not need fallback tiles when the freshwater source is supplied.");
-  assert(plan.oldProgrammaticRiverSegments === 0, "River tile renderer should not use old programmatic river segments.");
-  assert(plan.bridgeTileCount === world.semantic.bridgeCandidates.length, "River tile renderer bridge count should match semantic bridge candidates.");
-  assert(plan.sourceEndTileCount > 0, "River tile renderer should classify source/end tiles.");
-  assert(plan.straightTileCount + plan.cornerTileCount > 0, "River tile renderer should classify river body tiles.");
 }
 
 function stableSummary(world) {

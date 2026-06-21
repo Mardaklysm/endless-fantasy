@@ -44,8 +44,8 @@ This runs `tools/worldgen/test_worldgen.mjs`. It validates the active semantic r
 - roads are walkable and not overlapped by mountain/forest overlays
 - the semantic compatibility tile grid uses exactly one canonical tile ID each for deep water, shallow water, beach, grassland, sand/desert, and ice/snow while `TERRAIN_VARIANT_MODE` is off
 - the semantic mask terrain renderer plan reports the expected texture dimensions, mask resolution, class samples, boundary samples, and does not mutate the generated world
-- the semantic mask terrain renderer uses atlas texture source IDs that match the canonical terrain palette
-- the semantic route renderer plan reports styled road paths with zero normal styled river paths, the semantic river tile renderer maps every river cell to the freshwater asset source without fallback, and debug mode can expose road/river diagnostics
+- the semantic mask terrain renderer uses manifest texture source IDs for deep water, shallow water, freshwater, packed-dirt roads, beach, grassland, sand/desert, and ice/snow
+- the semantic route renderer plan reports hidden normal road/river overlays, and debug mode can expose road/river diagnostics
 
 ## Asset Import Validation
 
@@ -172,10 +172,10 @@ Expected:
 - Confirm movement stops with the leader's feet/shadow on each tile center, not at the tile's bottom edge.
 - Confirm collision does not jitter or leave the player visually/logically between tiles.
 - Confirm the overworld leader remains readable when standing on a town/location marker.
-- Confirm current selected terrain fills render for deep water, shallow water, beach, grassland, sand, and snow/ice; no old atlas art or magenta backgrounds should appear.
+- Confirm current selected terrain fills render for deep water, shallow water, freshwater, packed-dirt roads, beach, grassland, sand, and snow/ice; no old atlas art or magenta backgrounds should appear.
 - Confirm water blocks movement while generated roads suppress encounters and harbors enable boat travel.
 - Confirm normal overworld terrain is mask-rendered from semantic fields using current selected material PNGs, with crisp coastlines and biome boundaries rather than hard square tile edges or full-map blur.
-- Confirm normal gameplay roads are styled procedural overlays and river bodies are asset tile-mask overlays from the current freshwater material. F6 road/river graph strokes, dots, source/mouth markers, and route diagnostics must stay debug-only.
+- Confirm normal gameplay roads and river/lake bodies are semantic terrain masks from the current packed-dirt and freshwater materials. F6 road/river graph strokes, dots, source/mouth markers, and route diagnostics must stay debug-only.
 - Use F6 semantic debug overlays to inspect edge debug, raw square tiles, semantic masks, distance bands, walkability, overlay policy, mountain candidates/accepted cells, forest soft-terrain cells, island themes, POI clearance, roads, and rivers. `edgeDebug` draws water/beach edges cyan, sand/grass edges magenta, sand/ice edges white, and grass/ice edges blue.
 - At Greenhaven Harbor, confirm Coralreach costs 10 gold, deducts gold, moves the player to Coralreach harbor, and can return by harbor.
 - Confirm new games produce different world seeds and load restores the same saved world.

@@ -24,13 +24,15 @@
   "rendererContract": {
     "semanticWorldGenerationIsGameplayTruth": true,
     "baseTerrainUsesSemanticMaskFills": true,
-    "roadsRiversCoastsMountainsForestsPoisAreOverlays": true,
+    "roadsRiversCoastsMountainsForestsPoisAreOverlays": false,
     "randomBaseTerrainVariantSpam": false,
     "giantTransitionTilesets": false
   },
   "semanticTerrain": {
     "deepOcean": "world_current_terrain_deep_ocean",
     "shallowWater": "world_current_terrain_shallow_water",
+    "freshWater": "world_current_terrain_freshwater",
+    "road": "world_current_terrain_packed_dirt_surface",
     "beach": "world_current_terrain_beach_sand",
     "grassland": "world_current_terrain_grassland",
     "sand": "world_current_terrain_desert_sand",
@@ -41,9 +43,9 @@
     "dockVertical": "world_current_object_dock_wooden_t_shape_01",
     "bridgeHorizontal": "world_current_object_bridge_stone_horizontal_01",
     "bridgeVertical": "world_current_object_bridge_stone_arch_01",
-    "riverRendering": "asset_tile_mask_freshwater",
+    "riverRendering": "semantic_mask_freshwater",
     "riverFreshwater": "world_current_terrain_freshwater",
-    "roadRendering": "procedural_styled_stroke"
+    "roadRendering": "semantic_mask_packed_dirt"
   },
   "poiMappings": {
     "town": "world_current_object_town_market_colorful_01",
@@ -160,8 +162,8 @@
     },
     {
       "role": "road/river/bridge art stamps",
-      "status": "river_asset_tiles_plus_existing_route_assets",
-      "notes": "Rivers render from the freshwater terrain asset through a semantic tile-mask overlay. Roads remain procedural styled strokes, and route/dock/bridge keys point to existing current object PNGs."
+      "status": "semantic_terrain_masks_plus_existing_route_assets",
+      "notes": "Roads and rivers render from packed-dirt and freshwater terrain assets through semantic terrain masks. Route/dock/bridge keys point to existing current object PNGs."
     },
     {
       "role": "shipwreck and dedicated Starfall Gate sprites",

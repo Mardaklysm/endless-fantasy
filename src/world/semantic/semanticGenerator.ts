@@ -1094,10 +1094,49 @@ function traceRivers(
     const end = path[path.length - 1];
     const endIndex = index(width, end.x, end.y);
     if (waterClass[endIndex] === SEMANTIC_WATER.NONE && !lakeMap[endIndex] && distanceToWater[endIndex] > 1) continue;
-    for (const cell of path) riverMap[index(width, cell.x, cell.y)] = 1;
+    writeRiverRibbon(width, height, seed, rivers.length, path, landMask, waterClass, lakeMap, mountainMap, poiBlocked, riverMap);
     rivers.push({ id: `river_${rivers.length + 1}`, islandId: sourceIsland.id, source: { x: source.x, y: source.y }, mouth: end, path });
   }
   return rivers;
+}
+
+function writeRiverRibbon(
+  width: number,
+  height: number,
+  seed: string,
+  riverIndex: number,
+  path: SemanticVec[],
+  landMask: Uint8Array,
+  waterClass: Uint8Array,
+  lakeMap: Uint8Array,
+  mountainMap: Uint8Array,
+  poiBlocked: Set<string>,
+  riverMap: Uint8Array
+) {
+  const longRiverBonus = path.length >= 28 ? 0.5 : path.length >= 16 ? 0.25 : 0;
+  for (let step = 0; step < path.length; step += 1) {
+    const cell = path[step];
+    const centerIndex = index(width, cell.x, cell.y);
+    const middle = path.length <= 1 ? 0 : 1 - Math.abs(step / (path.length - 1) - 0.5) * 2;
+    const baseRadius = 1.05 + longRiverBonus + middle * 0.28;
+    const maxRadius = Math.ceil(baseRadius + 0.8);
+    for (let dy = -maxRadius; dy <= maxRadius; dy += 1) {
+      for (let dx = -maxRadius; dx <= maxRadius; dx += 1) {
+        const x = cell.x + dx;
+        const y = cell.y + dy;
+        if (!inBounds(width, height, x, y)) continue;
+        const i = index(width, x, y);
+        const isCenter = i === centerIndex;
+        const isExistingWater = waterClass[i] !== SEMANTIC_WATER.NONE || lakeMap[i] > 0;
+        if (!isCenter && !landMask[i] && !isExistingWater) continue;
+        if (waterClass[i] !== SEMANTIC_WATER.NONE && !isCenter) continue;
+        if (mountainMap[i] || poiBlocked.has(posKey({ x, y }))) continue;
+        const edgeNoise = hashNoise(`${seed}:semantic-river-ribbon:${riverIndex}:${step}`, x, y) * 0.55;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        if (isCenter || distance <= baseRadius + edgeNoise - 0.28) riverMap[i] = 1;
+      }
+    }
+  }
 }
 
 function traceRiverPath(

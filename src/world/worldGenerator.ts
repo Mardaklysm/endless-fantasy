@@ -132,6 +132,8 @@ export const TERRAIN_VARIANT_MODE: TerrainVariantMode = "off";
 export const SEMANTIC_BASE_TILE_PALETTE = {
   deepOcean: WORLD_TILE_IDS.deepWater,
   shallowWater: WORLD_TILE_IDS.shallowWater,
+  freshWater: WORLD_TILE_IDS.shallowWater,
+  road: WORLD_TILE_IDS.roadCrossroads,
   lake: WORLD_TILE_IDS.shallowWater,
   beach: WORLD_TILE_IDS.beachSand,
   grassland: WORLD_TILE_IDS.mediumGrass,

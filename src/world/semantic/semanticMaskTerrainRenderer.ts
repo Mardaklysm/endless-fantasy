@@ -2,7 +2,7 @@ import type Phaser from "phaser";
 import { hashNoise } from "../seededRng.ts";
 import { SEMANTIC_BIOME, SEMANTIC_WATER, type SemanticWorld } from "./semanticTypes.ts";
 
-export type SemanticMaskTerrainClass = "deepOcean" | "shallowWater" | "beach" | "grassland" | "sand" | "ice";
+export type SemanticMaskTerrainClass = "deepOcean" | "shallowWater" | "freshWater" | "road" | "beach" | "grassland" | "sand" | "ice";
 export type SemanticMaskTerrainSources = Partial<Record<SemanticMaskTerrainClass, CanvasImageSource & { width: number; height: number }>>;
 
 export interface SemanticMaskTerrainRenderOptions {
@@ -23,36 +23,44 @@ export interface SemanticMaskTerrainRenderPlan {
   maskHeight: number;
   classSamples: Record<SemanticMaskTerrainClass, number>;
   waterBeachBoundarySamples: number;
+  waterGrassBoundarySamples: number;
+  waterIceBoundarySamples: number;
+  roadBoundarySamples: number;
   sandGrassBoundarySamples: number;
   sandIceBoundarySamples: number;
   grassIceBoundarySamples: number;
   textureSourceLabels: Record<SemanticMaskTerrainClass, string>;
 }
 
-type TerrainClassId = 0 | 1 | 2 | 3 | 4 | 5;
+type TerrainClassId = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 type Rgb = [number, number, number];
 
 const TERRAIN_CLASS_IDS = {
   deepOcean: 0,
   shallowWater: 1,
-  beach: 2,
-  grassland: 3,
-  sand: 4,
-  ice: 5
+  freshWater: 2,
+  road: 3,
+  beach: 4,
+  grassland: 5,
+  sand: 6,
+  ice: 7
 } as const satisfies Record<SemanticMaskTerrainClass, TerrainClassId>;
 
-const TERRAIN_CLASSES = ["deepOcean", "shallowWater", "beach", "grassland", "sand", "ice"] as const satisfies readonly SemanticMaskTerrainClass[];
+const TERRAIN_CLASSES = ["deepOcean", "shallowWater", "freshWater", "road", "beach", "grassland", "sand", "ice"] as const satisfies readonly SemanticMaskTerrainClass[];
 
 export const SEMANTIC_MASK_TERRAIN_CLASSES = TERRAIN_CLASSES;
 
 const COLORS = {
   deepOcean: [12, 54, 92] as Rgb,
   shallowWater: [52, 149, 179] as Rgb,
+  freshWater: [54, 147, 183] as Rgb,
   shallowEdge: [93, 196, 213] as Rgb,
   foam: [234, 251, 237] as Rgb,
   wetSand: [178, 146, 86] as Rgb,
   beachEdge: [202, 158, 87] as Rgb,
   grassEdge: [70, 138, 58] as Rgb,
+  roadEdge: [126, 84, 43] as Rgb,
+  roadDust: [226, 180, 103] as Rgb,
   sandEdge: [167, 129, 66] as Rgb,
   iceEdge: [134, 190, 207] as Rgb,
   frost: [231, 251, 252] as Rgb
@@ -100,6 +108,9 @@ export function describeSemanticMaskTerrainRenderPlan(world: SemanticWorld, opti
   });
   const classSamples = emptyClassSamples();
   let waterBeachBoundarySamples = 0;
+  let waterGrassBoundarySamples = 0;
+  let waterIceBoundarySamples = 0;
+  let roadBoundarySamples = 0;
   let sandGrassBoundarySamples = 0;
   let sandIceBoundarySamples = 0;
   let grassIceBoundarySamples = 0;
@@ -112,6 +123,9 @@ export function describeSemanticMaskTerrainRenderPlan(world: SemanticWorld, opti
         const east = terrainClassAt(classGrid, y * maskWidth + x + 1);
         const boundary = boundaryKind(current, east);
         if (boundary === "waterBeach") waterBeachBoundarySamples += 1;
+        if (boundary === "waterGrass") waterGrassBoundarySamples += 1;
+        if (boundary === "waterIce") waterIceBoundarySamples += 1;
+        if (boundary === "roadBoundary") roadBoundarySamples += 1;
         if (boundary === "sandGrass") sandGrassBoundarySamples += 1;
         if (boundary === "sandIce") sandIceBoundarySamples += 1;
         if (boundary === "grassIce") grassIceBoundarySamples += 1;
@@ -120,6 +134,9 @@ export function describeSemanticMaskTerrainRenderPlan(world: SemanticWorld, opti
         const south = terrainClassAt(classGrid, (y + 1) * maskWidth + x);
         const boundary = boundaryKind(current, south);
         if (boundary === "waterBeach") waterBeachBoundarySamples += 1;
+        if (boundary === "waterGrass") waterGrassBoundarySamples += 1;
+        if (boundary === "waterIce") waterIceBoundarySamples += 1;
+        if (boundary === "roadBoundary") roadBoundarySamples += 1;
         if (boundary === "sandGrass") sandGrassBoundarySamples += 1;
         if (boundary === "sandIce") sandIceBoundarySamples += 1;
         if (boundary === "grassIce") grassIceBoundarySamples += 1;
@@ -137,6 +154,9 @@ export function describeSemanticMaskTerrainRenderPlan(world: SemanticWorld, opti
     maskHeight,
     classSamples,
     waterBeachBoundarySamples,
+    waterGrassBoundarySamples,
+    waterIceBoundarySamples,
+    roadBoundarySamples,
     sandGrassBoundarySamples,
     sandIceBoundarySamples,
     grassIceBoundarySamples,
@@ -160,11 +180,20 @@ function classifySample(world: SemanticWorld, sampleX: number, sampleY: number):
   const noiseX = Math.floor(sampleX * 8);
   const noiseY = Math.floor(sampleY * 8);
   const boundaryNoise = hashNoise(`${world.seed}:mask-terrain-boundary`, noiseX, noiseY, 0) - 0.5;
+  const freshWaterScore = Math.max(
+    samplePredicate(world, world.layers.riverMap, sampleX, sampleY, (value) => value > 0),
+    samplePredicate(world, world.layers.lakeMap, sampleX, sampleY, (value) => value > 0)
+  );
+  if (freshWaterScore + boundaryNoise * 0.08 > 0.32) return TERRAIN_CLASS_IDS.freshWater;
+
   const landScore = samplePredicate(world, world.layers.landMask, sampleX, sampleY, (value) => value > 0);
   if (landScore + boundaryNoise * 0.14 < 0.48) {
     const shallowScore = samplePredicate(world, world.layers.waterClass, sampleX, sampleY, (value) => value === SEMANTIC_WATER.SHALLOW || value === SEMANTIC_WATER.LAKE);
     return shallowScore + boundaryNoise * 0.08 > 0.36 ? TERRAIN_CLASS_IDS.shallowWater : TERRAIN_CLASS_IDS.deepOcean;
   }
+
+  const roadScore = samplePredicate(world, world.layers.roadMap, sampleX, sampleY, (value) => value > 0);
+  if (roadScore + boundaryNoise * 0.06 > 0.34) return TERRAIN_CLASS_IDS.road;
 
   const beachScore = sampleBiome(world, sampleX, sampleY, SEMANTIC_BIOME.BEACH);
   const grassScore = sampleBiome(world, sampleX, sampleY, SEMANTIC_BIOME.GRASS);
@@ -188,6 +217,8 @@ function createTerrainFillStyles(
   return {
     deepOcean: createTerrainPattern(ctx, terrainSources?.deepOcean, tileSize, COLORS.deepOcean),
     shallowWater: createTerrainPattern(ctx, terrainSources?.shallowWater, tileSize, COLORS.shallowWater),
+    freshWater: createTerrainPattern(ctx, terrainSources?.freshWater, tileSize, COLORS.freshWater),
+    road: createTerrainPattern(ctx, terrainSources?.road, tileSize, COLORS.roadDust),
     beach: createTerrainPattern(ctx, terrainSources?.beach, tileSize, COLORS.beachEdge),
     grassland: createTerrainPattern(ctx, terrainSources?.grassland, tileSize, COLORS.grassEdge),
     sand: createTerrainPattern(ctx, terrainSources?.sand, tileSize, COLORS.sandEdge),
@@ -216,6 +247,8 @@ function terrainTextureSourceLabels(options: SemanticMaskTerrainRenderOptions): 
   return {
     deepOcean: terrainTextureSourceLabel(options, "deepOcean"),
     shallowWater: terrainTextureSourceLabel(options, "shallowWater"),
+    freshWater: terrainTextureSourceLabel(options, "freshWater"),
+    road: terrainTextureSourceLabel(options, "road"),
     beach: terrainTextureSourceLabel(options, "beach"),
     grassland: terrainTextureSourceLabel(options, "grassland"),
     sand: terrainTextureSourceLabel(options, "sand"),
@@ -305,7 +338,7 @@ function drawBoundaryPair(
   const y = side === "s" ? (my + 1) * plan.pixelBlock : my * plan.pixelBlock;
   const length = plan.pixelBlock;
   const noise = hashNoise(`${world.seed}:mask-boundary-accent`, mx, my, side === "e" ? 1 : 2);
-  if (noise < 0.08 && boundary !== "waterBeach") return;
+  if (noise < 0.08 && boundary !== "waterBeach" && boundary !== "waterGrass" && boundary !== "waterIce") return;
 
   if (boundary === "deepShallow") {
     drawBoundaryStrip(ctx, x, y, side, length, lineWidth, COLORS.shallowEdge, 0.2);
@@ -315,6 +348,23 @@ function drawBoundaryPair(
     drawBoundaryStrip(ctx, x, y, side, length, accentWidth, COLORS.shallowEdge, 0.2);
     drawBoundaryStrip(ctx, x, y, side, length, lineWidth, COLORS.foam, 0.72);
     drawBoundaryStrip(ctx, x, y, side, length, accentWidth, COLORS.wetSand, 0.22);
+    return;
+  }
+  if (boundary === "waterGrass") {
+    drawBoundaryStrip(ctx, x, y, side, length, accentWidth, COLORS.shallowEdge, 0.18);
+    drawBoundaryStrip(ctx, x, y, side, length, lineWidth, COLORS.wetSand, 0.2);
+    drawBoundaryStrip(ctx, x, y, side, length, accentWidth, COLORS.grassEdge, 0.2);
+    return;
+  }
+  if (boundary === "waterIce") {
+    drawBoundaryStrip(ctx, x, y, side, length, accentWidth, COLORS.shallowEdge, 0.18);
+    drawBoundaryStrip(ctx, x, y, side, length, lineWidth, COLORS.frost, 0.44);
+    drawBoundaryStrip(ctx, x, y, side, length, accentWidth, COLORS.iceEdge, 0.2);
+    return;
+  }
+  if (boundary === "roadBoundary") {
+    drawBoundaryStrip(ctx, x, y, side, length, accentWidth, COLORS.roadEdge, 0.2);
+    drawBoundaryStrip(ctx, x, y, side, length, lineWidth, COLORS.roadDust, 0.24);
     return;
   }
   if (boundary === "sandGrass") {
@@ -339,9 +389,15 @@ function drawBoundaryStrip(ctx: CanvasRenderingContext2D, x: number, y: number, 
   else ctx.fillRect(x, y - Math.floor(width / 2), length, width);
 }
 
-function boundaryKind(a: TerrainClassId, b: TerrainClassId): "deepShallow" | "waterBeach" | "sandGrass" | "sandIce" | "grassIce" | undefined {
+function boundaryKind(
+  a: TerrainClassId,
+  b: TerrainClassId
+): "deepShallow" | "waterBeach" | "waterGrass" | "waterIce" | "roadBoundary" | "sandGrass" | "sandIce" | "grassIce" | undefined {
   if ((a === TERRAIN_CLASS_IDS.deepOcean && b === TERRAIN_CLASS_IDS.shallowWater) || (b === TERRAIN_CLASS_IDS.deepOcean && a === TERRAIN_CLASS_IDS.shallowWater)) return "deepShallow";
   if ((isWater(a) && isSandLike(b)) || (isWater(b) && isSandLike(a))) return "waterBeach";
+  if ((isWater(a) && b === TERRAIN_CLASS_IDS.grassland) || (isWater(b) && a === TERRAIN_CLASS_IDS.grassland)) return "waterGrass";
+  if ((isWater(a) && b === TERRAIN_CLASS_IDS.ice) || (isWater(b) && a === TERRAIN_CLASS_IDS.ice)) return "waterIce";
+  if ((a === TERRAIN_CLASS_IDS.road && b !== TERRAIN_CLASS_IDS.road) || (b === TERRAIN_CLASS_IDS.road && a !== TERRAIN_CLASS_IDS.road)) return "roadBoundary";
   if ((isSandLike(a) && b === TERRAIN_CLASS_IDS.grassland) || (isSandLike(b) && a === TERRAIN_CLASS_IDS.grassland)) return "sandGrass";
   if ((isSandLike(a) && b === TERRAIN_CLASS_IDS.ice) || (isSandLike(b) && a === TERRAIN_CLASS_IDS.ice)) return "sandIce";
   if ((a === TERRAIN_CLASS_IDS.grassland && b === TERRAIN_CLASS_IDS.ice) || (b === TERRAIN_CLASS_IDS.grassland && a === TERRAIN_CLASS_IDS.ice)) return "grassIce";
@@ -349,7 +405,7 @@ function boundaryKind(a: TerrainClassId, b: TerrainClassId): "deepShallow" | "wa
 }
 
 function isWater(value: TerrainClassId): boolean {
-  return value === TERRAIN_CLASS_IDS.deepOcean || value === TERRAIN_CLASS_IDS.shallowWater;
+  return value === TERRAIN_CLASS_IDS.deepOcean || value === TERRAIN_CLASS_IDS.shallowWater || value === TERRAIN_CLASS_IDS.freshWater;
 }
 
 function isSandLike(value: TerrainClassId): boolean {
@@ -360,6 +416,10 @@ function classNameForId(value: number): SemanticMaskTerrainClass {
   switch (value) {
     case TERRAIN_CLASS_IDS.shallowWater:
       return "shallowWater";
+    case TERRAIN_CLASS_IDS.freshWater:
+      return "freshWater";
+    case TERRAIN_CLASS_IDS.road:
+      return "road";
     case TERRAIN_CLASS_IDS.beach:
       return "beach";
     case TERRAIN_CLASS_IDS.grassland:
@@ -414,6 +474,8 @@ function emptyClassSamples(): Record<SemanticMaskTerrainClass, number> {
   return {
     deepOcean: 0,
     shallowWater: 0,
+    freshWater: 0,
+    road: 0,
     beach: 0,
     grassland: 0,
     sand: 0,

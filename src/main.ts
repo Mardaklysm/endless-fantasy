@@ -34,7 +34,6 @@ import {
 } from "./data/worldTiles.ts";
 import { generateDungeonFloors } from "./world/dungeonGenerator.ts";
 import { createSemanticMaskTerrainTexture, type SemanticMaskTerrainClass, type SemanticMaskTerrainSources } from "./world/semantic/semanticMaskTerrainRenderer.ts";
-import { createSemanticRiverTileOverlayTexture, type SemanticRiverTileSource } from "./world/semantic/semanticRiverTileRenderer.ts";
 import { createSemanticRouteOverlayTexture, type SemanticRouteOverlayMode } from "./world/semantic/semanticRouteRenderer.ts";
 import { SEMANTIC_BIOME, SEMANTIC_WATER } from "./world/semantic/semanticTypes.ts";
 import {
@@ -69,7 +68,6 @@ const DEBUG_WORLD_LAYOUT = false;
 const SAVE_KEY = "crystal-oath-save-v1";
 const WORLD_W = 96;
 const WORLD_H = 64;
-const WORLD_RIVER_FRESHWATER_TEXTURE_KEY = WORLD_CURRENT_ROUTE_TEXTURE_KEYS.riverFreshwater ?? "world_current_terrain_freshwater";
 const MOVE_DURATION_MS = 155;
 const FAST_MOVE_DURATION_MS = 95;
 const MOVE_TILES_PER_MS = 1 / MOVE_DURATION_MS;
@@ -1503,11 +1501,9 @@ class CrystalOathScene extends Phaser.Scene {
   private world: Terrain[][] = [];
   private worldTerrainCacheKey = "world_terrain_cache";
   private worldTerrainCacheSeed = "";
-  private worldRiverOverlayCacheKey = "world_river_tile_overlay_cache";
-  private worldRiverOverlayCacheSeed = "";
   private worldRouteOverlayCacheKey = "world_route_overlay_cache";
   private worldRouteOverlayCacheSeed = "";
-  private routeOverlayMode: SemanticRouteOverlayMode = "styled";
+  private routeOverlayMode: SemanticRouteOverlayMode = "hidden";
   private riverOverlayMode: SemanticRouteOverlayMode = "hidden";
   private cloudOverlayEnabled = true;
   private party: CharacterState[] = [];
@@ -1634,10 +1630,10 @@ class CrystalOathScene extends Phaser.Scene {
         `Grassland: ${WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.grassland}`,
         `Sand: ${WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.sand}`,
         `Ice/snow: ${WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.ice}`,
-        `River tiles: ${WORLD_RIVER_FRESHWATER_TEXTURE_KEY}`,
+        `Freshwater terrain: ${WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.freshWater}`,
         "Deprecated overworld atlases active: false",
         "Random base terrain variants active: false",
-        "Rivers render as semantic asset tile masks; roads/coasts/mountains/forests/POIs remain semantic overlays",
+        "Roads, rivers, and lakes render through the semantic terrain mask; bridges, mountains, forests, and POIs remain overlays",
         `Dungeon atlas: ${DUNGEON_ATLAS.image}`,
         `Dungeon atlas source inset: ${DUNGEON_ATLAS_SOURCE_INSET}`,
         `Dungeon atlas entries: ${DUNGEON_TILE_ID_SET.size}`
@@ -1878,7 +1874,6 @@ class CrystalOathScene extends Phaser.Scene {
     this.world = this.generatedWorld.tiles;
     this.roadVisualsByKey = new Map(this.generatedWorld.roadVisuals.map((visual) => [`${visual.x},${visual.y}`, visual]));
     this.rebuildWorldTerrainCache();
-    this.rebuildWorldRiverOverlayCache();
     this.rebuildWorldRouteOverlayCache();
     console.info(`Crystal Oath world seed: ${this.worldSeed}`);
   }
@@ -4954,7 +4949,6 @@ Statuses: ${statuses}`;
         }
       }
     }
-    this.drawCachedWorldRiverOverlay(tileCam);
     this.drawCachedWorldRouteOverlay(tileCam);
     this.drawWorldOverlays(startX, endX, startY, endY, tileCam);
     this.drawSemanticDebugOverlay(startX, endX, startY, endY, tileCam);
@@ -5571,12 +5565,6 @@ Statuses: ${statuses}`;
     const visibleObjectOverlays = this.generatedWorld.objectOverlays
       .filter((overlay) => inView(overlay, 2))
       .sort((a, b) => a.y + (a.offsetY ?? 0) - (b.y + (b.offsetY ?? 0)) || a.x + (a.offsetX ?? 0) - (b.x + (b.offsetX ?? 0)));
-    for (const overlay of visibleObjectOverlays) {
-      const displaySize = TILE * overlay.scale;
-      const sx = (overlay.x + (overlay.offsetX ?? 0)) * TILE - tileCam.x + TILE / 2 - displaySize / 2;
-      const sy = (overlay.y + (overlay.offsetY ?? 0)) * TILE - tileCam.y + TILE / 2 - displaySize / 2;
-      this.drawWorldObjectCell(overlay.objectId, sx, sy, displaySize, displaySize, overlay.alpha ?? 0.92);
-    }
     const reefTextureKey = WORLD_CURRENT_OBJECT_TEXTURE_KEY_BY_ID.coral_cluster_blue;
     if (!reefTextureKey || !this.hasTexture(reefTextureKey)) {
       for (const reef of this.generatedWorld.reefs) {
@@ -5596,6 +5584,12 @@ Statuses: ${statuses}`;
       overlayGraphics.fillStyle(0x07101d, 0.35).fillRect(sx + 5, sy + 5, TILE - 10, TILE - 10);
       overlayGraphics.fillStyle(color, 0.95).fillRect(sx + 7, sy + 12, TILE - 14, 8);
       overlayGraphics.lineStyle(1, 0xffefbd, 0.65).lineBetween(sx + 8, sy + 16, sx + TILE - 8, sy + 16);
+    }
+    for (const overlay of visibleObjectOverlays) {
+      const displaySize = TILE * overlay.scale;
+      const sx = (overlay.x + (overlay.offsetX ?? 0)) * TILE - tileCam.x + TILE / 2 - displaySize / 2;
+      const sy = (overlay.y + (overlay.offsetY ?? 0)) * TILE - tileCam.y + TILE / 2 - displaySize / 2;
+      this.drawWorldObjectCell(overlay.objectId, sx, sy, displaySize, displaySize, overlay.alpha ?? 0.92);
     }
   }
 
@@ -5621,6 +5615,7 @@ Statuses: ${statuses}`;
             else if (semantic.layers.biome[i] === SEMANTIC_BIOME.SAND) color = 0xd2aa5c;
             else if (semantic.layers.biome[i] === SEMANTIC_BIOME.ICE) color = 0xcdf6ff;
           }
+          if (semantic.layers.lakeMap[i] || semantic.layers.riverMap[i]) color = 0x3aa8d8;
           debugGraphics.fillStyle(color, 0.4).fillRect(x * TILE - tileCam.x, y * TILE - tileCam.y, TILE, TILE);
         }
       }
@@ -5868,20 +5863,6 @@ Statuses: ${statuses}`;
     return sources;
   }
 
-  private currentSemanticRiverTileSource(): SemanticRiverTileSource {
-    if (!this.textures.exists(WORLD_RIVER_FRESHWATER_TEXTURE_KEY)) {
-      throw new Error(`Current river tile asset is not loaded: ${WORLD_RIVER_FRESHWATER_TEXTURE_KEY}.`);
-    }
-    const source = this.textures.get(WORLD_RIVER_FRESHWATER_TEXTURE_KEY).getSourceImage() as CanvasImageSource & { width: number; height: number };
-    return {
-      image: source,
-      width: source.width,
-      height: source.height,
-      cellSize: TILE,
-      label: WORLD_RIVER_FRESHWATER_TEXTURE_KEY
-    };
-  }
-
   private assertCurrentWorldAssetTextures() {
     if (this.currentWorldAssetsValidated) return;
     for (const [terrainClass, textureKey] of Object.entries(WORLD_CURRENT_TERRAIN_TEXTURE_KEYS) as [SemanticMaskTerrainClass, string][]) {
@@ -5893,30 +5874,7 @@ Statuses: ${statuses}`;
         throw new Error(`Current world terrain asset ${textureKey} must be 256x256; got ${source.width}x${source.height}.`);
       }
     }
-    if (!this.textures.exists(WORLD_RIVER_FRESHWATER_TEXTURE_KEY)) {
-      throw new Error(`Current world river asset is not loaded: ${WORLD_RIVER_FRESHWATER_TEXTURE_KEY}.`);
-    }
-    const riverSource = this.textures.get(WORLD_RIVER_FRESHWATER_TEXTURE_KEY).getSourceImage() as { width: number; height: number };
-    if (riverSource.width !== 256 || riverSource.height !== 256) {
-      throw new Error(`Current world river asset ${WORLD_RIVER_FRESHWATER_TEXTURE_KEY} must be 256x256; got ${riverSource.width}x${riverSource.height}.`);
-    }
     this.currentWorldAssetsValidated = true;
-  }
-
-  private rebuildWorldRiverOverlayCache() {
-    this.worldRiverOverlayCacheSeed = "";
-    if (!this.generatedWorld || !this.world.length) return;
-    this.assertCurrentWorldAssetTextures();
-    createSemanticRiverTileOverlayTexture(this, this.generatedWorld.semantic, {
-      tileSize: TILE,
-      textureKey: this.worldRiverOverlayCacheKey,
-      riverTileSource: this.currentSemanticRiverTileSource()
-    });
-    this.textures.get(this.worldRiverOverlayCacheKey).setFilter(Phaser.Textures.FilterMode.NEAREST);
-    this.worldRiverOverlayCacheSeed = this.worldSeed;
-    if (import.meta.env.DEV) {
-      console.info(`Semantic river tile overlay cache rendered from ${WORLD_RIVER_FRESHWATER_TEXTURE_KEY}; procedural river strokes are debug-only.`);
-    }
   }
 
   private rebuildWorldRouteOverlayCache() {
@@ -5932,7 +5890,7 @@ Statuses: ${statuses}`;
     this.textures.get(this.worldRouteOverlayCacheKey).setFilter(Phaser.Textures.FilterMode.NEAREST);
     this.worldRouteOverlayCacheSeed = this.worldSeed;
     if (import.meta.env.DEV) {
-      console.info(`Semantic route overlay cache rendered for roads; river bodies are asset tile masks and F6 rivers are debug-only diagnostics.`);
+      console.info(`Semantic route overlay cache rendered for diagnostics; roads and river bodies are in the terrain mask.`);
     }
   }
 
@@ -5970,30 +5928,6 @@ Statuses: ${statuses}`;
         `expected display=${cropWidth * PIXEL_ART_SCALE}x${cropHeight * PIXEL_ART_SCALE}`
       );
     }
-    return true;
-  }
-
-  private drawCachedWorldRiverOverlay(tileCam: Vec): boolean {
-    if (this.worldRiverOverlayCacheSeed !== this.worldSeed || !this.textures.exists(this.worldRiverOverlayCacheKey)) return false;
-    const mapWidth = (this.world[0]?.length ?? 0) * TILE;
-    const mapHeight = this.world.length * TILE;
-    const cropX = Math.round(Phaser.Math.Clamp(tileCam.x, 0, Math.max(0, mapWidth - WIDTH)));
-    const cropY = Math.round(Phaser.Math.Clamp(tileCam.y, 0, Math.max(0, mapHeight - HEIGHT)));
-    const cropWidth = Math.min(WIDTH, mapWidth - cropX);
-    const cropHeight = Math.min(HEIGHT, mapHeight - cropY);
-    if (cropWidth <= 0 || cropHeight <= 0) return false;
-
-    const viewFrameKey = `${this.worldRiverOverlayCacheKey}_view`;
-    const texture = this.textures.get(this.worldRiverOverlayCacheKey);
-    if (texture.has(viewFrameKey)) texture.remove(viewFrameKey);
-    texture.add(viewFrameKey, 0, cropX, cropY, cropWidth, cropHeight);
-
-    const image = this.add.image(0, 0, this.worldRiverOverlayCacheKey, viewFrameKey);
-    image.setOrigin(0, 0);
-    image.setDisplaySize(cropWidth * PIXEL_ART_SCALE, cropHeight * PIXEL_ART_SCALE);
-    image.setDepth(LAYER_WORLD_IMAGE + 0.18);
-    image.setScrollFactor(0);
-    this.images.push(image);
     return true;
   }
 

@@ -65,7 +65,7 @@ export function createSemanticRouteOverlayCanvas(world: SemanticWorld, options: 
 
 export function describeSemanticRouteRenderPlan(world: SemanticWorld, options: SemanticRouteRenderOptions): SemanticRouteRenderPlan {
   const tileSize = Math.max(1, Math.floor(options.tileSize));
-  const routeOverlayMode = options.routeOverlayMode ?? "styled";
+  const routeOverlayMode = options.routeOverlayMode ?? "hidden";
   const riverOverlayMode = options.riverOverlayMode ?? "hidden";
   return {
     width: world.width * tileSize,
@@ -83,7 +83,10 @@ export function describeSemanticRouteRenderPlan(world: SemanticWorld, options: S
 }
 
 function drawStyledRoads(ctx: CanvasRenderingContext2D, world: SemanticWorld, tileSize: number) {
-  const paths = world.roadGraph.edges.filter((edge) => edge.connected && edge.path.length > 1).map((edge) => edge.path);
+  const paths = world.roadGraph.edges
+    .filter((edge) => edge.connected && edge.path.length > 1)
+    .flatMap((edge) => splitRoadPathAroundRiver(world, edge.path))
+    .filter((path) => path.length > 1);
   const pointPaths = paths.map((path, index) => jitteredPathPoints(world.seed, `road:${index}`, path, tileSize, 1.15));
   for (const path of pointPaths) drawCurvedStrokePoints(ctx, path, ROAD_STYLE.edgeWidth, ROAD_STYLE.edge);
   for (const path of pointPaths) drawCurvedStrokePoints(ctx, path, ROAD_STYLE.outlineWidth, ROAD_STYLE.outline);
@@ -170,6 +173,7 @@ function drawRoadTexture(ctx: CanvasRenderingContext2D, world: SemanticWorld, ti
     for (let x = 0; x < world.width; x += 1) {
       const i = y * world.width + x;
       if (!world.layers.roadMap[i]) continue;
+      if (world.layers.riverMap[i]) continue;
       const speckleCount = 2 + Math.floor(hashNoise(`${world.seed}:road-speckle-count`, x, y) * 3);
       for (let dot = 0; dot < speckleCount; dot += 1) {
         const roll = hashNoise(`${world.seed}:road-speckle:${dot}`, x, y);
@@ -183,6 +187,24 @@ function drawRoadTexture(ctx: CanvasRenderingContext2D, world: SemanticWorld, ti
     }
   }
   ctx.restore();
+}
+
+function splitRoadPathAroundRiver(world: SemanticWorld, path: SemanticVec[]): SemanticVec[][] {
+  const segments: SemanticVec[][] = [];
+  let current: SemanticVec[] = [];
+  for (const cell of path) {
+    const i = cell.y * world.width + cell.x;
+    if (world.layers.riverMap[i]) {
+      if (current.length > 0) {
+        segments.push(current);
+        current = [];
+      }
+      continue;
+    }
+    current.push(cell);
+  }
+  if (current.length > 0) segments.push(current);
+  return segments;
 }
 
 function drawDebugDot(ctx: CanvasRenderingContext2D, cell: SemanticVec, tileSize: number, color: string) {
