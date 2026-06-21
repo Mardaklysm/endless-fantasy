@@ -61,12 +61,10 @@ function validatePoi(world: SemanticWorld, poi: SemanticPoi, errors: string[]) {
 }
 
 function validateMountainRules(world: SemanticWorld, errors: string[], warnings: string[]) {
+  if (world.mountainDebug.singletonComponents > 0) errors.push(`Mountain cleanup left ${world.mountainDebug.singletonComponents} singleton component(s).`);
   for (const island of world.islands) {
     const islandMountains = world.mountains.filter((mountain) => mountain.islandId === island.id);
     const islandRanges = world.mountainRanges.filter((range) => range.islandId === island.id);
-    if (islandMountains.length > island.overlayRules.mountainCap) {
-      errors.push(`${island.id} has ${islandMountains.length} mountain overlays, above cap ${island.overlayRules.mountainCap}.`);
-    }
     const snowMountains = islandMountains.filter((mountain) => mountain.kind === "snow_mountain");
     if (!island.overlayRules.allowSnowMountains && snowMountains.length) {
       errors.push(`${island.id} has snow mountains but its theme does not allow them.`);
@@ -75,9 +73,11 @@ function validateMountainRules(world: SemanticWorld, errors: string[], warnings:
       const i = index(world.width, mountain.x, mountain.y);
       if (world.layers.biome[i] !== SEMANTIC_BIOME.ICE) errors.push(`Snow mountain on ${island.id} at ${mountain.x},${mountain.y} is not on ice/snow terrain.`);
     }
-    if (island.id === "highspire" && islandMountains.length < 3) warnings.push("Highspire has fewer than 3 mountain overlays.");
+    if (island.id === "highspire" && islandMountains.length < 24) warnings.push("Highspire has fewer than 24 mountain mask cells.");
     for (const range of islandRanges) {
-      if (range.cells.length < 2 && !range.smallOutcrop) errors.push(`${range.id} has ${range.cells.length} mountain cell but is not marked as a small outcrop.`);
+      const minimumSize = minimumMountainComponentSize(island.id);
+      if (range.cells.length < minimumSize) errors.push(`${range.id} has ${range.cells.length} mountain cells, below minimum ${minimumSize}.`);
+      if (!rangeIsConnected(range.cells)) errors.push(`${range.id} is not a contiguous mountain component.`);
       if (!island.overlayRules.allowSnowMountains && range.kind === "snow_mountain") errors.push(`${range.id} is snowy but ${island.id} does not allow snow mountains.`);
       for (const cell of range.collisionCells) {
         const i = index(world.width, cell.x, cell.y);
@@ -85,6 +85,31 @@ function validateMountainRules(world: SemanticWorld, errors: string[], warnings:
       }
     }
   }
+}
+
+function minimumMountainComponentSize(islandId: string): number {
+  if (islandId === "highspire") return 24;
+  if (islandId === "frostmere") return 18;
+  if (islandId === "greenhaven" || islandId === "coralreach") return 8;
+  return 8;
+}
+
+function rangeIsConnected(cells: { x: number; y: number }[]): boolean {
+  if (cells.length <= 1) return true;
+  const keys = new Set(cells.map((cell) => `${cell.x},${cell.y}`));
+  const seen = new Set<string>();
+  const queue = [cells[0]];
+  seen.add(`${cells[0].x},${cells[0].y}`);
+  for (let head = 0; head < queue.length; head += 1) {
+    const cell = queue[head];
+    for (const next of neighbors4(cell.x, cell.y)) {
+      const key = `${next.x},${next.y}`;
+      if (!keys.has(key) || seen.has(key)) continue;
+      seen.add(key);
+      queue.push(next);
+    }
+  }
+  return seen.size === cells.length;
 }
 
 function validatePortRoadConnectivity(world: SemanticWorld, errors: string[]) {

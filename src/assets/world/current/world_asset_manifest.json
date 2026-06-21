@@ -41,7 +41,8 @@
     "dockVertical": "world_current_object_dock_wooden_t_shape_01",
     "bridgeHorizontal": "world_current_object_bridge_stone_horizontal_01",
     "bridgeVertical": "world_current_object_bridge_stone_arch_01",
-    "riverRendering": "procedural_styled_stroke",
+    "riverRendering": "asset_tile_mask_freshwater",
+    "riverFreshwater": "world_current_terrain_freshwater",
     "roadRendering": "procedural_styled_stroke"
   },
   "poiMappings": {
@@ -159,8 +160,8 @@
     },
     {
       "role": "road/river/bridge art stamps",
-      "status": "procedural_or_existing_current_assets",
-      "notes": "Roads and rivers remain procedural styled strokes. Route/dock/bridge keys now point to existing current object PNGs, with no generic route placeholders restored."
+      "status": "river_asset_tiles_plus_existing_route_assets",
+      "notes": "Rivers render from the freshwater terrain asset through a semantic tile-mask overlay. Roads remain procedural styled strokes, and route/dock/bridge keys point to existing current object PNGs."
     },
     {
       "role": "shipwreck and dedicated Starfall Gate sprites",

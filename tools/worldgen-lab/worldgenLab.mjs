@@ -30,6 +30,9 @@ async function main() {
   outputs.push(writeImage(outDir, "semantic_map_debug.png", previews.semanticMap));
   outputs.push(writeImage(outDir, "distance_bands_debug.png", previews.distanceBands));
   outputs.push(writeImage(outDir, "elevation_debug.png", previews.elevation));
+  outputs.push(writeImage(outDir, "mountain_mask_debug.png", previews.mountainMask));
+  outputs.push(writeImage(outDir, "river_mask_debug.png", previews.riverMask));
+  outputs.push(writeImage(outDir, "river_connectivity_debug.png", previews.riverConnectivity));
   outputs.push(writeImage(outDir, "rivers_roads_debug.png", previews.riversRoads));
   outputs.push(writeImage(outDir, "rendered_world_preview.png", previews.renderedWorld));
   outputs.push(writeText(outDir, "semantic_world.json", JSON.stringify(serializeWorld(world), null, 2)));
@@ -114,6 +117,8 @@ function buildAlgorithmReport(world, options) {
   const warnings = world.validation.warnings.length ? world.validation.warnings.map((warning) => `- ${warning}`).join("\n") : "- none";
   const errors = world.validation.errors.length ? world.validation.errors.map((error) => `- ${error}`).join("\n") : "- none";
   const command = `npm run worldgen:lab -- --seed "${world.seed}" --out "${options.out || path.join("tmp", "worldgen-lab", safeSlug(world.seed))}"`;
+  const mountainReport = buildMountainComponentReport(world);
+  const riverReport = buildRiverTileReport(world);
 
   return `# World Generator Lab Algorithm Report
 
@@ -172,6 +177,14 @@ The lab stores a logical world model separately from its rendered preview. The s
 
 The output \`semantic_world.json\` is the inspectable semantic dump. The PNGs are only views of that data.
 
+## Mountain Component Report
+
+${mountainReport}
+
+## River Tile Report
+
+${riverReport}
+
 ## B. Island / Archipelago Generation
 
 The campaign profile defines four major islands: Greenhaven, Coralreach, Frostmere, and Highspire. It also adds seeded minor satellite islands. Each island is built from overlapping ellipse blobs with coast noise. The result is a semantic land mask, not a tile transition problem.
@@ -213,11 +226,11 @@ Biome assignment uses elevation, moisture, coldness, distance from coast, island
 
 ## E. Elevation And Mountains
 
-Elevation is separate from biome. It combines inland distance, base island height, ridge field, and noise. Mountains are symbolic overlay objects selected from grouped ridge/elevation components, so accepted peaks form ranges/clusters instead of isolated random icons. Snow mountains are chosen when elevation plus coldness is high. Mountain collision uses accepted range collision cells only, not surrounding visual pixels.
+Elevation is separate from biome. It combines inland distance, base island height, ridge field, and noise. Mountains are generated as connected semantic massif masks: a few seed peaks are chosen from high ridge/elevation candidates per island, deterministic flood-fill grows each seed into an organic region, a smoothing pass merges close cells, and cleanup removes tiny fragments before collision is written. Snow mountains are chosen when elevation plus coldness is high. Mountain collision uses the accepted mask cells only, not surrounding visual pixels.
 
 ## F. Rivers And Lakes
 
-River sources are chosen from high-elevation or cold/ridge areas. Rivers greedily flow toward lower elevation and coast/lakes with seeded tie-breaking. Loops are discarded. Surviving rivers are semantic paths rendered as styled banked stroke overlays, not terrain transition tiles or atlas stamps.
+River sources are chosen from high-elevation or cold/ridge areas while avoiding mountain masks and POI footprints. Rivers greedily flow toward lower elevation and coast/lakes with cardinal seeded tie-breaking. Loops are discarded. Surviving rivers remain semantic masks/paths, then render through an asset tile overlay: each river cell computes north/east/south/west connectivity, selects a freshwater atlas cell, and blits that asset cell with nearest-neighbor sampling. The old styled river stroke renderer is disabled for normal output.
 
 Lakes are optional overlay masks in moist inland basins.
 
@@ -260,11 +273,12 @@ The prototype renderer draws in layers:
 3. land base color/terrain
 4. beach/coast band
 5. biome fills
-6. lakes/rivers
-7. styled roads/bridges
-8. forest overlays
-9. mountain range overlays
-10. towns/POIs/ports
+6. lakes
+7. asset river tile-mask overlay
+8. styled roads/bridges
+9. forest overlays
+10. mountain range overlays
+11. towns/POIs/ports
 
 The current lab art is deliberately procedural: flat colors, light texture noise, simple symbolic mountains/forests, and styled route strokes. The algorithm and semantic separation are the point.
 
@@ -303,17 +317,153 @@ Recommended v1 approach:
 - semantic archipelago masks and fields
 - minimal terrain fills and brush-like edges
 - object overlays for mountains, forests, towns, ports, and dungeons
-- styled road and river overlays
+- styled road overlays and asset river tile masks
 - validation against logical world rules before visual polish
 
 ## Known Prototype Limitations
 
 - Roads are grid paths with simple A* costs; future visual smoothing should draw prettier curves over the same graph.
-- Rivers are greedy downhill paths; future versions should improve basin selection and merging.
+- Rivers are greedy downhill paths; future versions should improve basin selection and add dedicated directional river art beyond the freshwater material sheet.
 - Mountain and forest art is procedural placeholder only.
 - Biome smoothing is simple and should eventually use connected-region cleanup.
-- This lab preview remains isolated from Phaser-specific rendering even though it shares the runtime-safe semantic generator core.
+  - This lab preview remains isolated from Phaser-specific rendering even though it shares the runtime-safe semantic generator core.
 `;
+}
+
+function buildMountainComponentReport(world) {
+  const debug = world.mountainDebug ?? {
+    componentCount: world.mountainRanges.length,
+    componentSizes: world.mountainRanges.map((range) => range.cells.length).sort((a, b) => b - a),
+    minComponentSize: 0,
+    maxComponentSize: 0,
+    averageComponentSize: 0,
+    rejectedTinyComponents: 0,
+    singletonComponents: 0
+  };
+  const roadOverlap = countMaskOverlap(world, world.layers.mountainMap, world.layers.roadMap);
+  const riverOverlap = countMaskOverlap(world, world.layers.mountainMap, world.layers.riverMap);
+  const townOverlap = countPoiFootprintOverlap(world, (poi) => poi.role === "settlement");
+  const harborOverlap = countPoiFootprintOverlap(world, (poi) => poi.role === "port");
+  const importantPoiOverlap = countPoiFootprintOverlap(world, (poi) => poi.role !== "landmark" || poi.type === "gate" || poi.type === "final");
+  const sizes = debug.componentSizes.length ? debug.componentSizes.join(", ") : "none";
+  return `- Mountain components: ${debug.componentCount}
+- Component sizes: ${sizes}
+- Minimum component size: ${debug.minComponentSize}
+- Maximum component size: ${debug.maxComponentSize}
+- Average component size: ${debug.averageComponentSize}
+- Rejected tiny components: ${debug.rejectedTinyComponents}
+- Singleton mountain components after cleanup: ${debug.singletonComponents}
+- Mountain cells overlapping roads: ${roadOverlap}
+- Mountain cells overlapping rivers: ${riverOverlap}
+- Mountain cells overlapping town footprints: ${townOverlap}
+- Mountain cells overlapping harbor footprints: ${harborOverlap}
+- Mountain cells overlapping important POI footprints: ${importantPoiOverlap}`;
+}
+
+function buildRiverTileReport(world) {
+  const metrics = riverTileMetrics(world);
+  return `- River masks/paths: ${world.rivers.length}
+- River tile count: ${metrics.riverTileCount}
+- River source/end tiles: ${metrics.sourceEndTileCount}
+- River corner tiles: ${metrics.cornerTileCount}
+- River straight tiles: ${metrics.straightTileCount}
+- River junction tiles: ${metrics.junctionTileCount}
+- River crossing tiles: ${metrics.crossingTileCount}
+- Road/river crossings: ${metrics.roadRiverCrossings}
+- Bridges created/used: ${metrics.bridgeTileCount}
+- Old programmatic river renderer segments used: 0
+- River tiles lacking atlas mapping fallback: 0
+- River connectivity masks: ${Object.entries(metrics.connectivityCounts)
+    .sort(([a], [b]) => Number.parseInt(a, 16) - Number.parseInt(b, 16))
+    .map(([mask, count]) => `${mask}:${count}`)
+    .join(", ") || "none"}`;
+}
+
+function riverTileMetrics(world) {
+  const bridgeKeys = new Set((world.bridgeCandidates ?? []).map((bridge) => `${bridge.x},${bridge.y}`));
+  const metrics = {
+    riverTileCount: 0,
+    sourceEndTileCount: 0,
+    cornerTileCount: 0,
+    straightTileCount: 0,
+    junctionTileCount: 0,
+    crossingTileCount: 0,
+    roadRiverCrossings: countMaskOverlap(world, world.layers.roadMap, world.layers.riverMap),
+    bridgeTileCount: bridgeKeys.size,
+    connectivityCounts: {}
+  };
+  forEachCell(world, (x, y, i) => {
+    if (!world.layers.riverMap[i]) return;
+    metrics.riverTileCount += 1;
+    const mask = riverConnectivityMaskAt(world, x, y);
+    const key = mask.toString(16);
+    metrics.connectivityCounts[key] = (metrics.connectivityCounts[key] ?? 0) + 1;
+    const kind = riverTileKindForMask(mask);
+    if (kind === "isolated" || kind === "end") metrics.sourceEndTileCount += 1;
+    else if (kind === "corner") metrics.cornerTileCount += 1;
+    else if (kind === "straight") metrics.straightTileCount += 1;
+    else if (kind === "junction") metrics.junctionTileCount += 1;
+    else if (kind === "cross") metrics.crossingTileCount += 1;
+  });
+  return metrics;
+}
+
+function riverConnectivityMaskAt(world, x, y) {
+  let mask = 0;
+  if (isRiverTile(world, x, y - 1)) mask |= 1;
+  if (isRiverTile(world, x + 1, y)) mask |= 2;
+  if (isRiverTile(world, x, y + 1)) mask |= 4;
+  if (isRiverTile(world, x - 1, y)) mask |= 8;
+  return mask;
+}
+
+function isRiverTile(world, x, y) {
+  return x >= 0 && y >= 0 && x < world.width && y < world.height && world.layers.riverMap[y * world.width + x] === 1;
+}
+
+function riverTileKindForMask(mask) {
+  const count = bitCount(mask);
+  if (count === 0) return "isolated";
+  if (count === 1) return "end";
+  if (count === 2) return mask === 5 || mask === 10 ? "straight" : "corner";
+  if (count === 3) return "junction";
+  return "cross";
+}
+
+function bitCount(value) {
+  let count = 0;
+  let working = value;
+  while (working > 0) {
+    count += working & 1;
+    working >>= 1;
+  }
+  return count;
+}
+
+function countMaskOverlap(world, a, b) {
+  let count = 0;
+  for (let i = 0; i < a.length; i += 1) if (a[i] && b[i]) count += 1;
+  return count;
+}
+
+function forEachCell(world, fn) {
+  for (let y = 0; y < world.height; y += 1) {
+    for (let x = 0; x < world.width; x += 1) fn(x, y, y * world.width + x);
+  }
+}
+
+function countPoiFootprintOverlap(world, predicate) {
+  let count = 0;
+  for (const poi of world.poiList.filter(predicate)) {
+    const radius = poi.role === "settlement" || poi.role === "port" ? 1 : 0;
+    for (let y = poi.y - radius; y <= poi.y + radius; y += 1) {
+      for (let x = poi.x - radius; x <= poi.x + radius; x += 1) {
+        if (x < 0 || y < 0 || x >= world.width || y >= world.height) continue;
+        if (world.layers.mountainMap[y * world.width + x]) count += 1;
+      }
+    }
+  }
+  return count;
 }
 
 function buildAssetRequirementReport() {
@@ -330,7 +480,7 @@ This list supports the semantic-mask world generator direction. It avoids asking
 | Grass fill texture | required now | tile/fill | Readable green interior terrain. |
 | Sand/beach fill texture | required now | tile/fill | Used for beaches and desert interiors. |
 | Snow/ice fill texture | required now | tile/fill | Used for cold/high regions. |
-| River water overlay | required now | stroke/brush | Banked procedural route overlay; not a full terrain tile set. |
+| River water overlay | required now | asset tile mask | Uses the current freshwater material sheet by river connectivity mask. |
 | Lake water overlay | useful soon | brush/stamp | Small lake fills and edge highlights. |
 
 ## 2. Edge / Mask Rendering Assets
@@ -341,7 +491,7 @@ This list supports the semantic-mask world generator direction. It avoids asking
 | Beach edge tint/outline | required now | brush/shader-like overlay | Minimal outline between beach and inland biome. |
 | Shallow-water halo brush | required now | mask/field overlay | Follows distance-to-land field. |
 | Biome boundary softening brush | useful soon | procedural brush | Softens grass/sand/ice boundaries without transition tiles. |
-| River edge highlight | useful soon | stroke brush | Adds readability to narrow rivers. |
+| River edge highlight | useful soon | tile/mask overlay | Adds readability to narrow rivers without freehand stroke bodies. |
 
 ## 3. Overlay Objects
 
@@ -361,7 +511,7 @@ This list supports the semantic-mask world generator direction. It avoids asking
 | Ruins | required now | overlay sprite | Desert/ancient POI marker. |
 | Tower | required now | overlay sprite | Inland high-visibility POI. |
 | Chest/relic | later | overlay sprite | Sparse optional rewards. |
-| Bridge | useful soon | overlay sprite/stroke cap | Road/rivers crossing. |
+| Bridge | useful soon | overlay sprite | Road/rivers crossing. |
 | Dock | useful soon | overlay sprite/stamp | Port detail. |
 
 ## 4. Road / Route Overlays
@@ -371,7 +521,8 @@ This list supports the semantic-mask world generator direction. It avoids asking
 | Dirt road line style | required now | procedural stroke/brush | Main grassland route. |
 | Sandy trail style | useful soon | procedural stroke/brush | Desert/beach variant. |
 | Snowy trail style | useful soon | procedural stroke/brush | Ice/snow variant. |
-| Bridge overlay | useful soon | overlay sprite/stroke | Crosses rivers or narrow water. |
+| Bridge overlay | useful soon | overlay sprite | Crosses rivers or narrow water. |
+| River tile variants | useful soon | directional tile cells | Dedicated end, straight, corner, junction, and crossing art beyond the freshwater material. |
 | Curved road brush | later | brush | Lets paths render smooth curves while logic stays grid/graph based. |
 
 ## 5. Debug / Dev Assets
@@ -381,11 +532,11 @@ This list supports the semantic-mask world generator direction. It avoids asking
 | Biome color palette | required now | constants | Stable debug colors for grass/sand/ice/beach/water. |
 | POI markers | required now | procedural icons | Debug symbols for placement review. |
 | Road graph overlay | required now | procedural lines | Shows path graph and connection failures. |
-| River graph overlay | required now | procedural lines | Shows sources, mouths, discarded/final rivers. |
+| River graph overlay | required now | debug-only procedural lines | Shows sources, mouths, discarded/final rivers; normal rendering uses asset tiles. |
 
 ## Recommendation
 
-Make a small set of fills, brushes, and symbolic overlay sprites first. Keep coastlines, biome boundaries, roads, and rivers mask/stroke-driven. Only add targeted tile pieces later if a specific repeated visual problem survives the mask-rendering approach.
+Make a small set of fills, masks, symbolic overlay sprites, and directional river tile variants first. Keep coastlines, biome boundaries, roads, and rivers driven by semantic masks/graphs; river bodies should render from asset tiles, with procedural river lines limited to debug views.
 `;
 }
 

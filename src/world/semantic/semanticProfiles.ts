@@ -20,7 +20,7 @@ export const CAMPAIGN_WORLD_PROFILE: WorldProfile = {
       mountainBias: -0.06,
       forestBias: 0.26,
       overlayRules: {
-        mountainCap: 2,
+        mountainCap: 20,
         allowSnowMountains: false,
         mountainSpacing: 8,
         forestDensity: 0.62,
@@ -50,7 +50,7 @@ export const CAMPAIGN_WORLD_PROFILE: WorldProfile = {
       mountainBias: 0.04,
       forestBias: -0.04,
       overlayRules: {
-        mountainCap: 3,
+        mountainCap: 24,
         allowSnowMountains: false,
         mountainSpacing: 7,
         forestDensity: 0.22,
@@ -80,7 +80,7 @@ export const CAMPAIGN_WORLD_PROFILE: WorldProfile = {
       mountainBias: 0.18,
       forestBias: 0.04,
       overlayRules: {
-        mountainCap: 9,
+        mountainCap: 96,
         allowSnowMountains: true,
         mountainSpacing: 4,
         forestDensity: 0.3,
@@ -110,7 +110,7 @@ export const CAMPAIGN_WORLD_PROFILE: WorldProfile = {
       mountainBias: 0.36,
       forestBias: 0.02,
       overlayRules: {
-        mountainCap: 13,
+        mountainCap: 150,
         allowSnowMountains: true,
         mountainSpacing: 4,
         forestDensity: 0.34,

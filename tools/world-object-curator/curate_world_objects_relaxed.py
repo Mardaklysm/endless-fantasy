@@ -859,7 +859,7 @@ def integrate_runtime_objects(entries: list[dict[str, Any]], ready_root: Path, r
         {
             "role": "road/river/bridge art stamps",
             "status": "procedural_or_partially_replaced",
-            "notes": "Roads and rivers remain procedural styled strokes. Relaxed game-ready dock and horizontal bridge objects replace more route placeholders; vertical stone bridge remains missing.",
+            "notes": "Roads remain procedural styled strokes. Rivers render from semantic freshwater asset tile masks. Relaxed game-ready dock and horizontal bridge objects replace more route placeholders; vertical stone bridge remains missing.",
         },
         {
             "role": "shipwreck and dedicated Starfall Gate sprites",

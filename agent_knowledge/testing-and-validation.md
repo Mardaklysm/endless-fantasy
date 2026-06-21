@@ -40,12 +40,12 @@ This runs `tools/worldgen/test_worldgen.mjs`. It validates the active semantic r
 - runtime roads, rivers, mountain overlays, and forest overlays exist
 - overlay collision policies tag mountains as `hardBlock`, forests as `softTerrain`, and POI cells as `poiBlock`
 - forests remain walkable, while mountains remain blocked
-- mountain ranges exist, flat mountain overlay cells belong to ranges, ranges have at least two cells unless explicitly marked as small outcrops, Greenhaven/Coralreach do not receive snow mountains, Greenhaven and Coralreach respect their mountain caps, and every island respects its configured mountain cap
+- mountain ranges exist as connected semantic massif components, flat mountain mask cells belong to ranges, components meet their island minimum size, singleton mountain components are cleaned to zero, and Greenhaven/Coralreach do not receive snow mountains
 - roads are walkable and not overlapped by mountain/forest overlays
 - the semantic compatibility tile grid uses exactly one canonical tile ID each for deep water, shallow water, beach, grassland, sand/desert, and ice/snow while `TERRAIN_VARIANT_MODE` is off
 - the semantic mask terrain renderer plan reports the expected texture dimensions, mask resolution, class samples, boundary samples, and does not mutate the generated world
 - the semantic mask terrain renderer uses atlas texture source IDs that match the canonical terrain palette
-- the semantic route renderer plan reports styled road/river paths and confirms normal styled mode does not expose debug markers, while debug mode can expose diagnostics
+- the semantic route renderer plan reports styled road paths with zero normal styled river paths, the semantic river tile renderer maps every river cell to the freshwater asset source without fallback, and debug mode can expose road/river diagnostics
 
 ## Asset Import Validation
 
@@ -110,7 +110,7 @@ For the reset semantic overworld direction, use World Generator Lab:
 npm run worldgen:lab -- --seed test-greenhaven --out tmp/worldgen-lab/test-greenhaven
 ```
 
-Check `semantic_map_debug.png`, `distance_bands_debug.png`, `elevation_debug.png`, `rivers_roads_debug.png`, `rendered_world_preview.png`, `semantic_world.json`, `worldgen_algorithm_report.md`, and `worldgen_asset_requirements.md`. These are disposable outputs under `tmp/worldgen-lab/` and are not runtime assets.
+Check `semantic_map_debug.png`, `distance_bands_debug.png`, `elevation_debug.png`, `mountain_mask_debug.png`, `river_mask_debug.png`, `river_connectivity_debug.png`, `rivers_roads_debug.png`, `rendered_world_preview.png`, `semantic_world.json`, `worldgen_algorithm_report.md`, and `worldgen_asset_requirements.md`. These are disposable outputs under `tmp/worldgen-lab/` and are not runtime assets.
 
 For rembg-related regeneration, use `D:\tools\rembg\venv_rembg\Scripts\rembg.exe` with `birefnet-general`. The expected AMD/Windows provider path is DirectML (`DmlExecutionProvider`). Do not add NVIDIA-specific checks.
 
@@ -175,7 +175,7 @@ Expected:
 - Confirm current selected terrain fills render for deep water, shallow water, beach, grassland, sand, and snow/ice; no old atlas art or magenta backgrounds should appear.
 - Confirm water blocks movement while generated roads suppress encounters and harbors enable boat travel.
 - Confirm normal overworld terrain is mask-rendered from semantic fields using current selected material PNGs, with crisp coastlines and biome boundaries rather than hard square tile edges or full-map blur.
-- Confirm normal gameplay roads and rivers are styled procedural overlays with round strokes, muted colors, and no debug dots/nodes/source markers. Roads/rivers are semantic paths, not terrain tiles or atlas stamps.
+- Confirm normal gameplay roads are styled procedural overlays and river bodies are asset tile-mask overlays from the current freshwater material. F6 road/river graph strokes, dots, source/mouth markers, and route diagnostics must stay debug-only.
 - Use F6 semantic debug overlays to inspect edge debug, raw square tiles, semantic masks, distance bands, walkability, overlay policy, mountain candidates/accepted cells, forest soft-terrain cells, island themes, POI clearance, roads, and rivers. `edgeDebug` draws water/beach edges cyan, sand/grass edges magenta, sand/ice edges white, and grass/ice edges blue.
 - At Greenhaven Harbor, confirm Coralreach costs 10 gold, deducts gold, moves the player to Coralreach harbor, and can return by harbor.
 - Confirm new games produce different world seeds and load restores the same saved world.

@@ -2229,7 +2229,7 @@ def integrate_runtime_objects(project_root: Path, entries: list[dict[str, Any]],
         {
             "role": "road/river/bridge art stamps",
             "status": "procedural_or_partially_replaced",
-            "notes": "Roads and rivers remain procedural styled strokes. Horizontal dock has an approved object; vertical dock and stone bridges still use placeholders.",
+            "notes": "Roads remain procedural styled strokes. Rivers render from semantic freshwater asset tile masks. Horizontal dock has an approved object; vertical dock and stone bridges still use placeholders.",
         },
     ]
 

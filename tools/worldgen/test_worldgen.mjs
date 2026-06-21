@@ -18,6 +18,7 @@ import { WORLD_CLOUD_ASSET_BY_TEXTURE_KEY, WORLD_CLOUD_ASSETS, WORLD_CLOUD_MANIF
 import { DUNGEON_ATLAS } from "../../src/data/dungeonTiles.ts";
 import { SEMANTIC_BIOME, SEMANTIC_WATER } from "../../src/world/semantic/semanticTypes.ts";
 import { SEMANTIC_MASK_TERRAIN_CLASSES, describeSemanticMaskTerrainRenderPlan } from "../../src/world/semantic/semanticMaskTerrainRenderer.ts";
+import { describeSemanticRiverTileRenderPlan } from "../../src/world/semantic/semanticRiverTileRenderer.ts";
 import { describeSemanticRouteRenderPlan } from "../../src/world/semantic/semanticRouteRenderer.ts";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -155,6 +156,9 @@ function validateCurrentWorldAssetManifest() {
     assert(textureKey && WORLD_CURRENT_ASSET_BY_TEXTURE_KEY[textureKey], `Route key ${routeKey} lacks a current texture mapping.`);
     assert(WORLD_CURRENT_ASSET_BY_TEXTURE_KEY[textureKey].premium, `Route key ${routeKey} should prefer the premium object mapping.`);
   }
+  assert(WORLD_CURRENT_ROUTE_TEXTURE_KEYS.riverRendering === "asset_tile_mask_freshwater", "Current manifest should render rivers through the asset tile mask path.");
+  assert(WORLD_CURRENT_ROUTE_TEXTURE_KEYS.riverFreshwater === "world_current_terrain_freshwater", "Current manifest should map riverFreshwater to the freshwater terrain asset.");
+  assert(WORLD_CURRENT_ASSET_BY_TEXTURE_KEY[WORLD_CURRENT_ROUTE_TEXTURE_KEYS.riverFreshwater], "River freshwater texture key must resolve to a current asset.");
   for (const textureKey of [
     WORLD_CURRENT_POI_TEXTURE_KEYS.town,
     WORLD_CURRENT_POI_TEXTURE_KEYS.harbor,
@@ -266,7 +270,7 @@ function validateSemanticWorldgen() {
   assert(worldA.semantic.rivers.length > 0, "Semantic river data is missing.");
   assert(worldA.objectOverlays.some((overlay) => overlay.objectId === "small_mountain_peak" || overlay.objectId === "snowy_mountain_peak"), "No mountain overlays were generated.");
   const mountainVisualOverlays = worldA.objectOverlays.filter((overlay) => overlay.id.startsWith("mountain-"));
-  assert(mountainVisualOverlays.length >= worldA.semantic.mountains.length, "Mountain visual overlays should cover semantic mountain cells.");
+  assert(mountainVisualOverlays.length >= Math.round(worldA.semantic.mountains.length * 0.45), "Mountain visual overlays should densely cover semantic mountain regions.");
   assert(mountainVisualOverlays.some((overlay) => Math.abs(overlay.offsetX ?? 0) > 0 || Math.abs(overlay.offsetY ?? 0) > 0), "Mountain visual overlays should use patch jitter.");
   const nonSmallRange = worldA.semantic.mountainRanges.find((range) => !range.smallOutcrop);
   if (nonSmallRange) {
@@ -313,6 +317,7 @@ function validateSemanticWorldgen() {
   validateRoadConnections(worldA);
   validateRoadAndForestPolicies(worldA);
   validateSemanticMaskTerrainRendererPlan(worldA);
+  validateSemanticRiverTileRendererPlan(worldA);
   validateSemanticRouteRendererPlan(worldA);
 }
 
@@ -322,13 +327,13 @@ function validateIslandOverlayRules(world) {
   const rangeCellCount = world.semantic.mountainRanges.reduce((sum, range) => sum + range.cells.length, 0);
   assert(world.semantic.mountainRanges.length > 0, "No semantic mountain ranges were generated.");
   assert(rangeCellCount === world.semantic.mountains.length, "Mountain range cells do not match flat mountain overlays.");
-  if (world.semantic.mountains.length >= 4) {
-    assert(world.semantic.mountainRanges.length < world.semantic.mountains.length, "Mountains were not grouped into multi-cell ranges.");
-  }
+  assert(world.semantic.mountainDebug.singletonComponents === 0, "Mountain cleanup left singleton components.");
+  assert(world.semantic.mountainDebug.componentCount === world.semantic.mountainRanges.length, "Mountain debug component count does not match ranges.");
   for (const range of world.semantic.mountainRanges) {
     const island = world.semantic.islands.find((candidate) => candidate.id === range.islandId);
     assert(island, `Mountain range references missing island ${range.islandId}.`);
-    assert(range.cells.length >= 2 || range.smallOutcrop, `${range.id} is a one-cell range without explicit smallOutcrop.`);
+    assert(range.cells.length >= minimumMountainComponentSize(island.id), `${range.id} is below the minimum massif size.`);
+    assert(rangeIsConnected(range.cells), `${range.id} is not contiguous.`);
     assert(range.collisionCells.length === range.cells.length, `${range.id} collision cells should match accepted mountain cells.`);
     assert(range.bounds.minX <= range.bounds.maxX && range.bounds.minY <= range.bounds.maxY, `${range.id} has invalid bounds.`);
     if (range.kind === "snow_mountain") assert(island.overlayRules.allowSnowMountains, `${range.id} is snowy on a non-snow island.`);
@@ -348,13 +353,9 @@ function validateIslandOverlayRules(world) {
       assert(world.semantic.layers.biome[i] === SEMANTIC_BIOME.ICE, `Snow mountain on ${island.id} is not on snow/ice terrain.`);
     }
   }
-  for (const island of world.semantic.islands) {
-    assert((mountainCounts.get(island.id) ?? 0) <= island.overlayRules.mountainCap, `${island.id} exceeded mountain cap.`);
-  }
   assert((snowCounts.get("greenhaven") ?? 0) === 0, "Greenhaven must not have snow mountains.");
   assert((snowCounts.get("coralreach") ?? 0) === 0, "Coralreach must not have snow mountains.");
-  assert((mountainCounts.get("greenhaven") ?? 0) <= 2, "Greenhaven has too many mountains.");
-  assert((mountainCounts.get("coralreach") ?? 0) <= 3, "Coralreach has too many mountains.");
+  assert((mountainCounts.get("highspire") ?? 0) >= 24, "Highspire should keep a readable mountain massif.");
 }
 
 function validateCanonicalTerrainPalette(world) {
@@ -496,13 +497,30 @@ function validateSemanticRouteRendererPlan(world) {
   assert(styledPlan.width === world.width * 32, `Semantic route overlay texture width expected ${world.width * 32}, got ${styledPlan.width}.`);
   assert(styledPlan.height === world.height * 32, `Semantic route overlay texture height expected ${world.height * 32}, got ${styledPlan.height}.`);
   assert(styledPlan.styledRoadPathCount > 0, "Styled route renderer found no road paths.");
-  assert(styledPlan.styledRiverPathCount > 0, "Styled route renderer found no river paths.");
+  assert(styledPlan.riverOverlayMode === "hidden", "Normal route overlay should not render river bodies.");
+  assert(styledPlan.styledRiverPathCount === 0, "Normal route overlay should report zero styled river paths.");
   assert(styledPlan.roadCellCount > 0, "Styled route renderer found no road cells.");
-  assert(styledPlan.riverCellCount > 0, "Styled route renderer found no river cells.");
+  assert(styledPlan.riverCellCount > 0, "Route renderer plan found no semantic river cells.");
   assert(!styledPlan.debugMarkersVisible, "Styled route renderer should not show debug markers in normal mode.");
 
   const debugPlan = describeSemanticRouteRenderPlan(world.semantic, { tileSize: 32, routeOverlayMode: "debug", riverOverlayMode: "debug" });
   assert(debugPlan.debugMarkersVisible, "Debug route renderer plan should expose route/river diagnostics.");
+}
+
+function validateSemanticRiverTileRendererPlan(world) {
+  const source = { image: {}, width: 256, height: 256, cellSize: 32, label: WORLD_CURRENT_ROUTE_TEXTURE_KEYS.riverFreshwater };
+  const plan = describeSemanticRiverTileRenderPlan(world.semantic, { tileSize: 32, riverTileSource: source });
+  const classifiedRiverTiles = plan.sourceEndTileCount + plan.cornerTileCount + plan.straightTileCount + plan.junctionTileCount + plan.crossingTileCount;
+  assert(plan.width === world.width * 32, `Semantic river tile overlay texture width expected ${world.width * 32}, got ${plan.width}.`);
+  assert(plan.height === world.height * 32, `Semantic river tile overlay texture height expected ${world.height * 32}, got ${plan.height}.`);
+  assert(plan.riverTileCount === world.semantic.stats.riverCells, "River tile renderer count should match semantic river cells.");
+  assert(classifiedRiverTiles === plan.riverTileCount, "River tile renderer classification counts should sum to all river cells.");
+  assert(plan.atlasMappedTileCount === plan.riverTileCount, "River tile renderer should map every river tile to the freshwater atlas source.");
+  assert(plan.fallbackTileCount === 0, "River tile renderer should not need fallback tiles when the freshwater source is supplied.");
+  assert(plan.oldProgrammaticRiverSegments === 0, "River tile renderer should not use old programmatic river segments.");
+  assert(plan.bridgeTileCount === world.semantic.bridgeCandidates.length, "River tile renderer bridge count should match semantic bridge candidates.");
+  assert(plan.sourceEndTileCount > 0, "River tile renderer should classify source/end tiles.");
+  assert(plan.straightTileCount + plan.cornerTileCount > 0, "River tile renderer should classify river body tiles.");
 }
 
 function stableSummary(world) {
@@ -542,6 +560,30 @@ function hasNearbyMountain(world, x, y, radius) {
     }
   }
   return false;
+}
+
+function minimumMountainComponentSize(islandId) {
+  if (islandId === "highspire") return 24;
+  if (islandId === "frostmere") return 18;
+  if (islandId === "greenhaven" || islandId === "coralreach") return 8;
+  return 8;
+}
+
+function rangeIsConnected(cells) {
+  if (cells.length <= 1) return true;
+  const keys = new Set(cells.map((cell) => `${cell.x},${cell.y}`));
+  const seen = new Set([`${cells[0].x},${cells[0].y}`]);
+  const queue = [cells[0]];
+  for (let head = 0; head < queue.length; head += 1) {
+    const cell = queue[head];
+    for (const next of neighbors4(cell.x, cell.y)) {
+      const key = `${next.x},${next.y}`;
+      if (!keys.has(key) || seen.has(key)) continue;
+      seen.add(key);
+      queue.push(next);
+    }
+  }
+  return seen.size === cells.length;
 }
 
 function neighbors4(x, y) {

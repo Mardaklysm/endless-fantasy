@@ -551,7 +551,7 @@ function buildMountainPatchOverlays(semantic: SemanticWorld, range: SemanticWorl
 
 function mountainPatchVisualCount(range: SemanticWorld["mountainRanges"][number], semantic: SemanticWorld): number {
   if (range.smallOutcrop) return 4 + Math.floor(hashNoise(`${semantic.seed}:mountain-outcrop-count:${range.id}`, range.bounds.minX, range.bounds.minY) * 3);
-  return clamp(Math.round(range.cells.length * 3.4 + 6), 10, 25);
+  return clamp(Math.round(range.cells.length * 0.78 + 8), 12, 120);
 }
 
 function mountainPatchAnchorCell(seedWorld: SemanticWorld, rangeId: string, cells: WorldVec[], visualIndex: number): WorldVec {

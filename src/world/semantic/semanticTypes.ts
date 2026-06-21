@@ -129,6 +129,16 @@ export interface SemanticMountainRange {
   smallOutcrop?: boolean;
 }
 
+export interface SemanticMountainDebug {
+  componentCount: number;
+  componentSizes: number[];
+  minComponentSize: number;
+  maxComponentSize: number;
+  averageComponentSize: number;
+  rejectedTinyComponents: number;
+  singletonComponents: number;
+}
+
 export interface SemanticLake extends SemanticVec {
   radius: number;
   cells: SemanticVec[];
@@ -218,6 +228,7 @@ export interface SemanticWorld {
   layers: SemanticWorldLayers;
   mountains: SemanticMountain[];
   mountainRanges: SemanticMountainRange[];
+  mountainDebug: SemanticMountainDebug;
   lakes: SemanticLake[];
   rivers: SemanticRiver[];
   bridgeCandidates: SemanticBridgeCandidate[];

@@ -39,7 +39,8 @@ ROUTE_MAPPINGS = {
     "dockVertical": "world_current_object_dock_wooden_t_shape_01",
     "bridgeHorizontal": "world_current_object_bridge_stone_horizontal_01",
     "bridgeVertical": "world_current_object_bridge_stone_arch_01",
-    "riverRendering": "procedural_styled_stroke",
+    "riverRendering": "asset_tile_mask_freshwater",
+    "riverFreshwater": "world_current_terrain_freshwater",
     "roadRendering": "procedural_styled_stroke",
 }
 
@@ -268,8 +269,8 @@ def main() -> None:
             },
             {
                 "role": "road/river/bridge art stamps",
-                "status": "procedural_or_placeholder",
-                "notes": "Roads and rivers stay procedural styled strokes. Dock/bridge sprites use explicit current-folder placeholders.",
+                "status": "river_asset_tiles_plus_placeholders",
+                "notes": "Rivers render from the freshwater material through semantic tile masks. Roads stay procedural styled strokes. Dock/bridge sprites use explicit current-folder placeholders.",
             },
         ],
         "assets": sorted(assets, key=lambda item: item["filename"]),
