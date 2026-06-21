@@ -46,6 +46,9 @@ export interface WorldObjectOverlay extends WorldVec {
   objectId: WorldObjectId;
   scale: number;
   collisionPolicy: OverlayCollisionPolicy;
+  offsetX?: number;
+  offsetY?: number;
+  alpha?: number;
 }
 
 export interface WorldEntryTrigger {
@@ -215,13 +218,14 @@ function adaptSemanticWorld(semantic: SemanticWorld): GeneratedWorld {
   const shallows = collectCells(semantic, (i) => semantic.layers.waterClass[i] === SEMANTIC_WATER.SHALLOW);
   const reefs = pickReefs(semantic, shallows);
   const objectOverlays = buildObjectOverlays(semantic, reefs);
-  const bridges = buildDockTiles(semantic, pois, tiles);
+  const dockBridges = buildDockTiles(semantic, pois, tiles);
   const routeBridgeCandidates: WorldBridge[] = semantic.bridgeCandidates.map((bridge) => ({
     x: bridge.x,
     y: bridge.y,
     orientation: bridge.orientation,
     material: bridge.islandId === "highspire" || bridge.islandId === "frostmere" ? "stone" : "wood"
   }));
+  const bridges = [...dockBridges, ...routeBridgeCandidates];
   const seaRoutes = buildSeaRoutes(pois);
   const entryTriggers = pois.map((poi) => ({ poiId: poi.id, x: poi.x, y: poi.y }));
   const islands = semantic.islands.map((island) => adaptIsland(semantic, tiles, pois, island.id as IslandId));
@@ -498,16 +502,7 @@ function pickReefs(semantic: SemanticWorld, shallows: WorldVec[]): WorldVec[] {
 function buildObjectOverlays(semantic: SemanticWorld, reefs: WorldVec[]): WorldObjectOverlay[] {
   const overlays: WorldObjectOverlay[] = [];
   for (const range of [...semantic.mountainRanges].sort((a, b) => a.bounds.maxY - b.bounds.maxY || a.bounds.minX - b.bounds.minX)) {
-    range.cells.forEach((cell, index) => {
-      overlays.push({
-        id: `mountain-${range.id}-${index}`,
-        x: cell.x,
-        y: cell.y,
-        objectId: range.kind === "snow_mountain" ? WORLD_OBJECT_IDS.snowyMountainPeak : WORLD_OBJECT_IDS.smallMountainPeak,
-        scale: range.smallOutcrop ? 1.12 : 1.22 + hashNoise(`${semantic.seed}:mountain-scale:${range.id}`, cell.x, cell.y) * 0.1,
-        collisionPolicy: "hardBlock"
-      });
-    });
+    overlays.push(...buildMountainPatchOverlays(semantic, range));
   }
   for (let y = 0; y < semantic.height; y += 1) {
     for (let x = 0; x < semantic.width; x += 1) {
@@ -524,6 +519,58 @@ function buildObjectOverlays(semantic: SemanticWorld, reefs: WorldVec[]): WorldO
     overlays.push({ id: `reef-${index}-${pos.x}-${pos.y}`, x: pos.x, y: pos.y, objectId, scale: 1.15, collisionPolicy: "visualOnly" });
   });
   return overlays;
+}
+
+function buildMountainPatchOverlays(semantic: SemanticWorld, range: SemanticWorld["mountainRanges"][number]): WorldObjectOverlay[] {
+  const cells = [...range.cells].sort((a, b) => a.y - b.y || a.x - b.x);
+  if (!cells.length) return [];
+  const visualCount = mountainPatchVisualCount(range, semantic);
+  const overlays: WorldObjectOverlay[] = [];
+  for (let visualIndex = 0; visualIndex < visualCount; visualIndex += 1) {
+    const anchor = mountainPatchAnchorCell(semantic, range.id, cells, visualIndex);
+    const baseRoll = hashNoise(`${semantic.seed}:mountain-patch:${range.id}:${visualIndex}`, anchor.x, anchor.y);
+    const scaleRoll = hashNoise(`${semantic.seed}:mountain-patch-scale:${range.id}:${visualIndex}`, anchor.x, anchor.y);
+    const offsetRollX = hashNoise(`${semantic.seed}:mountain-patch-offset-x:${range.id}:${visualIndex}`, anchor.x, anchor.y);
+    const offsetRollY = hashNoise(`${semantic.seed}:mountain-patch-offset-y:${range.id}:${visualIndex}`, anchor.x, anchor.y);
+    const normalizedY = range.bounds.maxY === range.bounds.minY ? 0.5 : (anchor.y - range.bounds.minY) / (range.bounds.maxY - range.bounds.minY);
+    const largeBackPeakBias = 1 - normalizedY;
+    overlays.push({
+      id: `mountain-${range.id}-patch-${visualIndex}`,
+      x: anchor.x,
+      y: anchor.y,
+      objectId: mountainPatchObjectId(semantic, range, anchor, visualIndex, baseRoll),
+      scale: range.smallOutcrop ? 0.98 + scaleRoll * 0.22 : 1.03 + largeBackPeakBias * 0.22 + scaleRoll * 0.18,
+      offsetX: (offsetRollX - 0.5) * (range.smallOutcrop ? 0.26 : 0.82),
+      offsetY: (offsetRollY - 0.5) * (range.smallOutcrop ? 0.2 : 0.74) - largeBackPeakBias * 0.12,
+      alpha: 0.96,
+      collisionPolicy: "hardBlock"
+    });
+  }
+  return overlays;
+}
+
+function mountainPatchVisualCount(range: SemanticWorld["mountainRanges"][number], semantic: SemanticWorld): number {
+  if (range.smallOutcrop) return 4 + Math.floor(hashNoise(`${semantic.seed}:mountain-outcrop-count:${range.id}`, range.bounds.minX, range.bounds.minY) * 3);
+  return clamp(Math.round(range.cells.length * 3.4 + 6), 10, 25);
+}
+
+function mountainPatchAnchorCell(seedWorld: SemanticWorld, rangeId: string, cells: WorldVec[], visualIndex: number): WorldVec {
+  const orderedIndex = Math.floor(hashNoise(`${seedWorld.seed}:mountain-anchor:${rangeId}:${visualIndex}`, cells[0].x, cells[0].y) * cells.length) % cells.length;
+  return cells[(orderedIndex + visualIndex) % cells.length];
+}
+
+function mountainPatchObjectId(
+  semantic: SemanticWorld,
+  range: SemanticWorld["mountainRanges"][number],
+  cell: WorldVec,
+  visualIndex: number,
+  roll: number
+): WorldObjectId {
+  const biome = semantic.layers.biome[cell.y * semantic.width + cell.x];
+  if (range.kind === "snow_mountain" || biome === SEMANTIC_BIOME.ICE) return WORLD_OBJECT_IDS.snowyMountainPeak;
+  if (visualIndex > 0 && roll > 0.86) return WORLD_OBJECT_IDS.grayBoulderPile;
+  if (visualIndex > 0 && roll > 0.72) return WORLD_OBJECT_IDS.rockyHillObject;
+  return WORLD_OBJECT_IDS.smallMountainPeak;
 }
 
 function buildDockTiles(semantic: SemanticWorld, pois: WorldPoi[], tiles: WorldTileId[][]): WorldBridge[] {
@@ -675,6 +722,10 @@ function carveLinePath(from: WorldVec, to: WorldVec): WorldVec[] {
     if (!path.some((cell) => cell.x === current.x && cell.y === current.y)) path.push(current);
   }
   return path;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
 }
 
 function inBounds(width: number, height: number, x: number, y: number): boolean {

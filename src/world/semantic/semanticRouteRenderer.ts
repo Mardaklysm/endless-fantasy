@@ -26,26 +26,29 @@ export interface SemanticRouteRenderPlan {
 }
 
 const ROAD_STYLE = {
-  outlineWidth: 11,
-  innerWidth: 7,
-  outline: "rgba(103, 71, 37, 0.78)",
-  dirt: "rgba(196, 146, 78, 0.88)",
-  lightDust: "rgba(232, 190, 116, 0.38)",
+  edgeWidth: 16,
+  outlineWidth: 12,
+  innerWidth: 8,
+  centerWidth: 3,
+  edge: "rgba(72, 83, 47, 0.28)",
+  outline: "rgba(93, 66, 38, 0.76)",
+  dirt: "rgba(186, 133, 70, 0.9)",
+  lightDust: "rgba(232, 190, 116, 0.34)",
   darkSpeckle: "rgba(91, 63, 35, 0.42)"
 } as const;
 
 const RIVER_STYLE = {
-  bankWidth: 14,
-  shadowWidth: 11,
-  waterWidth: 8,
-  centerWidth: 3,
-  shineWidth: 1.4,
-  bank: "rgba(30, 76, 77, 0.34)",
-  shadow: "rgba(12, 48, 84, 0.54)",
-  water: "rgba(44, 128, 169, 0.88)",
-  center: "rgba(87, 174, 202, 0.58)",
-  shine: "rgba(215, 249, 252, 0.48)",
-  sourcePool: "rgba(151, 223, 218, 0.28)",
+  bankWidth: 36,
+  shadowWidth: 30,
+  waterWidth: 23,
+  centerWidth: 9,
+  shineWidth: 3.2,
+  bank: "rgba(33, 78, 73, 0.32)",
+  shadow: "rgba(10, 45, 82, 0.58)",
+  water: "rgba(47, 134, 176, 0.9)",
+  center: "rgba(91, 184, 211, 0.5)",
+  shine: "rgba(218, 250, 251, 0.42)",
+  sourcePool: "rgba(151, 223, 218, 0.26)",
   mouthPool: "rgba(67, 158, 183, 0.34)",
   darkFleck: "rgba(11, 68, 104, 0.34)",
   brightFleck: "rgba(185, 237, 242, 0.36)"
@@ -100,17 +103,19 @@ export function describeSemanticRouteRenderPlan(world: SemanticWorld, options: S
 function drawStyledRoads(ctx: CanvasRenderingContext2D, world: SemanticWorld, tileSize: number) {
   const paths = world.roadGraph.edges.filter((edge) => edge.connected && edge.path.length > 1).map((edge) => edge.path);
   const pointPaths = paths.map((path, index) => jitteredPathPoints(world.seed, `road:${index}`, path, tileSize, 1.15));
-  for (const path of pointPaths) drawStrokePoints(ctx, path, ROAD_STYLE.outlineWidth, ROAD_STYLE.outline);
-  for (const path of pointPaths) drawStrokePoints(ctx, path, ROAD_STYLE.innerWidth, ROAD_STYLE.dirt);
+  for (const path of pointPaths) drawCurvedStrokePoints(ctx, path, ROAD_STYLE.edgeWidth, ROAD_STYLE.edge);
+  for (const path of pointPaths) drawCurvedStrokePoints(ctx, path, ROAD_STYLE.outlineWidth, ROAD_STYLE.outline);
+  for (const path of pointPaths) drawCurvedStrokePoints(ctx, path, ROAD_STYLE.innerWidth, ROAD_STYLE.dirt);
   drawRoadTexture(ctx, world, tileSize);
+  for (const path of pointPaths) drawCurvedStrokePoints(ctx, path, ROAD_STYLE.centerWidth, ROAD_STYLE.lightDust);
 }
 
 function drawStyledRivers(ctx: CanvasRenderingContext2D, world: SemanticWorld, tileSize: number) {
   const rivers = world.rivers.filter((river) => river.path.length > 1);
   const pointPaths = rivers.map((river, index) => jitteredPathPoints(world.seed, `river:${index}`, river.path, tileSize, 0.9));
   for (const river of rivers) {
-    drawRiverPool(ctx, river.source, tileSize, tileSize * 0.24, RIVER_STYLE.sourcePool);
-    drawRiverPool(ctx, river.mouth, tileSize, tileSize * 0.36, RIVER_STYLE.mouthPool);
+    drawRiverPool(ctx, river.source, tileSize, tileSize * 0.42, RIVER_STYLE.sourcePool);
+    drawRiverPool(ctx, river.mouth, tileSize, tileSize * 0.68, RIVER_STYLE.mouthPool);
   }
   for (const path of pointPaths) drawCurvedStrokePoints(ctx, path, RIVER_STYLE.bankWidth, RIVER_STYLE.bank);
   for (const path of pointPaths) drawCurvedStrokePoints(ctx, path, RIVER_STYLE.shadowWidth, RIVER_STYLE.shadow);
@@ -118,6 +123,7 @@ function drawStyledRivers(ctx: CanvasRenderingContext2D, world: SemanticWorld, t
   drawRiverTexture(ctx, world, tileSize);
   for (const path of pointPaths) drawCurvedStrokePoints(ctx, path, RIVER_STYLE.centerWidth, RIVER_STYLE.center);
   for (const path of pointPaths) drawRiverShine(ctx, path, RIVER_STYLE.shineWidth, RIVER_STYLE.shine);
+  for (const river of rivers) drawRiverMouthFoam(ctx, river, tileSize);
 }
 
 function drawDebugRoads(ctx: CanvasRenderingContext2D, world: SemanticWorld, tileSize: number) {
@@ -188,6 +194,27 @@ function drawRiverShine(ctx: CanvasRenderingContext2D, points: SemanticVec[], wi
   drawCurvedStrokePoints(ctx, shinePoints.slice(1, Math.max(2, shinePoints.length - 1)), width, color);
 }
 
+function drawRiverMouthFoam(ctx: CanvasRenderingContext2D, river: SemanticWorld["rivers"][number], tileSize: number) {
+  if (river.path.length < 2) return;
+  const mouth = cellCenter(river.mouth, tileSize);
+  const before = river.path[Math.max(0, river.path.length - 2)];
+  const dx = river.mouth.x - before.x;
+  const dy = river.mouth.y - before.y;
+  const px = -dy;
+  const py = dx;
+  const length = tileSize * 0.18;
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = Math.max(2, tileSize * 0.07);
+  ctx.strokeStyle = "rgba(226, 250, 248, 0.42)";
+  ctx.beginPath();
+  ctx.moveTo(mouth.x - px * length, mouth.y - py * length);
+  ctx.lineTo(mouth.x + px * length, mouth.y + py * length);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function jitteredPathPoints(seed: string, salt: string, path: SemanticVec[], tileSize: number, amplitude: number): SemanticVec[] {
   return path.map((cell, index) => {
     const center = cellCenter(cell, tileSize);
@@ -204,12 +231,12 @@ function drawRoadTexture(ctx: CanvasRenderingContext2D, world: SemanticWorld, ti
     for (let x = 0; x < world.width; x += 1) {
       const i = y * world.width + x;
       if (!world.layers.roadMap[i]) continue;
-      const speckleCount = 1 + Math.floor(hashNoise(`${world.seed}:road-speckle-count`, x, y) * 3);
+      const speckleCount = 2 + Math.floor(hashNoise(`${world.seed}:road-speckle-count`, x, y) * 3);
       for (let dot = 0; dot < speckleCount; dot += 1) {
         const roll = hashNoise(`${world.seed}:road-speckle:${dot}`, x, y);
         if (roll < 0.25) continue;
-        const px = x * tileSize + Math.floor(tileSize * (0.24 + hashNoise(`${world.seed}:road-speckle-x:${dot}`, x, y) * 0.52));
-        const py = y * tileSize + Math.floor(tileSize * (0.24 + hashNoise(`${world.seed}:road-speckle-y:${dot}`, x, y) * 0.52));
+        const px = x * tileSize + Math.floor(tileSize * (0.2 + hashNoise(`${world.seed}:road-speckle-x:${dot}`, x, y) * 0.6));
+        const py = y * tileSize + Math.floor(tileSize * (0.2 + hashNoise(`${world.seed}:road-speckle-y:${dot}`, x, y) * 0.6));
         const size = roll > 0.82 ? 2 : 1;
         ctx.fillStyle = roll > 0.58 ? ROAD_STYLE.darkSpeckle : ROAD_STYLE.lightDust;
         ctx.fillRect(px, py, size, size);
@@ -225,12 +252,12 @@ function drawRiverTexture(ctx: CanvasRenderingContext2D, world: SemanticWorld, t
     for (let x = 0; x < world.width; x += 1) {
       const i = y * world.width + x;
       if (!world.layers.riverMap[i]) continue;
-      const fleckCount = 1 + Math.floor(hashNoise(`${world.seed}:river-fleck-count`, x, y) * 2);
+      const fleckCount = 2 + Math.floor(hashNoise(`${world.seed}:river-fleck-count`, x, y) * 3);
       for (let fleck = 0; fleck < fleckCount; fleck += 1) {
         const roll = hashNoise(`${world.seed}:river-fleck:${fleck}`, x, y);
         if (roll < 0.34) continue;
-        const px = x * tileSize + Math.floor(tileSize * (0.24 + hashNoise(`${world.seed}:river-fleck-x:${fleck}`, x, y) * 0.52));
-        const py = y * tileSize + Math.floor(tileSize * (0.24 + hashNoise(`${world.seed}:river-fleck-y:${fleck}`, x, y) * 0.52));
+        const px = x * tileSize + Math.floor(tileSize * (0.16 + hashNoise(`${world.seed}:river-fleck-x:${fleck}`, x, y) * 0.68));
+        const py = y * tileSize + Math.floor(tileSize * (0.16 + hashNoise(`${world.seed}:river-fleck-y:${fleck}`, x, y) * 0.68));
         const size = roll > 0.86 ? 2 : 1;
         ctx.fillStyle = roll > 0.62 ? RIVER_STYLE.brightFleck : RIVER_STYLE.darkFleck;
         ctx.fillRect(px, py, size, 1);

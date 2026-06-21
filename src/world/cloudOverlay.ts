@@ -172,7 +172,7 @@ export class OverworldCloudOverlay {
     image.setOrigin(0, 0);
     image.setDisplaySize(displayWidth * context.pixelScale, displayHeight * context.pixelScale);
     image.setDepth(context.depth);
-    image.setScrollFactor(0);
+    image.setScrollFactor(0, 0);
     const cloud: RuntimeCloud = { image, asset, x, y, displayWidth, displayHeight, baseSpeed, alphaOffset };
     this.applyCloudVisuals(cloud);
     this.clouds.push(cloud);

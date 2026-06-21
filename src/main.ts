@@ -4665,7 +4665,7 @@ Statuses: ${statuses}`;
 
   private updateCloudOverlay(deltaMs: number) {
     this.cloudOverlay?.update(deltaMs, {
-      active: this.mode === "world",
+      active: this.shouldWorldCloudOverlayBeActive(),
       enabled: this.cloudOverlayEnabled,
       worldSeed: this.worldSeed,
       islandId: this.currentIslandId,
@@ -4676,6 +4676,11 @@ Statuses: ${statuses}`;
       pixelScale: PIXEL_ART_SCALE,
       depth: LAYER_UI_GRAPHICS - 1
     });
+  }
+
+  private shouldWorldCloudOverlayBeActive(): boolean {
+    if (this.mode === "world") return true;
+    return (this.mode === "dialogue" || this.mode === "menu") && this.previousMode === "world";
   }
 
   private drawTexture(
@@ -5513,13 +5518,15 @@ Statuses: ${statuses}`;
   private drawWorldOverlays(startX: number, endX: number, startY: number, endY: number, tileCam: Vec) {
     if (!this.generatedWorld) return;
     const overlayGraphics = this.worldOverlay;
-    const inView = (pos: Vec) => pos.x >= startX && pos.x <= endX && pos.y >= startY && pos.y <= endY;
-    for (const overlay of this.generatedWorld.objectOverlays) {
-      if (!inView(overlay)) continue;
+    const inView = (pos: Vec, margin = 0) => pos.x >= startX - margin && pos.x <= endX + margin && pos.y >= startY - margin && pos.y <= endY + margin;
+    const visibleObjectOverlays = this.generatedWorld.objectOverlays
+      .filter((overlay) => inView(overlay, 2))
+      .sort((a, b) => a.y + (a.offsetY ?? 0) - (b.y + (b.offsetY ?? 0)) || a.x + (a.offsetX ?? 0) - (b.x + (b.offsetX ?? 0)));
+    for (const overlay of visibleObjectOverlays) {
       const displaySize = TILE * overlay.scale;
-      const sx = overlay.x * TILE - tileCam.x + TILE / 2 - displaySize / 2;
-      const sy = overlay.y * TILE - tileCam.y + TILE / 2 - displaySize / 2;
-      this.drawWorldObjectCell(overlay.objectId, sx, sy, displaySize, displaySize, 0.92);
+      const sx = (overlay.x + (overlay.offsetX ?? 0)) * TILE - tileCam.x + TILE / 2 - displaySize / 2;
+      const sy = (overlay.y + (overlay.offsetY ?? 0)) * TILE - tileCam.y + TILE / 2 - displaySize / 2;
+      this.drawWorldObjectCell(overlay.objectId, sx, sy, displaySize, displaySize, overlay.alpha ?? 0.92);
     }
     const reefTextureKey = WORLD_CURRENT_OBJECT_TEXTURE_KEY_BY_ID.coral_cluster_blue;
     if (!reefTextureKey || !this.hasTexture(reefTextureKey)) {

@@ -265,6 +265,14 @@ function validateSemanticWorldgen() {
   assert(worldA.semantic.roadGraph.edges.length > 0, "Semantic road graph data is missing.");
   assert(worldA.semantic.rivers.length > 0, "Semantic river data is missing.");
   assert(worldA.objectOverlays.some((overlay) => overlay.objectId === "small_mountain_peak" || overlay.objectId === "snowy_mountain_peak"), "No mountain overlays were generated.");
+  const mountainVisualOverlays = worldA.objectOverlays.filter((overlay) => overlay.id.startsWith("mountain-"));
+  assert(mountainVisualOverlays.length >= worldA.semantic.mountains.length, "Mountain visual overlays should cover semantic mountain cells.");
+  assert(mountainVisualOverlays.some((overlay) => Math.abs(overlay.offsetX ?? 0) > 0 || Math.abs(overlay.offsetY ?? 0) > 0), "Mountain visual overlays should use patch jitter.");
+  const nonSmallRange = worldA.semantic.mountainRanges.find((range) => !range.smallOutcrop);
+  if (nonSmallRange) {
+    const patchVisuals = mountainVisualOverlays.filter((overlay) => overlay.id.startsWith(`mountain-${nonSmallRange.id}-patch-`));
+    assert(patchVisuals.length >= 10, `${nonSmallRange.id} should render as a clustered mountain patch.`);
+  }
   assert(worldA.objectOverlays.some((overlay) => overlay.objectId === "broadleaf_tree" || overlay.objectId === "dark_pine_tree"), "No forest overlays were generated.");
   const mountainIndex = worldA.semantic.layers.mountainMap.findIndex((value) => value === 1);
   assert(mountainIndex >= 0, "No semantic mountain collision cells were generated.");
@@ -274,6 +282,26 @@ function validateSemanticWorldgen() {
   assert(forestIndex >= 0, "No semantic forest soft-terrain cells were generated.");
   assert(isWorldPositionWalkable(worldA, forestIndex % worldA.width, Math.floor(forestIndex / worldA.width)), "Forest overlay cell should stay walkable.");
   assert(worldA.semantic.layers.overlayCollisionPolicy[forestIndex] === "softTerrain", "Forest overlay should be tagged softTerrain.");
+  const bridgeKeys = new Set(worldA.semantic.bridgeCandidates.map((bridge) => `${bridge.x},${bridge.y}`));
+  const blockedRiverIndex = worldA.semantic.layers.riverMap.findIndex((value, index) => {
+    const x = index % worldA.width;
+    const y = Math.floor(index / worldA.width);
+    return value === 1 && !bridgeKeys.has(`${x},${y}`);
+  });
+  assert(blockedRiverIndex >= 0, "No non-bridge river cells were available for collision validation.");
+  assert(!isWorldPositionWalkable(worldA, blockedRiverIndex % worldA.width, Math.floor(blockedRiverIndex / worldA.width)), "Non-bridge river cells should block walking.");
+  assert(worldA.semantic.layers.overlayCollisionPolicy[blockedRiverIndex] === "hardBlock", "Non-bridge river cells should be tagged hardBlock.");
+  for (const bridge of worldA.semantic.bridgeCandidates) {
+    const i = bridge.y * worldA.width + bridge.x;
+    assert(worldA.semantic.layers.riverMap[i] === 1 && worldA.semantic.layers.roadMap[i] === 1, `Bridge ${bridge.id} should sit at a road-river crossing.`);
+    assert(isWorldPositionWalkable(worldA, bridge.x, bridge.y), `Bridge ${bridge.id} should keep the road crossing walkable.`);
+    assert(
+      worldA.semantic.layers.overlayCollisionPolicy[i] === "visualOnly" || worldA.semantic.layers.overlayCollisionPolicy[i] === "poiBlock",
+      `Bridge ${bridge.id} crossing should be tagged visualOnly or poiBlock when it sits in a POI footprint.`
+    );
+  }
+  assert(worldA.routeBridgeCandidates.length === worldA.semantic.bridgeCandidates.length, "Runtime bridge candidates should mirror semantic road-river crossings.");
+  assert(worldA.bridges.length >= worldA.routeBridgeCandidates.length, "Visible bridge/dock list should include route bridge crossings.");
   const poiPolicyIndex = worldA.pois[0].y * worldA.width + worldA.pois[0].x;
   assert(worldA.semantic.layers.overlayCollisionPolicy[poiPolicyIndex] === "poiBlock", "POI cells should be tagged poiBlock for debug/interaction policy.");
   assert(worldA.objectOverlays.every((overlay) => ["visualOnly", "softTerrain", "hardBlock", "poiBlock"].includes(overlay.collisionPolicy)), "Object overlays are missing collision policies.");
@@ -413,6 +441,9 @@ function validateRoadConnections(world) {
 }
 
 function validateRoadAndForestPolicies(world) {
+  const bridgeKeys = new Set(world.semantic.bridgeCandidates.map((bridge) => `${bridge.x},${bridge.y}`));
+  let blockedRiverCells = 0;
+  let bridgeRiverCells = 0;
   for (let y = 0; y < world.height; y += 1) {
     for (let x = 0; x < world.width; x += 1) {
       const i = y * world.width + x;
@@ -423,12 +454,21 @@ function validateRoadAndForestPolicies(world) {
       }
       if (world.semantic.layers.riverMap[i]) {
         assert(!world.semantic.layers.mountainMap[i], `Mountain overlaps river at ${x},${y}.`);
+        if (bridgeKeys.has(`${x},${y}`)) {
+          bridgeRiverCells += 1;
+          assert(isWorldPositionWalkable(world, x, y), `Bridge river crossing at ${x},${y} should be walkable.`);
+        } else {
+          blockedRiverCells += 1;
+          assert(!isWorldPositionWalkable(world, x, y), `River at ${x},${y} should block walking unless bridged.`);
+        }
       }
       if (world.semantic.layers.forestMap[i]) {
         assert(isWorldPositionWalkable(world, x, y), `Forest at ${x},${y} blocks walking.`);
       }
     }
   }
+  assert(blockedRiverCells > 0, "Expected at least one blocking river cell.");
+  assert(bridgeRiverCells === world.semantic.bridgeCandidates.length, "Bridge crossing count should match semantic bridge candidates.");
 }
 
 function validateSemanticMaskTerrainRendererPlan(world) {

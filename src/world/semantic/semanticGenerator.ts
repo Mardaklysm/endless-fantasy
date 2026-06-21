@@ -99,9 +99,9 @@ export function generateSemanticWorld(options: {
   const roadGraph = buildRoadGraph(width, height, islandId, islands, biome, waterClass, mountainMap, lakeMap, poiList, harbors, roadMap);
   ({ mountains, mountainRanges } = placeMountains(width, height, seed, landMask, distanceToWater, islandId, islands, biome, elevation, ridge, coldness, mountainCandidateScore, mountainMap, combineBlockMaps(lakeMap, riverMap, roadMap), poiList));
   const bridgeCandidates = detectBridgeCandidates(width, height, islandId, islands, roadMap, riverMap);
-  const forestMap = placeForests(width, height, seed, landMask, islandId, islands, biome, moisture, mountainMap, lakeMap, roadMap, poiList);
-  const overlayCollisionPolicy = buildOverlayCollisionPolicy(width, height, mountainMap, forestMap, roadMap, riverMap, poiList);
-  const walkability = buildWalkability(width, height, landMask, waterClass, lakeMap, mountainMap);
+  const forestMap = placeForests(width, height, seed, landMask, islandId, islands, biome, moisture, mountainMap, lakeMap, riverMap, roadMap, poiList);
+  const overlayCollisionPolicy = buildOverlayCollisionPolicy(width, height, mountainMap, forestMap, roadMap, riverMap, bridgeCandidates, poiList);
+  const walkability = buildWalkability(width, height, landMask, waterClass, lakeMap, mountainMap, riverMap, bridgeCandidates);
   const layers = {
     elevation,
     landMask,
@@ -1136,6 +1136,7 @@ function placeForests(
   moisture: Float32Array,
   mountainMap: Uint8Array,
   lakeMap: Uint8Array,
+  riverMap: Uint8Array,
   roadMap: Uint8Array,
   poiList: SemanticPoi[]
 ) {
@@ -1159,7 +1160,7 @@ function placeForests(
     const cells = cellsForIsland(islandId, island.order + 1).filter((i) => {
       const x = i % width;
       const y = Math.floor(i / width);
-      return forestBiomeAllowed(island, biome[i]) && moisture[i] > forestMoistureThreshold(island) && !mountainMap[i] && !lakeMap[i] && !occupied.has(posKey({ x, y })) && !roadReserved.has(posKey({ x, y }));
+      return forestBiomeAllowed(island, biome[i]) && moisture[i] > forestMoistureThreshold(island) && !mountainMap[i] && !lakeMap[i] && !riverMap[i] && !occupied.has(posKey({ x, y })) && !roadReserved.has(posKey({ x, y }));
     });
     if (!cells.length || targetClusters <= 0) continue;
     for (let count = 0; count < targetClusters; count += 1) {
@@ -1177,7 +1178,7 @@ function placeForests(
   }
   forEachCell(width, height, (x, y, i) => {
     const island = islandByOrder.get(islandId[i]);
-    if (!landMask[i] || !island || !forestBiomeAllowed(island, biome[i]) || mountainMap[i] || lakeMap[i] || roadMap[i] || occupied.has(posKey({ x, y })) || roadReserved.has(posKey({ x, y }))) return;
+    if (!landMask[i] || !island || !forestBiomeAllowed(island, biome[i]) || mountainMap[i] || lakeMap[i] || riverMap[i] || roadMap[i] || occupied.has(posKey({ x, y })) || roadReserved.has(posKey({ x, y }))) return;
     let value = 0;
     for (const cluster of clusters) {
       const dx = (x - cluster.x) / cluster.rx;
@@ -1196,11 +1197,15 @@ function buildWalkability(
   landMask: Uint8Array,
   waterClass: Uint8Array,
   lakeMap: Uint8Array,
-  mountainMap: Uint8Array
+  mountainMap: Uint8Array,
+  riverMap: Uint8Array,
+  bridgeCandidates: SemanticBridgeCandidate[]
 ) {
   const walkability = new Uint8Array(width * height);
-  forEachCell(width, height, (_x, _y, i) => {
-    walkability[i] = landMask[i] && waterClass[i] === SEMANTIC_WATER.NONE && !lakeMap[i] && !mountainMap[i] ? 1 : 0;
+  const bridgeKeys = bridgeCandidateKeySet(bridgeCandidates);
+  forEachCell(width, height, (x, y, i) => {
+    const isBridgeCrossing = bridgeKeys.has(posKey({ x, y }));
+    walkability[i] = landMask[i] && waterClass[i] === SEMANTIC_WATER.NONE && !lakeMap[i] && !mountainMap[i] && (!riverMap[i] || isBridgeCrossing) ? 1 : 0;
   });
   return walkability;
 }
@@ -1212,12 +1217,16 @@ function buildOverlayCollisionPolicy(
   forestMap: Uint8Array,
   roadMap: Uint8Array,
   riverMap: Uint8Array,
+  bridgeCandidates: SemanticBridgeCandidate[],
   poiList: SemanticPoi[]
 ): OverlayCollisionPolicy[] {
   const policy: OverlayCollisionPolicy[] = Array.from({ length: width * height }, () => "visualOnly");
-  forEachCell(width, height, (_x, _y, i) => {
+  const bridgeKeys = bridgeCandidateKeySet(bridgeCandidates);
+  forEachCell(width, height, (x, y, i) => {
     if (forestMap[i]) policy[i] = "softTerrain";
-    if (roadMap[i] || riverMap[i]) policy[i] = "visualOnly";
+    if (roadMap[i]) policy[i] = "visualOnly";
+    if (riverMap[i]) policy[i] = "hardBlock";
+    if (bridgeKeys.has(posKey({ x, y }))) policy[i] = "visualOnly";
     if (mountainMap[i]) policy[i] = "hardBlock";
   });
   for (const poi of poiList) {
@@ -1230,6 +1239,10 @@ function buildOverlayCollisionPolicy(
     }
   }
   return policy;
+}
+
+function bridgeCandidateKeySet(bridgeCandidates: SemanticBridgeCandidate[]): Set<string> {
+  return new Set(bridgeCandidates.map((bridge) => posKey(bridge)));
 }
 
 function summarizeWorld(landMask: Uint8Array, waterClass: Uint8Array, biome: Uint8Array, mountainMap: Uint8Array, forestMap: Uint8Array, roadMap: Uint8Array, riverMap: Uint8Array) {

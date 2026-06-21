@@ -111,6 +111,7 @@ function validateBeachBuffer(world: SemanticWorld, errors: string[]) {
 }
 
 function validateOverlaySpacingAndWalkability(world: SemanticWorld, errors: string[]) {
+  const bridgeKeys = new Set(world.bridgeCandidates.map((bridge) => `${bridge.x},${bridge.y}`));
   for (let i = 0; i < world.layers.forestMap.length; i += 1) {
     const x = i % world.width;
     const y = Math.floor(i / world.width);
@@ -118,6 +119,11 @@ function validateOverlaySpacingAndWalkability(world: SemanticWorld, errors: stri
     if (world.layers.forestMap[i] && nearbyCount(world, world.layers.roadMap, x, y, 1) > 0) errors.push(`Forest overlaps or crowds a road corridor at ${x},${y}.`);
     if (world.layers.roadMap[i] && !world.layers.walkability[i]) errors.push(`Road cell is blocked by terrain or overlay at ${x},${y}.`);
     if (world.layers.roadMap[i] && world.layers.mountainMap[i]) errors.push(`Mountain overlaps road at ${x},${y}.`);
+    if (world.layers.riverMap[i]) {
+      const isBridge = bridgeKeys.has(`${x},${y}`);
+      if (isBridge && !world.layers.walkability[i]) errors.push(`Bridge river crossing is blocked at ${x},${y}.`);
+      if (!isBridge && world.layers.walkability[i]) errors.push(`Unbridged river cell is walkable at ${x},${y}.`);
+    }
   }
   for (const poi of world.poiList) {
     const clearance = poi.role === "settlement" || poi.role === "port" ? 2 : 1;

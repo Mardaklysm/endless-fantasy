@@ -102,10 +102,11 @@ export function renderElevation(world, scale = 6) {
 
 export function renderRiversRoads(world, scale = 6) {
   const image = renderSemanticMap(world, scale);
-  for (const river of world.rivers) drawPath(image, river.path, scale, COLORS.debugRiver, Math.max(1, Math.floor(scale / 2)));
+  for (const river of world.rivers) drawStyledRiverPath(image, river.path, scale);
   for (const edge of world.roadGraph.edges) {
-    if (edge.connected) drawPath(image, edge.path, scale, COLORS.debugRoad, Math.max(1, Math.floor(scale / 2)));
+    if (edge.connected) drawStyledRoadPath(image, edge.path, scale);
   }
+  renderBridgeCrossings(image, world, scale);
   for (const poi of world.poiList) {
     const color = poi.type === "port" ? [255, 230, 96, 255] : COLORS.debugPoi;
     drawMarkerSquare(image, poi.x, poi.y, scale, color);
@@ -181,13 +182,7 @@ function renderLakes(image, world, scale) {
 
 function renderRivers(image, world, scale) {
   for (const river of world.rivers) {
-    const bankWidth = Math.max(2, Math.floor(scale / 2) + 3);
-    const shadowWidth = Math.max(2, Math.floor(scale / 2) + 2);
-    const waterWidth = Math.max(1, Math.floor(scale / 2) + 1);
-    drawPath(image, river.path, scale, [30, 76, 77, 160], bankWidth);
-    drawPath(image, river.path, scale, [12, 48, 84, 210], shadowWidth);
-    drawPath(image, river.path, scale, [44, 128, 169, 235], waterWidth);
-    drawPath(image, river.path, scale, [105, 187, 210, 170], Math.max(1, Math.floor(scale / 3)));
+    drawStyledRiverPath(image, river.path, scale);
   }
 }
 
@@ -202,25 +197,73 @@ function renderForests(image, world, scale) {
 }
 
 function renderMountains(image, world, scale) {
-  const sorted = [...world.mountains].sort((a, b) => a.y - b.y);
-  for (const mountain of sorted) {
-    const cx = mountain.x * scale + Math.floor(scale / 2);
-    const cy = mountain.y * scale + Math.floor(scale / 2);
-    const h = Math.max(5, Math.floor(scale * 1.45));
-    const w = Math.max(5, Math.floor(scale * 1.25));
-    drawTriangle(image, cx, cy - Math.floor(h * 0.65), cx - w, cy + Math.floor(h * 0.55), cx + w, cy + Math.floor(h * 0.55), COLORS.mountainDark);
-    drawTriangle(image, cx, cy - Math.floor(h * 0.72), cx - Math.floor(w * 0.72), cy + Math.floor(h * 0.45), cx + Math.floor(w * 0.72), cy + Math.floor(h * 0.45), COLORS.mountain);
-    if (mountain.kind === "snow_mountain") {
-      drawTriangle(image, cx, cy - Math.floor(h * 0.72), cx - Math.floor(w * 0.28), cy - Math.floor(h * 0.12), cx + Math.floor(w * 0.28), cy - Math.floor(h * 0.12), COLORS.mountainSnow);
+  const visuals = [];
+  for (const range of world.mountainRanges) {
+    const cells = [...range.cells].sort((a, b) => a.y - b.y || a.x - b.x);
+    if (!cells.length) continue;
+    const count = range.smallOutcrop ? 4 : clamp(Math.round(cells.length * 2.4 + 5), 8, 20);
+    for (let visualIndex = 0; visualIndex < count; visualIndex += 1) {
+      const baseIndex = Math.floor(noise(`${world.seed}:lab-mountain-anchor:${range.id}:${visualIndex}`, cells[0].x, cells[0].y) * cells.length) % cells.length;
+      const cell = cells[(baseIndex + visualIndex) % cells.length];
+      const ox = (noise(`${world.seed}:lab-mountain-x:${range.id}:${visualIndex}`, cell.x, cell.y) - 0.5) * (range.smallOutcrop ? 0.22 : 0.72);
+      const oy = (noise(`${world.seed}:lab-mountain-y:${range.id}:${visualIndex}`, cell.x, cell.y) - 0.5) * (range.smallOutcrop ? 0.18 : 0.58);
+      const scaleBoost = 0.9 + noise(`${world.seed}:lab-mountain-scale:${range.id}:${visualIndex}`, cell.x, cell.y) * 0.3;
+      visuals.push({ x: cell.x + ox, y: cell.y + oy, kind: range.kind, scaleBoost });
     }
   }
+  visuals.sort((a, b) => a.y - b.y || a.x - b.x);
+  for (const mountain of visuals) drawMountainSymbol(image, mountain.x, mountain.y, scale, mountain.kind, mountain.scaleBoost);
 }
 
 function renderRoads(image, world, scale) {
   for (const edge of world.roadGraph.edges) {
     if (!edge.connected) continue;
-    drawPath(image, edge.path, scale, COLORS.roadDark, Math.max(1, Math.floor(scale / 3) + 1));
-    drawPath(image, edge.path, scale, COLORS.road, Math.max(1, Math.floor(scale / 3)));
+    drawStyledRoadPath(image, edge.path, scale);
+  }
+  renderBridgeCrossings(image, world, scale);
+}
+
+function drawStyledRiverPath(image, path, scale) {
+  const bankWidth = Math.max(4, Math.round(scale * 1.25));
+  const shadowWidth = Math.max(3, Math.round(scale * 1.02));
+  const waterWidth = Math.max(2, Math.round(scale * 0.72));
+  drawPath(image, path, scale, [30, 76, 77, 150], bankWidth);
+  drawPath(image, path, scale, [12, 48, 84, 215], shadowWidth);
+  drawPath(image, path, scale, [47, 134, 176, 235], waterWidth);
+  drawPath(image, path, scale, [105, 187, 210, 155], Math.max(1, Math.round(scale * 0.28)));
+}
+
+function drawStyledRoadPath(image, path, scale) {
+  drawPath(image, path, scale, [72, 83, 47, 92], Math.max(3, Math.round(scale * 0.78)));
+  drawPath(image, path, scale, COLORS.roadDark, Math.max(2, Math.round(scale * 0.55)));
+  drawPath(image, path, scale, COLORS.road, Math.max(1, Math.round(scale * 0.34)));
+}
+
+function renderBridgeCrossings(image, world, scale) {
+  for (const bridge of world.bridgeCandidates ?? []) {
+    const px = bridge.x * scale;
+    const py = bridge.y * scale;
+    const wood = [174, 130, 78, 255];
+    const shadow = [64, 43, 31, 180];
+    if (bridge.orientation === "vertical") {
+      fillRect(image, px + Math.floor(scale * 0.22), py - 1, Math.max(2, Math.round(scale * 0.56)), scale + 2, shadow);
+      fillRect(image, px + Math.floor(scale * 0.3), py - 1, Math.max(1, Math.round(scale * 0.4)), scale + 2, wood);
+    } else {
+      fillRect(image, px - 1, py + Math.floor(scale * 0.22), scale + 2, Math.max(2, Math.round(scale * 0.56)), shadow);
+      fillRect(image, px - 1, py + Math.floor(scale * 0.3), scale + 2, Math.max(1, Math.round(scale * 0.4)), wood);
+    }
+  }
+}
+
+function drawMountainSymbol(image, x, y, scale, kind, scaleBoost = 1) {
+  const cx = Math.round(x * scale + scale / 2);
+  const cy = Math.round(y * scale + scale / 2);
+  const h = Math.max(5, Math.floor(scale * 1.45 * scaleBoost));
+  const w = Math.max(5, Math.floor(scale * 1.18 * scaleBoost));
+  drawTriangle(image, cx, cy - Math.floor(h * 0.65), cx - w, cy + Math.floor(h * 0.55), cx + w, cy + Math.floor(h * 0.55), COLORS.mountainDark);
+  drawTriangle(image, cx, cy - Math.floor(h * 0.72), cx - Math.floor(w * 0.72), cy + Math.floor(h * 0.45), cx + Math.floor(w * 0.72), cy + Math.floor(h * 0.45), COLORS.mountain);
+  if (kind === "snow_mountain") {
+    drawTriangle(image, cx, cy - Math.floor(h * 0.72), cx - Math.floor(w * 0.28), cy - Math.floor(h * 0.12), cx + Math.floor(w * 0.28), cy - Math.floor(h * 0.12), COLORS.mountainSnow);
   }
 }
 
