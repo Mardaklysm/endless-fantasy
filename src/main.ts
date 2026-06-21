@@ -1596,6 +1596,8 @@ class CrystalOathScene extends Phaser.Scene {
   private logActiveWorldTileset() {
     if (!import.meta.env.DEV) return;
     const terrainAssets = WORLD_CURRENT_ASSETS.filter((asset) => asset.assetKind === "terrain fill");
+    const worldObjectAssets = WORLD_CURRENT_ASSETS.filter((asset) => asset.assetKind === "world object");
+    const premiumWorldObjectAssets = worldObjectAssets.filter((asset) => asset.premium);
     const placeholderAssets = WORLD_CURRENT_ASSETS.filter((asset) => asset.placeholder);
     console.info(
       [
@@ -1603,7 +1605,10 @@ class CrystalOathScene extends Phaser.Scene {
         `Worldgen mode: ${ACTIVE_WORLDGEN_MODE}`,
         `Manifest: ${WORLD_CURRENT_ASSET_MANIFEST.runtimeRoot}/world_asset_manifest.json`,
         `Approved terrain fills: ${terrainAssets.length}`,
+        `Premium world objects: ${premiumWorldObjectAssets.length}`,
+        `Backup world objects: ${worldObjectAssets.length - premiumWorldObjectAssets.length}`,
         `Temporary current-folder placeholders: ${placeholderAssets.length}`,
+        "World object resolution: premium objects_premium first, backup objects second, generated fallback last",
         `Deep ocean: ${WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.deepOcean}`,
         `Shallow water: ${WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.shallowWater}`,
         `Beach: ${WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.beach}`,

@@ -37,6 +37,8 @@ export interface WorldCurrentAssetRecord {
   placementLayer?: string;
   tags?: string[];
   source?: string;
+  premium?: boolean;
+  qualityBucket?: string;
   integrationRole?: string;
   integrationStatus?: string;
   notes: string;
@@ -60,6 +62,10 @@ export interface WorldCurrentAssetManifest {
     relaxedObjectsMetadata?: string;
     relaxedGameReadyObjectCount?: number;
     relaxedTouchupObjectCount?: number;
+    backupWorldObjectCount?: number;
+    premiumSourceFolder?: string;
+    premiumRuntimeFolder?: string;
+    premiumWorldObjectCount?: number;
   };
   rendererContract: {
     semanticWorldGenerationIsGameplayTruth: boolean;
@@ -70,10 +76,15 @@ export interface WorldCurrentAssetManifest {
   };
   semanticTerrain: Record<SemanticMaskTerrainClass, string>;
   routeMappings: Record<string, string>;
+  premiumRouteMappings?: Record<string, string>;
   poiMappings: Record<string, string>;
+  premiumPoiMappings?: Record<string, string>;
   poiVariantMappings?: Record<string, string[]>;
+  premiumPoiVariantMappings?: Record<string, string[]>;
   locationIdMappings: Record<string, string>;
+  premiumLocationIdMappings?: Record<string, string>;
   objectMappings: Record<string, string>;
+  premiumObjectMappings?: Record<string, string>;
   deprecatedRuntimeSources: string[];
   missingRuntimeRoles: Array<{
     role: string;
@@ -91,10 +102,20 @@ export const WORLD_CURRENT_ASSET_BY_TEXTURE_KEY = Object.fromEntries(WORLD_CURRE
 >;
 export const WORLD_CURRENT_TEXTURE_KEY_SET = new Set(WORLD_CURRENT_ASSETS.map((asset) => asset.textureKey));
 export const WORLD_CURRENT_TERRAIN_TEXTURE_KEYS = WORLD_CURRENT_ASSET_MANIFEST.semanticTerrain;
-export const WORLD_CURRENT_ROUTE_TEXTURE_KEYS = WORLD_CURRENT_ASSET_MANIFEST.routeMappings;
-export const WORLD_CURRENT_POI_TEXTURE_KEYS = WORLD_CURRENT_ASSET_MANIFEST.poiMappings;
-export const WORLD_CURRENT_OBJECT_TEXTURE_KEY_BY_ID = WORLD_CURRENT_ASSET_MANIFEST.objectMappings;
-export const WORLD_CURRENT_LOCATION_TEXTURE_KEY_BY_ID = WORLD_CURRENT_ASSET_MANIFEST.locationIdMappings;
+export const WORLD_CURRENT_BACKUP_ROUTE_TEXTURE_KEYS = WORLD_CURRENT_ASSET_MANIFEST.routeMappings;
+export const WORLD_CURRENT_BACKUP_POI_TEXTURE_KEYS = WORLD_CURRENT_ASSET_MANIFEST.poiMappings;
+export const WORLD_CURRENT_BACKUP_OBJECT_TEXTURE_KEY_BY_ID = WORLD_CURRENT_ASSET_MANIFEST.objectMappings;
+export const WORLD_CURRENT_BACKUP_LOCATION_TEXTURE_KEY_BY_ID = WORLD_CURRENT_ASSET_MANIFEST.locationIdMappings;
+export const WORLD_CURRENT_ROUTE_TEXTURE_KEYS = mergeTextureMaps(WORLD_CURRENT_BACKUP_ROUTE_TEXTURE_KEYS, WORLD_CURRENT_ASSET_MANIFEST.premiumRouteMappings);
+export const WORLD_CURRENT_POI_TEXTURE_KEYS = mergeTextureMaps(WORLD_CURRENT_BACKUP_POI_TEXTURE_KEYS, WORLD_CURRENT_ASSET_MANIFEST.premiumPoiMappings);
+export const WORLD_CURRENT_OBJECT_TEXTURE_KEY_BY_ID = mergeTextureMaps(
+  WORLD_CURRENT_BACKUP_OBJECT_TEXTURE_KEY_BY_ID,
+  WORLD_CURRENT_ASSET_MANIFEST.premiumObjectMappings
+);
+export const WORLD_CURRENT_LOCATION_TEXTURE_KEY_BY_ID = mergeTextureMaps(
+  WORLD_CURRENT_BACKUP_LOCATION_TEXTURE_KEY_BY_ID,
+  WORLD_CURRENT_ASSET_MANIFEST.premiumLocationIdMappings
+);
 
 export interface WorldCurrentPoiDescriptor {
   id?: string;
@@ -126,14 +147,19 @@ export function worldCurrentPoiTextureKeyFor(poi: WorldCurrentPoiDescriptor): st
 }
 
 function worldCurrentPoiVariantTextureKeyFor(poi: WorldCurrentPoiDescriptor): string | undefined {
-  const variantsByRole = WORLD_CURRENT_ASSET_MANIFEST.poiVariantMappings;
-  if (!variantsByRole || !poi.kind) return undefined;
+  const backupVariantsByRole = WORLD_CURRENT_ASSET_MANIFEST.poiVariantMappings;
+  const premiumVariantsByRole = WORLD_CURRENT_ASSET_MANIFEST.premiumPoiVariantMappings;
+  if ((!backupVariantsByRole && !premiumVariantsByRole) || !poi.kind) return undefined;
   const role = poi.kind === "harbor" ? "harbor" : poi.kind === "town" ? "settlement" : poi.landmarkKind;
   if (!role) return undefined;
-  const variants = variantsByRole[role];
+  const variants = premiumVariantsByRole?.[role] ?? backupVariantsByRole?.[role];
   if (!variants?.length) return undefined;
   const basis = `${poi.id ?? poi.kind}:${poi.x ?? 0}:${poi.y ?? 0}`;
   let hash = 0;
   for (let index = 0; index < basis.length; index += 1) hash = (hash * 31 + basis.charCodeAt(index)) >>> 0;
   return variants[hash % variants.length];
+}
+
+function mergeTextureMaps<T extends Record<string, string>>(fallback: T, preferred?: Record<string, string>): T {
+  return { ...fallback, ...(preferred ?? {}) } as T;
 }

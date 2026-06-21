@@ -56,10 +56,20 @@ function validateCurrentWorldAssetManifest() {
   const terrainAssets = WORLD_CURRENT_ASSETS.filter((asset) => asset.assetKind === "terrain fill");
   assert(terrainAssets.length === 37, `Expected 37 current terrain fill assets, got ${terrainAssets.length}.`);
   const worldObjectAssets = WORLD_CURRENT_ASSETS.filter((asset) => asset.assetKind === "world object");
+  const premiumWorldObjectAssets = worldObjectAssets.filter((asset) => asset.premium);
+  const backupWorldObjectAssets = worldObjectAssets.filter((asset) => !asset.premium);
   assert(worldObjectAssets.length > 0, "Expected approved current-folder world object assets.");
   assert(
     WORLD_CURRENT_ASSET_MANIFEST.sourcePack.approvedWorldObjectCount === worldObjectAssets.length,
     `Current manifest approved object count does not match object assets (${WORLD_CURRENT_ASSET_MANIFEST.sourcePack.approvedWorldObjectCount} vs ${worldObjectAssets.length}).`
+  );
+  assert(
+    WORLD_CURRENT_ASSET_MANIFEST.sourcePack.premiumWorldObjectCount === premiumWorldObjectAssets.length,
+    `Current manifest premium object count does not match premium assets (${WORLD_CURRENT_ASSET_MANIFEST.sourcePack.premiumWorldObjectCount} vs ${premiumWorldObjectAssets.length}).`
+  );
+  assert(
+    WORLD_CURRENT_ASSET_MANIFEST.sourcePack.backupWorldObjectCount === backupWorldObjectAssets.length,
+    `Current manifest backup object count does not match backup assets (${WORLD_CURRENT_ASSET_MANIFEST.sourcePack.backupWorldObjectCount} vs ${backupWorldObjectAssets.length}).`
   );
   assert(
     WORLD_CURRENT_ASSET_MANIFEST.missingRuntimeRoles.length > 0,
@@ -77,23 +87,37 @@ function validateCurrentWorldAssetManifest() {
     if (asset.assetKind === "world object") {
       assert(asset.qualityFlag === "approved" && !asset.placeholder, `${asset.id} must be an approved world object, not a placeholder.`);
       assert(
-        asset.source === "world_objects_v2" || asset.source === "world_objects_v2_relaxed",
+        asset.source === "world_objects_v2" || asset.source === "world_objects_v2_relaxed" || asset.source === "premium_bg_output",
         `${asset.id} should record an approved world object source.`
       );
       assert(asset.transparencyStatus === "alpha", `${asset.id} world object should be transparent.`);
-      assert(asset.dimensions.width === 256 && asset.dimensions.height === 256, `${asset.id} world object must be normalized to 256x256.`);
       assert(asset.backgroundRemovalMethod, `${asset.id} should record its background removal method.`);
+      if (asset.premium) {
+        assert(asset.source === "premium_bg_output", `${asset.id} premium object should record premium_bg_output as its source.`);
+        assert(asset.filename.startsWith("objects_premium/"), `${asset.id} premium object should live in objects_premium.`);
+        assert(
+          asset.dimensions.width >= 64 && asset.dimensions.width <= 1024 && asset.dimensions.height >= 64 && asset.dimensions.height <= 1024,
+          `${asset.id} premium object should keep sane runtime dimensions, got ${asset.dimensions.width}x${asset.dimensions.height}.`
+        );
+      } else {
+        assert(asset.filename.startsWith("objects/"), `${asset.id} backup object should live in objects/.`);
+        assert(asset.dimensions.width === 256 && asset.dimensions.height === 256, `${asset.id} backup world object must be normalized to 256x256.`);
+      }
       if (asset.source === "world_objects_v2_relaxed") {
         assert(asset.qualityBucket === "game_ready", `${asset.id} relaxed runtime objects must be game_ready.`);
       }
     }
   }
-  const approvedObjectFilenames = new Set(worldObjectAssets.map((asset) => path.basename(asset.filename)));
-  const objectRuntimeFolder = path.join(PROJECT_ROOT, WORLD_CURRENT_ASSET_MANIFEST.runtimeRoot, "objects");
-  const runtimeObjectFiles = fs.existsSync(objectRuntimeFolder) ? fs.readdirSync(objectRuntimeFolder).filter((filename) => filename.endsWith(".png")) : [];
-  assert(runtimeObjectFiles.length === worldObjectAssets.length, `Runtime object folder has ${runtimeObjectFiles.length} PNGs, expected ${worldObjectAssets.length}.`);
+  const approvedObjectFilenames = new Set(worldObjectAssets.map((asset) => asset.filename.replaceAll("\\", "/")));
+  const runtimeObjectFiles = [];
+  for (const folder of ["objects", "objects_premium"]) {
+    const objectRuntimeFolder = path.join(PROJECT_ROOT, WORLD_CURRENT_ASSET_MANIFEST.runtimeRoot, folder);
+    const filenames = fs.existsSync(objectRuntimeFolder) ? fs.readdirSync(objectRuntimeFolder).filter((filename) => filename.endsWith(".png")) : [];
+    for (const filename of filenames) runtimeObjectFiles.push(`${folder}/${filename}`);
+  }
+  assert(runtimeObjectFiles.length === worldObjectAssets.length, `Runtime object folders have ${runtimeObjectFiles.length} PNGs, expected ${worldObjectAssets.length}.`);
   for (const filename of runtimeObjectFiles) {
-    assert(approvedObjectFilenames.has(filename), `Runtime object folder contains unapproved object file ${filename}.`);
+    assert(approvedObjectFilenames.has(filename), `Runtime object folders contain unmanifested object file ${filename}.`);
   }
   for (const terrainClass of SEMANTIC_MASK_TERRAIN_CLASSES) {
     const textureKey = WORLD_CURRENT_TERRAIN_TEXTURE_KEYS[terrainClass];
@@ -122,10 +146,12 @@ function validateCurrentWorldAssetManifest() {
   for (const poiKind of ["town", "harbor", "cave", "shrine", "ruins", "tower", "gate", "final"]) {
     const textureKey = WORLD_CURRENT_POI_TEXTURE_KEYS[poiKind];
     assert(textureKey && WORLD_CURRENT_ASSET_BY_TEXTURE_KEY[textureKey], `POI kind ${poiKind} lacks a current texture mapping.`);
+    assert(WORLD_CURRENT_ASSET_BY_TEXTURE_KEY[textureKey].premium, `POI kind ${poiKind} should prefer the premium object mapping.`);
   }
   for (const routeKey of ["dockHorizontal", "dockVertical", "bridgeHorizontal", "bridgeVertical"]) {
     const textureKey = WORLD_CURRENT_ROUTE_TEXTURE_KEYS[routeKey];
     assert(textureKey && WORLD_CURRENT_ASSET_BY_TEXTURE_KEY[textureKey], `Route key ${routeKey} lacks a current texture mapping.`);
+    assert(WORLD_CURRENT_ASSET_BY_TEXTURE_KEY[textureKey].premium, `Route key ${routeKey} should prefer the premium object mapping.`);
   }
   for (const textureKey of [
     WORLD_CURRENT_POI_TEXTURE_KEYS.town,
@@ -135,15 +161,23 @@ function validateCurrentWorldAssetManifest() {
     WORLD_CURRENT_POI_TEXTURE_KEYS.tower
   ]) {
     const asset = WORLD_CURRENT_ASSET_BY_TEXTURE_KEY[textureKey];
-    assert(asset?.source === "world_objects_v2_relaxed", `Settlement-corrected POI texture ${textureKey} should come from the relaxed game-ready set.`);
+    assert(
+      asset?.source === "world_objects_v2_relaxed" || asset?.source === "premium_bg_output",
+      `Settlement-corrected POI texture ${textureKey} should come from the relaxed or premium game-ready set.`
+    );
   }
   assert(
-    WORLD_CURRENT_ASSET_BY_TEXTURE_KEY[WORLD_CURRENT_ROUTE_TEXTURE_KEYS.bridgeHorizontal].source === "world_objects_v2_relaxed",
-    "Horizontal bridge route stamp should map to the relaxed game-ready bridge object."
+    WORLD_CURRENT_ASSET_BY_TEXTURE_KEY[WORLD_CURRENT_ROUTE_TEXTURE_KEYS.bridgeHorizontal].source === "premium_bg_output",
+    "Horizontal bridge route stamp should map to the premium bridge object."
   );
   assert(
     WORLD_CURRENT_ASSET_BY_TEXTURE_KEY[WORLD_CURRENT_ROUTE_TEXTURE_KEYS.dockHorizontal].assetKind === "world object",
     "Horizontal dock route stamp should map to the approved object pack."
+  );
+  assert(WORLD_CURRENT_ASSET_MANIFEST.premiumObjectMappings.small_mountain_peak, "Premium mountain mapping should be present.");
+  assert(
+    WORLD_CURRENT_OBJECT_TEXTURE_KEY_BY_ID.small_mountain_peak === WORLD_CURRENT_ASSET_MANIFEST.premiumObjectMappings.small_mountain_peak,
+    "Resolved mountain object mapping should prefer the premium asset."
   );
 }
 
