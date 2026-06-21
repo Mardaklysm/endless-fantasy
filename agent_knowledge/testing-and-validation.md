@@ -88,6 +88,14 @@ python tools\world-object-curator\curate_world_objects.py --integrate
 
 Check `D:\new_items\output\world_objects_v2_approved_contactsheet.png`, `world_objects_v2_alpha_preview.png`, `world_objects_v2_fit_preview.png`, and `world_objects_v2_background_method_contactsheet.png`. Runtime copies should exist only under `src/assets/world/current/objects/` and every integrated object must be `qualityFlag: "approved"` in `world_asset_manifest.json`.
 
+For the additive relaxed recovery pass, run:
+
+```powershell
+python tools\world-object-curator\curate_world_objects_relaxed.py --integrate
+```
+
+Check `D:\new_items\output_relaxed\world_objects_v2_game_ready_contactsheet.png`, `world_objects_v2_touchup_needed_contactsheet.png`, `world_objects_v2_alpha_preview.png`, `world_objects_v2_fit_preview.png`, and `world_objects_v2_runtime_mapping.json`. Only `game_ready` objects should be copied into runtime; `touchup_needed` objects must stay external. Compact settlements, cities, harbor towns, forts, castles, monasteries, academies, and similar miniature location compositions are valid POI sprites if readable and clean.
+
 For the active `dungeon_atlas` dungeon/city tile atlas, run after changing `D:\Projects\new_artwork\dungeon_atlas.jpeg` or the classification rules:
 
 ```powershell

@@ -4,6 +4,18 @@ Curates approved transparent overworld object sprites from generated atlas sheet
 
 The tool is deliberately strict: it exports only entries listed in the editable approval file and leaves rejected or missing categories in reports. Existing approvals are preserved, and raw-source defaults are merged additively when missing. Individual PNGs are the source of truth; any dense atlas generated here is preview-only.
 
+## Relaxed Recovery Pass
+
+Use the relaxed pass when reviewing later rembg/source folders for additional useful objects:
+
+```powershell
+python tools\world-object-curator\curate_world_objects_relaxed.py --integrate
+```
+
+This pass scans `D:\Tools\rembg\bg_input_2`, `D:\Tools\rembg\bg_output_2`, and `D:\Tools\rembg\bg_output`, writes additive outputs under `D:\new_items\output_relaxed`, and integrates only `game_ready` objects into `src\assets\world\current\objects`. `touchup_needed` objects stay external for manual cleanup.
+
+Important policy distinction: compact settlements are valid POI sprites. Do not reject villages, towns, city districts, harbor towns, castle towns, forts, monasteries, academies, or similar miniature settlement compositions merely because they include multiple buildings, walls, plazas, docks, or a compact ground/water base. That rule only applies to base terrain materials, not overworld POI objects.
+
 ## Run
 
 ```powershell

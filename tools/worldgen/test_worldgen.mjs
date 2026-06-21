@@ -73,10 +73,16 @@ function validateCurrentWorldAssetManifest() {
     }
     if (asset.assetKind === "world object") {
       assert(asset.qualityFlag === "approved" && !asset.placeholder, `${asset.id} must be an approved world object, not a placeholder.`);
-      assert(asset.source === "world_objects_v2", `${asset.id} should record source world_objects_v2.`);
+      assert(
+        asset.source === "world_objects_v2" || asset.source === "world_objects_v2_relaxed",
+        `${asset.id} should record an approved world object source.`
+      );
       assert(asset.transparencyStatus === "alpha", `${asset.id} world object should be transparent.`);
       assert(asset.dimensions.width === 256 && asset.dimensions.height === 256, `${asset.id} world object must be normalized to 256x256.`);
       assert(asset.backgroundRemovalMethod, `${asset.id} should record its background removal method.`);
+      if (asset.source === "world_objects_v2_relaxed") {
+        assert(asset.qualityBucket === "game_ready", `${asset.id} relaxed runtime objects must be game_ready.`);
+      }
     }
   }
   const approvedObjectFilenames = new Set(worldObjectAssets.map((asset) => path.basename(asset.filename)));
@@ -118,6 +124,20 @@ function validateCurrentWorldAssetManifest() {
     const textureKey = WORLD_CURRENT_ROUTE_TEXTURE_KEYS[routeKey];
     assert(textureKey && WORLD_CURRENT_ASSET_BY_TEXTURE_KEY[textureKey], `Route key ${routeKey} lacks a current texture mapping.`);
   }
+  for (const textureKey of [
+    WORLD_CURRENT_POI_TEXTURE_KEYS.town,
+    WORLD_CURRENT_POI_TEXTURE_KEYS.harbor,
+    WORLD_CURRENT_POI_TEXTURE_KEYS.shrine,
+    WORLD_CURRENT_POI_TEXTURE_KEYS.ruins,
+    WORLD_CURRENT_POI_TEXTURE_KEYS.tower
+  ]) {
+    const asset = WORLD_CURRENT_ASSET_BY_TEXTURE_KEY[textureKey];
+    assert(asset?.source === "world_objects_v2_relaxed", `Settlement-corrected POI texture ${textureKey} should come from the relaxed game-ready set.`);
+  }
+  assert(
+    WORLD_CURRENT_ASSET_BY_TEXTURE_KEY[WORLD_CURRENT_ROUTE_TEXTURE_KEYS.bridgeHorizontal].source === "world_objects_v2_relaxed",
+    "Horizontal bridge route stamp should map to the relaxed game-ready bridge object."
+  );
   assert(
     WORLD_CURRENT_ASSET_BY_TEXTURE_KEY[WORLD_CURRENT_ROUTE_TEXTURE_KEYS.dockHorizontal].assetKind === "world object",
     "Horizontal dock route stamp should map to the approved object pack."

@@ -55,6 +55,11 @@ export interface WorldCurrentAssetManifest {
     approvedObjectsMetadata?: string;
     approvedWorldObjectCount?: number;
     objectSelectionStandard?: string;
+    relaxedObjectsFolder?: string;
+    relaxedTouchupObjectsFolder?: string;
+    relaxedObjectsMetadata?: string;
+    relaxedGameReadyObjectCount?: number;
+    relaxedTouchupObjectCount?: number;
   };
   rendererContract: {
     semanticWorldGenerationIsGameplayTruth: boolean;
@@ -66,6 +71,7 @@ export interface WorldCurrentAssetManifest {
   semanticTerrain: Record<SemanticMaskTerrainClass, string>;
   routeMappings: Record<string, string>;
   poiMappings: Record<string, string>;
+  poiVariantMappings?: Record<string, string[]>;
   locationIdMappings: Record<string, string>;
   objectMappings: Record<string, string>;
   deprecatedRuntimeSources: string[];
@@ -95,6 +101,8 @@ export interface WorldCurrentPoiDescriptor {
   kind?: string;
   landmarkKind?: string;
   objectId?: string;
+  x?: number;
+  y?: number;
 }
 
 export function worldCurrentAssetByTextureKey(textureKey?: string): WorldCurrentAssetRecord | undefined {
@@ -111,6 +119,21 @@ export function worldCurrentPoiTextureKeyFor(poi: WorldCurrentPoiDescriptor): st
   if (poi.kind === "landmark" && poi.landmarkKind && WORLD_CURRENT_POI_TEXTURE_KEYS[poi.landmarkKind]) {
     return WORLD_CURRENT_POI_TEXTURE_KEYS[poi.landmarkKind];
   }
+  const variantKey = worldCurrentPoiVariantTextureKeyFor(poi);
+  if (variantKey) return variantKey;
   if (poi.kind && WORLD_CURRENT_POI_TEXTURE_KEYS[poi.kind]) return WORLD_CURRENT_POI_TEXTURE_KEYS[poi.kind];
   return worldCurrentObjectTextureKey(poi.objectId);
+}
+
+function worldCurrentPoiVariantTextureKeyFor(poi: WorldCurrentPoiDescriptor): string | undefined {
+  const variantsByRole = WORLD_CURRENT_ASSET_MANIFEST.poiVariantMappings;
+  if (!variantsByRole || !poi.kind) return undefined;
+  const role = poi.kind === "harbor" ? "harbor" : poi.kind === "town" ? "settlement" : poi.landmarkKind;
+  if (!role) return undefined;
+  const variants = variantsByRole[role];
+  if (!variants?.length) return undefined;
+  const basis = `${poi.id ?? poi.kind}:${poi.x ?? 0}:${poi.y ?? 0}`;
+  let hash = 0;
+  for (let index = 0; index < basis.length; index += 1) hash = (hash * 31 + basis.charCodeAt(index)) >>> 0;
+  return variants[hash % variants.length];
 }
