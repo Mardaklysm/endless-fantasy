@@ -1,69 +1,7 @@
-import atlasV3ManifestJson from "../assets/world/atlasV3.manifest.json" with { type: "json" };
-
 export type WorldBiome = "grassland" | "forest" | "desert" | "snow" | "darkland" | "water" | "mountain" | "lava";
 export type WorldEncounterFamily = "plains" | "forest" | "sand" | "hills" | "water" | "final";
 export type WorldBlendGroup = "grass" | "desert" | "snow" | "ice" | "dark" | "water" | "rock" | "lava";
 export type WorldTileId = string;
-
-export interface WorldSourceRect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-export const ATLAS_V3_SOURCE_INSET = 3;
-
-interface AtlasV3BaseCell {
-  row: number;
-  col: number;
-  empty: boolean;
-  source: WorldSourceRect;
-  emptyRatio: number;
-  notes?: string;
-}
-
-interface AtlasV3TileCell extends AtlasV3BaseCell {
-  empty: false;
-  id: WorldTileId;
-  biome: WorldBiome;
-  category: string;
-  blendGroup: WorldBlendGroup;
-  encounterFamily: WorldEncounterFamily;
-  walkable: boolean;
-  movementCost: number;
-  tags: string[];
-}
-
-interface AtlasV3EmptyCell extends AtlasV3BaseCell {
-  empty: true;
-}
-
-type AtlasV3Cell = AtlasV3TileCell | AtlasV3EmptyCell;
-
-interface AtlasV3Manifest {
-  schemaVersion: number;
-  id: "atlas_v3";
-  sourceImage: string;
-  runtimeImage: string;
-  columns: 8;
-  rows: 8;
-  tileWidth: number;
-  tileHeight: number;
-  image: {
-    width: number;
-    height: number;
-    runtimeFormat: string;
-    sourceFormat: string;
-  };
-  emptyDetection: {
-    nearBlackLuminance: number;
-    nearBlackMaxChannel: number;
-    emptyPixelRatio: number;
-  };
-  cells: AtlasV3Cell[];
-  tiles: Record<string, AtlasV3TileCell>;
-}
 
 export interface WorldTileDefinition {
   id: WorldTileId;
@@ -76,30 +14,13 @@ export interface WorldTileDefinition {
   walkable: boolean;
   movementCost: number;
   tags: readonly string[];
-  sourceRect: WorldSourceRect;
-  emptyRatio: number;
   notes?: string;
 }
 
-export const ATLAS_V3_MANIFEST = atlasV3ManifestJson as AtlasV3Manifest;
-
-export const WORLD_ATLAS = {
-  id: ATLAS_V3_MANIFEST.id,
-  textureKey: "atlas_v3",
-  image: ATLAS_V3_MANIFEST.runtimeImage,
-  manifest: "src/assets/world/atlasV3.manifest.json",
-  sourceImage: ATLAS_V3_MANIFEST.sourceImage,
-  sourceInset: ATLAS_V3_SOURCE_INSET,
-  columns: ATLAS_V3_MANIFEST.columns,
-  rows: ATLAS_V3_MANIFEST.rows,
-  tileWidth: ATLAS_V3_MANIFEST.tileWidth,
-  tileHeight: ATLAS_V3_MANIFEST.tileHeight,
-  sheetWidth: ATLAS_V3_MANIFEST.image.width,
-  sheetHeight: ATLAS_V3_MANIFEST.image.height,
-  emptyCellsActive: false,
-  oldGeneratedAtlasActive: false,
-  usingOld10x10Atlas: false,
-  usingClassicSpecialTileset: false
+export const WORLD_TILE_RUNTIME_SOURCE = {
+  id: "semantic_current_world_materials",
+  manifest: "src/assets/world/current/world_asset_manifest.json",
+  deprecatedAtlasActive: false
 } as const;
 
 export const WORLD_TILE_IDS = {
@@ -236,43 +157,75 @@ export const WORLD_TILE_BLEND_GROUPS = {
   [WORLD_TILE_IDS.roadDeadEndWest]: "grass"
 } as const satisfies Record<string, WorldBlendGroup>;
 
-export const ATLAS_V3_CELLS = ATLAS_V3_MANIFEST.cells as readonly AtlasV3Cell[];
-export const ATLAS_V3_EMPTY_CELLS = ATLAS_V3_CELLS.filter((cell): cell is AtlasV3EmptyCell => cell.empty);
-export const ATLAS_V3_NON_EMPTY_CELLS = ATLAS_V3_CELLS.filter((cell): cell is AtlasV3TileCell => !cell.empty);
-export const ATLAS_V3_EMPTY_CELL_KEYS = new Set(ATLAS_V3_EMPTY_CELLS.map((cell) => cellKey(cell.row, cell.col)));
+const FOREST_TILES = new Set<WorldTileId>([
+  WORLD_TILE_IDS.lightForest,
+  WORLD_TILE_IDS.denseForest,
+  WORLD_TILE_IDS.jungle,
+  WORLD_TILE_IDS.snowyForest,
+  WORLD_TILE_IDS.deadForest,
+  WORLD_TILE_IDS.ashForest
+]);
 
-export const WORLD_TILE_DEFINITIONS = ATLAS_V3_NON_EMPTY_CELLS.map(
-  (cell): WorldTileDefinition => ({
-    id: cell.id,
-    row: cell.row,
-    col: cell.col,
-    biome: cell.biome,
-    category: cell.category,
-    blendGroup: worldTileBlendGroup(cell.id),
-    encounterFamily: cell.encounterFamily,
-    walkable: cell.walkable,
-    movementCost: cell.movementCost,
-    tags: cell.tags,
-    sourceRect: {
-      x: cell.source.x,
-      y: cell.source.y,
-      width: cell.source.width,
-      height: cell.source.height
-    },
-    emptyRatio: cell.emptyRatio,
-    notes: cell.notes
-  })
-) as readonly WorldTileDefinition[];
+const WATER_TILES = new Set<WorldTileId>([
+  WORLD_TILE_IDS.deepWater,
+  WORLD_TILE_IDS.shallowWater,
+  WORLD_TILE_IDS.foamyShallowWater
+]);
 
+const MOUNTAIN_TILES = new Set<WorldTileId>([
+  WORLD_TILE_IDS.snowMountain,
+  WORLD_TILE_IDS.rockyMountainGround,
+  WORLD_TILE_IDS.gravelStoneGround,
+  WORLD_TILE_IDS.rockyHills,
+  WORLD_TILE_IDS.snowyMountainGround
+]);
+
+const BLOCKED_TILES = new Set<WorldTileId>([
+  ...WATER_TILES,
+  WORLD_TILE_IDS.snowMountain,
+  WORLD_TILE_IDS.rockyMountainGround,
+  WORLD_TILE_IDS.gravelStoneGround,
+  WORLD_TILE_IDS.volcanoMound,
+  WORLD_TILE_IDS.lavaCrackedGround,
+  WORLD_TILE_IDS.cooledLavaRock,
+  WORLD_TILE_IDS.lavaRockTransition,
+  WORLD_TILE_IDS.frozenLakeIce,
+  WORLD_TILE_IDS.crackedIce
+]);
+
+const ROAD_TILES = new Set<WorldTileId>([
+  WORLD_TILE_IDS.desertRoadCrossroads,
+  WORLD_TILE_IDS.roadHorizontal,
+  WORLD_TILE_IDS.roadVertical,
+  WORLD_TILE_IDS.roadCornerSw,
+  WORLD_TILE_IDS.roadTSouth,
+  WORLD_TILE_IDS.roadCrossroads,
+  WORLD_TILE_IDS.roadDeadEndEast,
+  WORLD_TILE_IDS.softGrassTrail,
+  WORLD_TILE_IDS.roadCornerSe,
+  WORLD_TILE_IDS.roadCornerNe,
+  WORLD_TILE_IDS.roadCornerNw,
+  WORLD_TILE_IDS.roadTEast,
+  WORLD_TILE_IDS.roadTNorth,
+  WORLD_TILE_IDS.roadTWest,
+  WORLD_TILE_IDS.roadDeadEndWest
+]);
+
+const DARK_TILES = new Set<WorldTileId>([
+  WORLD_TILE_IDS.deadCrackedEarth,
+  WORLD_TILE_IDS.ashBlackGround,
+  WORLD_TILE_IDS.cursedPurpleGround,
+  WORLD_TILE_IDS.deadForest,
+  WORLD_TILE_IDS.ashForest,
+  WORLD_TILE_IDS.volcanicAshGround
+]);
+
+export const WORLD_TILE_DEFINITIONS = Object.values(WORLD_TILE_IDS).map(makeWorldTileDefinition) as readonly WorldTileDefinition[];
 export const WORLD_TILES = Object.fromEntries(WORLD_TILE_DEFINITIONS.map((tile) => [tile.id, tile])) as Record<WorldTileId, WorldTileDefinition>;
 export const WORLD_TILE_ID_SET = new Set(Object.keys(WORLD_TILES));
 
-export function isAtlasV3TileId(tileId?: string): tileId is WorldTileId {
+export function isCurrentWorldTileId(tileId?: string): tileId is WorldTileId {
   return !!tileId && WORLD_TILE_ID_SET.has(tileId);
-}
-
-export function isAtlasV3EmptyCell(row: number, col: number): boolean {
-  return ATLAS_V3_EMPTY_CELL_KEYS.has(cellKey(row, col));
 }
 
 export function worldTileById(tileId?: WorldTileId): WorldTileDefinition | undefined {
@@ -305,21 +258,71 @@ export function worldTileIdsMatching(predicate: (tile: WorldTileDefinition) => b
   return WORLD_TILE_DEFINITIONS.filter(predicate).map((tile) => tile.id);
 }
 
-export function atlasV3SourceRectWithInset(sourceRect: WorldSourceRect, inset = ATLAS_V3_SOURCE_INSET): WorldSourceRect {
-  if (!Number.isInteger(inset) || inset < 0) {
-    throw new Error(`atlas_v3 source inset must be a non-negative integer; got ${inset}.`);
-  }
-  if (inset * 2 >= sourceRect.width || inset * 2 >= sourceRect.height) {
-    throw new Error(`atlas_v3 source inset ${inset} is too large for source rect ${sourceRect.width}x${sourceRect.height}.`);
-  }
+function makeWorldTileDefinition(tileId: WorldTileId, index: number): WorldTileDefinition {
+  const blendGroup = WORLD_TILE_BLEND_GROUPS[tileId];
+  const biome = biomeForTile(tileId, blendGroup);
+  const tags = tagsForTile(tileId, biome, blendGroup);
+  const walkable = !BLOCKED_TILES.has(tileId);
   return {
-    x: sourceRect.x + inset,
-    y: sourceRect.y + inset,
-    width: sourceRect.width - inset * 2,
-    height: sourceRect.height - inset * 2
+    id: tileId,
+    row: Math.floor(index / 8),
+    col: index % 8,
+    biome,
+    category: categoryForTile(tileId, biome),
+    blendGroup,
+    encounterFamily: encounterFamilyForTile(tileId, biome),
+    walkable,
+    movementCost: movementCostForTile(tileId, biome, walkable),
+    tags,
+    notes: "Semantic compatibility tile ID. Runtime pixels come from src/assets/world/current/world_asset_manifest.json, not an atlas cell."
   };
 }
 
-function cellKey(row: number, col: number): string {
-  return `${row}:${col}`;
+function biomeForTile(tileId: WorldTileId, blendGroup: WorldBlendGroup): WorldBiome {
+  if (WATER_TILES.has(tileId)) return "water";
+  if (MOUNTAIN_TILES.has(tileId)) return "mountain";
+  if (tileId === WORLD_TILE_IDS.volcanoMound || blendGroup === "lava") return "lava";
+  if (FOREST_TILES.has(tileId)) return "forest";
+  if (DARK_TILES.has(tileId)) return "darkland";
+  if (blendGroup === "snow" || blendGroup === "ice") return "snow";
+  if (blendGroup === "desert") return "desert";
+  return "grassland";
+}
+
+function categoryForTile(tileId: WorldTileId, biome: WorldBiome): string {
+  if (ROAD_TILES.has(tileId)) return "route";
+  if (tileId.includes("coast") || tileId.includes("edge") || tileId.includes("corner")) return "legacy_transition_id";
+  return biome;
+}
+
+function encounterFamilyForTile(tileId: WorldTileId, biome: WorldBiome): WorldEncounterFamily {
+  if (ROAD_TILES.has(tileId)) return "plains";
+  if (biome === "water") return "water";
+  if (biome === "forest") return "forest";
+  if (biome === "desert") return "sand";
+  if (biome === "darkland" || biome === "lava") return "final";
+  if (biome === "mountain" || biome === "snow") return "hills";
+  return "plains";
+}
+
+function movementCostForTile(tileId: WorldTileId, biome: WorldBiome, walkable: boolean): number {
+  if (!walkable) return 99;
+  if (ROAD_TILES.has(tileId)) return 1;
+  if (biome === "forest" || biome === "desert" || biome === "snow" || biome === "mountain") return 2;
+  return 1;
+}
+
+function tagsForTile(tileId: WorldTileId, biome: WorldBiome, blendGroup: WorldBlendGroup): string[] {
+  const tags: string[] = [biome, blendGroup];
+  if (WATER_TILES.has(tileId)) tags.push("water");
+  if (tileId === WORLD_TILE_IDS.deepWater) tags.push("deep");
+  if (tileId === WORLD_TILE_IDS.shallowWater || tileId === WORLD_TILE_IDS.foamyShallowWater) tags.push("shallow");
+  if (BLOCKED_TILES.has(tileId)) tags.push("blocked");
+  if (MOUNTAIN_TILES.has(tileId)) tags.push("mountain", "cliff");
+  if (FOREST_TILES.has(tileId)) tags.push("forest");
+  if (ROAD_TILES.has(tileId)) tags.push("road");
+  if (tileId.includes("snow") || blendGroup === "snow" || blendGroup === "ice") tags.push("snow");
+  if (blendGroup === "lava") tags.push("lava");
+  if (tileId.includes("coast") || tileId.includes("edge") || tileId.includes("corner")) tags.push("legacy_transition_id");
+  return [...new Set(tags)];
 }

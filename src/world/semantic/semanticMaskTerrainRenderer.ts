@@ -1,20 +1,15 @@
 import type Phaser from "phaser";
-import {
-  WORLD_ATLAS,
-  WORLD_TILE_IDS,
-  WORLD_TILES,
-  atlasV3SourceRectWithInset,
-  type WorldTileId
-} from "../../data/worldTiles.ts";
 import { hashNoise } from "../seededRng.ts";
 import { SEMANTIC_BIOME, SEMANTIC_WATER, type SemanticWorld } from "./semanticTypes.ts";
 
 export type SemanticMaskTerrainClass = "deepOcean" | "shallowWater" | "beach" | "grassland" | "sand" | "ice";
+export type SemanticMaskTerrainSources = Partial<Record<SemanticMaskTerrainClass, CanvasImageSource & { width: number; height: number }>>;
 
 export interface SemanticMaskTerrainRenderOptions {
   tileSize: number;
   textureKey?: string;
-  atlasTextureKey?: string;
+  terrainSources?: SemanticMaskTerrainSources;
+  terrainSourceLabels?: Partial<Record<SemanticMaskTerrainClass, string>>;
   maskPixelsPerCell?: number;
 }
 
@@ -31,6 +26,7 @@ export interface SemanticMaskTerrainRenderPlan {
   sandGrassBoundarySamples: number;
   sandIceBoundarySamples: number;
   grassIceBoundarySamples: number;
+  textureSourceLabels: Record<SemanticMaskTerrainClass, string>;
 }
 
 type TerrainClassId = 0 | 1 | 2 | 3 | 4 | 5;
@@ -47,14 +43,7 @@ const TERRAIN_CLASS_IDS = {
 
 const TERRAIN_CLASSES = ["deepOcean", "shallowWater", "beach", "grassland", "sand", "ice"] as const satisfies readonly SemanticMaskTerrainClass[];
 
-export const SEMANTIC_MASK_TEXTURE_TILE_IDS = {
-  deepOcean: WORLD_TILE_IDS.deepWater,
-  shallowWater: WORLD_TILE_IDS.shallowWater,
-  beach: WORLD_TILE_IDS.beachSand,
-  grassland: WORLD_TILE_IDS.mediumGrass,
-  sand: WORLD_TILE_IDS.brightSand,
-  ice: WORLD_TILE_IDS.cleanSnow
-} as const satisfies Record<SemanticMaskTerrainClass, WorldTileId>;
+export const SEMANTIC_MASK_TERRAIN_CLASSES = TERRAIN_CLASSES;
 
 const COLORS = {
   deepOcean: [12, 54, 92] as Rgb,
@@ -71,20 +60,13 @@ const COLORS = {
 
 export function createSemanticMaskTerrainTexture(scene: Phaser.Scene, world: SemanticWorld, options: SemanticMaskTerrainRenderOptions): string {
   const textureKey = options.textureKey ?? `semantic-mask-terrain-${world.seed}`;
-  const atlasTextureKey = options.atlasTextureKey ?? WORLD_ATLAS.textureKey;
-  const atlasSource = scene.textures.exists(atlasTextureKey)
-    ? (scene.textures.get(atlasTextureKey).getSourceImage() as CanvasImageSource & { width: number; height: number })
-    : undefined;
-  const canvas = createSemanticMaskTerrainCanvas(world, { ...options, atlasSource });
+  const canvas = createSemanticMaskTerrainCanvas(world, options);
   if (scene.textures.exists(textureKey)) scene.textures.remove(textureKey);
   scene.textures.addCanvas(textureKey, canvas);
   return textureKey;
 }
 
-export function createSemanticMaskTerrainCanvas(
-  world: SemanticWorld,
-  options: SemanticMaskTerrainRenderOptions & { atlasSource?: CanvasImageSource & { width: number; height: number } }
-): HTMLCanvasElement {
+export function createSemanticMaskTerrainCanvas(world: SemanticWorld, options: SemanticMaskTerrainRenderOptions): HTMLCanvasElement {
   const plan = describeSemanticMaskTerrainRenderPlan(world, options);
   const classGrid = buildMaskClassGrid(world, plan);
   const canvas = document.createElement("canvas");
@@ -94,7 +76,7 @@ export function createSemanticMaskTerrainCanvas(
   if (!ctx) throw new Error("Unable to create semantic mask terrain canvas.");
   ctx.imageSmoothingEnabled = false;
 
-  const fillStyles = createTerrainFillStyles(ctx, options.atlasSource, plan.tileSize);
+  const fillStyles = createTerrainFillStyles(ctx, options.terrainSources, plan.tileSize);
   fillFullTerrain(ctx, fillStyles.deepOcean, plan.width, plan.height);
   for (const terrainClass of TERRAIN_CLASSES) {
     if (terrainClass === "deepOcean") continue;
@@ -157,7 +139,8 @@ export function describeSemanticMaskTerrainRenderPlan(world: SemanticWorld, opti
     waterBeachBoundarySamples,
     sandGrassBoundarySamples,
     sandIceBoundarySamples,
-    grassIceBoundarySamples
+    grassIceBoundarySamples,
+    textureSourceLabels: terrainTextureSourceLabels(options)
   };
 }
 
@@ -199,37 +182,49 @@ function classifySample(world: SemanticWorld, sampleX: number, sampleY: number):
 
 function createTerrainFillStyles(
   ctx: CanvasRenderingContext2D,
-  atlasSource: (CanvasImageSource & { width: number; height: number }) | undefined,
+  terrainSources: SemanticMaskTerrainSources | undefined,
   tileSize: number
 ): Record<SemanticMaskTerrainClass, CanvasPattern | string> {
   return {
-    deepOcean: createTerrainPattern(ctx, atlasSource, SEMANTIC_MASK_TEXTURE_TILE_IDS.deepOcean, tileSize, COLORS.deepOcean),
-    shallowWater: createTerrainPattern(ctx, atlasSource, SEMANTIC_MASK_TEXTURE_TILE_IDS.shallowWater, tileSize, COLORS.shallowWater),
-    beach: createTerrainPattern(ctx, atlasSource, SEMANTIC_MASK_TEXTURE_TILE_IDS.beach, tileSize, COLORS.beachEdge),
-    grassland: createTerrainPattern(ctx, atlasSource, SEMANTIC_MASK_TEXTURE_TILE_IDS.grassland, tileSize, COLORS.grassEdge),
-    sand: createTerrainPattern(ctx, atlasSource, SEMANTIC_MASK_TEXTURE_TILE_IDS.sand, tileSize, COLORS.sandEdge),
-    ice: createTerrainPattern(ctx, atlasSource, SEMANTIC_MASK_TEXTURE_TILE_IDS.ice, tileSize, COLORS.frost)
+    deepOcean: createTerrainPattern(ctx, terrainSources?.deepOcean, tileSize, COLORS.deepOcean),
+    shallowWater: createTerrainPattern(ctx, terrainSources?.shallowWater, tileSize, COLORS.shallowWater),
+    beach: createTerrainPattern(ctx, terrainSources?.beach, tileSize, COLORS.beachEdge),
+    grassland: createTerrainPattern(ctx, terrainSources?.grassland, tileSize, COLORS.grassEdge),
+    sand: createTerrainPattern(ctx, terrainSources?.sand, tileSize, COLORS.sandEdge),
+    ice: createTerrainPattern(ctx, terrainSources?.ice, tileSize, COLORS.frost)
   };
 }
 
 function createTerrainPattern(
   ctx: CanvasRenderingContext2D,
-  atlasSource: (CanvasImageSource & { width: number; height: number }) | undefined,
-  tileId: WorldTileId,
+  source: (CanvasImageSource & { width: number; height: number }) | undefined,
   tileSize: number,
   fallbackColor: Rgb
 ): CanvasPattern | string {
-  const tile = WORLD_TILES[tileId];
-  if (!atlasSource || !tile) return rgbCss(fallbackColor);
-  const rect = atlasV3SourceRectWithInset(tile.sourceRect);
+  if (!source) return rgbCss(fallbackColor);
   const patternCanvas = document.createElement("canvas");
   patternCanvas.width = tileSize;
   patternCanvas.height = tileSize;
   const patternCtx = patternCanvas.getContext("2d");
   if (!patternCtx) return rgbCss(fallbackColor);
   patternCtx.imageSmoothingEnabled = false;
-  patternCtx.drawImage(atlasSource, rect.x, rect.y, rect.width, rect.height, 0, 0, tileSize, tileSize);
+  patternCtx.drawImage(source, 0, 0, source.width, source.height, 0, 0, tileSize, tileSize);
   return ctx.createPattern(patternCanvas, "repeat") ?? rgbCss(fallbackColor);
+}
+
+function terrainTextureSourceLabels(options: SemanticMaskTerrainRenderOptions): Record<SemanticMaskTerrainClass, string> {
+  return {
+    deepOcean: terrainTextureSourceLabel(options, "deepOcean"),
+    shallowWater: terrainTextureSourceLabel(options, "shallowWater"),
+    beach: terrainTextureSourceLabel(options, "beach"),
+    grassland: terrainTextureSourceLabel(options, "grassland"),
+    sand: terrainTextureSourceLabel(options, "sand"),
+    ice: terrainTextureSourceLabel(options, "ice")
+  };
+}
+
+function terrainTextureSourceLabel(options: SemanticMaskTerrainRenderOptions, terrainClass: SemanticMaskTerrainClass): string {
+  return options.terrainSourceLabels?.[terrainClass] ?? (options.terrainSources?.[terrainClass] ? "runtime-texture" : "fallback-color");
 }
 
 function fillFullTerrain(ctx: CanvasRenderingContext2D, fillStyle: CanvasPattern | string, width: number, height: number) {

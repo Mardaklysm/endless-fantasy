@@ -2,11 +2,21 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { SEMANTIC_BASE_TILE_PALETTE, TERRAIN_VARIANT_MODE, generateWorld, getIslandAt, isWorldPositionWalkable } from "../../src/world/worldGenerator.ts";
-import { WORLD_ATLAS, WORLD_TILE_IDS, isWorldTileWalkable, worldTileById } from "../../src/data/worldTiles.ts";
-import { WORLD_OBJECT_ATLAS, WORLD_OBJECT_ID_SET } from "../../src/data/worldObjects.ts";
+import { WORLD_TILE_IDS, isWorldTileWalkable, worldTileById } from "../../src/data/worldTiles.ts";
+import { WORLD_OBJECT_ID_SET } from "../../src/data/worldObjects.ts";
+import {
+  WORLD_CURRENT_ASSET_BY_TEXTURE_KEY,
+  WORLD_CURRENT_ASSET_MANIFEST,
+  WORLD_CURRENT_ASSETS,
+  WORLD_CURRENT_OBJECT_TEXTURE_KEY_BY_ID,
+  WORLD_CURRENT_POI_TEXTURE_KEYS,
+  WORLD_CURRENT_ROUTE_TEXTURE_KEYS,
+  WORLD_CURRENT_TERRAIN_TEXTURE_KEYS,
+  worldCurrentPoiTextureKeyFor
+} from "../../src/data/worldCurrentAssets.ts";
 import { DUNGEON_ATLAS } from "../../src/data/dungeonTiles.ts";
 import { SEMANTIC_BIOME, SEMANTIC_WATER } from "../../src/world/semantic/semanticTypes.ts";
-import { SEMANTIC_MASK_TEXTURE_TILE_IDS, describeSemanticMaskTerrainRenderPlan } from "../../src/world/semantic/semanticMaskTerrainRenderer.ts";
+import { SEMANTIC_MASK_TERRAIN_CLASSES, describeSemanticMaskTerrainRenderPlan } from "../../src/world/semantic/semanticMaskTerrainRenderer.ts";
 import { describeSemanticRouteRenderPlan } from "../../src/world/semantic/semanticRouteRenderer.ts";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -20,9 +30,9 @@ validateSemanticWorldgen();
 console.log("semantic worldgen runtime validation passed.");
 
 function validateRuntimeAssets() {
-  assertPng(WORLD_ATLAS.image, 1024, 1024, "active world atlas");
-  assertPng(WORLD_OBJECT_ATLAS.image, 1024, 1024, "active world object atlas");
   assertPng(DUNGEON_ATLAS.image, 1024, 1024, "active dungeon atlas");
+  validateCurrentWorldAssetManifest();
+  validateNoDeprecatedRuntimeAtlasReferences();
   assert(worldTileById(WORLD_TILE_IDS.deepWater), "deep water tile is missing.");
   assert(worldTileById(WORLD_TILE_IDS.shallowWater), "shallow water tile is missing.");
   assert(worldTileById(WORLD_TILE_IDS.beachSand), "beach tile is missing.");
@@ -32,9 +42,65 @@ function validateRuntimeAssets() {
   assert(!isWorldTileWalkable(WORLD_TILE_IDS.deepWater), "deep water must block walking.");
   assert(!isWorldTileWalkable(WORLD_TILE_IDS.shallowWater), "shallow water must block walking.");
   assert(isWorldTileWalkable(WORLD_TILE_IDS.beachSand), "beach must be walkable.");
-  assert(WORLD_OBJECT_ID_SET.has("small_mountain_peak"), "world object atlas lacks mountain overlay.");
-  assert(WORLD_OBJECT_ID_SET.has("broadleaf_tree"), "world object atlas lacks forest overlay.");
-  assert(WORLD_OBJECT_ID_SET.has("harbor_signpost"), "world object atlas lacks harbor overlay.");
+  assert(WORLD_OBJECT_ID_SET.has("small_mountain_peak"), "world object registry lacks mountain overlay ID.");
+  assert(WORLD_OBJECT_ID_SET.has("broadleaf_tree"), "world object registry lacks forest overlay ID.");
+  assert(WORLD_OBJECT_ID_SET.has("harbor_signpost"), "world object registry lacks harbor overlay ID.");
+}
+
+function validateCurrentWorldAssetManifest() {
+  assert(WORLD_CURRENT_ASSET_MANIFEST.rendererContract.semanticWorldGenerationIsGameplayTruth, "current world manifest must preserve semantic worldgen as truth.");
+  assert(WORLD_CURRENT_ASSET_MANIFEST.rendererContract.baseTerrainUsesSemanticMaskFills, "current world manifest must mark semantic mask terrain fills active.");
+  assert(WORLD_CURRENT_ASSET_MANIFEST.rendererContract.roadsRiversCoastsMountainsForestsPoisAreOverlays, "current world manifest must keep roads/rivers/POIs as overlays.");
+  assert(!WORLD_CURRENT_ASSET_MANIFEST.rendererContract.randomBaseTerrainVariantSpam, "current world manifest must keep random base terrain variants disabled.");
+  assert(WORLD_CURRENT_ASSET_MANIFEST.sourcePack.approvedTerrainMaterialCount === 37, "current world manifest should record 37 approved terrain fills.");
+  const terrainAssets = WORLD_CURRENT_ASSETS.filter((asset) => asset.assetKind === "terrain fill");
+  assert(terrainAssets.length === 37, `Expected 37 current terrain fill assets, got ${terrainAssets.length}.`);
+  assert(WORLD_CURRENT_ASSETS.some((asset) => asset.placeholder), "Missing explicit current-folder placeholders for absent overlay/POI art.");
+  for (const asset of WORLD_CURRENT_ASSETS) {
+    assert(WORLD_CURRENT_ASSET_BY_TEXTURE_KEY[asset.textureKey] === asset, `Texture key lookup failed for ${asset.textureKey}.`);
+    assert(!asset.magentaKeyRemovalNeeded, `${asset.id} should not need runtime magenta removal.`);
+    assert(asset.scaleCropPadNeeded === "none", `${asset.id} should not require runtime scaling/cropping/padding normalization.`);
+    assertPng(path.join(WORLD_CURRENT_ASSET_MANIFEST.runtimeRoot, asset.filename), asset.dimensions.width, asset.dimensions.height, `current world asset ${asset.id}`);
+    if (asset.assetKind === "terrain fill") {
+      assert(asset.qualityFlag === "approved" && !asset.placeholder, `${asset.id} must be an approved terrain fill, not a placeholder.`);
+      assert(asset.dimensions.width === 256 && asset.dimensions.height === 256, `${asset.id} terrain fill must be 256x256.`);
+    }
+  }
+  for (const terrainClass of SEMANTIC_MASK_TERRAIN_CLASSES) {
+    const textureKey = WORLD_CURRENT_TERRAIN_TEXTURE_KEYS[terrainClass];
+    const asset = WORLD_CURRENT_ASSET_BY_TEXTURE_KEY[textureKey];
+    assert(asset, `${terrainClass} is not mapped to a current world asset.`);
+    assert(asset.assetKind === "terrain fill" && asset.qualityFlag === "approved", `${terrainClass} must map to an approved terrain fill.`);
+  }
+  for (const objectId of ["small_mountain_peak", "snowy_mountain_peak", "broadleaf_tree", "dark_pine_tree", "dense_jungle_bush", "harbor_signpost"]) {
+    const textureKey = WORLD_CURRENT_OBJECT_TEXTURE_KEY_BY_ID[objectId];
+    assert(textureKey && WORLD_CURRENT_ASSET_BY_TEXTURE_KEY[textureKey], `Object ${objectId} lacks a current texture mapping.`);
+  }
+  for (const poiKind of ["town", "harbor", "cave", "shrine", "ruins", "tower", "gate", "final"]) {
+    const textureKey = WORLD_CURRENT_POI_TEXTURE_KEYS[poiKind];
+    assert(textureKey && WORLD_CURRENT_ASSET_BY_TEXTURE_KEY[textureKey], `POI kind ${poiKind} lacks a current texture mapping.`);
+  }
+  for (const routeKey of ["dockHorizontal", "dockVertical", "bridgeHorizontal", "bridgeVertical"]) {
+    const textureKey = WORLD_CURRENT_ROUTE_TEXTURE_KEYS[routeKey];
+    assert(textureKey && WORLD_CURRENT_ASSET_BY_TEXTURE_KEY[textureKey], `Route key ${routeKey} lacks a current texture mapping.`);
+  }
+}
+
+function validateNoDeprecatedRuntimeAtlasReferences() {
+  const activeFiles = [
+    "src/main.ts",
+    "src/world/semantic/semanticMaskTerrainRenderer.ts",
+    "src/data/worldTiles.ts",
+    "src/data/worldObjects.ts",
+    "src/data/worldCurrentAssets.ts"
+  ];
+  const forbidden = ["atlas_v3", "world_objects", "pier_atlas", "WORLD_ATLAS", "WORLD_OBJECT_ATLAS", "atlasV3SourceRectWithInset", "SEMANTIC_MASK_TEXTURE_TILE_IDS"];
+  for (const relativePath of activeFiles) {
+    const text = fs.readFileSync(path.join(PROJECT_ROOT, relativePath), "utf8");
+    for (const token of forbidden) {
+      assert(!text.includes(token), `${relativePath} still references deprecated runtime atlas token ${token}.`);
+    }
+  }
 }
 
 function validateSemanticWorldgen() {
@@ -198,6 +264,8 @@ function validatePois(world) {
     assert(world.semantic.layers.landMask[i] === 1, `POI ${poi.id} is not on land.`);
     assert(isWorldPositionWalkable(world, poi.x, poi.y), `POI ${poi.id} is not reachable/walkable.`);
     assert(hasAdjacentWalkable(world, poi.x, poi.y) || isWorldPositionWalkable(world, poi.x, poi.y), `POI ${poi.id} has no walkable approach.`);
+    const textureKey = worldCurrentPoiTextureKeyFor(poi);
+    assert(textureKey && WORLD_CURRENT_ASSET_BY_TEXTURE_KEY[textureKey], `POI ${poi.id} lacks a current texture mapping.`);
   }
 }
 
@@ -242,14 +310,17 @@ function validateRoadAndForestPolicies(world) {
 
 function validateSemanticMaskTerrainRendererPlan(world) {
   const before = stableSummary(world);
-  const plan = describeSemanticMaskTerrainRenderPlan(world.semantic, { tileSize: 32, maskPixelsPerCell: 16 });
+  const plan = describeSemanticMaskTerrainRenderPlan(world.semantic, { tileSize: 32, maskPixelsPerCell: 16, terrainSourceLabels: WORLD_CURRENT_TERRAIN_TEXTURE_KEYS });
   const after = stableSummary(world);
   assert(plan.width === world.width * 32, `Semantic mask terrain texture width expected ${world.width * 32}, got ${plan.width}.`);
   assert(plan.height === world.height * 32, `Semantic mask terrain texture height expected ${world.height * 32}, got ${plan.height}.`);
   assert(plan.maskPixelsPerCell === 16, `Semantic mask terrain should render 16 mask samples per cell, got ${plan.maskPixelsPerCell}.`);
   assert(plan.pixelBlock === 2, `Semantic mask terrain should render 2px mask blocks at 32px tiles, got ${plan.pixelBlock}.`);
-  for (const [terrainClass, tileId] of Object.entries(SEMANTIC_MASK_TEXTURE_TILE_IDS)) {
-    assert(tileId === SEMANTIC_BASE_TILE_PALETTE[terrainClass] || (terrainClass === "shallowWater" && tileId === SEMANTIC_BASE_TILE_PALETTE.shallowWater), `${terrainClass} mask texture source should match the canonical palette.`);
+  for (const terrainClass of SEMANTIC_MASK_TERRAIN_CLASSES) {
+    const textureKey = WORLD_CURRENT_TERRAIN_TEXTURE_KEYS[terrainClass];
+    assert(textureKey, `${terrainClass} mask texture source should be mapped to a current material.`);
+    assert(plan.textureSourceLabels[terrainClass] === textureKey, `${terrainClass} mask texture source should match the current material manifest.`);
+    assert(SEMANTIC_BASE_TILE_PALETTE[terrainClass], `${terrainClass} should still have a semantic compatibility tile ID.`);
     assert(plan.classSamples[terrainClass] > 0, `Semantic mask terrain plan found no ${terrainClass} samples.`);
   }
   assert(plan.waterBeachBoundarySamples > 0, "Semantic mask terrain plan found no water/beach boundaries.");

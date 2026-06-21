@@ -72,21 +72,13 @@ node tools\art_import\import_character_sprites.mjs
 
 Check `assets_v2/characters/classes/*_normalized.png`, `src/data/characterSprites.ts`, and `docs/debug/sprite-import/*.debug.png` / `*.import-report.md`. The normalized runtime sheets should be transparent 5x2 sheets with identical 704x512 cells; debug previews are the only files with labels, grid boxes, anchor crosses, and baseline lines.
 
-For the active `atlas_v3` overworld atlas, run after changing `D:\Projects\new_artwork\atlas_v3.jpeg` or the importer/classification rules:
+For the active current overworld selected asset set, run after changing `D:\atlas\output\approved_materials`, approved metadata, or placeholder/import rules:
 
 ```powershell
-npm run import:atlas-v3
+python tools\world_assets\import_selected_world_assets.py
 ```
 
-Check `src/assets/world/atlas_v3.png`, `src/assets/world/atlasV3.manifest.json`, `docs/debug/world-atlas-v3/atlas-v3-labeled.png`, and `docs/debug/world-atlas-v3/atlas-v3-import-report.md`. The current atlas classifies all 64 cells as terrain. Do not chroma-key black or treat black pixels as transparency.
-
-For the active `world_objects` overlay atlas, run after changing `D:\Projects\new_artwork\world_objects_atlas.jpeg` or the object classification rules:
-
-```powershell
-npm run import:world-objects
-```
-
-Check `src/assets/world/world_objects.png`, `src/assets/world/worldObjectAtlas.manifest.json`, and `docs/debug/world-objects/world-objects-import-report.md`. The current importer uses ImageMagick resize plus edge flood-fill transparency from the magenta matte. Do not use global magenta removal because the atlas intentionally contains purple portal, crystal, and gem pixels.
+Check `src/assets/world/current/world_asset_manifest.json`, `src/assets/world/current/terrain/*.png`, and the placeholder folders under `src/assets/world/current/overlays`, `pois`, and `routes`. Approved terrain fills must remain 256x256 PNGs and must not include baked roads, rivers, coasts, forests, mountains, or POIs.
 
 For the active `dungeon_atlas` dungeon/city tile atlas, run after changing `D:\Projects\new_artwork\dungeon_atlas.jpeg` or the classification rules:
 
@@ -164,9 +156,9 @@ Expected:
 - Confirm movement stops with the leader's feet/shadow on each tile center, not at the tile's bottom edge.
 - Confirm collision does not jitter or leave the player visually/logically between tiles.
 - Confirm the overworld leader remains readable when standing on a town/location marker.
-- Confirm `atlas_v3` terrain uses the new coast, road, shallow-water, forest, and mountain cells; dark seams can come from actual atlas cell edge pixels and should not be debug grid overlays.
+- Confirm current selected terrain fills render for deep water, shallow water, beach, grassland, sand, and snow/ice; no old atlas art or magenta backgrounds should appear.
 - Confirm water blocks movement while generated roads suppress encounters and harbors enable boat travel.
-- Confirm normal overworld terrain is mask-rendered from semantic fields using atlas texture sources, with crisp coastlines and biome boundaries rather than hard square tile edges or full-map blur.
+- Confirm normal overworld terrain is mask-rendered from semantic fields using current selected material PNGs, with crisp coastlines and biome boundaries rather than hard square tile edges or full-map blur.
 - Confirm normal gameplay roads and rivers are styled procedural overlays with round strokes, muted colors, and no debug dots/nodes/source markers. Roads/rivers are semantic paths, not terrain tiles or atlas stamps.
 - Use F6 semantic debug overlays to inspect edge debug, raw square tiles, semantic masks, distance bands, walkability, overlay policy, mountain candidates/accepted cells, forest soft-terrain cells, island themes, POI clearance, roads, and rivers. `edgeDebug` draws water/beach edges cyan, sand/grass edges magenta, sand/ice edges white, and grass/ice edges blue.
 - At Greenhaven Harbor, confirm Coralreach costs 10 gold, deducts gold, moves the player to Coralreach harbor, and can return by harbor.

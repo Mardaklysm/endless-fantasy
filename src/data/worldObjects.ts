@@ -1,5 +1,3 @@
-import worldObjectManifestJson from "../assets/world/worldObjectAtlas.manifest.json" with { type: "json" };
-
 export type WorldObjectId = string;
 export type WorldObjectCategory =
   | "dungeonEntrance"
@@ -18,63 +16,17 @@ export type WorldObjectCategory =
   | "volcanic"
   | "crystal";
 
-export interface WorldObjectSourceRect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-export interface WorldObjectCell {
-  row: number;
-  col: number;
-  source: WorldObjectSourceRect;
+export interface WorldObjectDefinition {
   id: WorldObjectId;
   category: WorldObjectCategory;
-  tags: string[];
+  tags: readonly string[];
   notes?: string;
 }
 
-interface WorldObjectAtlasManifest {
-  schemaVersion: number;
-  id: "world_objects";
-  sourceImage: string;
-  runtimeImage: string;
-  columns: 8;
-  rows: 8;
-  tileWidth: number;
-  tileHeight: number;
-  image: {
-    width: number;
-    height: number;
-    runtimeFormat: string;
-    sourceFormat: string;
-  };
-  backgroundRemoval: {
-    method: string;
-    tool: string;
-    sampledBackground: string;
-    fuzzPercent: number;
-    reason: string;
-  };
-  cells: WorldObjectCell[];
-  objects: Record<string, WorldObjectCell>;
-}
-
-export const WORLD_OBJECT_ATLAS_MANIFEST = worldObjectManifestJson as WorldObjectAtlasManifest;
-
-export const WORLD_OBJECT_ATLAS = {
-  id: WORLD_OBJECT_ATLAS_MANIFEST.id,
-  textureKey: "world_objects",
-  image: WORLD_OBJECT_ATLAS_MANIFEST.runtimeImage,
-  manifest: "src/assets/world/worldObjectAtlas.manifest.json",
-  sourceImage: WORLD_OBJECT_ATLAS_MANIFEST.sourceImage,
-  columns: WORLD_OBJECT_ATLAS_MANIFEST.columns,
-  rows: WORLD_OBJECT_ATLAS_MANIFEST.rows,
-  tileWidth: WORLD_OBJECT_ATLAS_MANIFEST.tileWidth,
-  tileHeight: WORLD_OBJECT_ATLAS_MANIFEST.tileHeight,
-  sheetWidth: WORLD_OBJECT_ATLAS_MANIFEST.image.width,
-  sheetHeight: WORLD_OBJECT_ATLAS_MANIFEST.image.height
+export const WORLD_OBJECT_RUNTIME_SOURCE = {
+  id: "current_world_individual_sprites",
+  manifest: "src/assets/world/current/world_asset_manifest.json",
+  deprecatedAtlasActive: false
 } as const;
 
 export const WORLD_OBJECT_IDS = {
@@ -144,10 +96,94 @@ export const WORLD_OBJECT_IDS = {
   cursedPurpleCrystalCluster: "cursed_purple_crystal_cluster"
 } as const satisfies Record<string, WorldObjectId>;
 
-export const WORLD_OBJECT_CELLS = WORLD_OBJECT_ATLAS_MANIFEST.cells;
-export const WORLD_OBJECTS = WORLD_OBJECT_ATLAS_MANIFEST.objects;
+const TREASURE_OBJECTS = new Set<WorldObjectId>([
+  WORLD_OBJECT_IDS.closedTreasureChest,
+  WORLD_OBJECT_IDS.openTreasureChest,
+  WORLD_OBJECT_IDS.stoneGuardianCache,
+  WORLD_OBJECT_IDS.supplyCrates,
+  WORLD_OBJECT_IDS.barrelStack,
+  WORLD_OBJECT_IDS.octopusCache,
+  WORLD_OBJECT_IDS.jeweledMagicCache,
+  WORLD_OBJECT_IDS.mossyLockedCache,
+  WORLD_OBJECT_IDS.floatingTreasureBarrel
+]);
+
+const WATER_OBJECTS = new Set<WorldObjectId>([
+  WORLD_OBJECT_IDS.fishingSpot,
+  WORLD_OBJECT_IDS.coralClusterBlue,
+  WORLD_OBJECT_IDS.shipwreckDebris,
+  WORLD_OBJECT_IDS.brokenMast,
+  WORLD_OBJECT_IDS.whirlpoolSwirl
+]);
+
+const NATURE_OBJECTS = new Set<WorldObjectId>([
+  WORLD_OBJECT_IDS.herbBush,
+  WORLD_OBJECT_IDS.broadleafTree,
+  WORLD_OBJECT_IDS.darkPineTree,
+  WORLD_OBJECT_IDS.palmTree,
+  WORLD_OBJECT_IDS.denseJungleBush,
+  WORLD_OBJECT_IDS.thornBramble,
+  WORLD_OBJECT_IDS.fallenLog,
+  WORLD_OBJECT_IDS.giantMushroomCluster,
+  WORLD_OBJECT_IDS.vinesOverStone
+]);
+
+const ROCK_OBJECTS = new Set<WorldObjectId>([
+  WORLD_OBJECT_IDS.grayBoulderPile,
+  WORLD_OBJECT_IDS.rockyHillObject,
+  WORLD_OBJECT_IDS.smallMountainPeak,
+  WORLD_OBJECT_IDS.snowyMountainPeak
+]);
+
+const VOLCANIC_OBJECTS = new Set<WorldObjectId>([
+  WORLD_OBJECT_IDS.volcanoCone,
+  WORLD_OBJECT_IDS.lavaVentRocks,
+  WORLD_OBJECT_IDS.blackAshRockCluster
+]);
+
+export const WORLD_OBJECTS = Object.fromEntries(
+  Object.values(WORLD_OBJECT_IDS).map((id) => [
+    id,
+    {
+      id,
+      category: categoryForObject(id),
+      tags: tagsForObject(id),
+      notes: "Rendered from src/assets/world/current/world_asset_manifest.json; no atlas source rect is active."
+    } satisfies WorldObjectDefinition
+  ])
+) as Record<WorldObjectId, WorldObjectDefinition>;
+
 export const WORLD_OBJECT_ID_SET = new Set(Object.keys(WORLD_OBJECTS));
 
-export function worldObjectById(id: WorldObjectId): WorldObjectCell | undefined {
+export function worldObjectById(id: WorldObjectId): WorldObjectDefinition | undefined {
   return WORLD_OBJECTS[id];
+}
+
+function categoryForObject(id: WorldObjectId): WorldObjectCategory {
+  if (id.includes("cave") || id.includes("entrance") || id.includes("door")) return "dungeonEntrance";
+  if (id.includes("shrine") || id.includes("obelisk") || id.includes("stones") || id.includes("statue")) return "landmark";
+  if (TREASURE_OBJECTS.has(id)) return "treasure";
+  if (id === WORLD_OBJECT_IDS.oreNode) return "resource";
+  if (WATER_OBJECTS.has(id)) return "waterOverlay";
+  if (id.includes("harbor") || id.includes("rowboat") || id.includes("mooring") || id.includes("anchor") || id.includes("dock") || id.includes("net")) return "harbor";
+  if (id.includes("merchant") || id.includes("market")) return "merchant";
+  if (id.includes("monster")) return "encounter";
+  if (id.includes("campfire")) return "camp";
+  if (id.includes("sparkle") || id.includes("smoke")) return "effect";
+  if (NATURE_OBJECTS.has(id)) return "nature";
+  if (ROCK_OBJECTS.has(id)) return "rock";
+  if (VOLCANIC_OBJECTS.has(id)) return "volcanic";
+  if (id.includes("crystal")) return "crystal";
+  return "prop";
+}
+
+function tagsForObject(id: WorldObjectId): string[] {
+  const tags: string[] = [];
+  const category = categoryForObject(id);
+  tags.push(category);
+  if (category === "rock" || category === "volcanic") tags.push("hardBlock");
+  if (category === "nature") tags.push("overlay");
+  if (category === "waterOverlay") tags.push("water");
+  if (id.includes("snowy")) tags.push("snow");
+  return tags;
 }

@@ -1,10 +1,6 @@
 import Phaser from "phaser";
 import { CHARACTER_SPRITES, type CharacterSpriteClass, type CharacterSpriteFrameName } from "./data/characterSprites";
-import atlasV3ImageUrl from "./assets/world/atlas_v3.png";
 import dungeonAtlasImageUrl from "./assets/world/dungeon_atlas.png";
-import pierAtlasImageUrl from "./assets/world/pier_atlas.png";
-import worldObjectsImageUrl from "./assets/world/world_objects.png";
-import atlasV3Manifest from "./assets/world/atlasV3.manifest.json" with { type: "json" };
 import {
   DUNGEON_ATLAS,
   DUNGEON_ATLAS_SOURCE_INSET,
@@ -15,24 +11,26 @@ import {
   type DungeonTileId
 } from "./data/dungeonTiles.ts";
 import {
-  WORLD_OBJECT_ATLAS,
-  WORLD_OBJECTS,
-  worldObjectById,
+  WORLD_CURRENT_ASSET_MANIFEST,
+  WORLD_CURRENT_ASSETS,
+  WORLD_CURRENT_OBJECT_TEXTURE_KEY_BY_ID,
+  WORLD_CURRENT_ROUTE_TEXTURE_KEYS,
+  WORLD_CURRENT_TERRAIN_TEXTURE_KEYS,
+  worldCurrentObjectTextureKey,
+  worldCurrentPoiTextureKeyFor
+} from "./data/worldCurrentAssets.ts";
+import {
   type WorldObjectId
 } from "./data/worldObjects.ts";
 import {
-  ATLAS_V3_SOURCE_INSET,
-  WORLD_ATLAS,
   WORLD_TILES,
-  atlasV3SourceRectWithInset,
   isWorldTileWalkable,
   worldTileEncounterFamily,
   worldTileHasTag,
-  type WorldTileDefinition,
   type WorldTileId
 } from "./data/worldTiles.ts";
 import { generateDungeonFloors } from "./world/dungeonGenerator.ts";
-import { createSemanticMaskTerrainTexture } from "./world/semantic/semanticMaskTerrainRenderer.ts";
+import { createSemanticMaskTerrainTexture, type SemanticMaskTerrainClass, type SemanticMaskTerrainSources } from "./world/semantic/semanticMaskTerrainRenderer.ts";
 import { createSemanticRouteOverlayTexture, type SemanticRouteOverlayMode } from "./world/semantic/semanticRouteRenderer.ts";
 import { SEMANTIC_BIOME, SEMANTIC_WATER } from "./world/semantic/semanticTypes.ts";
 import {
@@ -382,10 +380,7 @@ const TOWN_SERVICES: TownServiceDef[] = [
 ];
 
 const ASSET_PATHS = [
-  ["atlas_v3", "world/atlas_v3.png"],
   ["dungeon_atlas", "world/dungeon_atlas.png"],
-  ["pier_atlas", "world/pier_atlas.png"],
-  ["world_objects", "world/world_objects.png"],
   ["tile_plains", "tiles/world/plains.png"],
   ["tile_forest", "tiles/world/forest.png"],
   ["tile_hills", "tiles/world/hills.png"],
@@ -517,7 +512,7 @@ const ASSET_PATHS = [
   ["title_four_crystals", "title/four_star_relics.png"]
 ] as const;
 
-type AssetKey = (typeof ASSET_PATHS)[number][0];
+type AssetKey = string;
 
 const ASSET_MODULES = import.meta.glob(["../assets/**/*.{png,jpeg,jpg}", "!../assets/characters/arlen_map.png"], {
   eager: true,
@@ -536,6 +531,12 @@ const SRC_ASSET_MODULES = import.meta.glob(
     import: "default"
   }
 ) as Record<string, string>;
+
+const WORLD_CURRENT_ASSET_MODULES = import.meta.glob("./assets/world/current/**/*.png", {
+  eager: true,
+  query: "?url",
+  import: "default"
+}) as Record<string, string>;
 
 const ASSET_V2_MODULES = import.meta.glob(
   [
@@ -590,10 +591,7 @@ const ASSET_V2_PATH_OVERRIDES: Partial<Record<AssetKey, string>> = {
 };
 
 const EXPLICIT_ASSET_URLS: Partial<Record<AssetKey, string>> = {
-  atlas_v3: atlasV3ImageUrl,
-  dungeon_atlas: dungeonAtlasImageUrl,
-  pier_atlas: pierAtlasImageUrl,
-  world_objects: worldObjectsImageUrl
+  dungeon_atlas: dungeonAtlasImageUrl
 };
 
 const ASSET_URLS = Object.fromEntries(
@@ -606,18 +604,6 @@ const ASSET_URLS = Object.fromEntries(
     ];
   })
 ) as Partial<Record<AssetKey, string>>;
-
-const PIER_ATLAS = {
-  textureKey: "pier_atlas",
-  columns: 4,
-  rows: 4,
-  tileWidth: 256,
-  tileHeight: 256,
-  cells: {
-    horizontal: { row: 0, col: 0 },
-    vertical: { row: 0, col: 1 }
-  }
-} as const;
 
 interface DungeonThemeTiles {
   floors: DungeonTileId[];
@@ -1564,7 +1550,7 @@ class CrystalOathScene extends Phaser.Scene {
   private walkAnimElapsed = 0;
   private playerMoving = false;
   private activeStep?: ExploreStep;
-  private worldTilesetValidated = false;
+  private currentWorldAssetsValidated = false;
 
   constructor() {
     super("CrystalOathScene");
@@ -1573,6 +1559,11 @@ class CrystalOathScene extends Phaser.Scene {
   preload() {
     for (const [key, url] of Object.entries(ASSET_URLS) as [AssetKey, string | undefined][]) {
       if (url) this.load.image(key, url);
+    }
+    for (const asset of WORLD_CURRENT_ASSETS) {
+      const url = WORLD_CURRENT_ASSET_MODULES[`./assets/world/current/${asset.filename}`];
+      if (url) this.load.image(asset.textureKey, url);
+      else console.warn(`Missing current world asset module for ${asset.filename}`);
     }
   }
 
@@ -1602,21 +1593,24 @@ class CrystalOathScene extends Phaser.Scene {
 
   private logActiveWorldTileset() {
     if (!import.meta.env.DEV) return;
+    const terrainAssets = WORLD_CURRENT_ASSETS.filter((asset) => asset.assetKind === "terrain fill");
+    const placeholderAssets = WORLD_CURRENT_ASSETS.filter((asset) => asset.placeholder);
     console.info(
       [
-        "Active world tileset: atlas_v3",
+        "Active world art set: current selected asset manifest",
         `Worldgen mode: ${ACTIVE_WORLDGEN_MODE}`,
-        "Grid: 8x8",
-        "Using empty cells: false",
-        "Removed special tileset active: false",
-        "Generated 10x10 atlas active: false",
-        `Atlas v3 source inset: ${ATLAS_V3_SOURCE_INSET}`,
-        "Terrain cache postprocess: disabled",
-        `Image: ${WORLD_ATLAS.image}`,
-        `Manifest: ${WORLD_ATLAS.manifest}`,
-        `Manifest entries: ${Object.keys(atlasV3Manifest.tiles ?? {}).length} non-empty tiles`,
-        `Object overlay atlas: ${WORLD_OBJECT_ATLAS.image}`,
-        `Object overlay entries: ${Object.keys(WORLD_OBJECTS).length}`,
+        `Manifest: ${WORLD_CURRENT_ASSET_MANIFEST.runtimeRoot}/world_asset_manifest.json`,
+        `Approved terrain fills: ${terrainAssets.length}`,
+        `Temporary current-folder placeholders: ${placeholderAssets.length}`,
+        `Deep ocean: ${WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.deepOcean}`,
+        `Shallow water: ${WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.shallowWater}`,
+        `Beach: ${WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.beach}`,
+        `Grassland: ${WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.grassland}`,
+        `Sand: ${WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.sand}`,
+        `Ice/snow: ${WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.ice}`,
+        "Deprecated overworld atlases active: false",
+        "Random base terrain variants active: false",
+        "Roads/rivers/coasts/mountains/forests/POIs remain semantic overlays",
         `Dungeon atlas: ${DUNGEON_ATLAS.image}`,
         `Dungeon atlas source inset: ${DUNGEON_ATLAS_SOURCE_INSET}`,
         `Dungeon atlas entries: ${DUNGEON_TILE_ID_SET.size}`
@@ -4628,6 +4622,9 @@ Statuses: ${statuses}`;
       const filter = key.startsWith("battle_bg_") ? Phaser.Textures.FilterMode.LINEAR : Phaser.Textures.FilterMode.NEAREST;
       this.textures.get(key).setFilter(filter);
     }
+    for (const asset of WORLD_CURRENT_ASSETS) {
+      if (this.textures.exists(asset.textureKey)) this.textures.get(asset.textureKey).setFilter(Phaser.Textures.FilterMode.NEAREST);
+    }
   }
 
   private drawTexture(
@@ -5418,23 +5415,9 @@ Statuses: ${statuses}`;
   private drawWorldTile(terrain: Terrain, sx: number, sy: number, x: number, y: number) {
     const roadVisual = this.roadVisualAt(x, y);
     const tile = WORLD_TILES[roadVisual?.sourceTileId ?? terrain];
-    if (tile && this.hasTexture(WORLD_ATLAS.textureKey)) {
-      const rect = this.worldTileSourceRect(tile);
-      this.drawCroppedTexture(
-        WORLD_ATLAS.textureKey,
-        sx,
-        sy,
-        rect.x,
-        rect.y,
-        rect.width,
-        rect.height,
-        TILE,
-        TILE,
-        LAYER_WORLD_IMAGE,
-        1,
-        undefined,
-        roadVisual?.rotation ?? 0
-      );
+    const textureKey = this.currentTerrainTextureForTile(roadVisual?.sourceTileId ?? terrain);
+    if (textureKey && this.hasTexture(textureKey)) {
+      this.drawTexture(textureKey, sx, sy, TILE, TILE, LAYER_WORLD_IMAGE);
       return;
     }
     if (tile?.biome === "grassland") this.drawWorldPlainsTile(sx, sy, x, y);
@@ -5448,6 +5431,19 @@ Statuses: ${statuses}`;
     this.drawWorldCoastEdges(terrain, sx, sy, x, y);
   }
 
+  private currentTerrainTextureForTile(tileId: WorldTileId | undefined): string | undefined {
+    const tile = tileId ? WORLD_TILES[tileId] : undefined;
+    if (!tile) return undefined;
+    if (tile.biome === "water") return worldTileHasTag(tileId, "deep") ? WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.deepOcean : WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.shallowWater;
+    if (tile.blendGroup === "snow" || tile.blendGroup === "ice") return WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.ice;
+    if (tile.blendGroup === "desert") return tileId === "beach_sand" || tileId === "wet_beach_sand" ? WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.beach : WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.sand;
+    if (tile.blendGroup === "rock") return "world_current_terrain_mountain_scree_ground";
+    if (tile.blendGroup === "lava") return "world_current_terrain_lava_crust";
+    if (tile.blendGroup === "dark") return "world_current_terrain_black_ash_ground";
+    if (tile.id.includes("road") || tile.id.includes("trail")) return "world_current_terrain_packed_dirt_surface";
+    return WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.grassland;
+  }
+
   private roadVisualAt(x: number, y: number): WorldRoadVisual | undefined {
     return this.roadVisualsByKey.get(`${x},${y}`);
   }
@@ -5456,7 +5452,6 @@ Statuses: ${statuses}`;
     if (!this.generatedWorld) return;
     const overlayGraphics = this.worldOverlay;
     const inView = (pos: Vec) => pos.x >= startX && pos.x <= endX && pos.y >= startY && pos.y <= endY;
-    const hasObjectAtlas = this.hasTexture(WORLD_OBJECT_ATLAS.textureKey);
     for (const overlay of this.generatedWorld.objectOverlays) {
       if (!inView(overlay)) continue;
       const displaySize = TILE * overlay.scale;
@@ -5464,7 +5459,8 @@ Statuses: ${statuses}`;
       const sy = overlay.y * TILE - tileCam.y + TILE / 2 - displaySize / 2;
       this.drawWorldObjectCell(overlay.objectId, sx, sy, displaySize, displaySize, 0.92);
     }
-    if (!hasObjectAtlas) {
+    const reefTextureKey = WORLD_CURRENT_OBJECT_TEXTURE_KEY_BY_ID.coral_cluster_blue;
+    if (!reefTextureKey || !this.hasTexture(reefTextureKey)) {
       for (const reef of this.generatedWorld.reefs) {
         if (!inView(reef)) continue;
         const sx = reef.x * TILE - tileCam.x;
@@ -5694,59 +5690,65 @@ Statuses: ${statuses}`;
   }
 
   private drawWorldObjectCell(objectId: WorldObjectId | undefined, sx: number, sy: number, width: number, height: number, alpha = 1): boolean {
-    if (!objectId || !this.hasTexture(WORLD_OBJECT_ATLAS.textureKey)) return false;
-    const object = worldObjectById(objectId);
-    if (!object) return false;
-    this.drawCroppedTexture(
-      WORLD_OBJECT_ATLAS.textureKey,
-      sx,
-      sy,
-      object.source.x,
-      object.source.y,
-      object.source.width,
-      object.source.height,
-      width,
-      height,
-      LAYER_OBJECT_IMAGE,
-      alpha
-    );
+    const textureKey = worldCurrentObjectTextureKey(objectId);
+    if (!textureKey || !this.hasTexture(textureKey)) return false;
+    this.drawTexture(textureKey, sx, sy, width, height, LAYER_OBJECT_IMAGE, alpha);
     return true;
   }
 
   private drawPierDockTile(bridge: { orientation: "horizontal" | "vertical"; material: "wood" | "stone" }, sx: number, sy: number): boolean {
-    if (!this.hasTexture(PIER_ATLAS.textureKey)) return false;
-    const cell = bridge.orientation === "vertical" ? PIER_ATLAS.cells.vertical : PIER_ATLAS.cells.horizontal;
-    this.drawCroppedTexture(
-      PIER_ATLAS.textureKey,
-      sx,
-      sy,
-      cell.col * PIER_ATLAS.tileWidth,
-      cell.row * PIER_ATLAS.tileHeight,
-      PIER_ATLAS.tileWidth,
-      PIER_ATLAS.tileHeight,
-      TILE,
-      TILE,
-      LAYER_OBJECT_IMAGE,
-      1,
-      bridge.material === "stone" ? 0xb9b0a1 : undefined
-    );
+    const textureKey =
+      bridge.material === "stone"
+        ? bridge.orientation === "vertical"
+          ? WORLD_CURRENT_ROUTE_TEXTURE_KEYS.bridgeVertical
+          : WORLD_CURRENT_ROUTE_TEXTURE_KEYS.bridgeHorizontal
+        : bridge.orientation === "vertical"
+          ? WORLD_CURRENT_ROUTE_TEXTURE_KEYS.dockVertical
+          : WORLD_CURRENT_ROUTE_TEXTURE_KEYS.dockHorizontal;
+    if (!textureKey || textureKey === "procedural_styled_stroke" || !this.hasTexture(textureKey)) return false;
+    this.drawTexture(textureKey, sx, sy, TILE, TILE, LAYER_OBJECT_IMAGE);
     return true;
   }
 
   private rebuildWorldTerrainCache() {
     this.worldTerrainCacheSeed = "";
-    if (!this.generatedWorld || !this.world.length || !this.textures.exists(WORLD_ATLAS.textureKey)) return;
-    this.assertWorldTilesetTextureSize();
+    if (!this.generatedWorld || !this.world.length) return;
+    this.assertCurrentWorldAssetTextures();
     createSemanticMaskTerrainTexture(this, this.generatedWorld.semantic, {
       tileSize: TILE,
       textureKey: this.worldTerrainCacheKey,
-      atlasTextureKey: WORLD_ATLAS.textureKey
+      terrainSources: this.currentSemanticTerrainSources(),
+      terrainSourceLabels: WORLD_CURRENT_TERRAIN_TEXTURE_KEYS
     });
     this.textures.get(this.worldTerrainCacheKey).setFilter(Phaser.Textures.FilterMode.NEAREST);
     this.worldTerrainCacheSeed = this.worldSeed;
     if (import.meta.env.DEV) {
-      console.info(`Semantic mask terrain cache rendered from atlas texture sources; raw square tiles remain available through F6 rawTiles.`);
+      console.info(`Semantic mask terrain cache rendered from current selected material PNGs; raw square tiles remain debug-only.`);
     }
+  }
+
+  private currentSemanticTerrainSources(): SemanticMaskTerrainSources {
+    const sources: SemanticMaskTerrainSources = {};
+    for (const terrainClass of Object.keys(WORLD_CURRENT_TERRAIN_TEXTURE_KEYS) as SemanticMaskTerrainClass[]) {
+      const textureKey = WORLD_CURRENT_TERRAIN_TEXTURE_KEYS[terrainClass];
+      if (!this.textures.exists(textureKey)) continue;
+      sources[terrainClass] = this.textures.get(textureKey).getSourceImage() as CanvasImageSource & { width: number; height: number };
+    }
+    return sources;
+  }
+
+  private assertCurrentWorldAssetTextures() {
+    if (this.currentWorldAssetsValidated) return;
+    for (const [terrainClass, textureKey] of Object.entries(WORLD_CURRENT_TERRAIN_TEXTURE_KEYS) as [SemanticMaskTerrainClass, string][]) {
+      if (!this.textures.exists(textureKey)) {
+        throw new Error(`Current world terrain asset for ${terrainClass} is not loaded: ${textureKey}.`);
+      }
+      const source = this.textures.get(textureKey).getSourceImage() as { width: number; height: number };
+      if (source.width !== 256 || source.height !== 256) {
+        throw new Error(`Current world terrain asset ${textureKey} must be 256x256; got ${source.width}x${source.height}.`);
+      }
+    }
+    this.currentWorldAssetsValidated = true;
   }
 
   private rebuildWorldRouteOverlayCache() {
@@ -5764,21 +5766,6 @@ Statuses: ${statuses}`;
     if (import.meta.env.DEV) {
       console.info(`Semantic route overlay cache rendered as styled strokes; F6 roads/rivers remain debug-only diagnostics.`);
     }
-  }
-
-  private drawRotatedWorldTileToCache(
-    ctx: CanvasRenderingContext2D,
-    atlasSource: CanvasImageSource,
-    rect: { x: number; y: number; width: number; height: number },
-    x: number,
-    y: number,
-    rotation: RoadRotation
-  ) {
-    ctx.save();
-    ctx.translate(x + TILE / 2, y + TILE / 2);
-    ctx.rotate((rotation * Math.PI) / 180);
-    ctx.drawImage(atlasSource, rect.x, rect.y, rect.width, rect.height, -TILE / 2, -TILE / 2, TILE, TILE);
-    ctx.restore();
   }
 
   private drawCachedWorldTerrain(tileCam: Vec): boolean {
@@ -5840,38 +5827,6 @@ Statuses: ${statuses}`;
     image.setScrollFactor(0);
     this.images.push(image);
     return true;
-  }
-
-  private worldTileSourceRect(tile: WorldTileDefinition) {
-    this.assertWorldTilesetTextureSize();
-    this.assertWorldTilesetSourceRect(tile.sourceRect, `World tile ${tile.id}`);
-    const rect = atlasV3SourceRectWithInset(tile.sourceRect);
-    this.assertWorldTilesetSourceRect(rect, `World tile ${tile.id} inset source rect`);
-    return rect;
-  }
-
-  private assertWorldTilesetSourceRect(rect: { x: number; y: number; width: number; height: number }, label: string) {
-    if (!Number.isInteger(rect.x) || !Number.isInteger(rect.y) || !Number.isInteger(rect.width) || !Number.isInteger(rect.height)) {
-      throw new Error(`${label} source rect must use exact integers; got ${rect.x},${rect.y},${rect.width},${rect.height}.`);
-    }
-    if (rect.x < 0 || rect.y < 0 || rect.width <= 0 || rect.height <= 0) {
-      throw new Error(`${label} source rect must be positive and in-bounds; got ${rect.x},${rect.y},${rect.width},${rect.height}.`);
-    }
-    if (rect.x + rect.width > WORLD_ATLAS.sheetWidth || rect.y + rect.height > WORLD_ATLAS.sheetHeight) {
-      throw new Error(`${label} source rect ${rect.x},${rect.y},${rect.width},${rect.height} exceeds atlas_v3 ${WORLD_ATLAS.sheetWidth}x${WORLD_ATLAS.sheetHeight}.`);
-    }
-  }
-
-  private assertWorldTilesetTextureSize() {
-    if (this.worldTilesetValidated) return;
-    const source = this.textures.get(WORLD_ATLAS.textureKey).getSourceImage() as { width: number; height: number };
-    if (source.width !== WORLD_ATLAS.sheetWidth || source.height !== WORLD_ATLAS.sheetHeight) {
-      throw new Error(`atlas_v3 manifest size mismatch: image ${source.width}x${source.height}, manifest ${WORLD_ATLAS.sheetWidth}x${WORLD_ATLAS.sheetHeight}.`);
-    }
-    if (source.width !== WORLD_ATLAS.columns * WORLD_ATLAS.tileWidth || source.height !== WORLD_ATLAS.rows * WORLD_ATLAS.tileHeight) {
-      throw new Error(`atlas_v3 grid mismatch: image ${source.width}x${source.height}, grid ${WORLD_ATLAS.columns}x${WORLD_ATLAS.rows} at ${WORLD_ATLAS.tileWidth}x${WORLD_ATLAS.tileHeight}.`);
-    }
-    this.worldTilesetValidated = true;
   }
 
   private worldTerrainAt(x: number, y: number): Terrain | undefined {
@@ -6095,6 +6050,11 @@ Statuses: ${statuses}`;
     const cx = sx + size / 2;
     const bottom = sy + size - 6;
     this.drawActorShadow(cx, bottom, size * 0.72, Math.max(10, size * 0.16));
+    const currentPoiTexture = worldCurrentPoiTextureKeyFor(loc);
+    if (currentPoiTexture && this.hasTexture(currentPoiTexture)) {
+      this.drawTexture(currentPoiTexture, sx, sy - 2, size, size, LAYER_OBJECT_IMAGE);
+      return;
+    }
     if (this.drawWorldObjectCell(loc.objectId, sx, sy - 2, size, size)) return;
     const locationTexture = LOCATION_TEXTURES[loc.id] ?? this.locationTextureForKind(loc);
     if (locationTexture && this.hasTexture(locationTexture)) {

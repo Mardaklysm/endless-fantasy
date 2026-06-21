@@ -88,7 +88,7 @@ Batch 001 is already integrated under root `assets/` with Phaser preload keys in
 - Use image-first fallback rendering.
 - Keep generated placeholders until the replacement path is verified.
 - For class character sheets, use `tools/art_import/import_character_sprites.mjs`; it copies the alpha PNG sources, normalizes 5x2 sheets, writes `src/data/characterSprites.ts`, and produces debug reports.
-- For the transparent overworld object overlay sheet, use `npm run import:world-objects`; it imports `D:\Projects\new_artwork\world_objects_atlas.jpeg`, writes `src/assets/world/world_objects.png`, updates `worldObjectAtlas.manifest.json`, and emits a debug report.
+- For the current overworld selected asset set, use `python tools\world_assets\import_selected_world_assets.py`; it imports approved fills from `D:\atlas\output\approved_materials`, writes `src/assets/world/current/`, updates `world_asset_manifest.json`, and creates explicit placeholders for missing overlay/POI/route roles.
 - For the opaque dungeon/city tile sheet, use `npm run import:dungeon-atlas`; it imports `D:\Projects\new_artwork\dungeon_atlas.jpeg`, writes `src/assets/world/dungeon_atlas.png`, updates `dungeonAtlas.manifest.json`, and emits a debug report.
 - Prefer one family at a time: UI panel pass, icon/menu pass, vehicle pass, effects pass, then polish animation.
 
