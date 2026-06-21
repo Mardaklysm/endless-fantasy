@@ -1,7 +1,7 @@
 import worldAssetManifestJson from "../assets/world/current/world_asset_manifest.json" with { type: "json" };
 import type { SemanticMaskTerrainClass } from "../world/semantic/semanticMaskTerrainRenderer.ts";
 
-export type WorldCurrentAssetKind = "terrain fill" | "overlay sprite" | "POI sprite" | "route/river asset" | "debug-only";
+export type WorldCurrentAssetKind = "terrain fill" | "overlay sprite" | "POI sprite" | "route/river asset" | "world object" | "debug-only";
 
 export interface WorldCurrentAssetRecord {
   id: string;
@@ -11,6 +11,7 @@ export interface WorldCurrentAssetRecord {
   newCanonicalFilename: string;
   filename: string;
   category: string;
+  subcategory?: string;
   semanticRole: string;
   intendedRuntimeUsage: string;
   assetKind: WorldCurrentAssetKind;
@@ -27,6 +28,17 @@ export interface WorldCurrentAssetRecord {
   selectedSourceRow: number | null;
   selectedSourceCol: number | null;
   visualRationale: string;
+  backgroundRemovalMethod?: string;
+  anchorX?: number;
+  anchorY?: number;
+  footprintWidth?: number;
+  footprintHeight?: number;
+  recommendedScale?: number;
+  placementLayer?: string;
+  tags?: string[];
+  source?: string;
+  integrationRole?: string;
+  integrationStatus?: string;
   notes: string;
 }
 
@@ -39,6 +51,10 @@ export interface WorldCurrentAssetManifest {
     approvedMetadata: string;
     approvedTerrainMaterialCount: number;
     selectionStandard: string;
+    approvedObjectsFolder?: string;
+    approvedObjectsMetadata?: string;
+    approvedWorldObjectCount?: number;
+    objectSelectionStandard?: string;
   };
   rendererContract: {
     semanticWorldGenerationIsGameplayTruth: boolean;

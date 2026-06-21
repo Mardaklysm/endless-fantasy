@@ -80,6 +80,14 @@ python tools\world_assets\import_selected_world_assets.py
 
 Check `src/assets/world/current/world_asset_manifest.json`, `src/assets/world/current/terrain/*.png`, and the placeholder folders under `src/assets/world/current/overlays`, `pois`, and `routes`. Approved terrain fills must remain 256x256 PNGs and must not include baked roads, rivers, coasts, forests, mountains, or POIs.
 
+For the active current overworld object set, run after changing `D:\new_items`, `D:\Tools\rembg\bg_input`, approval decisions, or object role mappings:
+
+```powershell
+python tools\world-object-curator\curate_world_objects.py --integrate
+```
+
+Check `D:\new_items\output\world_objects_v2_approved_contactsheet.png`, `world_objects_v2_alpha_preview.png`, `world_objects_v2_fit_preview.png`, and `world_objects_v2_background_method_contactsheet.png`. Runtime copies should exist only under `src/assets/world/current/objects/` and every integrated object must be `qualityFlag: "approved"` in `world_asset_manifest.json`.
+
 For the active `dungeon_atlas` dungeon/city tile atlas, run after changing `D:\Projects\new_artwork\dungeon_atlas.jpeg` or the classification rules:
 
 ```powershell

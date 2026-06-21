@@ -55,6 +55,12 @@ function validateCurrentWorldAssetManifest() {
   assert(WORLD_CURRENT_ASSET_MANIFEST.sourcePack.approvedTerrainMaterialCount === 37, "current world manifest should record 37 approved terrain fills.");
   const terrainAssets = WORLD_CURRENT_ASSETS.filter((asset) => asset.assetKind === "terrain fill");
   assert(terrainAssets.length === 37, `Expected 37 current terrain fill assets, got ${terrainAssets.length}.`);
+  const worldObjectAssets = WORLD_CURRENT_ASSETS.filter((asset) => asset.assetKind === "world object");
+  assert(worldObjectAssets.length > 0, "Expected approved current-folder world object assets.");
+  assert(
+    WORLD_CURRENT_ASSET_MANIFEST.sourcePack.approvedWorldObjectCount === worldObjectAssets.length,
+    `Current manifest approved object count does not match object assets (${WORLD_CURRENT_ASSET_MANIFEST.sourcePack.approvedWorldObjectCount} vs ${worldObjectAssets.length}).`
+  );
   assert(WORLD_CURRENT_ASSETS.some((asset) => asset.placeholder), "Missing explicit current-folder placeholders for absent overlay/POI art.");
   for (const asset of WORLD_CURRENT_ASSETS) {
     assert(WORLD_CURRENT_ASSET_BY_TEXTURE_KEY[asset.textureKey] === asset, `Texture key lookup failed for ${asset.textureKey}.`);
@@ -65,6 +71,20 @@ function validateCurrentWorldAssetManifest() {
       assert(asset.qualityFlag === "approved" && !asset.placeholder, `${asset.id} must be an approved terrain fill, not a placeholder.`);
       assert(asset.dimensions.width === 256 && asset.dimensions.height === 256, `${asset.id} terrain fill must be 256x256.`);
     }
+    if (asset.assetKind === "world object") {
+      assert(asset.qualityFlag === "approved" && !asset.placeholder, `${asset.id} must be an approved world object, not a placeholder.`);
+      assert(asset.source === "world_objects_v2", `${asset.id} should record source world_objects_v2.`);
+      assert(asset.transparencyStatus === "alpha", `${asset.id} world object should be transparent.`);
+      assert(asset.dimensions.width === 256 && asset.dimensions.height === 256, `${asset.id} world object must be normalized to 256x256.`);
+      assert(asset.backgroundRemovalMethod, `${asset.id} should record its background removal method.`);
+    }
+  }
+  const approvedObjectFilenames = new Set(worldObjectAssets.map((asset) => path.basename(asset.filename)));
+  const objectRuntimeFolder = path.join(PROJECT_ROOT, WORLD_CURRENT_ASSET_MANIFEST.runtimeRoot, "objects");
+  const runtimeObjectFiles = fs.existsSync(objectRuntimeFolder) ? fs.readdirSync(objectRuntimeFolder).filter((filename) => filename.endsWith(".png")) : [];
+  assert(runtimeObjectFiles.length === worldObjectAssets.length, `Runtime object folder has ${runtimeObjectFiles.length} PNGs, expected ${worldObjectAssets.length}.`);
+  for (const filename of runtimeObjectFiles) {
+    assert(approvedObjectFilenames.has(filename), `Runtime object folder contains unapproved object file ${filename}.`);
   }
   for (const terrainClass of SEMANTIC_MASK_TERRAIN_CLASSES) {
     const textureKey = WORLD_CURRENT_TERRAIN_TEXTURE_KEYS[terrainClass];
@@ -72,9 +92,23 @@ function validateCurrentWorldAssetManifest() {
     assert(asset, `${terrainClass} is not mapped to a current world asset.`);
     assert(asset.assetKind === "terrain fill" && asset.qualityFlag === "approved", `${terrainClass} must map to an approved terrain fill.`);
   }
-  for (const objectId of ["small_mountain_peak", "snowy_mountain_peak", "broadleaf_tree", "dark_pine_tree", "dense_jungle_bush", "harbor_signpost"]) {
+  for (const objectId of [
+    "small_mountain_peak",
+    "snowy_mountain_peak",
+    "broadleaf_tree",
+    "dark_pine_tree",
+    "dense_jungle_bush",
+    "harbor_signpost",
+    "supply_crates",
+    "barrel_stack",
+    "thorn_bramble"
+  ]) {
     const textureKey = WORLD_CURRENT_OBJECT_TEXTURE_KEY_BY_ID[objectId];
-    assert(textureKey && WORLD_CURRENT_ASSET_BY_TEXTURE_KEY[textureKey], `Object ${objectId} lacks a current texture mapping.`);
+    const asset = textureKey ? WORLD_CURRENT_ASSET_BY_TEXTURE_KEY[textureKey] : undefined;
+    assert(asset, `Object ${objectId} lacks a current texture mapping.`);
+    if (objectId !== "harbor_signpost") {
+      assert(asset.assetKind === "world object" && asset.qualityFlag === "approved", `Object ${objectId} should map to an approved world object.`);
+    }
   }
   for (const poiKind of ["town", "harbor", "cave", "shrine", "ruins", "tower", "gate", "final"]) {
     const textureKey = WORLD_CURRENT_POI_TEXTURE_KEYS[poiKind];
@@ -84,6 +118,10 @@ function validateCurrentWorldAssetManifest() {
     const textureKey = WORLD_CURRENT_ROUTE_TEXTURE_KEYS[routeKey];
     assert(textureKey && WORLD_CURRENT_ASSET_BY_TEXTURE_KEY[textureKey], `Route key ${routeKey} lacks a current texture mapping.`);
   }
+  assert(
+    WORLD_CURRENT_ASSET_BY_TEXTURE_KEY[WORLD_CURRENT_ROUTE_TEXTURE_KEYS.dockHorizontal].assetKind === "world object",
+    "Horizontal dock route stamp should map to the approved object pack."
+  );
 }
 
 function validateNoDeprecatedRuntimeAtlasReferences() {

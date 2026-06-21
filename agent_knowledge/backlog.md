@@ -12,7 +12,7 @@ This backlog is practical project memory, not a full design document. Keep it sh
 - Add vehicle rendering for boat/skyship on the overworld after deciding whether they replace or accompany Arlen.
 - Add simple effect rendering only after battle timing can show short animations without slowing commands.
 - Add v2-quality art for later-region normal enemies not covered by the first twelve common roster crops.
-- Archipelago generation now uses selected current terrain fills plus explicit current-folder placeholders for generated dungeons, landmarks, harbors, reefs, wrecks, barrels, whirlpools, forests, mountains, docks, and bridges. Sea route dots remain lightweight generated overlays.
+- Archipelago generation now uses selected current terrain fills plus approved current-folder object sprites for many generated dungeons, landmarks, harbors, resources, forests, mountains, props, and horizontal docks. Explicit placeholders remain for weak/missing roles such as shipwreck debris, vertical docks, stone bridges, true snowy pine clusters, and a dedicated Starfall Gate sprite. Sea route dots remain lightweight generated overlays.
 - Overworld terrain selection now uses dominant base tiles with lower-frequency patches and avoids random fixed-direction coast stamps. Future coastline polish should add direction-aware transition placement or new neutral coast tiles, not map-level pixel blending.
 - Semantic overworld generation is now active in runtime through `src/world/semantic/`, with `tools/worldgen-lab/` sharing that core for preview PNGs/reports. Future polish should improve Phaser rendering and assets from the semantic layers rather than returning to giant coastline-transition tilesets.
 - Runtime overworld terrain now uses a crisp semantic mask-rendered background with selected individual material PNGs as texture sources for deep water, shallow water, beach, grass, sand, and ice/snow. Future polish should tune the mask boundary styling or add minimal brush-style overlay assets, not return to square tile terrain plus tiny edge strips, random variant spam, full-map blur, or hundreds of coastline transition tiles.
@@ -31,8 +31,9 @@ This backlog is practical project memory, not a full design document. Keep it sh
 - Normalized fighter/priest/wizard class sheets are wired; keep standalone party map/battle PNGs out of runtime glob loading unless intentionally reintroduced.
 - Dungeon/city tiles are wired through the active `src/assets/world/dungeon_atlas.png` sheet; individual dungeon PNGs remain fallback only.
 - Dungeon/city atlas rendering now uses weighted base/accent selection; future dungeon polish should focus on room dressing and clearer wall/floor transition art rather than adding more evenly random tile variants.
-- Before replacing current overworld placeholders, iterate in `npm run worldgen:lab` and define final fill/brush/object assets from `worldgen_asset_requirements.md`.
+- Before replacing the remaining current overworld placeholders, iterate in `npm run worldgen:lab` and define final fill/brush/object assets from `worldgen_asset_requirements.md`. Do not promote rejected or needs-manual-cleanup object candidates into runtime.
 - Review and regenerate missing entries from `D:\atlas\output\terrain_materials_v2_missing_materials.md` before considering the external terrain material pack complete. Do not promote rejected/debug crops into runtime assets; only approved `approved_materials/*.png` should be candidates for future renderer experiments.
+- Review `D:\new_items\output\world_objects_v2_missing_or_weak_categories.md` before the next object generation pass; remaining useful targets include shipwreck fragments, vertical dock/bridge stamps, true snowy pine clusters, better harbor-town variants, and a dedicated Starfall Gate object.
 
 ## Gameplay Gaps
 
