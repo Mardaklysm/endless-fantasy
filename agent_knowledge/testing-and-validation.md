@@ -72,13 +72,13 @@ node tools\art_import\import_character_sprites.mjs
 
 Check `assets_v2/characters/classes/*_normalized.png`, `src/data/characterSprites.ts`, and `docs/debug/sprite-import/*.debug.png` / `*.import-report.md`. The normalized runtime sheets should be transparent 5x2 sheets with identical 704x512 cells; debug previews are the only files with labels, grid boxes, anchor crosses, and baseline lines.
 
-For the active current overworld selected asset set, run after changing `D:\atlas\output\approved_materials`, approved metadata, or placeholder/import rules:
+For the active current overworld selected terrain fills, do not use the legacy terrain-only importer because it is disabled and does not represent the full current object set:
 
 ```powershell
 python tools\world_assets\import_selected_world_assets.py
 ```
 
-Check `src/assets/world/current/world_asset_manifest.json`, `src/assets/world/current/terrain/*.png`, and the placeholder folders under `src/assets/world/current/overlays`, `pois`, and `routes`. Approved terrain fills must remain 256x256 PNGs and must not include baked roads, rivers, coasts, forests, mountains, or POIs.
+If terrain fills need a future refresh, create a new safe import path or update the manifest intentionally, then verify `src/assets/world/current/world_asset_manifest.json` and `src/assets/world/current/terrain/*.png`. Do not restore generic overlay/POI/route placeholder PNGs. Approved terrain fills must remain 256x256 PNGs and must not include baked roads, rivers, coasts, forests, mountains, or POIs.
 
 For the active current overworld object set, run after changing `D:\new_items`, `D:\Tools\rembg\bg_input`, approval decisions, or object role mappings:
 

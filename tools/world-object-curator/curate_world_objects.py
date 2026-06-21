@@ -1118,32 +1118,6 @@ DEFAULT_APPROVALS: list[dict[str, Any]] = [
         "object:barrel_stack",
     ),
     approval(
-        "rope_fence_01",
-        RAW_RESOURCE_WHITE_SOURCE,
-        7,
-        6,
-        "travel_infrastructure",
-        "rope_fence",
-        "infrastructure",
-        "available rope fence or boundary prop",
-        "Rope fence is a clean infrastructure object for future route or POI dressing.",
-        ["fence", "rope", "available"],
-        "rope_fence",
-    ),
-    approval(
-        "broken_fence_01",
-        RAW_RESOURCE_WHITE_SOURCE,
-        7,
-        7,
-        "travel_infrastructure",
-        "broken_fence",
-        "infrastructure",
-        "available broken fence prop",
-        "Broken fence is a useful damaged-infrastructure detail and cleans acceptably from the raw source.",
-        ["fence", "broken", "available"],
-        "broken_fence",
-    ),
-    approval(
         "traveler_backpack_01",
         RAW_RESOURCE_WHITE_SOURCE,
         7,
@@ -1278,7 +1252,7 @@ OBJECT_MAPPINGS = {
 }
 
 FALLBACK_OBJECT_MAPPINGS = {
-    "fallen_log": "world_current_overlay_dense_forest_cluster",
+    "fallen_log": "world_current_object_dead_tree_cluster_01",
 }
 
 

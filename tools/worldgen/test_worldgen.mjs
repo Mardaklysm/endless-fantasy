@@ -61,7 +61,10 @@ function validateCurrentWorldAssetManifest() {
     WORLD_CURRENT_ASSET_MANIFEST.sourcePack.approvedWorldObjectCount === worldObjectAssets.length,
     `Current manifest approved object count does not match object assets (${WORLD_CURRENT_ASSET_MANIFEST.sourcePack.approvedWorldObjectCount} vs ${worldObjectAssets.length}).`
   );
-  assert(WORLD_CURRENT_ASSETS.some((asset) => asset.placeholder), "Missing explicit current-folder placeholders for absent overlay/POI art.");
+  assert(
+    WORLD_CURRENT_ASSET_MANIFEST.missingRuntimeRoles.length > 0,
+    "Current world manifest should document roles that still rely on existing-object or procedural fallbacks."
+  );
   for (const asset of WORLD_CURRENT_ASSETS) {
     assert(WORLD_CURRENT_ASSET_BY_TEXTURE_KEY[asset.textureKey] === asset, `Texture key lookup failed for ${asset.textureKey}.`);
     assert(!asset.magentaKeyRemovalNeeded, `${asset.id} should not need runtime magenta removal.`);
