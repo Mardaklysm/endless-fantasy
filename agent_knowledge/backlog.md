@@ -16,8 +16,8 @@ This backlog is practical project memory, not a full design document. Keep it sh
 - Overworld terrain selection now uses dominant base tiles with lower-frequency patches and avoids random fixed-direction coast stamps. Future coastline polish should add direction-aware transition placement or new neutral coast tiles, not map-level pixel blending.
 - Semantic overworld generation is now active in runtime through `src/world/semantic/`, with `tools/worldgen-lab/` sharing that core for preview PNGs/reports. Future polish should improve Phaser rendering and assets from the semantic layers rather than returning to giant coastline-transition tilesets.
 - Runtime overworld terrain now uses a crisp semantic mask-rendered background with `atlas_v3` terrain crops as texture sources for deep water, shallow water, beach, grass, sand, and ice/snow. Future polish should tune the mask boundary styling or add minimal brush-style overlay assets, not return to square tile terrain plus tiny edge strips, random variant spam, full-map blur, or hundreds of coastline transition tiles.
-- Road and river semantic graph strokes are hidden from normal gameplay until proper route/river art exists; inspect them through F6 debug modes.
-- Semantic overworld collision and overlay rules now separate visual-only, soft-terrain, hard-block, and POI interaction policies. Forests are passable soft terrain for now, while mountains are hard blockers and use theme-aware caps/snow rules. Future polish should tune encounter effects for soft terrain rather than making forests collision walls again.
+- Road and river semantic paths now render in normal gameplay through styled procedural stroke overlays; inspect graph nodes/source/mouth diagnostics through F6 debug modes. Future route polish should tune the stroke brush, add small bridge stamps, or smooth path curves rather than creating giant road/river atlases.
+- Semantic overworld collision and overlay rules now separate visual-only, soft-terrain, hard-block, and POI interaction policies. Forests are passable soft terrain for now, while mountain ranges are hard blockers and use theme-aware caps/snow rules. Future polish should tune encounter effects for soft terrain rather than making forests collision walls again.
 - Consider dynamic loading/code splitting for large JPEG battle backgrounds and large normalized class sheets if bundle size becomes painful.
 
 ## Asset Manifest Follow-Up
@@ -26,7 +26,7 @@ This backlog is practical project memory, not a full design document. Keep it sh
 - Verify future batches match filename, size, and transparency guidance before wiring.
 - `chest_open.png` is wired for opened chest state; keep testing it during dungeon pass-throughs.
 - `tile_water_b` and `tile_deep_water_b` are loaded but not animated yet.
-- `tile_bridge` exists in `assets_v2`, but current harbor route/dock visuals use the active `src/assets/world/pier_atlas.png` sheet with generated Graphics fallback.
+- `tile_bridge` exists in `assets_v2`, but current harbor route/dock visuals use the active `src/assets/world/pier_atlas.png` sheet with generated Graphics fallback. Road-river bridge candidates are semantic records for now; add separate overlay bridge stamps later if the styled road-over-river treatment is not enough.
 - Reference-only UI window crops in `assets_v2/ui` are intentionally not loaded at runtime because they contain sample text.
 - Normalized fighter/priest/wizard class sheets are wired; keep standalone party map/battle PNGs out of runtime glob loading unless intentionally reintroduced.
 - Dungeon/city tiles are wired through the active `src/assets/world/dungeon_atlas.png` sheet; individual dungeon PNGs remain fallback only.

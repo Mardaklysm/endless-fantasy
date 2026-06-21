@@ -120,9 +120,9 @@ export function renderWorldPreview(world, scale = 6) {
   renderCoastOutline(image, world, scale);
   renderLakes(image, world, scale);
   renderRivers(image, world, scale);
+  renderRoads(image, world, scale);
   renderForests(image, world, scale);
   renderMountains(image, world, scale);
-  renderRoads(image, world, scale);
   renderPois(image, world, scale);
   return image;
 }

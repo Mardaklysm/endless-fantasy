@@ -63,6 +63,7 @@ function validatePoi(world: SemanticWorld, poi: SemanticPoi, errors: string[]) {
 function validateMountainRules(world: SemanticWorld, errors: string[], warnings: string[]) {
   for (const island of world.islands) {
     const islandMountains = world.mountains.filter((mountain) => mountain.islandId === island.id);
+    const islandRanges = world.mountainRanges.filter((range) => range.islandId === island.id);
     if (islandMountains.length > island.overlayRules.mountainCap) {
       errors.push(`${island.id} has ${islandMountains.length} mountain overlays, above cap ${island.overlayRules.mountainCap}.`);
     }
@@ -75,6 +76,14 @@ function validateMountainRules(world: SemanticWorld, errors: string[], warnings:
       if (world.layers.biome[i] !== SEMANTIC_BIOME.ICE) errors.push(`Snow mountain on ${island.id} at ${mountain.x},${mountain.y} is not on ice/snow terrain.`);
     }
     if (island.id === "highspire" && islandMountains.length < 3) warnings.push("Highspire has fewer than 3 mountain overlays.");
+    for (const range of islandRanges) {
+      if (range.cells.length < 2 && !range.smallOutcrop) errors.push(`${range.id} has ${range.cells.length} mountain cell but is not marked as a small outcrop.`);
+      if (!island.overlayRules.allowSnowMountains && range.kind === "snow_mountain") errors.push(`${range.id} is snowy but ${island.id} does not allow snow mountains.`);
+      for (const cell of range.collisionCells) {
+        const i = index(world.width, cell.x, cell.y);
+        if (world.layers.mountainMap[i] !== 1) errors.push(`${range.id} collision cell ${cell.x},${cell.y} is missing from the mountain collision map.`);
+      }
+    }
   }
 }
 

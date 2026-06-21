@@ -42,8 +42,10 @@ export function serializeWorld(world) {
     poiList: world.poiList,
     harbors: world.harbors,
     mountains: world.mountains,
+    mountainRanges: world.mountainRanges,
     lakes: world.lakes.map((lake) => ({ x: lake.x, y: lake.y, radius: lake.radius })),
     rivers: world.rivers.map((river) => ({ id: river.id, islandId: river.islandId, source: river.source, mouth: river.mouth, length: river.path.length })),
+    bridgeCandidates: world.bridgeCandidates,
     roadGraph: {
       edges: world.roadGraph.edges.map((edge) => ({ from: edge.from, to: edge.to, connected: edge.connected, length: edge.length }))
     },

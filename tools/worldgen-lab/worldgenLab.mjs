@@ -46,6 +46,7 @@ async function main() {
   console.log(`Harbors: ${world.harbors.length}`);
   console.log(`Rivers: ${world.rivers.length}`);
   console.log(`Mountains: ${world.mountains.length}`);
+  console.log(`Mountain ranges: ${world.mountainRanges.length}`);
   console.log(`Validation: ${world.validation.ok ? "ok" : "errors"}`);
   for (const warning of world.validation.warnings) console.log(`Warning: ${warning}`);
   for (const error of world.validation.errors) console.log(`Error: ${error}`);
@@ -141,6 +142,7 @@ The generated world contains:
 - Sand/desert cells: ${world.stats.sandCells}
 - Ice/snow cells: ${world.stats.iceCells}
 - Mountain overlays: ${world.stats.mountainCells}
+- Mountain ranges: ${world.mountainRanges.length}
 - Forest overlay cells: ${world.stats.forestCells}
 - River cells: ${world.stats.riverCells}
 - Road cells: ${world.stats.roadCells}
@@ -161,6 +163,7 @@ The lab stores a logical world model separately from its rendered preview. The s
 - moisture, temperature, and coldness fields
 - ridge/mountain field
 - mountain overlay map
+- mountain range records
 - river overlay map
 - forest overlay map
 - road overlay map and road graph
@@ -210,11 +213,11 @@ Biome assignment uses elevation, moisture, coldness, distance from coast, island
 
 ## E. Elevation And Mountains
 
-Elevation is separate from biome. It combines inland distance, base island height, ridge field, and noise. Mountains are symbolic overlay objects placed on high ridge/elevation cells, not base terrain tiles. Snow mountains are chosen when elevation plus coldness is high.
+Elevation is separate from biome. It combines inland distance, base island height, ridge field, and noise. Mountains are symbolic overlay objects selected from grouped ridge/elevation components, so accepted peaks form ranges/clusters instead of isolated random icons. Snow mountains are chosen when elevation plus coldness is high. Mountain collision uses accepted range collision cells only, not surrounding visual pixels.
 
 ## F. Rivers And Lakes
 
-River sources are chosen from high-elevation or cold/ridge areas. Rivers greedily flow toward lower elevation and coast/lakes with seeded tie-breaking. Loops are discarded. Surviving rivers are thin blue overlays, not terrain transition tiles.
+River sources are chosen from high-elevation or cold/ridge areas. Rivers greedily flow toward lower elevation and coast/lakes with seeded tie-breaking. Loops are discarded. Surviving rivers are semantic paths rendered as styled blue stroke overlays, not terrain transition tiles or atlas stamps.
 
 Lakes are optional overlay masks in moist inland basins.
 
@@ -233,7 +236,7 @@ POIs are placed first. Roads are then generated from a graph between settlements
 - mountains: very high
 - water/lakes: blocked
 
-Roads are thin overlays. They do not force terrain tiles or rewrite base terrain.
+Roads are semantic paths rendered as styled warm dirt stroke overlays. They do not force terrain tiles, do not rewrite base terrain, and do not require a giant road atlas.
 
 ## I. POI Placement
 
@@ -258,12 +261,12 @@ The prototype renderer draws in layers:
 4. beach/coast band
 5. biome fills
 6. lakes/rivers
-7. forest overlays
-8. mountain overlays
-9. roads/bridges
+7. styled roads/bridges
+8. forest overlays
+9. mountain range overlays
 10. towns/POIs/ports
 
-The current art is deliberately placeholder/procedural: flat colors, light texture noise, simple symbolic mountains/forests, and line overlays. The algorithm and semantic separation are the point.
+The current lab art is deliberately procedural: flat colors, light texture noise, simple symbolic mountains/forests, and styled route strokes. The algorithm and semantic separation are the point.
 
 ## K. Validation
 
@@ -300,7 +303,7 @@ Recommended v1 approach:
 - semantic archipelago masks and fields
 - minimal terrain fills and brush-like edges
 - object overlays for mountains, forests, towns, ports, and dungeons
-- road and river overlays
+- styled road and river overlays
 - validation against logical world rules before visual polish
 
 ## Known Prototype Limitations
@@ -309,7 +312,7 @@ Recommended v1 approach:
 - Rivers are greedy downhill paths; future versions should improve basin selection and merging.
 - Mountain and forest art is procedural placeholder only.
 - Biome smoothing is simple and should eventually use connected-region cleanup.
-- This lab is not wired into Phaser runtime and should remain isolated until the design is accepted.
+- This lab preview remains isolated from Phaser-specific rendering even though it shares the runtime-safe semantic generator core.
 `;
 }
 

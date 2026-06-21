@@ -33,6 +33,7 @@ import {
 } from "./data/worldTiles.ts";
 import { generateDungeonFloors } from "./world/dungeonGenerator.ts";
 import { createSemanticMaskTerrainTexture } from "./world/semantic/semanticMaskTerrainRenderer.ts";
+import { createSemanticRouteOverlayTexture, type SemanticRouteOverlayMode } from "./world/semantic/semanticRouteRenderer.ts";
 import { SEMANTIC_BIOME, SEMANTIC_WATER } from "./world/semantic/semanticTypes.ts";
 import {
   ACTIVE_WORLDGEN_MODE,
@@ -880,10 +881,6 @@ const LAYER_BATTLE_IMAGE = 4;
 const LAYER_UI_GRAPHICS = 10;
 const LAYER_UI_IMAGE = 12;
 const LAYER_TEXT = 20;
-const ROAD_N = 1;
-const ROAD_E = 2;
-const ROAD_S = 4;
-const ROAD_W = 8;
 
 const ITEMS: Record<string, ItemDef> = {
   potion: {
@@ -1509,6 +1506,10 @@ class CrystalOathScene extends Phaser.Scene {
   private world: Terrain[][] = [];
   private worldTerrainCacheKey = "world_terrain_cache";
   private worldTerrainCacheSeed = "";
+  private worldRouteOverlayCacheKey = "world_route_overlay_cache";
+  private worldRouteOverlayCacheSeed = "";
+  private routeOverlayMode: SemanticRouteOverlayMode = "styled";
+  private riverOverlayMode: SemanticRouteOverlayMode = "styled";
   private party: CharacterState[] = [];
   private inventory: Record<string, number> = {};
   private gearBag: Record<string, number> = {};
@@ -1843,6 +1844,7 @@ class CrystalOathScene extends Phaser.Scene {
     this.world = this.generatedWorld.tiles;
     this.roadVisualsByKey = new Map(this.generatedWorld.roadVisuals.map((visual) => [`${visual.x},${visual.y}`, visual]));
     this.rebuildWorldTerrainCache();
+    this.rebuildWorldRouteOverlayCache();
     console.info(`Crystal Oath world seed: ${this.worldSeed}`);
   }
 
@@ -4851,6 +4853,7 @@ Statuses: ${statuses}`;
         }
       }
     }
+    this.drawCachedWorldRouteOverlay(tileCam);
     this.drawWorldOverlays(startX, endX, startY, endY, tileCam);
     this.drawSemanticDebugOverlay(startX, endX, startY, endY, tileCam);
     for (const loc of this.locations()) {
@@ -5482,32 +5485,6 @@ Statuses: ${statuses}`;
     }
   }
 
-  private drawWorldRoadOverlays(startX: number, endX: number, startY: number, endY: number, tileCam: Vec, overlayGraphics: Phaser.GameObjects.Graphics) {
-    const visibleRoads = this.generatedWorld?.roadVisuals.filter((road) => road.x >= startX && road.x <= endX && road.y >= startY && road.y <= endY) ?? [];
-    for (const road of visibleRoads) {
-      const cx = road.x * TILE - tileCam.x + TILE / 2;
-      const cy = road.y * TILE - tileCam.y + TILE / 2;
-      const mask = road.mask || road.roadMask || road.endpointMask;
-      overlayGraphics.lineStyle(6, 0x8a6335, 0.72);
-      this.drawRoadMaskLines(overlayGraphics, cx, cy, mask);
-      overlayGraphics.lineStyle(3, 0xc89955, 0.88);
-      this.drawRoadMaskLines(overlayGraphics, cx, cy, mask);
-      overlayGraphics.fillStyle(0xd7ac63, 0.9).fillCircle(cx, cy, 3);
-    }
-  }
-
-  private drawRoadMaskLines(overlayGraphics: Phaser.GameObjects.Graphics, cx: number, cy: number, mask: number) {
-    const length = TILE / 2 + 1;
-    if (!mask) {
-      overlayGraphics.lineBetween(cx - length, cy, cx + length, cy);
-      return;
-    }
-    if (mask & ROAD_N) overlayGraphics.lineBetween(cx, cy, cx, cy - length);
-    if (mask & ROAD_E) overlayGraphics.lineBetween(cx, cy, cx + length, cy);
-    if (mask & ROAD_S) overlayGraphics.lineBetween(cx, cy, cx, cy + length);
-    if (mask & ROAD_W) overlayGraphics.lineBetween(cx, cy, cx - length, cy);
-  }
-
   private drawSemanticDebugOverlay(startX: number, endX: number, startY: number, endY: number, tileCam: Vec) {
     if (!this.generatedWorld || this.semanticDebugOverlay === "off") return;
     const semantic = this.generatedWorld.semantic;
@@ -5638,6 +5615,10 @@ Statuses: ${statuses}`;
           if ((from.x < startX || from.x > endX || from.y < startY || from.y > endY) && (to.x < startX || to.x > endX || to.y < startY || to.y > endY)) continue;
           debugGraphics.lineBetween(from.x * TILE - tileCam.x + TILE / 2, from.y * TILE - tileCam.y + TILE / 2, to.x * TILE - tileCam.x + TILE / 2, to.y * TILE - tileCam.y + TILE / 2);
         }
+        for (const node of [edge.path[0], edge.path[edge.path.length - 1]]) {
+          if (!node || node.x < startX || node.x > endX || node.y < startY || node.y > endY) continue;
+          debugGraphics.fillStyle(0xffee91, 0.92).fillCircle(node.x * TILE - tileCam.x + TILE / 2, node.y * TILE - tileCam.y + TILE / 2, 4);
+        }
       }
     }
     if (this.semanticDebugOverlay === "rivers") {
@@ -5648,6 +5629,12 @@ Statuses: ${statuses}`;
           const to = river.path[i];
           if ((from.x < startX || from.x > endX || from.y < startY || from.y > endY) && (to.x < startX || to.x > endX || to.y < startY || to.y > endY)) continue;
           debugGraphics.lineBetween(from.x * TILE - tileCam.x + TILE / 2, from.y * TILE - tileCam.y + TILE / 2, to.x * TILE - tileCam.x + TILE / 2, to.y * TILE - tileCam.y + TILE / 2);
+        }
+        if (river.source.x >= startX && river.source.x <= endX && river.source.y >= startY && river.source.y <= endY) {
+          debugGraphics.fillStyle(0xc0f9ff, 0.95).fillCircle(river.source.x * TILE - tileCam.x + TILE / 2, river.source.y * TILE - tileCam.y + TILE / 2, 5);
+        }
+        if (river.mouth.x >= startX && river.mouth.x <= endX && river.mouth.y >= startY && river.mouth.y <= endY) {
+          debugGraphics.fillStyle(0x2367ff, 0.95).fillCircle(river.mouth.x * TILE - tileCam.x + TILE / 2, river.mouth.y * TILE - tileCam.y + TILE / 2, 5);
         }
       }
     }
@@ -5762,6 +5749,23 @@ Statuses: ${statuses}`;
     }
   }
 
+  private rebuildWorldRouteOverlayCache() {
+    this.worldRouteOverlayCacheSeed = "";
+    if (!this.generatedWorld || !this.world.length) return;
+    if (this.routeOverlayMode === "hidden" && this.riverOverlayMode === "hidden") return;
+    createSemanticRouteOverlayTexture(this, this.generatedWorld.semantic, {
+      tileSize: TILE,
+      textureKey: this.worldRouteOverlayCacheKey,
+      routeOverlayMode: this.routeOverlayMode,
+      riverOverlayMode: this.riverOverlayMode
+    });
+    this.textures.get(this.worldRouteOverlayCacheKey).setFilter(Phaser.Textures.FilterMode.NEAREST);
+    this.worldRouteOverlayCacheSeed = this.worldSeed;
+    if (import.meta.env.DEV) {
+      console.info(`Semantic route overlay cache rendered as styled strokes; F6 roads/rivers remain debug-only diagnostics.`);
+    }
+  }
+
   private drawRotatedWorldTileToCache(
     ctx: CanvasRenderingContext2D,
     atlasSource: CanvasImageSource,
@@ -5811,6 +5815,30 @@ Statuses: ${statuses}`;
         `expected display=${cropWidth * PIXEL_ART_SCALE}x${cropHeight * PIXEL_ART_SCALE}`
       );
     }
+    return true;
+  }
+
+  private drawCachedWorldRouteOverlay(tileCam: Vec): boolean {
+    if (this.worldRouteOverlayCacheSeed !== this.worldSeed || !this.textures.exists(this.worldRouteOverlayCacheKey)) return false;
+    const mapWidth = (this.world[0]?.length ?? 0) * TILE;
+    const mapHeight = this.world.length * TILE;
+    const cropX = Math.round(Phaser.Math.Clamp(tileCam.x, 0, Math.max(0, mapWidth - WIDTH)));
+    const cropY = Math.round(Phaser.Math.Clamp(tileCam.y, 0, Math.max(0, mapHeight - HEIGHT)));
+    const cropWidth = Math.min(WIDTH, mapWidth - cropX);
+    const cropHeight = Math.min(HEIGHT, mapHeight - cropY);
+    if (cropWidth <= 0 || cropHeight <= 0) return false;
+
+    const viewFrameKey = `${this.worldRouteOverlayCacheKey}_view`;
+    const texture = this.textures.get(this.worldRouteOverlayCacheKey);
+    if (texture.has(viewFrameKey)) texture.remove(viewFrameKey);
+    texture.add(viewFrameKey, 0, cropX, cropY, cropWidth, cropHeight);
+
+    const image = this.add.image(0, 0, this.worldRouteOverlayCacheKey, viewFrameKey);
+    image.setOrigin(0, 0);
+    image.setDisplaySize(cropWidth * PIXEL_ART_SCALE, cropHeight * PIXEL_ART_SCALE);
+    image.setDepth(LAYER_WORLD_IMAGE + 0.35);
+    image.setScrollFactor(0);
+    this.images.push(image);
     return true;
   }
 

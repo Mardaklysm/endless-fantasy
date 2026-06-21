@@ -113,9 +113,20 @@ export interface SemanticIslandRecord {
 export interface SemanticMountain extends SemanticVec {
   kind: "mountain" | "snow_mountain";
   islandId: SemanticIslandId;
+  rangeId: string;
   elevation: number;
   ridge: number;
   score: number;
+}
+
+export interface SemanticMountainRange {
+  id: string;
+  islandId: SemanticIslandId;
+  kind: "mountain" | "snow_mountain";
+  cells: SemanticVec[];
+  collisionCells: SemanticVec[];
+  bounds: { minX: number; minY: number; maxX: number; maxY: number };
+  smallOutcrop?: boolean;
 }
 
 export interface SemanticLake extends SemanticVec {
@@ -146,6 +157,13 @@ export interface SemanticRoadEdge {
   connected: boolean;
   length: number;
   path: SemanticVec[];
+}
+
+export interface SemanticBridgeCandidate extends SemanticVec {
+  id: string;
+  islandId: SemanticIslandId;
+  orientation: "horizontal" | "vertical";
+  kind: "road_river";
 }
 
 export interface SemanticValidationResult {
@@ -199,8 +217,10 @@ export interface SemanticWorld {
   islandIndexToId: Map<number, SemanticIslandId>;
   layers: SemanticWorldLayers;
   mountains: SemanticMountain[];
+  mountainRanges: SemanticMountainRange[];
   lakes: SemanticLake[];
   rivers: SemanticRiver[];
+  bridgeCandidates: SemanticBridgeCandidate[];
   poiList: SemanticPoi[];
   harbors: SemanticPoi[];
   roadGraph: { edges: SemanticRoadEdge[] };

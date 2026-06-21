@@ -106,6 +106,7 @@ export interface GeneratedWorld {
   roadVisuals: WorldRoadVisual[];
   rivers: WorldVec[][];
   bridges: WorldBridge[];
+  routeBridgeCandidates: WorldBridge[];
   objectOverlays: WorldObjectOverlay[];
   shallows: WorldVec[];
   reefs: WorldVec[];
@@ -215,6 +216,12 @@ function adaptSemanticWorld(semantic: SemanticWorld): GeneratedWorld {
   const reefs = pickReefs(semantic, shallows);
   const objectOverlays = buildObjectOverlays(semantic, reefs);
   const bridges = buildDockTiles(semantic, pois, tiles);
+  const routeBridgeCandidates: WorldBridge[] = semantic.bridgeCandidates.map((bridge) => ({
+    x: bridge.x,
+    y: bridge.y,
+    orientation: bridge.orientation,
+    material: bridge.islandId === "highspire" || bridge.islandId === "frostmere" ? "stone" : "wood"
+  }));
   const seaRoutes = buildSeaRoutes(pois);
   const entryTriggers = pois.map((poi) => ({ poiId: poi.id, x: poi.x, y: poi.y }));
   const islands = semantic.islands.map((island) => adaptIsland(semantic, tiles, pois, island.id as IslandId));
@@ -233,6 +240,7 @@ function adaptSemanticWorld(semantic: SemanticWorld): GeneratedWorld {
     roadVisuals,
     rivers,
     bridges,
+    routeBridgeCandidates,
     objectOverlays,
     shallows,
     reefs,
@@ -489,14 +497,16 @@ function pickReefs(semantic: SemanticWorld, shallows: WorldVec[]): WorldVec[] {
 
 function buildObjectOverlays(semantic: SemanticWorld, reefs: WorldVec[]): WorldObjectOverlay[] {
   const overlays: WorldObjectOverlay[] = [];
-  for (const mountain of semantic.mountains) {
-    overlays.push({
-      id: `mountain-${mountain.x}-${mountain.y}`,
-      x: mountain.x,
-      y: mountain.y,
-      objectId: mountain.kind === "snow_mountain" ? WORLD_OBJECT_IDS.snowyMountainPeak : WORLD_OBJECT_IDS.smallMountainPeak,
-      scale: 1.24,
-      collisionPolicy: "hardBlock"
+  for (const range of [...semantic.mountainRanges].sort((a, b) => a.bounds.maxY - b.bounds.maxY || a.bounds.minX - b.bounds.minX)) {
+    range.cells.forEach((cell, index) => {
+      overlays.push({
+        id: `mountain-${range.id}-${index}`,
+        x: cell.x,
+        y: cell.y,
+        objectId: range.kind === "snow_mountain" ? WORLD_OBJECT_IDS.snowyMountainPeak : WORLD_OBJECT_IDS.smallMountainPeak,
+        scale: range.smallOutcrop ? 1.12 : 1.22 + hashNoise(`${semantic.seed}:mountain-scale:${range.id}`, cell.x, cell.y) * 0.1,
+        collisionPolicy: "hardBlock"
+      });
     });
   }
   for (let y = 0; y < semantic.height; y += 1) {
@@ -564,18 +574,25 @@ function chooseStartPosition(semantic: SemanticWorld, pois: WorldPoi[]): WorldVe
       { x: starterTown.x + 1, y: starterTown.y }
     ];
     const poiKeys = new Set(pois.map((poi) => `${poi.x},${poi.y}`));
-    const valid = candidates.find((candidate) => isSemanticWalkable(semantic, candidate.x, candidate.y) && !poiKeys.has(`${candidate.x},${candidate.y}`));
+    const isValidStart = (candidate: WorldVec) => isSemanticWalkable(semantic, candidate.x, candidate.y) && !poiKeys.has(`${candidate.x},${candidate.y}`);
+    const clear = candidates.find((candidate) => isValidStart(candidate) && !hasNearbySemanticMountain(semantic, candidate.x, candidate.y, 2));
+    if (clear) return clear;
+    const valid = candidates.find(isValidStart);
     if (valid) return valid;
   }
   const starterIsland = semantic.islands.find((island) => island.id === CAMPAIGN_WORLD_PROFILE.startingIslandId);
   if (starterIsland) {
+    let firstWalkable: WorldVec | undefined;
     for (let radius = 0; radius < 14; radius += 1) {
       for (let y = Math.round(starterIsland.center.y) - radius; y <= Math.round(starterIsland.center.y) + radius; y += 1) {
         for (let x = Math.round(starterIsland.center.x) - radius; x <= Math.round(starterIsland.center.x) + radius; x += 1) {
-          if (isSemanticWalkable(semantic, x, y)) return { x, y };
+          if (!isSemanticWalkable(semantic, x, y)) continue;
+          firstWalkable ??= { x, y };
+          if (!hasNearbySemanticMountain(semantic, x, y, 2)) return { x, y };
         }
       }
     }
+    if (firstWalkable) return firstWalkable;
   }
   return { x: 10, y: 22 };
 }
@@ -590,6 +607,7 @@ function buildValidationResult(semantic: SemanticWorld, pois: WorldPoi[]): World
   const warnings = [...semantic.validation.warnings];
   const start = chooseStartPosition(semantic, pois);
   if (!isSemanticWalkable(semantic, start.x, start.y)) errors.push("Start position is not walkable.");
+  if (hasNearbySemanticMountain(semantic, start.x, start.y, 2)) errors.push("Start position is too close to mountain collision.");
   return {
     valid: errors.length === 0,
     errors,
@@ -601,6 +619,16 @@ function buildValidationResult(semantic: SemanticWorld, pois: WorldPoi[]): World
 
 function isSemanticWalkable(semantic: SemanticWorld, x: number, y: number): boolean {
   return inBounds(semantic.width, semantic.height, x, y) && semantic.layers.walkability[y * semantic.width + x] === 1;
+}
+
+function hasNearbySemanticMountain(semantic: SemanticWorld, x: number, y: number, radius: number): boolean {
+  for (let yy = y - radius; yy <= y + radius; yy += 1) {
+    for (let xx = x - radius; xx <= x + radius; xx += 1) {
+      if (!inBounds(semantic.width, semantic.height, xx, yy) || Math.hypot(xx - x, yy - y) > radius) continue;
+      if (semantic.layers.mountainMap[yy * semantic.width + xx]) return true;
+    }
+  }
+  return false;
 }
 
 function pointInPoiFootprint(poi: WorldPoi, x: number, y: number): boolean {

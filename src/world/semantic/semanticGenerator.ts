@@ -11,8 +11,10 @@ import {
   type RequiredPoiSpec,
   type SemanticIslandId,
   type SemanticIslandRecord,
+  type SemanticBridgeCandidate,
   type SemanticLake,
   type SemanticMountain,
+  type SemanticMountainRange,
   type SemanticPoi,
   type SemanticPoiType,
   type SemanticRiver,
@@ -56,6 +58,14 @@ interface ComponentSeed {
   cells: number[];
 }
 
+interface MountainCandidate extends SemanticVec {
+  i: number;
+  score: number;
+  kind: SemanticMountain["kind"];
+  elevation: number;
+  ridge: number;
+}
+
 export function generateSemanticWorld(options: {
   seed: string;
   profile?: WorldProfile;
@@ -78,15 +88,17 @@ export function generateSemanticWorld(options: {
   const biome = classifyBiomes(width, height, landMask, distanceToWater, islandId, islands, elevation, moisture, coldness);
   const mountainMap = new Uint8Array(width * height);
   const mountainCandidateScore = new Float32Array(width * height);
-  let mountains = placeMountains(width, height, seed, landMask, distanceToWater, islandId, islands, biome, elevation, ridge, coldness, mountainCandidateScore, mountainMap);
+  let { mountains, mountainRanges } = placeMountains(width, height, seed, landMask, distanceToWater, islandId, islands, biome, elevation, ridge, coldness, mountainCandidateScore, mountainMap);
   const lakeMap = new Uint8Array(width * height);
   const lakes = placeLakes(width, height, seed, landMask, distanceToWater, elevation, moisture, biome, mountainMap, lakeMap);
   const riverMap = new Uint8Array(width * height);
   const { poiList, harbors } = placePois(width, height, seed, islands, islandId, landMask, waterClass, distanceToWater, biome, elevation, moisture, mountainMap, lakeMap);
-  mountains = applyMountainClearance(width, height, mountains, mountainMap, poiList);
+  ({ mountains, mountainRanges } = placeMountains(width, height, seed, landMask, distanceToWater, islandId, islands, biome, elevation, ridge, coldness, mountainCandidateScore, mountainMap, lakeMap, poiList));
   const rivers = traceRivers(width, height, seed, landMask, waterClass, lakeMap, distanceToWater, islandId, islands, elevation, coldness, ridge, riverMap);
   const roadMap = new Uint8Array(width * height);
   const roadGraph = buildRoadGraph(width, height, islandId, islands, biome, waterClass, mountainMap, lakeMap, poiList, harbors, roadMap);
+  ({ mountains, mountainRanges } = placeMountains(width, height, seed, landMask, distanceToWater, islandId, islands, biome, elevation, ridge, coldness, mountainCandidateScore, mountainMap, combineBlockMaps(lakeMap, riverMap, roadMap), poiList));
+  const bridgeCandidates = detectBridgeCandidates(width, height, islandId, islands, roadMap, riverMap);
   const forestMap = placeForests(width, height, seed, landMask, islandId, islands, biome, moisture, mountainMap, lakeMap, roadMap, poiList);
   const overlayCollisionPolicy = buildOverlayCollisionPolicy(width, height, mountainMap, forestMap, roadMap, riverMap, poiList);
   const walkability = buildWalkability(width, height, landMask, waterClass, lakeMap, mountainMap);
@@ -121,8 +133,10 @@ export function generateSemanticWorld(options: {
     islandIndexToId,
     layers,
     mountains,
+    mountainRanges,
     lakes,
     rivers,
+    bridgeCandidates,
     poiList,
     harbors,
     roadGraph,
@@ -599,10 +613,13 @@ function placeMountains(
   ridge: Float32Array,
   coldness: Float32Array,
   mountainCandidateScore: Float32Array,
-  mountainMap: Uint8Array
-): SemanticMountain[] {
+  mountainMap: Uint8Array,
+  blockedMap?: Uint8Array,
+  poiList?: SemanticPoi[]
+): { mountains: SemanticMountain[]; mountainRanges: SemanticMountainRange[] } {
+  mountainMap.fill(0);
   const islandByOrder = new Map(islands.map((island) => [island.order + 1, island]));
-  const candidatesByIsland = new Map<number, { x: number; y: number; i: number; score: number }[]>();
+  const candidatesByIsland = new Map<number, MountainCandidate[]>();
   forEachCell(width, height, (x, y, i) => {
     const island = islandByOrder.get(islandId[i]);
     if (!landMask[i] || !island || distanceToWater[i] <= 2) return;
@@ -614,6 +631,8 @@ function placeMountains(
       island.mountainBias * 0.22 +
       fbm(`${seed}:semantic-mountain`, x / 5, y / 5, 2) * 0.1;
     mountainCandidateScore[i] = Math.max(0, score);
+    if (blockedMap?.[i]) return;
+    if (poiList?.some((poi) => squaredDistance({ x, y }, poi) < mountainPoiClearanceRadius(poi) ** 2)) return;
     if (score < mountainThreshold(island)) return;
     if (ridge[i] < (island.theme === "mixed_highland" || island.theme === "ice" ? 0.52 : 0.6)) return;
     if (ridgeSupport < (island.major ? 2 : 1)) return;
@@ -621,48 +640,171 @@ function placeMountains(
     if (island.id === "greenhaven" && elevation[i] < 0.58) return;
     if (island.id === "coralreach" && elevation[i] < 0.56) return;
     const islandCandidates = candidatesByIsland.get(island.order + 1) ?? [];
-    islandCandidates.push({ x, y, i, score });
+    islandCandidates.push({
+      x,
+      y,
+      i,
+      score,
+      kind: mountainKindForCell(island, i, biome, elevation, coldness),
+      elevation: round(elevation[i]),
+      ridge: round(ridge[i])
+    });
     candidatesByIsland.set(island.order + 1, islandCandidates);
   });
   const mountains: SemanticMountain[] = [];
+  const mountainRanges: SemanticMountainRange[] = [];
   for (const [islandNumber, candidates] of candidatesByIsland.entries()) {
     const island = islandByOrder.get(islandNumber);
     if (!island) continue;
     const cap = island.overlayRules.mountainCap;
     if (cap <= 0) continue;
-    candidates.sort((a, b) => b.score - a.score);
-    let accepted = 0;
-    for (const candidate of candidates) {
-      if (accepted >= cap) break;
-      const minDistance = island.overlayRules.mountainSpacing;
-      if (mountains.some((mountain) => mountain.islandId === island.id && squaredDistance(candidate, mountain) < minDistance * minDistance)) continue;
-      mountainMap[candidate.i] = 1;
-      mountains.push({
-        x: candidate.x,
-        y: candidate.y,
+    const components = mountainCandidateComponents(width, height, candidates)
+      .map((component) => ({ cells: component, score: mountainComponentScore(island, component) }))
+      .sort((a, b) => b.score - a.score);
+    let acceptedCells = 0;
+    let rangeIndex = 1;
+    for (const component of components) {
+      if (acceptedCells >= cap) break;
+      const remaining = cap - acceptedCells;
+      const selected = selectMountainRangeCells(island, component.cells, remaining);
+      const smallOutcrop = selected.length === 1 && allowSmallMountainOutcrop(island);
+      if (selected.length < 2 && !smallOutcrop) continue;
+      const rangeId = `${island.id}-range-${rangeIndex}`;
+      rangeIndex += 1;
+      const cells = selected.map(({ x, y }) => ({ x, y }));
+      const bounds = boundsForCells(cells);
+      const range: SemanticMountainRange = {
+        id: rangeId,
         islandId: island.id,
-        kind: mountainKindForCell(island, candidate.i, biome, elevation, coldness),
-        elevation: round(elevation[candidate.i]),
-        ridge: round(ridge[candidate.i]),
-        score: round(candidate.score)
-      });
-      accepted += 1;
+        kind: selected[0].kind,
+        cells,
+        collisionCells: cells.map((cell) => ({ ...cell })),
+        bounds,
+        ...(smallOutcrop ? { smallOutcrop: true } : {})
+      };
+      mountainRanges.push(range);
+      for (const candidate of selected) {
+        mountainMap[candidate.i] = 1;
+        mountains.push({
+          x: candidate.x,
+          y: candidate.y,
+          islandId: island.id,
+          rangeId,
+          kind: candidate.kind,
+          elevation: candidate.elevation,
+          ridge: candidate.ridge,
+          score: round(candidate.score)
+        });
+      }
+      acceptedCells += selected.length;
     }
   }
-  return mountains;
+  return { mountains, mountainRanges };
 }
 
-function applyMountainClearance(width: number, height: number, mountains: SemanticMountain[], mountainMap: Uint8Array, poiList: SemanticPoi[]): SemanticMountain[] {
-  mountainMap.fill(0);
-  const kept: SemanticMountain[] = [];
-  for (const mountain of mountains) {
-    const tooCloseToPoi = poiList.some((poi) => squaredDistance(mountain, poi) < mountainPoiClearanceRadius(poi) ** 2);
-    if (tooCloseToPoi) continue;
-    if (!inBounds(width, height, mountain.x, mountain.y)) continue;
-    mountainMap[index(width, mountain.x, mountain.y)] = 1;
-    kept.push(mountain);
+function mountainCandidateComponents(width: number, height: number, candidates: MountainCandidate[]): MountainCandidate[][] {
+  const byKey = new Map(candidates.map((candidate) => [posKey(candidate), candidate]));
+  const seen = new Set<string>();
+  const components: MountainCandidate[][] = [];
+  const ordered = [...candidates].sort((a, b) => b.score - a.score);
+  for (const start of ordered) {
+    const startKey = posKey(start);
+    if (seen.has(startKey)) continue;
+    const queue = [start];
+    const component: MountainCandidate[] = [];
+    seen.add(startKey);
+    for (let head = 0; head < queue.length; head += 1) {
+      const current = queue[head];
+      component.push(current);
+      for (let dy = -2; dy <= 2; dy += 1) {
+        for (let dx = -2; dx <= 2; dx += 1) {
+          if (dx === 0 && dy === 0) continue;
+          if (dx * dx + dy * dy > 5) continue;
+          const nx = current.x + dx;
+          const ny = current.y + dy;
+          if (!inBounds(width, height, nx, ny)) continue;
+          const next = byKey.get(`${nx},${ny}`);
+          if (!next || next.kind !== current.kind) continue;
+          const nextKey = posKey(next);
+          if (seen.has(nextKey)) continue;
+          seen.add(nextKey);
+          queue.push(next);
+        }
+      }
+    }
+    components.push(component);
   }
-  return kept;
+  return components;
+}
+
+function mountainComponentScore(island: SemanticIslandRecord, component: MountainCandidate[]): number {
+  const best = Math.max(...component.map((candidate) => candidate.score));
+  const average = component.reduce((sum, candidate) => sum + candidate.score, 0) / Math.max(1, component.length);
+  const sizeBonus = Math.min(0.16, component.length * 0.012);
+  const snowBonus = component[0]?.kind === "snow_mountain" && (island.theme === "ice" || island.id === "frostmere") ? 0.06 : 0;
+  const highlandBonus = island.id === "highspire" ? 0.04 : 0;
+  return best * 0.68 + average * 0.32 + sizeBonus + snowBonus + highlandBonus;
+}
+
+function selectMountainRangeCells(island: SemanticIslandRecord, candidates: MountainCandidate[], remaining: number): MountainCandidate[] {
+  const limit = Math.min(remaining, maxMountainRangeSize(island), preferredMountainRangeSize(island, candidates.length));
+  if (limit <= 0) return [];
+  const ordered = [...candidates].sort((a, b) => b.score - a.score);
+  let selected = pickMountainCellsWithSpacing(ordered, limit, mountainRangeIconSpacing(island));
+  if (limit >= 2 && selected.length < 2) selected = pickMountainCellsWithSpacing(ordered, limit, 1);
+  return selected;
+}
+
+function pickMountainCellsWithSpacing(candidates: MountainCandidate[], limit: number, spacing: number): MountainCandidate[] {
+  const selected: MountainCandidate[] = [];
+  const minDistanceSquared = spacing * spacing;
+  for (const candidate of candidates) {
+    if (selected.length >= limit) break;
+    if (selected.some((existing) => squaredDistance(existing, candidate) < minDistanceSquared)) continue;
+    selected.push(candidate);
+  }
+  return selected;
+}
+
+function preferredMountainRangeSize(island: SemanticIslandRecord, componentSize: number): number {
+  if (componentSize <= 1) return 1;
+  const base = Math.ceil(Math.sqrt(componentSize));
+  if (island.id === "highspire") return clamp(base + 1, 2, 5);
+  if (island.id === "frostmere") return clamp(base, 2, 4);
+  if (island.id === "coralreach") return clamp(base, 1, 3);
+  if (island.id === "greenhaven") return clamp(base, 1, 2);
+  if (island.role === "cave") return clamp(base, 1, 2);
+  return 1;
+}
+
+function maxMountainRangeSize(island: SemanticIslandRecord): number {
+  if (island.id === "highspire") return 5;
+  if (island.id === "frostmere") return 4;
+  if (island.id === "coralreach") return 3;
+  if (island.id === "greenhaven") return 2;
+  return island.role === "cave" ? 2 : 1;
+}
+
+function mountainRangeIconSpacing(_island: SemanticIslandRecord): number {
+  return 2;
+}
+
+function allowSmallMountainOutcrop(island: SemanticIslandRecord): boolean {
+  return island.id === "greenhaven" || island.id === "coralreach" || (!island.major && (island.role === "cave" || island.role === "resource"));
+}
+
+function boundsForCells(cells: SemanticVec[]): { minX: number; minY: number; maxX: number; maxY: number } {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const cell of cells) {
+    minX = Math.min(minX, cell.x);
+    minY = Math.min(minY, cell.y);
+    maxX = Math.max(maxX, cell.x);
+    maxY = Math.max(maxY, cell.y);
+  }
+  return { minX, minY, maxX, maxY };
 }
 
 function placeLakes(
@@ -951,6 +1093,38 @@ function findRoadPath(
   return [];
 }
 
+function detectBridgeCandidates(
+  width: number,
+  height: number,
+  islandId: Int16Array,
+  islands: SemanticIslandRecord[],
+  roadMap: Uint8Array,
+  riverMap: Uint8Array
+): SemanticBridgeCandidate[] {
+  const islandByOrder = new Map(islands.map((island) => [island.order + 1, island]));
+  const candidates: SemanticBridgeCandidate[] = [];
+  forEachCell(width, height, (x, y, i) => {
+    if (!roadMap[i] || !riverMap[i]) return;
+    const island = islandByOrder.get(islandId[i]);
+    if (!island) return;
+    const horizontal = isRoadLike(width, height, roadMap, x - 1, y) || isRoadLike(width, height, roadMap, x + 1, y);
+    const vertical = isRoadLike(width, height, roadMap, x, y - 1) || isRoadLike(width, height, roadMap, x, y + 1);
+    candidates.push({
+      id: `bridge_${candidates.length + 1}`,
+      islandId: island.id,
+      x,
+      y,
+      orientation: horizontal && !vertical ? "horizontal" : "vertical",
+      kind: "road_river"
+    });
+  });
+  return candidates;
+}
+
+function isRoadLike(width: number, height: number, roadMap: Uint8Array, x: number, y: number): boolean {
+  return inBounds(width, height, x, y) && roadMap[index(width, x, y)] === 1;
+}
+
 function placeForests(
   width: number,
   height: number,
@@ -1117,7 +1291,7 @@ function minorPoisForRole(role: IslandRole, minorIndex: number): RequiredPoiSpec
 function mountainThreshold(island: SemanticIslandRecord): number {
   if (island.id === "greenhaven") return 0.94;
   if (island.id === "coralreach") return 0.9;
-  if (island.id === "frostmere") return 0.74;
+  if (island.id === "frostmere") return 0.7;
   if (island.id === "highspire") return 0.68;
   return island.role === "cave" ? 0.84 : 0.92;
 }
@@ -1268,6 +1442,14 @@ function countValues(array: Uint8Array, value: number): number {
   let count = 0;
   for (const item of array) if (item === value) count += 1;
   return count;
+}
+
+function combineBlockMaps(...maps: Uint8Array[]): Uint8Array {
+  const combined = new Uint8Array(maps[0]?.length ?? 0);
+  for (const map of maps) {
+    for (let i = 0; i < map.length; i += 1) if (map[i]) combined[i] = 1;
+  }
+  return combined;
 }
 
 function forEachCell(width: number, height: number, fn: (x: number, y: number, i: number) => void) {
