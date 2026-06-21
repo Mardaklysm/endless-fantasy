@@ -181,8 +181,13 @@ function renderLakes(image, world, scale) {
 
 function renderRivers(image, world, scale) {
   for (const river of world.rivers) {
-    drawPath(image, river.path, scale, [16, 94, 145, 255], Math.max(1, Math.floor(scale / 2) + 1));
-    drawPath(image, river.path, scale, COLORS.river, Math.max(1, Math.floor(scale / 2)));
+    const bankWidth = Math.max(2, Math.floor(scale / 2) + 3);
+    const shadowWidth = Math.max(2, Math.floor(scale / 2) + 2);
+    const waterWidth = Math.max(1, Math.floor(scale / 2) + 1);
+    drawPath(image, river.path, scale, [30, 76, 77, 160], bankWidth);
+    drawPath(image, river.path, scale, [12, 48, 84, 210], shadowWidth);
+    drawPath(image, river.path, scale, [44, 128, 169, 235], waterWidth);
+    drawPath(image, river.path, scale, [105, 187, 210, 170], Math.max(1, Math.floor(scale / 3)));
   }
 }
 

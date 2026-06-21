@@ -35,12 +35,20 @@ const ROAD_STYLE = {
 } as const;
 
 const RIVER_STYLE = {
-  outlineWidth: 8,
-  innerWidth: 5,
-  highlightWidth: 1.5,
-  outline: "rgba(20, 78, 126, 0.72)",
-  water: "rgba(45, 145, 196, 0.8)",
-  highlight: "rgba(174, 235, 248, 0.58)"
+  bankWidth: 14,
+  shadowWidth: 11,
+  waterWidth: 8,
+  centerWidth: 3,
+  shineWidth: 1.4,
+  bank: "rgba(30, 76, 77, 0.34)",
+  shadow: "rgba(12, 48, 84, 0.54)",
+  water: "rgba(44, 128, 169, 0.88)",
+  center: "rgba(87, 174, 202, 0.58)",
+  shine: "rgba(215, 249, 252, 0.48)",
+  sourcePool: "rgba(151, 223, 218, 0.28)",
+  mouthPool: "rgba(67, 158, 183, 0.34)",
+  darkFleck: "rgba(11, 68, 104, 0.34)",
+  brightFleck: "rgba(185, 237, 242, 0.36)"
 } as const;
 
 export function createSemanticRouteOverlayTexture(scene: Phaser.Scene, world: SemanticWorld, options: SemanticRouteRenderOptions): string {
@@ -98,10 +106,18 @@ function drawStyledRoads(ctx: CanvasRenderingContext2D, world: SemanticWorld, ti
 }
 
 function drawStyledRivers(ctx: CanvasRenderingContext2D, world: SemanticWorld, tileSize: number) {
-  const pointPaths = world.rivers.map((river, index) => jitteredPathPoints(world.seed, `river:${index}`, river.path, tileSize, 1.8));
-  for (const path of pointPaths) drawStrokePoints(ctx, path, RIVER_STYLE.outlineWidth, RIVER_STYLE.outline);
-  for (const path of pointPaths) drawStrokePoints(ctx, path, RIVER_STYLE.innerWidth, RIVER_STYLE.water);
-  for (const path of pointPaths) drawStrokePoints(ctx, path, RIVER_STYLE.highlightWidth, RIVER_STYLE.highlight);
+  const rivers = world.rivers.filter((river) => river.path.length > 1);
+  const pointPaths = rivers.map((river, index) => jitteredPathPoints(world.seed, `river:${index}`, river.path, tileSize, 0.9));
+  for (const river of rivers) {
+    drawRiverPool(ctx, river.source, tileSize, tileSize * 0.24, RIVER_STYLE.sourcePool);
+    drawRiverPool(ctx, river.mouth, tileSize, tileSize * 0.36, RIVER_STYLE.mouthPool);
+  }
+  for (const path of pointPaths) drawCurvedStrokePoints(ctx, path, RIVER_STYLE.bankWidth, RIVER_STYLE.bank);
+  for (const path of pointPaths) drawCurvedStrokePoints(ctx, path, RIVER_STYLE.shadowWidth, RIVER_STYLE.shadow);
+  for (const path of pointPaths) drawCurvedStrokePoints(ctx, path, RIVER_STYLE.waterWidth, RIVER_STYLE.water);
+  drawRiverTexture(ctx, world, tileSize);
+  for (const path of pointPaths) drawCurvedStrokePoints(ctx, path, RIVER_STYLE.centerWidth, RIVER_STYLE.center);
+  for (const path of pointPaths) drawRiverShine(ctx, path, RIVER_STYLE.shineWidth, RIVER_STYLE.shine);
 }
 
 function drawDebugRoads(ctx: CanvasRenderingContext2D, world: SemanticWorld, tileSize: number) {
@@ -140,6 +156,38 @@ function drawStrokePoints(ctx: CanvasRenderingContext2D, points: SemanticVec[], 
   ctx.restore();
 }
 
+function drawCurvedStrokePoints(ctx: CanvasRenderingContext2D, points: SemanticVec[], width: number, color: string) {
+  if (points.length < 2) return;
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = width;
+  ctx.strokeStyle = color;
+  ctx.beginPath();
+  const start = points[0];
+  ctx.moveTo(start.x, start.y);
+  if (points.length === 2) {
+    const end = points[1];
+    ctx.lineTo(end.x, end.y);
+  } else {
+    for (let i = 1; i < points.length - 1; i += 1) {
+      const current = points[i];
+      const next = points[i + 1];
+      ctx.quadraticCurveTo(current.x, current.y, (current.x + next.x) / 2, (current.y + next.y) / 2);
+    }
+    const end = points[points.length - 1];
+    ctx.lineTo(end.x, end.y);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawRiverShine(ctx: CanvasRenderingContext2D, points: SemanticVec[], width: number, color: string) {
+  if (points.length < 4) return;
+  const shinePoints = points.map((point, index) => ({ x: point.x - (index % 2 === 0 ? 1 : 0), y: point.y - 1 }));
+  drawCurvedStrokePoints(ctx, shinePoints.slice(1, Math.max(2, shinePoints.length - 1)), width, color);
+}
+
 function jitteredPathPoints(seed: string, salt: string, path: SemanticVec[], tileSize: number, amplitude: number): SemanticVec[] {
   return path.map((cell, index) => {
     const center = cellCenter(cell, tileSize);
@@ -168,6 +216,37 @@ function drawRoadTexture(ctx: CanvasRenderingContext2D, world: SemanticWorld, ti
       }
     }
   }
+  ctx.restore();
+}
+
+function drawRiverTexture(ctx: CanvasRenderingContext2D, world: SemanticWorld, tileSize: number) {
+  ctx.save();
+  for (let y = 0; y < world.height; y += 1) {
+    for (let x = 0; x < world.width; x += 1) {
+      const i = y * world.width + x;
+      if (!world.layers.riverMap[i]) continue;
+      const fleckCount = 1 + Math.floor(hashNoise(`${world.seed}:river-fleck-count`, x, y) * 2);
+      for (let fleck = 0; fleck < fleckCount; fleck += 1) {
+        const roll = hashNoise(`${world.seed}:river-fleck:${fleck}`, x, y);
+        if (roll < 0.34) continue;
+        const px = x * tileSize + Math.floor(tileSize * (0.24 + hashNoise(`${world.seed}:river-fleck-x:${fleck}`, x, y) * 0.52));
+        const py = y * tileSize + Math.floor(tileSize * (0.24 + hashNoise(`${world.seed}:river-fleck-y:${fleck}`, x, y) * 0.52));
+        const size = roll > 0.86 ? 2 : 1;
+        ctx.fillStyle = roll > 0.62 ? RIVER_STYLE.brightFleck : RIVER_STYLE.darkFleck;
+        ctx.fillRect(px, py, size, 1);
+      }
+    }
+  }
+  ctx.restore();
+}
+
+function drawRiverPool(ctx: CanvasRenderingContext2D, cell: SemanticVec, tileSize: number, radius: number, color: string) {
+  const center = cellCenter(cell, tileSize);
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
+  ctx.fill();
   ctx.restore();
 }
 

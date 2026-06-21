@@ -217,7 +217,7 @@ Elevation is separate from biome. It combines inland distance, base island heigh
 
 ## F. Rivers And Lakes
 
-River sources are chosen from high-elevation or cold/ridge areas. Rivers greedily flow toward lower elevation and coast/lakes with seeded tie-breaking. Loops are discarded. Surviving rivers are semantic paths rendered as styled blue stroke overlays, not terrain transition tiles or atlas stamps.
+River sources are chosen from high-elevation or cold/ridge areas. Rivers greedily flow toward lower elevation and coast/lakes with seeded tie-breaking. Loops are discarded. Surviving rivers are semantic paths rendered as styled banked stroke overlays, not terrain transition tiles or atlas stamps.
 
 Lakes are optional overlay masks in moist inland basins.
 
@@ -330,7 +330,7 @@ This list supports the semantic-mask world generator direction. It avoids asking
 | Grass fill texture | required now | tile/fill | Readable green interior terrain. |
 | Sand/beach fill texture | required now | tile/fill | Used for beaches and desert interiors. |
 | Snow/ice fill texture | required now | tile/fill | Used for cold/high regions. |
-| River water overlay | required now | stroke/brush | Thin blue route overlay; not a full terrain tile set. |
+| River water overlay | required now | stroke/brush | Banked procedural route overlay; not a full terrain tile set. |
 | Lake water overlay | useful soon | brush/stamp | Small lake fills and edge highlights. |
 
 ## 2. Edge / Mask Rendering Assets
@@ -341,7 +341,7 @@ This list supports the semantic-mask world generator direction. It avoids asking
 | Beach edge tint/outline | required now | brush/shader-like overlay | Minimal outline between beach and inland biome. |
 | Shallow-water halo brush | required now | mask/field overlay | Follows distance-to-land field. |
 | Biome boundary softening brush | useful soon | procedural brush | Softens grass/sand/ice boundaries without transition tiles. |
-| River edge highlight | useful soon | stroke brush | Adds readability to thin rivers. |
+| River edge highlight | useful soon | stroke brush | Adds readability to narrow rivers. |
 
 ## 3. Overlay Objects
 

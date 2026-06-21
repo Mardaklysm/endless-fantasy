@@ -16,8 +16,10 @@ import {
   WORLD_CURRENT_OBJECT_TEXTURE_KEY_BY_ID,
   WORLD_CURRENT_ROUTE_TEXTURE_KEYS,
   WORLD_CURRENT_TERRAIN_TEXTURE_KEYS,
+  worldCurrentAssetByTextureKey,
   worldCurrentObjectTextureKey,
-  worldCurrentPoiTextureKeyFor
+  worldCurrentPoiTextureKeyFor,
+  type WorldCurrentAssetRecord
 } from "./data/worldCurrentAssets.ts";
 import {
   type WorldObjectId
@@ -5692,7 +5694,12 @@ Statuses: ${statuses}`;
   private drawWorldObjectCell(objectId: WorldObjectId | undefined, sx: number, sy: number, width: number, height: number, alpha = 1): boolean {
     const textureKey = worldCurrentObjectTextureKey(objectId);
     if (!textureKey || !this.hasTexture(textureKey)) return false;
-    this.drawTexture(textureKey, sx, sy, width, height, LAYER_OBJECT_IMAGE, alpha);
+    const asset = worldCurrentAssetByTextureKey(textureKey);
+    const anchorX = asset?.anchorX ?? 0.5;
+    const anchorY = asset?.anchorY ?? 0.92;
+    const anchoredX = sx + width / 2 - width * anchorX;
+    const anchoredY = sy + height - height * anchorY;
+    this.drawTexture(textureKey, anchoredX, anchoredY, width, height, LAYER_OBJECT_IMAGE, alpha);
     return true;
   }
 
@@ -6044,87 +6051,98 @@ Statuses: ${statuses}`;
   private drawLocationIcon(loc: LocationDef, footprintX: number, footprintY: number) {
     const footprint = this.locationFootprint(loc);
     const footprintSize = footprint * TILE;
-    const size = this.locationVisualSize(loc, footprintSize);
-    const sx = footprintX + footprintSize / 2 - size / 2;
-    const sy = footprintY + footprintSize - size - this.locationVisualLift(loc);
-    const cx = sx + size / 2;
-    const bottom = sy + size - 6;
-    this.drawActorShadow(cx, bottom, size * 0.72, Math.max(10, size * 0.16));
     const currentPoiTexture = worldCurrentPoiTextureKeyFor(loc);
+    const currentPoiAsset = worldCurrentAssetByTextureKey(currentPoiTexture);
+    const size = this.locationVisualSize(loc, footprintSize, currentPoiAsset);
+    const centerX = footprintX + footprintSize / 2;
+    const baselineY = footprintY + footprintSize - this.locationVisualLift(loc);
+    const sx = centerX - size * (currentPoiAsset?.anchorX ?? 0.5);
+    const sy = baselineY - size * (currentPoiAsset?.anchorY ?? 1);
+    const fallbackSx = centerX - size / 2;
+    const fallbackSy = baselineY - size;
+    const cx = centerX;
+    const bottom = baselineY - 6;
+    this.drawActorShadow(cx, bottom, size * 0.72, Math.max(10, size * 0.16));
     if (currentPoiTexture && this.hasTexture(currentPoiTexture)) {
       this.drawTexture(currentPoiTexture, sx, sy - 2, size, size, LAYER_OBJECT_IMAGE);
       return;
     }
-    if (this.drawWorldObjectCell(loc.objectId, sx, sy - 2, size, size)) return;
+    if (this.drawWorldObjectCell(loc.objectId, fallbackSx, fallbackSy - 2, size, size)) return;
     const locationTexture = LOCATION_TEXTURES[loc.id] ?? this.locationTextureForKind(loc);
     if (locationTexture && this.hasTexture(locationTexture)) {
-      this.drawTexture(locationTexture, sx, sy - 2, size, size, LAYER_OBJECT_IMAGE);
+      this.drawTexture(locationTexture, fallbackSx, fallbackSy - 2, size, size, LAYER_OBJECT_IMAGE);
       return;
     }
+    const syGenerated = fallbackSy;
+    const sxGenerated = fallbackSx;
     const u = size / 96;
     if (loc.kind === "harbor") {
-      this.g.fillStyle(0x9a6a3d, 1).fillRect(sx + 18 * u, sy + 54 * u, 60 * u, 12 * u);
-      this.g.fillStyle(0xe8c36b, 1).fillRect(sx + 24 * u, sy + 42 * u, 48 * u, 18 * u);
-      this.g.fillStyle(0x2f8db8, 1).fillTriangle(sx + 34 * u, sy + 42 * u, sx + 50 * u, sy + 18 * u, sx + 66 * u, sy + 42 * u);
-      this.g.fillStyle(0xf7f2d0, 1).fillRect(sx + 47 * u, sy + 20 * u, 5 * u, 38 * u);
+      this.g.fillStyle(0x9a6a3d, 1).fillRect(sxGenerated + 18 * u, syGenerated + 54 * u, 60 * u, 12 * u);
+      this.g.fillStyle(0xe8c36b, 1).fillRect(sxGenerated + 24 * u, syGenerated + 42 * u, 48 * u, 18 * u);
+      this.g.fillStyle(0x2f8db8, 1).fillTriangle(sxGenerated + 34 * u, syGenerated + 42 * u, sxGenerated + 50 * u, syGenerated + 18 * u, sxGenerated + 66 * u, syGenerated + 42 * u);
+      this.g.fillStyle(0xf7f2d0, 1).fillRect(sxGenerated + 47 * u, syGenerated + 20 * u, 5 * u, 38 * u);
       return;
     }
     if (loc.kind === "landmark") {
       const color = loc.landmarkKind === "shrine" ? 0x95e7ff : loc.landmarkKind === "monsterNest" ? 0xd96b55 : 0xffdf78;
-      this.g.fillStyle(0x1b2430, 1).fillRect(sx + 24 * u, sy + 44 * u, 48 * u, 32 * u);
-      this.g.fillStyle(color, 1).fillTriangle(sx + 18 * u, sy + 48 * u, cx, sy + 18 * u, sx + 78 * u, sy + 48 * u);
-      this.g.fillStyle(0x07101d, 1).fillRect(cx - 9 * u, sy + 56 * u, 18 * u, 20 * u);
+      this.g.fillStyle(0x1b2430, 1).fillRect(sxGenerated + 24 * u, syGenerated + 44 * u, 48 * u, 32 * u);
+      this.g.fillStyle(color, 1).fillTriangle(sxGenerated + 18 * u, syGenerated + 48 * u, cx, syGenerated + 18 * u, sxGenerated + 78 * u, syGenerated + 48 * u);
+      this.g.fillStyle(0x07101d, 1).fillRect(cx - 9 * u, syGenerated + 56 * u, 18 * u, 20 * u);
       return;
     }
     if (loc.id === "dawnford" || loc.kind === "town") {
       const roof = loc.id === "brinewick" ? 0x4c9fc7 : loc.id === "sunbarrow" ? 0xf08a2e : 0xd9542e;
-      this.g.fillStyle(0x1a2334, 0.55).fillRect(sx + 18 * u, sy + 54 * u, 60 * u, 24 * u);
-      this.g.fillStyle(0xf2eee0, 1).fillRect(sx + 26 * u, sy + 42 * u, 44 * u, 34 * u);
-      this.g.fillStyle(roof, 1).fillTriangle(sx + 18 * u, sy + 44 * u, cx, sy + 22 * u, sx + 78 * u, sy + 44 * u);
-      this.g.fillStyle(0x283044, 1).fillRect(cx - 8 * u, sy + 57 * u, 16 * u, 20 * u);
-      this.g.fillStyle(0xffefbd, 1).fillRect(sx + 32 * u, sy + 52 * u, 8 * u, 8 * u);
-      this.g.fillRect(sx + 56 * u, sy + 52 * u, 8 * u, 8 * u);
+      this.g.fillStyle(0x1a2334, 0.55).fillRect(sxGenerated + 18 * u, syGenerated + 54 * u, 60 * u, 24 * u);
+      this.g.fillStyle(0xf2eee0, 1).fillRect(sxGenerated + 26 * u, syGenerated + 42 * u, 44 * u, 34 * u);
+      this.g.fillStyle(roof, 1).fillTriangle(sxGenerated + 18 * u, syGenerated + 44 * u, cx, syGenerated + 22 * u, sxGenerated + 78 * u, syGenerated + 44 * u);
+      this.g.fillStyle(0x283044, 1).fillRect(cx - 8 * u, syGenerated + 57 * u, 16 * u, 20 * u);
+      this.g.fillStyle(0xffefbd, 1).fillRect(sxGenerated + 32 * u, syGenerated + 52 * u, 8 * u, 8 * u);
+      this.g.fillRect(sxGenerated + 56 * u, syGenerated + 52 * u, 8 * u, 8 * u);
       return;
     }
     if (loc.kind === "gate") {
-      this.g.fillStyle(0x4b467a, 1).fillRect(sx + 24 * u, sy + 28 * u, 16 * u, 50 * u);
-      this.g.fillRect(sx + 56 * u, sy + 28 * u, 16 * u, 50 * u);
-      this.g.fillStyle(0xffdf76, 1).fillCircle(cx, sy + 26 * u, 12 * u);
-      this.g.lineStyle(5 * u, 0xd5c8ff, 1).lineBetween(sx + 32 * u, sy + 32 * u, sx + 64 * u, sy + 32 * u);
+      this.g.fillStyle(0x4b467a, 1).fillRect(sxGenerated + 24 * u, syGenerated + 28 * u, 16 * u, 50 * u);
+      this.g.fillRect(sxGenerated + 56 * u, syGenerated + 28 * u, 16 * u, 50 * u);
+      this.g.fillStyle(0xffdf76, 1).fillCircle(cx, syGenerated + 26 * u, 12 * u);
+      this.g.lineStyle(5 * u, 0xd5c8ff, 1).lineBetween(sxGenerated + 32 * u, syGenerated + 32 * u, sxGenerated + 64 * u, syGenerated + 32 * u);
       return;
     }
     if (loc.id === "mossCave") {
-      this.g.fillStyle(0x4a5744, 1).fillTriangle(sx + 12 * u, sy + 78 * u, cx, sy + 20 * u, sx + 84 * u, sy + 78 * u);
-      this.g.fillStyle(0x142018, 1).fillRect(cx - 17 * u, sy + 48 * u, 34 * u, 30 * u);
-      this.g.fillStyle(0x4aa44d, 1).fillRect(sx + 22 * u, sy + 64 * u, 14 * u, 10 * u);
+      this.g.fillStyle(0x4a5744, 1).fillTriangle(sxGenerated + 12 * u, syGenerated + 78 * u, cx, syGenerated + 20 * u, sxGenerated + 84 * u, syGenerated + 78 * u);
+      this.g.fillStyle(0x142018, 1).fillRect(cx - 17 * u, syGenerated + 48 * u, 34 * u, 30 * u);
+      this.g.fillStyle(0x4aa44d, 1).fillRect(sxGenerated + 22 * u, syGenerated + 64 * u, 14 * u, 10 * u);
       return;
     }
     if (loc.id === "ashenKeep") {
-      this.g.fillStyle(0x454044, 1).fillRect(sx + 16 * u, sy + 34 * u, 64 * u, 44 * u);
-      this.g.fillStyle(0xdf5a2e, 1).fillRect(sx + 28 * u, sy + 20 * u, 12 * u, 22 * u);
-      this.g.fillRect(sx + 58 * u, sy + 20 * u, 12 * u, 22 * u);
-      this.g.fillStyle(0x111018, 1).fillRect(cx - 10 * u, sy + 56 * u, 20 * u, 22 * u);
+      this.g.fillStyle(0x454044, 1).fillRect(sxGenerated + 16 * u, syGenerated + 34 * u, 64 * u, 44 * u);
+      this.g.fillStyle(0xdf5a2e, 1).fillRect(sxGenerated + 28 * u, syGenerated + 20 * u, 12 * u, 22 * u);
+      this.g.fillRect(sxGenerated + 58 * u, syGenerated + 20 * u, 12 * u, 22 * u);
+      this.g.fillStyle(0x111018, 1).fillRect(cx - 10 * u, syGenerated + 56 * u, 20 * u, 22 * u);
       return;
     }
     if (loc.id === "tideShrine") {
-      this.g.fillStyle(0xdfe8ef, 1).fillRect(sx + 20 * u, sy + 40 * u, 56 * u, 36 * u);
-      this.g.fillStyle(0x4ab3d1, 1).fillTriangle(sx + 14 * u, sy + 42 * u, cx, sy + 18 * u, sx + 82 * u, sy + 42 * u);
-      this.g.fillStyle(0x1a5e80, 1).fillRect(sx + 32 * u, sy + 55 * u, 10 * u, 22 * u);
-      this.g.fillRect(sx + 56 * u, sy + 55 * u, 10 * u, 22 * u);
+      this.g.fillStyle(0xdfe8ef, 1).fillRect(sxGenerated + 20 * u, syGenerated + 40 * u, 56 * u, 36 * u);
+      this.g.fillStyle(0x4ab3d1, 1).fillTriangle(sxGenerated + 14 * u, syGenerated + 42 * u, cx, syGenerated + 18 * u, sxGenerated + 82 * u, syGenerated + 42 * u);
+      this.g.fillStyle(0x1a5e80, 1).fillRect(sxGenerated + 32 * u, syGenerated + 55 * u, 10 * u, 22 * u);
+      this.g.fillRect(sxGenerated + 56 * u, syGenerated + 55 * u, 10 * u, 22 * u);
       return;
     }
     if (loc.id === "skyglassTower") {
-      this.g.fillStyle(0x647081, 1).fillRect(cx - 13 * u, sy + 20 * u, 26 * u, 58 * u);
-      this.g.fillStyle(0x98edf7, 1).fillTriangle(cx - 20 * u, sy + 30 * u, cx, sy + 6 * u, cx + 20 * u, sy + 30 * u);
-      this.g.fillStyle(0x273548, 1).fillRect(cx - 6 * u, sy + 58 * u, 12 * u, 20 * u);
+      this.g.fillStyle(0x647081, 1).fillRect(cx - 13 * u, syGenerated + 20 * u, 26 * u, 58 * u);
+      this.g.fillStyle(0x98edf7, 1).fillTriangle(cx - 20 * u, syGenerated + 30 * u, cx, syGenerated + 6 * u, cx + 20 * u, syGenerated + 30 * u);
+      this.g.fillStyle(0x273548, 1).fillRect(cx - 6 * u, syGenerated + 58 * u, 12 * u, 20 * u);
       return;
     }
-    this.g.fillStyle(0x2a1d3d, 1).fillTriangle(sx + 20 * u, sy + 80 * u, cx, sy + 12 * u, sx + 76 * u, sy + 80 * u);
-    this.g.fillStyle(0xb388ff, 1).fillRect(cx - 8 * u, sy + 28 * u, 16 * u, 44 * u);
-    this.g.fillStyle(0xffdf78, 1).fillRect(cx - 14 * u, sy + 18 * u, 28 * u, 10 * u);
+    this.g.fillStyle(0x2a1d3d, 1).fillTriangle(sxGenerated + 20 * u, syGenerated + 80 * u, cx, syGenerated + 12 * u, sxGenerated + 76 * u, syGenerated + 80 * u);
+    this.g.fillStyle(0xb388ff, 1).fillRect(cx - 8 * u, syGenerated + 28 * u, 16 * u, 44 * u);
+    this.g.fillStyle(0xffdf78, 1).fillRect(cx - 14 * u, syGenerated + 18 * u, 28 * u, 10 * u);
   }
 
-  private locationVisualSize(loc: LocationDef, footprintSize: number): number {
+  private locationVisualSize(loc: LocationDef, footprintSize: number, asset?: WorldCurrentAssetRecord): number {
+    if (asset && !asset.placeholder) {
+      const scale = this.locationManifestScale(loc, asset);
+      return Math.min(footprintSize * 1.04, Math.max(TILE * 1.55, footprintSize * scale));
+    }
     const byKind: Record<WorldPoiKind, number> = {
       town: 2.45,
       harbor: 1.55,
@@ -6136,6 +6154,27 @@ Statuses: ${statuses}`;
     if (loc.landmarkKind === "shipwreck" || loc.landmarkKind === "secretMerchant") return Math.min(footprintSize, TILE * 1.85);
     if (loc.landmarkKind === "ancientDoor" || loc.landmarkKind === "ruins") return Math.min(footprintSize, TILE * 2);
     return Math.min(footprintSize, TILE * (byKind[loc.kind] ?? 1.75));
+  }
+
+  private locationManifestScale(loc: LocationDef, asset: WorldCurrentAssetRecord): number {
+    const recommended = asset.recommendedScale ?? 0.9;
+    const roleText = `${asset.category} ${asset.subcategory ?? ""} ${asset.placementLayer ?? ""} ${asset.integrationRole ?? ""} ${asset.semanticRole}`;
+    if (
+      loc.kind === "town" ||
+      loc.kind === "harbor" ||
+      roleText.includes("settlement") ||
+      roleText.includes("village") ||
+      roleText.includes("town") ||
+      roleText.includes("city") ||
+      roleText.includes("harbor") ||
+      roleText.includes("castle") ||
+      roleText.includes("fort")
+    ) {
+      return Math.max(recommended, 0.96);
+    }
+    if (loc.kind === "gate" || loc.kind === "final") return Math.max(recommended, 0.9);
+    if (loc.kind === "dungeon") return Math.max(recommended, 0.84);
+    return Math.max(recommended, 0.74);
   }
 
   private locationVisualLift(loc: LocationDef): number {
