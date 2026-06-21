@@ -283,17 +283,17 @@ Should we use tile transitions?
 
 No, not as the core architecture. A small number of fills and brush/edge overlays can help later, but a huge transition tileset should not drive geography.
 
-Should we use full island stamps?
+Should rendered PNGs drive gameplay?
 
-No. Full stamps can be useful as debug references or handcrafted set pieces, but not as the main world generator. They do not give enough semantic control for movement, roads, encounters, ports, or progression.
+No. Generated PNGs are views of semantic data. Movement, roads, encounters, ports, progression, collision, and POI placement come from the semantic model.
 
 Should we use mask/field rendering?
 
 Yes. The recommended v1 direction is semantic masks and fields for land, coast, water depth, biomes, elevation, rivers, and logical terrain, then stylized rendering from those layers.
 
-Should we use WFC?
+Should another generator replace the semantic model?
 
-Not for main geography. WFC can be considered later for small local decoration patches or micro-detail, after the semantic map is already generated.
+No. Geography, progression, collision, harbors, roads, rivers, POIs, forests, mountains, and biome identity all come from the semantic model.
 
 Recommended v1 approach:
 

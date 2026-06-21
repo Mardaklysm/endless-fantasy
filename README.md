@@ -83,7 +83,7 @@ All code, art, and audio are procedurally generated or created inside this proje
 - Title screen appears and New Game starts in Greenhaven.
 - Intro dialogue advances with Enter/Z.
 - Player moves smoothly with keyboard, can exit town through the south gate, and sees an ocean-based archipelago on the overworld.
-- Normal overworld terrain is mask-rendered, not square atlas tiles; coast and biome boundaries should read as pixel-crisp organic masks rather than a hard tile grid. F6 `rawTiles` shows the old square atlas view for debugging, and F6 `roads` / `rivers` show the semantic graph lines.
+- Normal overworld terrain is mask-rendered, not square atlas tiles; coast and biome boundaries should read as pixel-crisp organic masks rather than a hard tile grid. F6 `rawTiles` shows the square atlas debug view, and F6 `roads` / `rivers` show the semantic graph lines.
 - Menu opens with Escape and Settings can toggle encounters and XP multiplier.
 - Random or debug encounters enter battle.
 - Battle shows one current actor at a time, enemy intent, and the Skill command; party actions resolve immediately and enemies act on initiative turns.

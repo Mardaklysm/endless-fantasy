@@ -88,9 +88,6 @@ type ExploreMode = "world" | "town" | "dungeon";
 type DirectionName = "up" | "down" | "left" | "right";
 
 type Terrain = WorldTileId;
-type TerrainRenderMode = "mask" | "tile";
-
-const TERRAIN_RENDER_MODE: TerrainRenderMode = "mask";
 
 type ElementType =
   | "none"
@@ -530,9 +527,7 @@ const ASSET_MODULES = import.meta.glob(["../assets/**/*.{png,jpeg,jpg}", "!../as
 const SRC_ASSET_MODULES = import.meta.glob(
   [
     "./assets/**/*.{png,jpeg,jpg}",
-    "!./assets/world/source/**/*.{png,jpeg,jpg}",
-    "!./assets/world/world_atlas.normalized.png",
-    "!./assets/world/tilesets/**/*.{png,jpeg,jpg}"
+    "!./assets/world/source/**/*.{png,jpeg,jpg}"
   ],
   {
     eager: true,
@@ -1509,7 +1504,6 @@ class CrystalOathScene extends Phaser.Scene {
   private audio = new SynthAudio();
   private generatedWorld?: GeneratedWorld;
   private roadVisualsByKey = new Map<string, WorldRoadVisual>();
-  private terrainRenderMode: TerrainRenderMode = TERRAIN_RENDER_MODE;
   private semanticDebugOverlay: "off" | "edgeDebug" | "rawTiles" | "masks" | "distance" | "grid" | "walkability" | "policy" | "mountains" | "forests" | "islands" | "pois" | "roads" | "rivers" = "off";
   private worldSeed = "title-preview";
   private world: Terrain[][] = [];
@@ -1613,8 +1607,8 @@ class CrystalOathScene extends Phaser.Scene {
         `Worldgen mode: ${ACTIVE_WORLDGEN_MODE}`,
         "Grid: 8x8",
         "Using empty cells: false",
-        "Using classic special tileset: false",
-        "Using old 10x10 atlas: false",
+        "Removed special tileset active: false",
+        "Generated 10x10 atlas active: false",
         `Atlas v3 source inset: ${ATLAS_V3_SOURCE_INSET}`,
         "Terrain cache postprocess: disabled",
         `Image: ${WORLD_ATLAS.image}`,
@@ -4849,7 +4843,7 @@ Statuses: ${statuses}`;
     const endX = Math.min(WORLD_W - 1, Math.ceil((tileCam.x + WIDTH) / TILE));
     const startY = Math.max(0, Math.floor(tileCam.y / TILE) - 1);
     const endY = Math.min(WORLD_H - 1, Math.ceil((tileCam.y + HEIGHT) / TILE));
-    const showRawTiles = this.terrainRenderMode === "tile" || this.semanticDebugOverlay === "rawTiles";
+    const showRawTiles = this.semanticDebugOverlay === "rawTiles";
     if (showRawTiles || !this.drawCachedWorldTerrain(tileCam)) {
       for (let y = startY; y <= endY; y += 1) {
         for (let x = startX; x <= endX; x += 1) {

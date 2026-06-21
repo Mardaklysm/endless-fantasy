@@ -28,11 +28,9 @@ This backlog is practical project memory, not a full design document. Keep it sh
 - `tile_water_b` and `tile_deep_water_b` are loaded but not animated yet.
 - `tile_bridge` exists in `assets_v2`, but current harbor route/dock visuals use the active `src/assets/world/pier_atlas.png` sheet with generated Graphics fallback.
 - Reference-only UI window crops in `assets_v2/ui` are intentionally not loaded at runtime because they contain sample text.
-- Normalized fighter/priest/wizard class sheets are wired; keep old standalone party map/battle PNGs out of runtime glob loading unless intentionally reintroduced.
-- Dungeon/city tiles are wired through the active `src/assets/world/dungeon_atlas.png` sheet; older individual dungeon PNGs remain fallback only.
+- Normalized fighter/priest/wizard class sheets are wired; keep standalone party map/battle PNGs out of runtime glob loading unless intentionally reintroduced.
+- Dungeon/city tiles are wired through the active `src/assets/world/dungeon_atlas.png` sheet; individual dungeon PNGs remain fallback only.
 - Dungeon/city atlas rendering now uses weighted base/accent selection; future dungeon polish should focus on room dressing and clearer wall/floor transition art rather than adding more evenly random tile variants.
-- Keep the archived classic tileset pack out of active runtime unless a future task explicitly reopens that direction. Active terrain should continue to use only non-empty `atlas_v3` cells.
-- Before replacing or refactoring runtime island/world rendering with generated Greenhaven kernel art, vet candidate kernels with `npm run island:kernel`; the lab is only a preview tool until a separate integration task is approved.
 - Before replacing the active atlas-v3 archipelago generator, iterate in `npm run worldgen:lab` and define final fill/brush/object assets from `worldgen_asset_requirements.md`.
 
 ## Gameplay Gaps

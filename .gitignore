@@ -23,3 +23,11 @@ pnpm-debug.log*
 *.temp
 tmp/
 temp/
+
+# Generated QA/debug artifacts should stay disposable.
+assets_v2/previews/rembg_candidates/
+assets_v2/previews/rembg_compare_*.png
+docs/debug/runtime/
+docs/debug/world-atlas/
+docs/debug/world-tileset-import/
+docs/debug/worldgen/

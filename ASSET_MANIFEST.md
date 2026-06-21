@@ -22,7 +22,7 @@ Priority scale: P1 readability-critical, P2 core gameplay polish, P3 boss/story 
 
 ## A. Core Tiles
 
-Note: the individual `assets/tiles/world/*` entries below remain fallback/legacy targets. The active generated overworld renders from `atlas_v3` only:
+Note: the individual `assets/tiles/world/*` entries below remain fallback targets. The active generated overworld renders from `atlas_v3` only:
 
 | Asset ID | Filename | Category | Size | Req | Priority | Used In | Tint/Recolor | Artist Notes | Replacement Target |
 |---|---|---:|---:|---|---|---|---|---|---|
@@ -43,7 +43,7 @@ Note: the individual `assets/tiles/world/*` entries below remain fallback/legacy
 | tile_deep_water_b | assets/tiles/world/deep_water_b.png | World tile | 16x16 | Optional | P4 | Deep water animation | Yes | Second deep water frame. | Future animated tile loader |
 | tile_sand | assets/tiles/world/sand.png | World tile | 16x16 | Required | P1 | Desert/Sunbarrow region | Yes | Ochre sand with sparse marks, not too bright. | `drawWorldTile("sand")` |
 | tile_road | assets/tiles/world/road.png | World tile | 16x16 | Required | P1 | Roads/locations | Yes | Warm path, reads as safe route. | `drawWorldTile("road")` |
-| tile_bridge | assets/tiles/world/bridge.png | World tile | 16x16 | Optional | P2 | Legacy/fallback water crossings | Partial | Wooden/stone bridge over water; active harbor dock visuals now use `src/assets/world/pier_atlas.png`. | Future route/bridge overlay |
+| tile_bridge | assets/tiles/world/bridge.png | World tile | 16x16 | Optional | P2 | Fallback water crossings | Partial | Wooden/stone bridge over water; active harbor dock visuals now use `src/assets/world/pier_atlas.png`. | Future route/bridge overlay |
 | marker_town | assets/tiles/markers/town.png | Map marker | 16x16 | Required | P2 | Dawnford, Brinewick, Elderleaf, Sunbarrow | Yes | Safe settlement icon; can palette swap per town. | `drawLocationIcon(kind: "town")` |
 | marker_castle | assets/tiles/markers/castle.png | Map marker | 16x16 | Required | P2 | Dawnford identity | Partial | Castle/town variant for Dawnford. | `drawLocationIcon`, location-specific later |
 | marker_cave | assets/tiles/markers/cave.png | Map marker | 16x16 | Required | P2 | Moss Cave | Yes | Dark opening in stone/moss. | `drawLocationIcon(kind: "dungeon")` |
@@ -54,7 +54,7 @@ Note: the individual `assets/tiles/world/*` entries below remain fallback/legacy
 | marker_gate | assets/tiles/markers/starfall_gate.png | Map marker | 16x16 | Required | P3 | Starfall Gate | Partial | Ancient gate/star arch; bright gold accent. | `drawLocationIcon(kind: "gate")` |
 | marker_final_spire | assets/tiles/markers/eclipse_spire.png | Map marker | 16x16 | Required | P3 | Eclipse Spire | No | Dark spire with violet/gold crown accent. | `drawLocationIcon(kind: "final")` |
 
-Note: the individual dungeon tile rows below are retained as fallback/legacy asset targets. Active dungeon and city/interior tile rendering now prefers `dungeon_atlas`.
+Note: the individual dungeon tile rows below are retained as fallback asset targets. Active dungeon and city/interior tile rendering now prefers `dungeon_atlas`.
 
 | dungeon_floor_moss | assets/tiles/dungeons/floor_moss.png | Dungeon floor | 16x16 | Required | P1 | Moss Cave | Yes | Stone/soil with moss accent. | `drawDungeonTile(".")`, Moss palette |
 | dungeon_floor_fire | assets/tiles/dungeons/floor_fire.png | Dungeon floor | 16x16 | Required | P2 | Ashen Keep | Yes | Dark charred stone, small ember cracks. | `drawDungeonTile(".")`, Ashen palette |

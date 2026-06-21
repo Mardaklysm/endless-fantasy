@@ -4,7 +4,7 @@
 
 The game now has two asset roots:
 
-- `assets/`: Batch 001 and older verified fallback assets.
+- `assets/`: Batch 001 and verified fallback assets.
 - `assets_v2/`: improved SNES-style assets extracted from `D:\Projects\new_artwork`.
 
 Phaser preloads stable texture keys from `src/main.ts`. The loader prefers `assets_v2` for mapped keys and falls back to `assets/` when a v2 file is missing. Do not delete generated `Graphics` fallback rendering; missing or rejected assets must still leave the game playable.
@@ -17,21 +17,18 @@ Reusable scripts live in `tools/art_import/`:
 
 - `scan_new_artwork.ps1`: inventories `D:\Projects\new_artwork`.
 - `extract_new_art_assets.ps1`: reads JSON crop maps and extracts final PNGs to `assets_v2`.
-- `apply_rembg_candidates.ps1`: compares color-key and rembg outputs, promoting only approved rembg results.
+- `apply_rembg_candidates.ps1`: compares color-key and rembg outputs, promoting only approved rembg results. Its comparison outputs are disposable and ignored.
 - `generate_asset_previews.ps1`: creates contact sheets and `assets_v2/previews/QUALITY_REPORT.md`.
 - `import_character_sprites.mjs`: imports `D:\Tools\rembg\bg_output\fighter.png`, `priest.png`, and `wizard.png` without running rembg, splits them as 5x2 alpha PNG sheets, normalizes fixed cells/anchors, writes `src/data/characterSprites.ts`, and creates debug previews/reports in `docs/debug/sprite-import/`.
 - `import_atlas_v3.mjs`: imports `D:\Projects\new_artwork\atlas_v3.jpeg`, normalizes it to the 1024x1024 runtime PNG at `src/assets/world/atlas_v3.png`, writes all 64 atlas cell classifications to `src/assets/world/atlasV3.manifest.json`, and creates `docs/debug/world-atlas-v3/atlas-v3-labeled.png` plus `atlas-v3-import-report.md`.
 - `import_world_objects.mjs`: imports `D:\Projects\new_artwork\world_objects_atlas.jpeg`, resizes it to the 1024x1024 transparent runtime PNG at `src/assets/world/world_objects.png`, writes all 64 object overlay cells to `src/assets/world/worldObjectAtlas.manifest.json`, and creates `docs/debug/world-objects/world-objects-import-report.md`.
 - `import_dungeon_atlas.mjs`: imports `D:\Projects\new_artwork\dungeon_atlas.jpeg`, resizes it to the 1024x1024 opaque runtime PNG at `src/assets/world/dungeon_atlas.png`, writes all 64 dungeon/city cells to `src/assets/world/dungeonAtlas.manifest.json`, and creates `docs/debug/dungeon-atlas/dungeon-atlas-import-report.md`.
-- `import_world_atlas.mjs`: legacy importer for the older final PNG source `C:\Users\Marku\Downloads\master_overworld_tileset_atlas_10x10.png`. It can still recreate `src/assets/world/world_atlas.normalized.png` and debug atlas outputs, but that 10x10 generated atlas is no longer active runtime terrain.
-- `import_classic_world_tileset.mjs`: archived importer for the complex classic sheet `C:\Users\Marku\Downloads\57105.png`. The classic sheet is not active runtime terrain.
 
 Independent art preview tools:
 
-- `tools/island-kernel-lab/islandKernelLab.mjs` runs through `npm run island:kernel -- --input <png>`. It is a standalone PNG slicing/composition lab for generated Greenhaven island kernels and is not part of Phaser runtime, current worldgen, or the active map renderer.
 - `tools/worldgen-lab/worldgenLab.mjs` runs through `npm run worldgen:lab -- --seed <seed> --out <dir>`. It is a standalone PNG/report renderer for the active semantic overworld core under `src/world/semantic/`; pngjs/filesystem preview code stays out of Phaser runtime.
 
-Manual crop maps live in `tools/art_import/crop_maps/`. Active overworld tile/debug/fallback asset support uses the fixed 8x8 `atlas_v3` path, not the old crop-map/JPEG normalization path, the legacy 10x10 atlas, or the classic special sheet. Normal base terrain presentation is generated from semantic masks.
+Manual crop maps live in `tools/art_import/crop_maps/`. Active overworld tile/debug/fallback asset support uses the fixed 8x8 `atlas_v3` path. Normal base terrain presentation is generated from semantic masks.
 
 The source folder `D:\Projects\new_artwork` contained 63 PNGs and no ZIPs. No extraction into `D:\Projects\new_artwork_extracted` was needed.
 
@@ -65,16 +62,13 @@ Rendered now from `assets_v2`:
 - Battle backgrounds: forest path, plains, moss cave, ashen keep, tide shrine, eclipse spire.
 - UI: compact window panel skin, cursor, HP/MP/empty bars, buttons. Runtime text remains live Phaser text.
 
-Still fallback or older assets:
+Fallback assets:
 
 - Later-region normal enemies not present in the new common roster: reef fang, bubble eye, drowned husk, sky mite, gale harpy, glass roc, eclipse shade, crown guard, void serpent.
 - Vehicles, inventory/equipment/relic icons, title art, and effects still use Batch 001 or generated fallbacks.
 - `command_window.png`, `target_window.png`, `party_status_window.png`, and `message_window.png` are reference/source-only because they include sample text or baked layout.
 
-Legacy/reference world atlas:
-
-- `src/assets/world/world_atlas.normalized.png` may remain in the repository as an archived/generated atlas asset, but `src/main.ts` excludes it from active eager loading and runtime gameplay should not use it unless a future task intentionally reactivates it.
-- `src/assets/world/tilesets/classic_world_tileset.cleaned.png`, `classicWorldTileset.manifest.json`, extracted classic crops, and classic debug contact sheets may remain as archived assets/tool outputs, but active gameplay must not import them.
+Removed experimental world assets and tools should not be restored. The active overworld asset set is `atlas_v3`, `pier_atlas`, and `world_objects`, all driven by semantic world data.
 
 ## Current Sizes
 
@@ -86,8 +80,6 @@ Legacy/reference world atlas:
 - Active world object atlas: source `D:\Projects\new_artwork\world_objects_atlas.jpeg`, runtime `src/assets/world/world_objects.png`, 1024x1024 transparent PNG, 8 columns x 8 rows, 128x128 logical cells, 64 overlay object cells.
 - Active dungeon atlas: source `D:\Projects\new_artwork\dungeon_atlas.jpeg`, runtime `src/assets/world/dungeon_atlas.png`, 1024x1024 opaque PNG, 8 columns x 8 rows, 128x128 logical cells, 64 dungeon/city cells.
 - World Generator Lab default preview model: 192x120 semantic cells rendered at 6px per cell to disposable PNGs under `tmp/worldgen-lab/`.
-- Greenhaven island kernel lab format: source PNGs are 1152x1152, 9 columns x 9 rows, 128x128 logical cells. Generated lab previews under `tmp/island-kernel-lab/` are disposable and should not be committed.
-- Legacy world atlas: 10 columns x 10 rows, 256x256 cells, 2560x2560 opaque PNG. It is not active gameplay terrain.
 - V2 town tiles: 32x32 opaque PNGs.
 - Class character sheets: 5 columns x 2 rows, 704x512 cells, 3520x1024 sheet size, transparent PNG. Manifest anchor is bodyCenterX=352 and feetBaselineY=464.
 - V2 portraits: 32x40 transparent PNGs.
@@ -100,7 +92,7 @@ Legacy/reference world atlas:
 - Greenhaven/town service markers render as one clean horizontal row of five image-only icons. Do not add always-visible text labels such as Items/Arms/Magic/Clinic back onto those markers.
 - The town south exit uses the gate art only; there is no floating "Exit" label or persistent bottom-right interaction hint in normal town exploration.
 - Overworld locations render as larger 3x3-ish landmarks with matching entry footprints. Keep terrain tiles small/repeating, but landmarks should remain visually important.
-- Active overworld slicing starts from exact 8x8 atlas math from `atlasV3.manifest.json`, then applies the shared source inset: `sx = tile.source.x + 3`, `sy = tile.source.y + 3`, `sw = tile.source.width - 6`, `sh = tile.source.height - 6`. Normal gameplay samples selected atlas cells as repeating texture sources inside semantic masks; F6 `rawTiles` uses the same slices for square-tile debugging. Do not reintroduce classic special tiles, old 10x10 assumptions, chroma-keying, global black transparency, or debug-grid art for runtime terrain.
+- Active overworld slicing starts from exact 8x8 atlas math from `atlasV3.manifest.json`, then applies the shared source inset: `sx = tile.source.x + 3`, `sy = tile.source.y + 3`, `sw = tile.source.width - 6`, `sh = tile.source.height - 6`. Normal gameplay samples selected atlas cells as repeating texture sources inside semantic masks; F6 `rawTiles` uses the same slices for square-tile debugging. Do not reintroduce removed special tiles, non-current atlas assumptions, chroma-keying, global black transparency, or debug-grid art for runtime terrain.
 - The `atlas_v3` `road_vertical` source cell is visually dirty because its art has a small side connector. Straight north-south generated roads should use rotated `road_horizontal` art until a clean vertical source tile replaces it.
 - The `atlas_v3` `road_dead_end_e` source cell is the accepted clean dead-end cap. Use it for all generated one-connector road visuals and rotate it rather than using other dead-end-looking cells.
 - Active dungeon/city slicing starts from exact 8x8 atlas math from `dungeonAtlas.manifest.json`, then applies the shared source inset: `sx = tile.source.x + 3`, `sy = tile.source.y + 3`, `sw = tile.source.width - 6`, `sh = tile.source.height - 6`. Do not run rembg or chroma-key this opaque atlas.
@@ -108,12 +100,12 @@ Legacy/reference world atlas:
 - Generated overworld terrain should avoid using fixed-orientation coast/foam cells as random stamps. Normal gameplay uses semantic mask rendering with existing atlas terrain cells as texture sources and code-rendered pixel boundary accents for shallow water, beach, coast foam/tint, and grass/sand/ice boundaries. Do not return to square atlas tiles plus tiny edge strips as the normal terrain solution, random variant spam, direction-specific transition tile stamping, or global smoothing.
 - The active overworld direction starts from semantic masks/fields: archipelago land masks, shallow-water halos, beach bands, grass/sand/ice biomes, elevation/ridges, river/road overlays, forest/mountain object overlays, and POI placement. Do not return to designing a huge transition tileset as the core architecture.
 - Roads, beaches/coasts, shallow water, forests/jungle, and volcanic support now have real atlas cells. Generated fallback art still remains for missing textures and for lightweight non-atlas overlays such as sea route dots and optional ocean details.
-- Generated POIs carry optional `objectId` values, ocean object overlays are seed-derived from reef/detail positions, and palm/normal tree groves use `world_objects` overlays instead of palm-looking terrain tiles. `drawLocationIcon` and `drawWorldOverlays` prefer `world_objects` for those objects, then fall back to older marker textures or generated Graphics.
+- Generated POIs carry optional `objectId` values, ocean object overlays are seed-derived from reef/detail positions, and palm/normal tree groves use `world_objects` overlays instead of palm-looking terrain tiles. `drawLocationIcon` and `drawWorldOverlays` prefer `world_objects` for those objects, then fall back to marker textures or generated Graphics.
 - Do not implement runtime map-level seam blending for `atlas_v3` tile placements. Raw/fallback/debug tile rendering and debug previews should crop valid source cells inward and must not mutate stamped atlas pixels by mixing water/grass or other neighboring terrain colors after placement. Normal gameplay should come from semantic masks using atlas texture sources, not from stamped square atlas tiles.
 - Road and river graph strokes are semantic debug information, not finished map art. Keep them hidden in normal gameplay until a proper route/river visual style exists.
 - Flowers, clover, rocks, dune ripples, scrub, dark grass patches, and other terrain-detail variants should become sparse decoration overlays or controlled larger patches later. They should not be random base tile replacements every few cells in normal gameplay.
 - Battle backgrounds are full 16:9 opaque JPEG images and are assigned linear texture filtering. Pixel sprites, tiles, UI, and icons remain nearest-neighbor filtered. The canvas itself uses `image-rendering: auto` so high-resolution artwork is not globally pixelated.
-- Battle party presentation uses the normalized fighter/priest/wizard class sheets only on the battlefield; redundant small head portraits/icons and old standalone party battle PNGs are intentionally not drawn there.
+- Battle party presentation uses the normalized fighter/priest/wizard class sheets only on the battlefield; redundant small head portraits/icons and standalone party battle PNGs are intentionally not drawn there.
 
 ## Real-Asset Rules
 
@@ -131,7 +123,7 @@ Legacy/reference world atlas:
 
 ## Archipelago Replacement Prompt References
 
-These older prompts remain as reference if future art needs another replacement pass. The current runtime already has an atlas-backed archipelago terrain sheet and a separate pier atlas. Keep outputs opaque rectangular PNGs, no labels, no UI text, no copyrighted references, top-down JRPG perspective, and compatible with the current 32px display tile grid.
+These prompts remain as reference if future art needs another replacement pass. The current runtime already has an atlas-backed archipelago terrain sheet and a separate pier atlas. Keep outputs opaque rectangular PNGs, no labels, no UI text, no copyrighted references, top-down JRPG perspective, and compatible with the current 32px display tile grid.
 
 Road/path prompt:
 

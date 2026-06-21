@@ -34,17 +34,6 @@ New-Preview "bosses_preview.png" (Get-ChildItem -Path (Join-Path $OutRoot "enemi
 New-Preview "ui_preview.png" (Get-ChildItem -Path (Join-Path $OutRoot "ui") -Filter "*.png" | Sort-Object Name | ForEach-Object FullName) "120x80" "4x"
 New-Preview "battle_backgrounds_preview.png" (Get-ChildItem -Path (Join-Path $OutRoot "battle\backgrounds") -Filter "*.png" | Sort-Object Name | ForEach-Object FullName) "220x90" "2x"
 
-$candidateRoot = Join-Path $OutRoot "previews\rembg_candidates"
-if (Test-Path $candidateRoot) {
-  New-Preview "rembg_compare_characters.png" (Get-ChildItem -Path (Join-Path $candidateRoot "characters") -Filter "*.png" -ErrorAction SilentlyContinue | Sort-Object Name | ForEach-Object FullName) "120x120" "4x"
-  New-Preview "rembg_compare_portraits.png" (Get-ChildItem -Path (Join-Path $candidateRoot "portraits") -Filter "*.png" -ErrorAction SilentlyContinue | Sort-Object Name | ForEach-Object FullName) "96x120" "3x"
-  New-Preview "rembg_compare_enemies.png" (Get-ChildItem -Path (Join-Path $candidateRoot "enemies\common") -Filter "*.png" -ErrorAction SilentlyContinue | Sort-Object Name | ForEach-Object FullName) "112x112" "4x"
-  New-Preview "rembg_compare_bosses.png" (Get-ChildItem -Path (Join-Path $candidateRoot "enemies\bosses") -Filter "*.png" -ErrorAction SilentlyContinue | Sort-Object Name | ForEach-Object FullName) "150x150" "4x"
-  New-Preview "rembg_compare_markers.png" (Get-ChildItem -Path (Join-Path $candidateRoot "tiles\markers") -Filter "*.png" -ErrorAction SilentlyContinue | Sort-Object Name | ForEach-Object FullName) "80x80" "4x"
-  New-Preview "rembg_compare_town_props.png" (Get-ChildItem -Path (Join-Path $candidateRoot "tiles\town") -Filter "*.png" -ErrorAction SilentlyContinue | Sort-Object Name | ForEach-Object FullName) "120x90" "4x"
-  New-Preview "rembg_compare_ui.png" (Get-ChildItem -Path (Join-Path $candidateRoot "ui") -Filter "*.png" -ErrorAction SilentlyContinue | Sort-Object Name | ForEach-Object FullName) "120x80" "4x"
-}
-
 $report = @'
 # Assets V2 Quality Report
 

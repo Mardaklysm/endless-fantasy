@@ -42,5 +42,5 @@ Game integration rules:
 - Exploration uses two-frame walking loops and A-frame idle for the last facing direction.
 - Battle idle faces left with `walk_left_a`.
 - Battle attacks use `attack_windup_left` then `attack_release_left`.
-- Keep old tiny class sprites out of runtime mappings unless intentionally reintroduced.
+- Keep tiny class sprites out of runtime mappings unless intentionally reintroduced.
 - Validate with `node tools\art_import\import_character_sprites.mjs`, `npm run build`, and a browser smoke test when runtime integration changes.

@@ -46,22 +46,6 @@ This runs `tools/worldgen/test_worldgen.mjs`. It validates the active semantic r
 - the semantic mask terrain renderer plan reports the expected texture dimensions, mask resolution, class samples, boundary samples, and does not mutate the generated world
 - the semantic mask terrain renderer uses atlas texture source IDs that match the canonical terrain palette
 
-To write a human-readable generation report and PNG minimap preview:
-
-```powershell
-npm run debug:worldgen -- optional-seed
-```
-
-Outputs:
-
-- `docs/debug/worldgen/latest-worldgen-report.md`
-- `docs/debug/worldgen/atlas-v3-source-inset-report.md`
-- `docs/debug/worldgen/atlas-v3-source-inset-preview.png`
-- `docs/debug/worldgen/atlas-v3-world-preview.png`
-- `docs/debug/worldgen/world-preview-seed-<seed>.png`
-
-The source-inset report should confirm raw/fallback atlas draws and debug previews use `ATLAS_V3_SOURCE_INSET`, and that stamped-atlas map-level terrain blending/neighbor-pixel mutation is disabled. Normal gameplay terrain is a semantic mask-rendered background using atlas texture crops, not stamped square atlas cells.
-
 ## Asset Import Validation
 
 After changing `tools/art_import/`, crop maps, or files under `assets_v2/`, regenerate previews:
@@ -111,14 +95,6 @@ npm run import:dungeon-atlas
 
 Check `src/assets/world/dungeon_atlas.png`, `src/assets/world/dungeonAtlas.manifest.json`, and `docs/debug/dungeon-atlas/dungeon-atlas-import-report.md`. The current importer uses ImageMagick resize only and keeps the sheet opaque. Do not run rembg or transparency removal on this atlas.
 
-For generated Greenhaven island kernel art, use Island Kernel Lab before any runtime integration work:
-
-```powershell
-npm run island:kernel -- --input "D:\island_kernel_greenhaven_v1_1152.png" --out "tmp/island-kernel-lab/greenhaven"
-```
-
-The lab validates the official 9x9, 128px-cell, 1152x1152 PNG format, writes a sliced debug sheet, recomposes the kernel exactly, and produces disposable island and archipelago previews under `tmp/island-kernel-lab/`.
-
 For the reset semantic overworld direction, use World Generator Lab:
 
 ```powershell
@@ -126,23 +102,6 @@ npm run worldgen:lab -- --seed test-greenhaven --out tmp/worldgen-lab/test-green
 ```
 
 Check `semantic_map_debug.png`, `distance_bands_debug.png`, `elevation_debug.png`, `rivers_roads_debug.png`, `rendered_world_preview.png`, `semantic_world.json`, `worldgen_algorithm_report.md`, and `worldgen_asset_requirements.md`. These are disposable outputs under `tmp/worldgen-lab/` and are not runtime assets.
-
-For the legacy 10x10 overworld atlas, run only if intentionally regenerating that archived asset:
-
-```powershell
-node tools\art_import\import_world_atlas.mjs
-```
-
-Check `src/assets/world/world_atlas.normalized.png` and `docs/debug/world-atlas/world_atlas.labeled-preview.png` / `world_atlas.import-report.md`. This should not replace the active `atlas_v3` raw/debug/fallback path or the semantic mask terrain renderer without a deliberate follow-up task.
-
-For the archived classic world tileset pack, run only if intentionally inspecting archived assets:
-
-```powershell
-node tools\art_import\import_classic_world_tileset.mjs
-node tools\art_import\test_classic_world_tileset.mjs
-```
-
-Check `src/assets/world/tilesets/classic_world_tileset.cleaned.png`, `src/assets/world/tilesets/classicWorldTileset.manifest.json`, `src/assets/world/tilesets/classic/extracted/`, and `docs/debug/world-tileset-import/`. The cleaned PNG should remove only exact `#00B100` matte pixels; the debug contact sheets and group-detection image are review outputs only and are not runtime assets. This classic pack is not active gameplay terrain.
 
 For rembg-related regeneration, use `D:\tools\rembg\venv_rembg\Scripts\rembg.exe` with `birefnet-general`. The expected AMD/Windows provider path is DirectML (`DmlExecutionProvider`). Do not add NVIDIA-specific checks.
 
