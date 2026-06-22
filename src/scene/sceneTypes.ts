@@ -41,7 +41,10 @@ export interface BoatTravelState {
   destinationName: string;
   costGold: number;
   previousBoatFlag: boolean;
+  departureTile: Vec;
   arrivalTile: Vec;
+  sourceDockTile: Vec;
+  destinationDockTile: Vec;
   sourceWaterTile: Vec;
   destinationWaterTile: Vec;
   rawPath: Vec[];
@@ -55,8 +58,6 @@ export interface BoatTravelState {
   segmentIndex: number;
   boatPos: Vec;
   direction: BoatTravelDirection;
-  phase: "departing" | "sailing" | "arriving";
-  phaseElapsedMs: number;
 }
 
 export interface MenuOption {

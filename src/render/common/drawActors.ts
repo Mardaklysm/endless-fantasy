@@ -3,11 +3,11 @@ import { ENEMY_TEXTURES, NPC_TEXTURES, PARTY_CLASS, PORTRAIT_TEXTURES } from "..
 import type { CharacterState, EnemyState } from "../../data/gameDataTypes";
 import type { CrystalOathSceneContext } from "../../scene/sceneContext";
 
-export function drawActorShadow(this: CrystalOathSceneContext, x: number, y: number, width = 26, height = 8) {
-  this.g.fillStyle(0x050812, 0.34).fillEllipse(x, y, width, height);
+export function drawActorShadow(this: CrystalOathSceneContext, x: number, y: number, width = 26, height = 8, alpha = 0.34) {
+  this.g.fillStyle(0x050812, alpha).fillEllipse(x, y, width, height);
 }
 
-export function drawLeader(this: CrystalOathSceneContext, x: number, y: number) {
+export function drawLeader(this: CrystalOathSceneContext, x: number, y: number, alpha = 1) {
   const frame = this.playerMoving ? Math.floor(this.walkAnimElapsed / 85) % 2 : 0;
   const spriteCellWidth = EXPLORE_PLAYER_SPRITE_WIDTH;
   const shadowWidth = 36;
@@ -18,22 +18,22 @@ export function drawLeader(this: CrystalOathSceneContext, x: number, y: number) 
   const bodyOffsetY = 13;
   const bodyCenterX = x + bodyOffsetX;
   const feetBaselineY = y + bodyOffsetY;
-  this.drawActorShadow(bodyCenterX, feetBaselineY, shadowWidth, shadowHeight);
-  this.g.lineStyle(1, 0xfff0a8, 0.62).strokeEllipse(bodyCenterX, feetBaselineY, ellipseW, ellipseH);
-  if (this.drawCharacterSpriteFrame(PARTY_CLASS.arlen, this.explorationCharacterFrame(frame), bodyCenterX, feetBaselineY, spriteCellWidth)) {
+  this.drawActorShadow(bodyCenterX, feetBaselineY, shadowWidth, shadowHeight, 0.34 * alpha);
+  this.g.lineStyle(1, 0xfff0a8, 0.62 * alpha).strokeEllipse(bodyCenterX, feetBaselineY, ellipseW, ellipseH);
+  if (this.drawCharacterSpriteFrame(PARTY_CLASS.arlen, this.explorationCharacterFrame(frame), bodyCenterX, feetBaselineY, spriteCellWidth, LAYER_CHARACTER_IMAGE, alpha)) {
     return;
   }
   const scale = 2;
   const fx = bodyCenterX - 11 * scale;
   const fy = feetBaselineY - 37 * scale;
-  this.g.fillStyle(0x050812, 1).fillRect(fx + 5 * scale, fy + 3 * scale, 22 * scale, 29 * scale);
-  this.g.fillStyle(0x2a213a, 1).fillRect(fx + 7 * scale, fy + scale, 18 * scale, 9 * scale);
-  this.g.fillStyle(0xf0c18d, 1).fillRect(fx + 9 * scale, fy + 5 * scale, 14 * scale, 12 * scale);
-  this.g.fillStyle(0xb93434, 1).fillRect(fx + 6 * scale, fy + 17 * scale, 22 * scale, 13 * scale);
-  this.g.fillStyle(0xf2e9dd, 1).fillRect(fx + 15 * scale, fy + 17 * scale, 7 * scale, 16 * scale);
-  this.g.fillStyle(0x1c2238, 1).fillRect(fx + 7 * scale, fy + 30 * scale, 8 * scale, (7 + frame) * scale);
+  this.g.fillStyle(0x050812, alpha).fillRect(fx + 5 * scale, fy + 3 * scale, 22 * scale, 29 * scale);
+  this.g.fillStyle(0x2a213a, alpha).fillRect(fx + 7 * scale, fy + scale, 18 * scale, 9 * scale);
+  this.g.fillStyle(0xf0c18d, alpha).fillRect(fx + 9 * scale, fy + 5 * scale, 14 * scale, 12 * scale);
+  this.g.fillStyle(0xb93434, alpha).fillRect(fx + 6 * scale, fy + 17 * scale, 22 * scale, 13 * scale);
+  this.g.fillStyle(0xf2e9dd, alpha).fillRect(fx + 15 * scale, fy + 17 * scale, 7 * scale, 16 * scale);
+  this.g.fillStyle(0x1c2238, alpha).fillRect(fx + 7 * scale, fy + 30 * scale, 8 * scale, (7 + frame) * scale);
   this.g.fillRect(fx + 20 * scale, fy + 30 * scale, 8 * scale, (7 + (1 - frame)) * scale);
-  this.g.fillStyle(0xffffff, 1).fillRect(fx + 11 * scale, fy + 10 * scale, 3 * scale, 3 * scale);
+  this.g.fillStyle(0xffffff, alpha).fillRect(fx + 11 * scale, fy + 10 * scale, 3 * scale, 3 * scale);
   this.g.fillRect(fx + 19 * scale, fy + 10 * scale, 3 * scale, 3 * scale);
 }
 

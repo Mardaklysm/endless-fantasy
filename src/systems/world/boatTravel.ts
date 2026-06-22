@@ -7,13 +7,13 @@ import {
   findBoatWaterPath as findSharedBoatWaterPath,
   findHarborWaterTile,
   isBoatNavigableTile,
+  isBoatStepAllowed,
   simplifyBoatPathToCompassWaypoints,
   validateBoatPath
 } from "../../world/semantic/boatNavigation";
 
 const BOAT_TILES_PER_MS = MOVE_TILES_PER_MS * 0.5;
-const DEPARTURE_PAUSE_MS = 280;
-const ARRIVAL_PAUSE_MS = 340;
+const BOAT_HARBOR_BLEND_TILES = 4;
 const MAX_HARBOR_WATER_SEARCH_RADIUS = 16;
 const BOAT_FRAME_DISPLAY_SIZE = 64;
 const BOAT_SPRITE_Y_OFFSET = -5;
@@ -33,6 +33,8 @@ export const BOAT_TRAVEL_DIRECTION_FRAMES: Record<BoatTravelDirection, number> =
 
 interface PlannedBoatRoute {
   arrivalTile: Vec;
+  sourceDockTile: Vec;
+  destinationDockTile: Vec;
   sourceWaterTile: Vec;
   destinationWaterTile: Vec;
   rawPath: Vec[];
@@ -78,7 +80,10 @@ export function beginBoatTravel(this: CrystalOathSceneContext, sourceHarbor: Loc
     destinationName: destination.displayName,
     costGold: destination.costGold,
     previousBoatFlag,
+    departureTile: { ...this.worldPos },
     arrivalTile: route.arrivalTile,
+    sourceDockTile: route.sourceDockTile,
+    destinationDockTile: route.destinationDockTile,
     sourceWaterTile: route.sourceWaterTile,
     destinationWaterTile: route.destinationWaterTile,
     rawPath: route.rawPath,
@@ -91,9 +96,7 @@ export function beginBoatTravel(this: CrystalOathSceneContext, sourceHarbor: Loc
     nextWorldTimeRouteIndex: 1,
     segmentIndex: 0,
     boatPos: { ...route.path[0] },
-    direction: initialBoatDirection(route.path, route.sourceWaterTile, route.destinationWaterTile),
-    phase: "departing",
-    phaseElapsedMs: 0
+    direction: initialBoatDirection(route.path, route.sourceDockTile, route.destinationDockTile)
   };
   this.audio.setMode("world");
   if (import.meta.env.DEV) {
@@ -109,29 +112,14 @@ export function updateBoatTravel(this: CrystalOathSceneContext, deltaMs: number)
   const travel = this.boatTravel;
   if (!travel) return;
   try {
-    travel.phaseElapsedMs += deltaMs;
-    if (travel.phase === "departing") {
-      if (travel.phaseElapsedMs >= DEPARTURE_PAUSE_MS) {
-        travel.phase = "sailing";
-        travel.phaseElapsedMs = 0;
-      }
-      this.markDirty();
-      return;
-    }
-    if (travel.phase === "arriving") {
-      if (travel.phaseElapsedMs >= ARRIVAL_PAUSE_MS) this.completeBoatTravel();
-      else this.markDirty();
-      return;
-    }
-
     travel.progressTiles = Math.min(travel.routeLength, travel.progressTiles + BOAT_TILES_PER_MS * deltaMs);
     advanceBoatTravelWorldTime.call(this, travel);
     travel.boatPos = boatRoutePointAtDistance(travel, travel.progressTiles);
     travel.direction = boatDirectionFromCurrentSegment(travel, travel.direction);
     if (travel.progressTiles >= travel.routeLength) {
-      travel.boatPos = { ...travel.destinationWaterTile };
-      travel.phase = "arriving";
-      travel.phaseElapsedMs = 0;
+      travel.boatPos = { ...travel.destinationDockTile };
+      this.completeBoatTravel();
+      return;
     }
     this.markDirty();
   } catch (error) {
@@ -153,7 +141,7 @@ export function completeBoatTravel(this: CrystalOathSceneContext) {
   this.currentIslandId = travel.destinationIslandId;
   this.worldPos = { ...travel.arrivalTile };
   this.markLocationVisited(this.locations().find((loc) => loc.kind === "harbor" && loc.islandId === travel.destinationIslandId)?.id);
-  this.lastMoveDir = directionToward(travel.arrivalTile, travel.destinationWaterTile);
+  this.lastMoveDir = directionToward(travel.arrivalTile, travel.destinationDockTile);
   this.destroyBoatTravelSprite();
   this.boatTravel = undefined;
   this.worldControlLockReason = undefined;
@@ -190,26 +178,31 @@ export function planBoatRoute(this: CrystalOathSceneContext, sourceHarbor: Locat
   const sourceWaterTile = this.harborWaterTile(sourceHarbor, destinationHarbor);
   const destinationWaterTile = this.harborWaterTile(destinationHarbor, sourceHarbor);
   if (!sourceWaterTile || !destinationWaterTile) return undefined;
+  const sourceDockTile = this.harborDockTile(sourceHarbor, sourceWaterTile);
+  const destinationDockTile = this.harborDockTile(destinationHarbor, destinationWaterTile);
   const rawPath =
     this.findBoatWaterPath(sourceWaterTile, destinationWaterTile, true) ??
     this.findBoatWaterPath(sourceWaterTile, destinationWaterTile, false);
   if (!rawPath || rawPath.length < 2) return undefined;
-  const waypoints = this.compactBoatWaypoints(rawPath);
-  const routePath = waypoints.length >= 2 ? waypoints : rawPath;
-  const errors = this.validateBoatRoutePath(rawPath, routePath);
+  const visualRawPath = extendBoatPathToHarbors(sourceDockTile, rawPath, destinationDockTile);
+  const waypoints = this.compactBoatWaypoints(visualRawPath);
+  const routePath = waypoints.length >= 2 ? waypoints : visualRawPath;
+  const errors = this.validateBoatRoutePath(visualRawPath, routePath);
   if (errors.length) {
     if (import.meta.env.DEV) console.warn(`Rejected unsafe boat route: ${errors.join("; ")}`);
     return undefined;
   }
   const pathDistances = cumulativeDistances(routePath);
-  const rawPathDistances = cumulativeDistances(rawPath);
+  const rawPathDistances = cumulativeDistances(visualRawPath);
   const routeLength = pathDistances[pathDistances.length - 1] ?? 0;
   if (routeLength <= 0) return undefined;
   return {
     arrivalTile: this.arrivalTileForIsland(destination.destinationIslandId),
+    sourceDockTile,
+    destinationDockTile,
     sourceWaterTile,
     destinationWaterTile,
-    rawPath,
+    rawPath: visualRawPath,
     rawPathDistances,
     waypoints: waypoints.map(({ x, y }) => ({ x, y })),
     path: routePath,
@@ -227,6 +220,24 @@ export function harborWaterTile(this: CrystalOathSceneContext, harbor: LocationD
     toward ? { x: toward.x, y: toward.y } : undefined,
     MAX_HARBOR_WATER_SEARCH_RADIUS
   );
+}
+
+export function harborDockTile(this: CrystalOathSceneContext, harbor: LocationDef, waterTile: Vec): Vec {
+  const world = this.generatedWorld?.semantic;
+  if (!world) return waterTile;
+  const bounds = this.locationFootprintBounds(harbor);
+  const candidates: Vec[] = [];
+  for (let y = bounds.minY; y <= bounds.maxY; y += 1) {
+    for (let x = bounds.minX; x <= bounds.maxX; x += 1) {
+      const candidate = { x, y };
+      if (!isBoatNavigableTile(world, x, y)) continue;
+      if (!isLegalBoatSegment(candidate, waterTile)) continue;
+      if (!isBoatStepAllowed(world, candidate, waterTile)) continue;
+      if (!isBoatStepAllowed(world, waterTile, candidate)) continue;
+      candidates.push(candidate);
+    }
+  }
+  return candidates.sort((a, b) => Math.hypot(a.x - waterTile.x, a.y - waterTile.y) - Math.hypot(b.x - waterTile.x, b.y - waterTile.y))[0] ?? waterTile;
 }
 
 export function findBoatWaterPath(this: CrystalOathSceneContext, start: Vec, end: Vec, preferOpenWater: boolean): Vec[] | undefined {
@@ -259,23 +270,32 @@ export function drawBoatTravel(this: CrystalOathSceneContext, cam: Vec) {
   const travel = this.boatTravel;
   if (!travel) return;
   if (this.semanticDebugOverlay !== "off") this.drawBoatTravelDebug(cam);
+  const departurePlayerAlpha = departurePlayerFadeAlpha(travel);
+  if (departurePlayerAlpha > 0.01) {
+    this.drawLeader(travel.departureTile.x * TILE - cam.x + 4, travel.departureTile.y * TILE - cam.y + 3, departurePlayerAlpha);
+  }
   const centerX = travel.boatPos.x * TILE - cam.x + TILE / 2;
   const centerY = travel.boatPos.y * TILE - cam.y + TILE / 2;
-  this.drawActorShadow(centerX, centerY + 11, 42, 12);
+  const boatAlpha = boatTravelFadeAlpha(travel);
+  this.drawActorShadow(centerX, centerY + 11, 42, 12, 0.34 * boatAlpha);
   if (this.hasTexture(CHARTER_BOAT_8DIR_TEXTURE_KEY)) {
-    this.drawBoatTravelSprite(centerX, centerY, BOAT_TRAVEL_DIRECTION_FRAMES[travel.direction]);
-    return;
+    this.drawBoatTravelSprite(centerX, centerY, BOAT_TRAVEL_DIRECTION_FRAMES[travel.direction], boatAlpha);
+  } else {
+    this.destroyBoatTravelSprite();
+    const x = centerX - 29;
+    const y = centerY - 22;
+    const eastFacing = directionPointsEast(travel.direction);
+    this.g.fillStyle(0x2f1d13, boatAlpha).fillRect(x + 8, y + 18, 42, 11);
+    this.g.fillStyle(0x8b5a2b, boatAlpha).fillRect(x + 14, y + 10, 30, 13);
+    this.g.fillStyle(0xe8d29c, boatAlpha).fillTriangle(x + 24, y + 5, x + 24, y + 24, eastFacing ? x + 42 : x + 10, y + 22);
   }
-  this.destroyBoatTravelSprite();
-  const x = centerX - 29;
-  const y = centerY - 22;
-  const eastFacing = directionPointsEast(travel.direction);
-  this.g.fillStyle(0x2f1d13, 1).fillRect(x + 8, y + 18, 42, 11);
-  this.g.fillStyle(0x8b5a2b, 1).fillRect(x + 14, y + 10, 30, 13);
-  this.g.fillStyle(0xe8d29c, 1).fillTriangle(x + 24, y + 5, x + 24, y + 24, eastFacing ? x + 42 : x + 10, y + 22);
+  const arrivalPlayerAlpha = arrivalPlayerFadeAlpha(travel);
+  if (arrivalPlayerAlpha > 0.01) {
+    this.drawLeader(travel.arrivalTile.x * TILE - cam.x + 4, travel.arrivalTile.y * TILE - cam.y + 3, arrivalPlayerAlpha);
+  }
 }
 
-export function drawBoatTravelSprite(this: CrystalOathSceneContext, centerX: number, centerY: number, frameIndex: number) {
+export function drawBoatTravelSprite(this: CrystalOathSceneContext, centerX: number, centerY: number, frameIndex: number, alpha = 1) {
   let sprite = this.boatTravelSprite;
   if (!sprite || !sprite.active) {
     sprite = this.add.image(centerX * PIXEL_ART_SCALE, (centerY + BOAT_SPRITE_Y_OFFSET) * PIXEL_ART_SCALE, CHARTER_BOAT_8DIR_TEXTURE_KEY, frameIndex);
@@ -297,6 +317,7 @@ export function drawBoatTravelSprite(this: CrystalOathSceneContext, centerX: num
   sprite.setFrame(frameIndex);
   sprite.setPosition(centerX * PIXEL_ART_SCALE, (centerY + BOAT_SPRITE_Y_OFFSET) * PIXEL_ART_SCALE);
   sprite.setDepth(LAYER_CHARACTER_IMAGE);
+  sprite.setAlpha(alpha);
   sprite.setVisible(true);
 }
 
@@ -325,6 +346,15 @@ function initialBoatDirection(path: Vec[], sourceWaterTile: Vec, destinationWate
   const from = path[0] ?? sourceWaterTile;
   const to = path[1] ?? destinationWaterTile;
   return boatDirectionFromSegment(from, to, "E");
+}
+
+function extendBoatPathToHarbors(sourceDockTile: Vec, rawPath: Vec[], destinationDockTile: Vec): Vec[] {
+  const path = rawPath.map((point) => ({ ...point }));
+  if (path.length === 0) return path;
+  if (!samePoint(sourceDockTile, path[0])) path.unshift({ ...sourceDockTile });
+  const last = path[path.length - 1];
+  if (!samePoint(destinationDockTile, last)) path.push({ ...destinationDockTile });
+  return path;
 }
 
 function boatDirectionFromCurrentSegment(travel: BoatTravelState, fallback: BoatTravelDirection): BoatTravelDirection {
@@ -376,6 +406,19 @@ function advanceBoatTravelWorldTime(this: CrystalOathSceneContext, travel: BoatT
   }
 }
 
+function departurePlayerFadeAlpha(travel: BoatTravelState): number {
+  return 1 - clamp01(travel.progressTiles / BOAT_HARBOR_BLEND_TILES);
+}
+
+function arrivalPlayerFadeAlpha(travel: BoatTravelState): number {
+  const start = Math.max(0, travel.routeLength - BOAT_HARBOR_BLEND_TILES);
+  return clamp01((travel.progressTiles - start) / BOAT_HARBOR_BLEND_TILES);
+}
+
+function boatTravelFadeAlpha(travel: BoatTravelState): number {
+  return Math.min(clamp01(travel.progressTiles / BOAT_HARBOR_BLEND_TILES), 1 - arrivalPlayerFadeAlpha(travel));
+}
+
 function cumulativeDistances(path: Vec[]): number[] {
   const distances = [0];
   for (let i = 1; i < path.length; i += 1) {
@@ -390,6 +433,10 @@ function isLegalBoatSegment(from: Vec, to: Vec): boolean {
   return (dx !== 0 || dy !== 0) && (dx === 0 || dy === 0 || dx === dy);
 }
 
+function samePoint(a: Vec, b: Vec): boolean {
+  return a.x === b.x && a.y === b.y;
+}
+
 function directionToward(from: Vec, to: Vec): Vec {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
@@ -401,4 +448,8 @@ function directionToward(from: Vec, to: Vec): Vec {
 function clampLerp(from: number, to: number, t: number): number {
   const clamped = Math.max(0, Math.min(1, t));
   return from + (to - from) * clamped;
+}
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
 }
