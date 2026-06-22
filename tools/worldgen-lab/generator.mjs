@@ -1,6 +1,7 @@
 import { generateSemanticWorld } from "../../src/world/semantic/semanticGenerator.ts";
 import { CAMPAIGN_WORLD_PROFILE } from "../../src/world/semantic/semanticProfiles.ts";
 import { SEMANTIC_BIOME, SEMANTIC_WATER } from "../../src/world/semantic/semanticTypes.ts";
+import { generateWorld } from "../../src/world/worldGenerator.ts";
 
 export const BIOME = SEMANTIC_BIOME;
 export const WATER = SEMANTIC_WATER;
@@ -17,7 +18,8 @@ export function generateWorldLab(options = {}) {
   const seed = options.seed ?? "worldgen-lab";
   const width = options.width ?? 192;
   const height = options.height ?? 120;
-  return adaptSemanticForLab(generateSemanticWorld({ seed, width, height, profile: CAMPAIGN_WORLD_PROFILE }));
+  const runtimeWorld = generateWorld({ seed, width, height, maxAttempts: 1 });
+  return adaptSemanticForLab(runtimeWorld.semantic ?? generateSemanticWorld({ seed, width, height, profile: CAMPAIGN_WORLD_PROFILE }), runtimeWorld);
 }
 
 export function serializeWorld(world) {
@@ -47,6 +49,7 @@ export function serializeWorld(world) {
     lakes: world.lakes.map((lake) => ({ x: lake.x, y: lake.y, radius: lake.radius })),
     rivers: world.rivers.map((river) => ({ id: river.id, islandId: river.islandId, source: river.source, mouth: river.mouth, length: river.path.length })),
     bridgeCandidates: world.bridgeCandidates,
+    objectOverlays: world.objectOverlays ?? [],
     roadGraph: {
       edges: world.roadGraph.edges.map((edge) => ({ from: edge.from, to: edge.to, connected: edge.connected, length: edge.length }))
     },
@@ -73,9 +76,10 @@ export function serializeWorld(world) {
   };
 }
 
-function adaptSemanticForLab(world) {
+function adaptSemanticForLab(world, runtimeWorld) {
   return {
     ...world,
+    objectOverlays: runtimeWorld?.objectOverlays ?? [],
     islandRecords: world.islands,
     validation: {
       ok: world.validation.ok,

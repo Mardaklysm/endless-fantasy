@@ -31,6 +31,7 @@ async function main() {
   outputs.push(writeImage(outDir, "distance_bands_debug.png", previews.distanceBands));
   outputs.push(writeImage(outDir, "elevation_debug.png", previews.elevation));
   outputs.push(writeImage(outDir, "mountain_mask_debug.png", previews.mountainMask));
+  outputs.push(writeImage(outDir, "mountain_collision_debug.png", previews.mountainCollision));
   outputs.push(writeImage(outDir, "river_mask_debug.png", previews.riverMask));
   outputs.push(writeImage(outDir, "river_connectivity_debug.png", previews.riverConnectivity));
   outputs.push(writeImage(outDir, "rivers_roads_debug.png", previews.riversRoads));
@@ -146,8 +147,9 @@ The generated world contains:
 - Grass cells: ${world.stats.grassCells}
 - Sand/desert cells: ${world.stats.sandCells}
 - Ice/snow cells: ${world.stats.iceCells}
-- Mountain overlays: ${world.stats.mountainCells}
+- Mountain mask cells: ${world.stats.mountainCells}
 - Mountain ranges: ${world.mountainRanges.length}
+- Decorative mountain overlays: ${(world.objectOverlays ?? []).filter((overlay) => String(overlay.id ?? "").startsWith("mountain-")).length}
 - Forest overlay cells: ${world.stats.forestCells}
 - River cells: ${world.stats.riverCells}
 - Road cells: ${world.stats.roadCells}
@@ -167,7 +169,7 @@ The lab stores a logical world model separately from its rendered preview. The s
 - biome map: grassland, sand/beach/desert, ice/snow
 - moisture, temperature, and coldness fields
 - ridge/mountain field
-- mountain mask
+- mountain mask and mountain collision debug
 - mountain range records
 - river mask
 - forest overlay map
@@ -277,7 +279,7 @@ The prototype renderer draws in layers:
 7. packed-dirt road masks
 8. bridges/docks
 9. forest overlays
-10. mountain range overlays
+10. semantic mountain massif terrain and visual-only ridge overlays
 11. towns/POIs/ports
 
 The current lab art is deliberately procedural: flat colors, light texture noise, simple symbolic mountains/forests, and styled route strokes. The algorithm and semantic separation are the point.
@@ -316,7 +318,7 @@ Recommended v1 approach:
 
 - semantic archipelago masks and fields
 - minimal terrain fills and brush-like edges
-- object overlays for mountains, forests, towns, ports, and dungeons
+- semantic mountain massif masks plus visual-only ridge overlays, forests, towns, ports, and dungeons
 - packed-dirt road masks and freshwater river/lake masks
 - validation against logical world rules before visual polish
 
@@ -324,7 +326,7 @@ Recommended v1 approach:
 
 - Roads are grid paths with simple A* costs; future visual smoothing should improve the same semantic road mask and graph rather than normal route strokes.
 - Rivers are semantic freshwater ribbons rendered by the terrain mask; future versions should improve basin selection and add stronger bank/pass shaping where roads cross wide rivers.
-- Mountain and forest art is procedural placeholder only.
+- Mountain terrain is semantic-mask driven; ridge/peak art is sparse visual-only placeholder overlay art.
 - Biome smoothing is simple and should eventually use connected-region cleanup.
   - This lab preview remains isolated from Phaser-specific rendering even though it shares the runtime-safe semantic generator core.
 `;
@@ -501,6 +503,7 @@ This list supports the semantic-mask world generator direction. It avoids asking
 | Sand/beach fill texture | required now | tile/fill | Used for beaches and desert interiors. |
 | Snow/ice fill texture | required now | tile/fill | Used for cold/high regions. |
 | Freshwater terrain fill | required now | semantic mask fill | Uses the current freshwater material sheet for river and lake masks. |
+| Mountain massif / scree terrain fill | required now | semantic mask fill | Opaque terrain-level fill for blocked mountain cells; decorative ridge sprites do not drive collision. |
 | Lake edge accents | useful soon | mask accent | Small lake edge highlights beyond the shared freshwater mask. |
 
 ## 2. Edge / Mask Rendering Assets

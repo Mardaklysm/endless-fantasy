@@ -37,14 +37,14 @@ This runs `tools/worldgen/test_worldgen.mjs`. It validates the active semantic r
 - beach cells buffer land from water
 - generated POIs never spawn on blocked water and are walkable
 - required settlement-to-port/dungeon/gate/final road graph edges connect
-- runtime roads, rivers, mountain overlays, and forest overlays exist
-- overlay collision policies tag mountains as `hardBlock`, forests as `softTerrain`, and POI cells as `poiBlock`
-- forests remain walkable, while mountains remain blocked
+- runtime roads, rivers, visual-only mountain ridge overlays, and forest overlays exist
+- overlay collision policies tag semantic mountain mask cells as `hardBlock`, mountain ridge overlays as `visualOnly`, forests as `softTerrain`, and POI cells as `poiBlock`
+- forests remain walkable, while semantic mountain mask cells remain blocked
 - mountain ranges exist as connected semantic massif components, flat mountain mask cells belong to ranges, components meet their island minimum size, singleton mountain components are cleaned to zero, and Greenhaven/Coralreach do not receive snow mountains
 - roads are walkable and not overlapped by mountain/forest overlays
 - the semantic compatibility tile grid uses exactly one canonical tile ID each for deep water, shallow water, beach, grassland, sand/desert, and ice/snow while `TERRAIN_VARIANT_MODE` is off
 - the semantic mask terrain renderer plan reports the expected texture dimensions, mask resolution, class samples, boundary samples, and does not mutate the generated world
-- the semantic mask terrain renderer uses manifest texture source IDs for deep water, shallow water, freshwater, packed-dirt roads, beach, grassland, sand/desert, and ice/snow
+- the semantic mask terrain renderer uses manifest texture source IDs for deep water, shallow water, freshwater, packed-dirt roads, beach, grassland, sand/desert, ice/snow, and mountain massifs
 - the semantic route renderer plan reports hidden normal road/river overlays, and debug mode can expose road/river diagnostics
 
 ## Asset Import Validation
@@ -110,7 +110,7 @@ For the reset semantic overworld direction, use World Generator Lab:
 npm run worldgen:lab -- --seed test-greenhaven --out tmp/worldgen-lab/test-greenhaven
 ```
 
-Check `semantic_map_debug.png`, `distance_bands_debug.png`, `elevation_debug.png`, `mountain_mask_debug.png`, `river_mask_debug.png`, `river_connectivity_debug.png`, `rivers_roads_debug.png`, `rendered_world_preview.png`, `semantic_world.json`, `worldgen_algorithm_report.md`, and `worldgen_asset_requirements.md`. These are disposable outputs under `tmp/worldgen-lab/` and are not runtime assets.
+Check `semantic_map_debug.png`, `distance_bands_debug.png`, `elevation_debug.png`, `mountain_mask_debug.png`, `mountain_collision_debug.png`, `river_mask_debug.png`, `river_connectivity_debug.png`, `rivers_roads_debug.png`, `rendered_world_preview.png`, `semantic_world.json`, `worldgen_algorithm_report.md`, and `worldgen_asset_requirements.md`. These are disposable outputs under `tmp/worldgen-lab/` and are not runtime assets.
 
 For rembg-related regeneration, use `D:\tools\rembg\venv_rembg\Scripts\rembg.exe` with `birefnet-general`. The expected AMD/Windows provider path is DirectML (`DmlExecutionProvider`). Do not add NVIDIA-specific checks.
 

@@ -56,7 +56,16 @@ function validateCurrentWorldAssetManifest() {
   assert(!WORLD_CURRENT_ASSET_MANIFEST.rendererContract.randomBaseTerrainVariantSpam, "current world manifest must keep random base terrain variants disabled.");
   assert(WORLD_CURRENT_ASSET_MANIFEST.sourcePack.approvedTerrainMaterialCount === 37, "current world manifest should record 37 approved terrain fills.");
   const terrainAssets = WORLD_CURRENT_ASSETS.filter((asset) => asset.assetKind === "terrain fill");
-  assert(terrainAssets.length === 37, `Expected 37 current terrain fill assets, got ${terrainAssets.length}.`);
+  const approvedTerrainAssets = terrainAssets.filter((asset) => asset.filename.startsWith("terrain/"));
+  const restoredV1TerrainAssets = terrainAssets.filter((asset) => asset.filename.startsWith("terrain_v1/"));
+  assert(
+    approvedTerrainAssets.length === WORLD_CURRENT_ASSET_MANIFEST.sourcePack.approvedTerrainMaterialCount,
+    `Expected ${WORLD_CURRENT_ASSET_MANIFEST.sourcePack.approvedTerrainMaterialCount} approved current terrain fills, got ${approvedTerrainAssets.length}.`
+  );
+  assert(restoredV1TerrainAssets.length > 0, "Expected restored terrain_v1 fills for selected old atlas-style water/sand/snow materials.");
+  for (const textureKey of Object.values(WORLD_CURRENT_TERRAIN_TEXTURE_KEYS)) {
+    assert(WORLD_CURRENT_ASSET_BY_TEXTURE_KEY[textureKey]?.assetKind === "terrain fill", `Semantic terrain texture ${textureKey} should resolve to a terrain fill asset.`);
+  }
   const worldObjectAssets = WORLD_CURRENT_ASSETS.filter((asset) => asset.assetKind === "world object");
   const premiumWorldObjectAssets = worldObjectAssets.filter((asset) => asset.premium);
   const backupWorldObjectAssets = worldObjectAssets.filter((asset) => !asset.premium);
@@ -279,18 +288,22 @@ function validateSemanticWorldgen() {
   assert(worldA.semantic.rivers.length > 0, "Semantic river data is missing.");
   assert(worldA.objectOverlays.some((overlay) => overlay.objectId === "small_mountain_peak" || overlay.objectId === "snowy_mountain_peak"), "No mountain overlays were generated.");
   const mountainVisualOverlays = worldA.objectOverlays.filter((overlay) => overlay.id.startsWith("mountain-"));
-  assert(mountainVisualOverlays.length >= worldA.semantic.mountains.length, "Mountain visual overlays should densely cover every semantic mountain cell.");
+  assert(mountainVisualOverlays.length > 0, "Mountain visual overlays should decorate semantic mountain ranges.");
+  assert(mountainVisualOverlays.length < worldA.semantic.mountains.length, "Mountain ridge sprites should be sparse decoration, not one overlay per blocked cell.");
+  assert(mountainVisualOverlays.every((overlay) => overlay.collisionPolicy === "visualOnly"), "Mountain ridge overlays must be visual-only; semantic mountainMap owns collision.");
   assert(mountainVisualOverlays.some((overlay) => Math.abs(overlay.offsetX ?? 0) > 0 || Math.abs(overlay.offsetY ?? 0) > 0), "Mountain visual overlays should use patch jitter.");
   for (const range of worldA.semantic.mountainRanges) {
     const patchVisuals = mountainVisualOverlays.filter((overlay) => overlay.id.startsWith(`mountain-${range.id}-patch-`));
-    assert(patchVisuals.length >= range.cells.length, `${range.id} should render at least one mountain visual per semantic mountain cell.`);
+    assert(patchVisuals.length >= 1, `${range.id} should get at least one decorative ridge sprite.`);
+    assert(patchVisuals.length <= Math.max(1, Math.ceil(range.cells.length / 4)), `${range.id} should not spam decorative ridge sprites.`);
     assert(new Set(patchVisuals.map((overlay) => overlay.objectId)).size === 1, `${range.id} should use one mountain asset across the whole massif.`);
   }
   assert(worldA.objectOverlays.some((overlay) => overlay.objectId === "broadleaf_tree" || overlay.objectId === "dark_pine_tree"), "No forest overlays were generated.");
   const mountainIndex = worldA.semantic.layers.mountainMap.findIndex((value) => value === 1);
   assert(mountainIndex >= 0, "No semantic mountain collision cells were generated.");
-  assert(!isWorldPositionWalkable(worldA, mountainIndex % worldA.width, Math.floor(mountainIndex / worldA.width)), "Mountain overlay cell should block walking.");
-  assert(worldA.semantic.layers.overlayCollisionPolicy[mountainIndex] === "hardBlock", "Mountain overlay should be tagged hardBlock.");
+  assert(!isWorldPositionWalkable(worldA, mountainIndex % worldA.width, Math.floor(mountainIndex / worldA.width)), "Semantic mountain mask cell should block walking.");
+  assert(worldA.semantic.layers.overlayCollisionPolicy[mountainIndex] === "hardBlock", "Semantic mountain mask cell should be tagged hardBlock.");
+  validateMountainCollisionInvariant(worldA);
   const forestIndex = worldA.semantic.layers.forestMap.findIndex((value, index) => value === 1 && worldA.semantic.layers.roadMap[index] === 0 && worldA.semantic.layers.overlayCollisionPolicy[index] === "softTerrain");
   assert(forestIndex >= 0, "No semantic forest soft-terrain cells were generated.");
   assert(isWorldPositionWalkable(worldA, forestIndex % worldA.width, Math.floor(forestIndex / worldA.width)), "Forest overlay cell should stay walkable.");
@@ -327,6 +340,26 @@ function validateSemanticWorldgen() {
   validateRoadAndForestPolicies(worldA);
   validateSemanticMaskTerrainRendererPlan(worldA);
   validateSemanticRouteRendererPlan(worldA);
+}
+
+function validateMountainCollisionInvariant(world) {
+  let mountainCells = 0;
+  let blockedByMountain = 0;
+  for (let y = 0; y < world.height; y += 1) {
+    for (let x = 0; x < world.width; x += 1) {
+      const i = y * world.width + x;
+      if (world.semantic.layers.mountainMap[i]) {
+        mountainCells += 1;
+        assert(!isWorldPositionWalkable(world, x, y), `Mountain mask cell ${x},${y} should block walking.`);
+        assert(world.semantic.layers.overlayCollisionPolicy[i] === "hardBlock", `Mountain mask cell ${x},${y} should carry hardBlock policy.`);
+        blockedByMountain += 1;
+      } else if (world.semantic.layers.landMask[i] && world.semantic.layers.waterClass[i] === SEMANTIC_WATER.NONE && !world.semantic.layers.lakeMap[i] && !world.semantic.layers.riverMap[i]) {
+        assert(world.semantic.layers.overlayCollisionPolicy[i] !== "hardBlock", `Non-mountain land cell ${x},${y} should not be mountain hard-blocked.`);
+      }
+    }
+  }
+  assert(mountainCells > 0, "Expected semantic mountain mask cells for collision validation.");
+  assert(blockedByMountain === mountainCells, "Blocked mountain cells should exactly match semantic mountain mask cells.");
 }
 
 function validateIslandOverlayRules(world) {
@@ -374,7 +407,8 @@ function validateCanonicalTerrainPalette(world) {
     beach: new Set(),
     grassland: new Set(),
     sand: new Set(),
-    ice: new Set()
+    ice: new Set(),
+    mountain: new Set()
   };
   for (let y = 0; y < world.height; y += 1) {
     for (let x = 0; x < world.width; x += 1) {
@@ -387,6 +421,10 @@ function validateCanonicalTerrainPalette(world) {
       }
       if (world.semantic.layers.lakeMap[i]) {
         tilesBySemantic.shallowWater.add(tile);
+        continue;
+      }
+      if (world.semantic.layers.mountainMap[i]) {
+        tilesBySemantic.mountain.add(tile);
         continue;
       }
       const biome = world.semantic.layers.biome[i];
@@ -402,6 +440,10 @@ function validateCanonicalTerrainPalette(world) {
   assertSingleTileSet(tilesBySemantic.grassland, SEMANTIC_BASE_TILE_PALETTE.grassland, "grassland");
   assertSingleTileSet(tilesBySemantic.sand, SEMANTIC_BASE_TILE_PALETTE.sand, "sand/desert");
   assertSingleTileSet(tilesBySemantic.ice, SEMANTIC_BASE_TILE_PALETTE.ice, "ice/snow");
+  assert(tilesBySemantic.mountain.has(SEMANTIC_BASE_TILE_PALETTE.mountain), "Mountain cells should include the canonical rocky mountain tile.");
+  for (const tile of tilesBySemantic.mountain) {
+    assert(tile === SEMANTIC_BASE_TILE_PALETTE.mountain || tile === WORLD_TILE_IDS.snowyMountainGround, `Unexpected mountain tile ${tile}.`);
+  }
 }
 
 function validateBeachBand(world) {
@@ -499,6 +541,7 @@ function validateSemanticMaskTerrainRendererPlan(world) {
   assert(plan.waterGrassBoundarySamples + plan.waterIceBoundarySamples > 0, "Semantic mask terrain plan found no inland water/land boundaries.");
   assert(plan.roadBoundarySamples > 0, "Semantic mask terrain plan found no road terrain boundaries.");
   assert(plan.sandGrassBoundarySamples > 0, "Semantic mask terrain plan found no sand/grass boundaries.");
+  assert(plan.mountainBoundarySamples > 0, "Semantic mask terrain plan found no mountain massif boundaries.");
   assert(before === after, "Semantic mask terrain planning mutated the generated world.");
 }
 

@@ -19,7 +19,7 @@ export function validateSemanticWorld(world: SemanticWorld) {
   }
   if (shallowCount === 0) errors.push("No shallow coastal water was generated.");
   if (beachCount === 0) errors.push("No beach band was generated.");
-  if (world.stats.mountainCells > landCount * 0.16) warnings.push("Mountain overlays cover more than 16% of land.");
+  if (world.stats.mountainCells > landCount * 0.16) warnings.push("Mountain mask cells cover more than 16% of land.");
   if (world.rivers.some((river) => hasDuplicateCells(river.path))) errors.push("A river path contains a loop.");
   if (world.rivers.length === 0) warnings.push("No rivers survived validation.");
   validateMountainRules(world, errors, warnings);

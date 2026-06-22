@@ -138,7 +138,8 @@ export const SEMANTIC_BASE_TILE_PALETTE = {
   beach: WORLD_TILE_IDS.beachSand,
   grassland: WORLD_TILE_IDS.mediumGrass,
   sand: WORLD_TILE_IDS.brightSand,
-  ice: WORLD_TILE_IDS.cleanSnow
+  ice: WORLD_TILE_IDS.cleanSnow,
+  mountain: WORLD_TILE_IDS.rockyMountainGround
 } as const satisfies Record<string, WorldTileId>;
 
 export function createWorldSeed(): string {
@@ -275,8 +276,16 @@ function tileForSemanticCell(semantic: SemanticWorld, x: number, y: number): Wor
   if (!semantic.layers.landMask[i]) {
     return semantic.layers.waterClass[i] === SEMANTIC_WATER.SHALLOW ? SEMANTIC_BASE_TILE_PALETTE.shallowWater : SEMANTIC_BASE_TILE_PALETTE.deepOcean;
   }
+  if (semantic.layers.mountainMap[i]) return mountainTileForSemanticCell(semantic, i);
   if (TERRAIN_VARIANT_MODE === "off") return canonicalTileForBiome(semantic.layers.biome[i]);
   return variantTileForSemanticCell(semantic, x, y, i);
+}
+
+function mountainTileForSemanticCell(semantic: SemanticWorld, i: number): WorldTileId {
+  if (semantic.layers.biome[i] === SEMANTIC_BIOME.ICE) return WORLD_TILE_IDS.snowyMountainGround;
+  const islandId = semantic.islandIndexToId.get(semantic.layers.islandId[i]);
+  if (islandId === "highspire") return WORLD_TILE_IDS.rockyMountainGround;
+  return SEMANTIC_BASE_TILE_PALETTE.mountain;
 }
 
 function canonicalTileForBiome(biome: number): WorldTileId {
@@ -529,8 +538,8 @@ function buildMountainPatchOverlays(semantic: SemanticWorld, range: SemanticWorl
   const width = range.bounds.maxX - range.bounds.minX + 1;
   const height = range.bounds.maxY - range.bounds.minY + 1;
   const longAxis = Math.max(width, height);
-  const visualCount = range.smallOutcrop ? 1 : Math.max(1, Math.min(10, Math.ceil(cells.length / 10), Math.ceil(longAxis / 2.6)));
-  const anchors = pickCoverageAnchors(semantic.seed, range.id, cells, visualCount);
+  const visualCount = range.smallOutcrop ? 1 : Math.max(1, Math.min(8, Math.ceil(cells.length / 16), Math.ceil(longAxis / 4)));
+  const anchors = pickMountainRidgeAnchors(semantic.seed, range.id, cells, visualCount);
   for (let visualIndex = 0; visualIndex < anchors.length; visualIndex += 1) {
     const anchor = anchors[visualIndex];
     const scaleRoll = hashNoise(`${semantic.seed}:mountain-patch-scale:${range.id}:${visualIndex}`, anchor.x, anchor.y);
@@ -548,7 +557,7 @@ function buildMountainPatchOverlays(semantic: SemanticWorld, range: SemanticWorl
       offsetX: (offsetRollX - 0.5) * (range.smallOutcrop ? 0.1 : 0.3),
       offsetY: (offsetRollY - 0.5) * (range.smallOutcrop ? 0.08 : 0.2) - largeBackPeakBias * 0.08,
       alpha: 0.96,
-      collisionPolicy: "hardBlock"
+      collisionPolicy: "visualOnly"
     });
   }
   return overlays;
@@ -630,18 +639,19 @@ function pickSpreadAnchors(seed: string, salt: string, cells: WorldVec[], count:
   return anchors.length ? anchors : [cells[Math.floor(cells.length / 2)]];
 }
 
-function pickCoverageAnchors(seed: string, salt: string, cells: WorldVec[], count: number): WorldVec[] {
-  if (count <= 1 || cells.length <= 1) return [centerCell(seed, salt, cells)];
-  const anchors = [centerCell(seed, salt, cells)];
+function pickMountainRidgeAnchors(seed: string, salt: string, cells: WorldVec[], count: number): WorldVec[] {
+  if (count <= 1 || cells.length <= 1) return [mountainCenterlineCell(seed, salt, cells)];
+  const depths = mountainInteriorDepths(cells);
+  const anchors = [mountainCenterlineCell(seed, salt, cells, depths)];
   while (anchors.length < count) {
     let bestCell: WorldVec | undefined;
     let bestScore = -Infinity;
     for (const cell of cells) {
       if (anchors.some((anchor) => anchor.x === cell.x && anchor.y === cell.y)) continue;
       const nearestDistance = Math.min(...anchors.map((anchor) => Math.hypot(anchor.x - cell.x, anchor.y - cell.y)));
-      const edgeBias = Math.abs(cell.x - anchors[0].x) + Math.abs(cell.y - anchors[0].y);
+      const interiorBias = depths.get(posKey(cell)) ?? 0;
       const jitter = hashNoise(`${seed}:coverage-anchor:${salt}:${anchors.length}`, cell.x, cell.y) * 0.18;
-      const score = nearestDistance + edgeBias * 0.08 + jitter;
+      const score = nearestDistance + interiorBias * 1.35 + jitter;
       if (score > bestScore) {
         bestScore = score;
         bestCell = cell;
@@ -653,15 +663,44 @@ function pickCoverageAnchors(seed: string, salt: string, cells: WorldVec[], coun
   return anchors;
 }
 
-function centerCell(seed: string, salt: string, cells: WorldVec[]): WorldVec {
+function mountainCenterlineCell(seed: string, salt: string, cells: WorldVec[], depths = mountainInteriorDepths(cells)): WorldVec {
   const center = cells.reduce((sum, cell) => ({ x: sum.x + cell.x, y: sum.y + cell.y }), { x: 0, y: 0 });
   center.x /= cells.length;
   center.y /= cells.length;
   return [...cells].sort((a, b) => {
     const distanceA = Math.hypot(a.x - center.x, a.y - center.y);
     const distanceB = Math.hypot(b.x - center.x, b.y - center.y);
-    return distanceA - distanceB || hashNoise(`${seed}:center-anchor:${salt}`, b.x, b.y) - hashNoise(`${seed}:center-anchor:${salt}`, a.x, a.y);
+    const depthA = depths.get(posKey(a)) ?? 0;
+    const depthB = depths.get(posKey(b)) ?? 0;
+    return depthB - depthA || distanceA - distanceB || hashNoise(`${seed}:center-anchor:${salt}`, b.x, b.y) - hashNoise(`${seed}:center-anchor:${salt}`, a.x, a.y);
   })[0];
+}
+
+function mountainInteriorDepths(cells: WorldVec[]): Map<string, number> {
+  const cellKeys = new Set(cells.map(posKey));
+  const depths = new Map<string, number>();
+  const queue: WorldVec[] = [];
+  for (const cell of cells) {
+    const isEdge = neighbors4(cell.x, cell.y).some((next) => !cellKeys.has(posKey(next)));
+    if (!isEdge) continue;
+    depths.set(posKey(cell), 0);
+    queue.push(cell);
+  }
+  if (!queue.length) {
+    for (const cell of cells) depths.set(posKey(cell), 1);
+    return depths;
+  }
+  for (let head = 0; head < queue.length; head += 1) {
+    const cell = queue[head];
+    const depth = depths.get(posKey(cell)) ?? 0;
+    for (const next of neighbors4(cell.x, cell.y)) {
+      const key = posKey(next);
+      if (!cellKeys.has(key) || depths.has(key)) continue;
+      depths.set(key, depth + 1);
+      queue.push(next);
+    }
+  }
+  return depths;
 }
 
 function mountainRangeObjectId(
@@ -781,6 +820,10 @@ function hasNearbySemanticMountain(semantic: SemanticWorld, x: number, y: number
 function pointInPoiFootprint(poi: WorldPoi, x: number, y: number): boolean {
   const radius = Math.floor(poi.footprint / 2);
   return x >= poi.x - radius && x <= poi.x + radius && y >= poi.y - radius && y <= poi.y + radius;
+}
+
+function posKey(pos: WorldVec): string {
+  return `${pos.x},${pos.y}`;
 }
 
 function pickByNoise(ids: WorldTileId[], seed: string, salt: string, x: number, y: number, weights?: number[]): WorldTileId {

@@ -39,7 +39,8 @@
     "beach": "world_current_terrain_v1_atlas_beach_sand",
     "grassland": "world_current_terrain_grassland",
     "sand": "world_current_terrain_v1_atlas_desert_sand",
-    "ice": "world_current_terrain_v1_atlas_snow"
+    "ice": "world_current_terrain_v1_atlas_snow",
+    "mountain": "world_current_terrain_mountain_scree_ground"
   },
   "routeMappings": {
     "dockHorizontal": "world_current_object_dock_wooden_small_02",
