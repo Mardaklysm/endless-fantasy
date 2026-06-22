@@ -33,6 +33,7 @@ export interface ExploreStep {
 }
 
 export type WorldControlLockReason = "boatTravel";
+export type BoatTravelDirection = "N" | "NE" | "E" | "SE" | "S" | "SW" | "W" | "NW";
 
 export interface BoatTravelState {
   sourceIslandId: IslandId;
@@ -51,7 +52,7 @@ export interface BoatTravelState {
   progressTiles: number;
   segmentIndex: number;
   boatPos: Vec;
-  facing: "left" | "right";
+  direction: BoatTravelDirection;
   phase: "departing" | "sailing" | "arriving";
   phaseElapsedMs: number;
 }

@@ -99,6 +99,8 @@ export class CrystalOathScene extends Phaser.Scene {
   dialogue?: Dialogue;
   battle?: BattleState;
   boatTravel?: BoatTravelState;
+  boatTravelSprite?: Phaser.GameObjects.Image;
+  boatTravelBreathingTween?: Phaser.Tweens.Tween;
   worldControlLockReason?: WorldControlLockReason;
   audio = new SynthAudio();
   generatedWorld?: GeneratedWorld;

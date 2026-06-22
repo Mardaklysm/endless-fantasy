@@ -10,7 +10,7 @@ import {
   TILE,
   WIDTH
 } from "../../app/config";
-import { ASSET_PATHS } from "../../assets/assetPaths";
+import { ASSET_PATHS, CHARTER_BOAT_8DIR_TEXTURE_KEY } from "../../assets/assetPaths";
 import type { AssetKey } from "../../assets/assetTypes";
 import { CHARACTER_CLASS_TEXTURES, DEFAULT_DUNGEON_THEME_TILES, DUNGEON_THEME_TILES } from "../../assets/textureKeys";
 import type { DungeonThemeTiles } from "../../assets/textureKeys";
@@ -97,6 +97,9 @@ export function configureTextureFiltering(this: CrystalOathSceneContext) {
   }
   for (const cloud of WORLD_CLOUD_ASSETS) {
     if (this.textures.exists(cloud.textureKey)) this.textures.get(cloud.textureKey).setFilter(Phaser.Textures.FilterMode.LINEAR);
+  }
+  if (this.textures.exists(CHARTER_BOAT_8DIR_TEXTURE_KEY)) {
+    this.textures.get(CHARTER_BOAT_8DIR_TEXTURE_KEY).setFilter(Phaser.Textures.FilterMode.NEAREST);
   }
 }
 

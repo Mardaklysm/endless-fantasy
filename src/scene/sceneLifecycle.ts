@@ -1,6 +1,13 @@
 import Phaser from "phaser";
 import { LAYER_UI_GRAPHICS, LAYER_WORLD_IMAGE, PIXEL_ART_SCALE } from "../app/config";
-import { ASSET_URLS, WORLD_CURRENT_ASSET_MODULES } from "../assets/assetPaths";
+import {
+  ASSET_URLS,
+  CHARTER_BOAT_8DIR_FILENAME,
+  CHARTER_BOAT_8DIR_FRAME_HEIGHT,
+  CHARTER_BOAT_8DIR_FRAME_WIDTH,
+  CHARTER_BOAT_8DIR_TEXTURE_KEY,
+  WORLD_CURRENT_ASSET_MODULES
+} from "../assets/assetPaths";
 import type { AssetKey } from "../assets/assetTypes";
 import { DUNGEON_ATLAS, DUNGEON_ATLAS_SOURCE_INSET, DUNGEON_TILE_ID_SET } from "../data/dungeonTiles";
 import { WORLD_CLOUD_ASSETS, WORLD_CLOUD_MANIFEST } from "../data/worldCloudAssets";
@@ -22,6 +29,15 @@ export function preload(this: CrystalOathSceneContext) {
     const url = WORLD_CURRENT_ASSET_MODULES[`./world/current/${cloud.filename}`];
     if (url) this.load.image(cloud.textureKey, url);
     else console.warn(`Missing current world cloud asset module for ${cloud.filename}`);
+  }
+  const charterBoatUrl = WORLD_CURRENT_ASSET_MODULES[`./world/current/${CHARTER_BOAT_8DIR_FILENAME}`];
+  if (charterBoatUrl) {
+    this.load.spritesheet(CHARTER_BOAT_8DIR_TEXTURE_KEY, charterBoatUrl, {
+      frameWidth: CHARTER_BOAT_8DIR_FRAME_WIDTH,
+      frameHeight: CHARTER_BOAT_8DIR_FRAME_HEIGHT
+    });
+  } else {
+    console.warn(`Missing charter boat spritesheet module for ${CHARTER_BOAT_8DIR_FILENAME}`);
   }
 }
 

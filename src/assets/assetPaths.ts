@@ -159,6 +159,11 @@ export const WORLD_CURRENT_ASSET_MODULES = import.meta.glob("./world/current/**/
   import: "default"
 }) as Record<string, string>;
 
+export const CHARTER_BOAT_8DIR_TEXTURE_KEY = "charter_boat_8dir";
+export const CHARTER_BOAT_8DIR_FILENAME = "boats/charter_boat_8dir.png";
+export const CHARTER_BOAT_8DIR_FRAME_WIDTH = 512;
+export const CHARTER_BOAT_8DIR_FRAME_HEIGHT = 512;
+
 export const ASSET_V2_MODULES = import.meta.glob(
   [
     "../../assets_v2/**/*.{png,jpeg,jpg}",

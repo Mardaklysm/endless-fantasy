@@ -1,7 +1,8 @@
-import { LAYER_CHARACTER_IMAGE, MOVE_TILES_PER_MS, TILE } from "../../app/config";
+import { LAYER_CHARACTER_IMAGE, MOVE_TILES_PER_MS, PIXEL_ART_SCALE, TILE } from "../../app/config";
+import { CHARTER_BOAT_8DIR_TEXTURE_KEY } from "../../assets/assetPaths";
 import type { LocationDef, TravelDestination } from "../../data/gameDataTypes";
 import { worldTileHasTag } from "../../data/worldTiles";
-import type { BoatTravelState, Vec } from "../../scene/sceneTypes";
+import type { BoatTravelDirection, BoatTravelState, Vec } from "../../scene/sceneTypes";
 import type { CrystalOathSceneContext } from "../../scene/sceneContext";
 import { SEMANTIC_WATER } from "../../world/semantic/semanticTypes";
 
@@ -10,8 +11,22 @@ const DEPARTURE_PAUSE_MS = 280;
 const ARRIVAL_PAUSE_MS = 340;
 const MAX_HARBOR_WATER_SEARCH_RADIUS = 10;
 const ROUTE_SAMPLE_STEP_TILES = 0.18;
-const BOAT_DISPLAY_W = 58;
-const BOAT_DISPLAY_H = 38;
+const BOAT_FRAME_DISPLAY_SIZE = 64;
+const BOAT_SPRITE_Y_OFFSET = -5;
+const BOAT_DIRECTION_EPSILON_TILES = 0.002;
+const BOAT_BREATHING_SCALE = 1.008;
+const BOAT_BREATHING_HALF_CYCLE_MS = 2200;
+
+export const BOAT_TRAVEL_DIRECTION_FRAMES: Record<BoatTravelDirection, number> = {
+  N: 0,
+  NE: 1,
+  E: 2,
+  SE: 3,
+  S: 4,
+  SW: 5,
+  W: 6,
+  NW: 7
+};
 
 const WATER_DIRS = [
   { x: 1, y: 0 },
@@ -91,7 +106,7 @@ export function beginBoatTravel(this: CrystalOathSceneContext, sourceHarbor: Loc
     progressTiles: 0,
     segmentIndex: 0,
     boatPos: { ...route.path[0] },
-    facing: route.destinationWaterTile.x >= route.sourceWaterTile.x ? "right" : "left",
+    direction: initialBoatDirection(route.path, route.sourceWaterTile, route.destinationWaterTile),
     phase: "departing",
     phaseElapsedMs: 0
   };
@@ -128,7 +143,8 @@ export function updateBoatTravel(this: CrystalOathSceneContext, deltaMs: number)
     const previous = travel.boatPos;
     travel.boatPos = boatRoutePointAtDistance(travel, travel.progressTiles);
     const dx = travel.boatPos.x - previous.x;
-    if (Math.abs(dx) > 0.01) travel.facing = dx > 0 ? "right" : "left";
+    const dy = travel.boatPos.y - previous.y;
+    travel.direction = boatDirectionFromDelta(dx, dy, travel.direction);
     if (travel.progressTiles >= travel.routeLength) {
       travel.boatPos = { ...travel.destinationWaterTile };
       travel.phase = "arriving";
@@ -154,6 +170,7 @@ export function completeBoatTravel(this: CrystalOathSceneContext) {
   this.currentIslandId = travel.destinationIslandId;
   this.worldPos = { ...travel.arrivalTile };
   this.lastMoveDir = directionToward(travel.arrivalTile, travel.destinationWaterTile);
+  this.destroyBoatTravelSprite();
   this.boatTravel = undefined;
   this.worldControlLockReason = undefined;
   this.mode = "world";
@@ -173,6 +190,7 @@ export function abortBoatTravel(this: CrystalOathSceneContext, refund = false) {
       this.flags.boat = travel.previousBoatFlag;
     }
   }
+  this.destroyBoatTravelSprite();
   this.boatTravel = undefined;
   this.worldControlLockReason = undefined;
   this.menu = undefined;
@@ -358,15 +376,50 @@ export function drawBoatTravel(this: CrystalOathSceneContext, cam: Vec) {
   const centerX = travel.boatPos.x * TILE - cam.x + TILE / 2;
   const centerY = travel.boatPos.y * TILE - cam.y + TILE / 2;
   this.drawActorShadow(centerX, centerY + 11, 42, 12);
-  const x = centerX - BOAT_DISPLAY_W / 2;
-  const y = centerY - BOAT_DISPLAY_H / 2 - 3;
-  if (this.hasTexture("vehicle_boat")) {
-    this.drawTexture("vehicle_boat", x, y, BOAT_DISPLAY_W, BOAT_DISPLAY_H, LAYER_CHARACTER_IMAGE, 1, undefined, travel.facing === "right");
+  if (this.hasTexture(CHARTER_BOAT_8DIR_TEXTURE_KEY)) {
+    this.drawBoatTravelSprite(centerX, centerY, BOAT_TRAVEL_DIRECTION_FRAMES[travel.direction]);
     return;
   }
-  this.g.fillStyle(0x2f1d13, 1).fillRect(x + 8, y + 18, BOAT_DISPLAY_W - 16, 11);
-  this.g.fillStyle(0x8b5a2b, 1).fillRect(x + 14, y + 10, BOAT_DISPLAY_W - 28, 13);
-  this.g.fillStyle(0xe8d29c, 1).fillTriangle(x + 24, y + 5, x + 24, y + 24, travel.facing === "right" ? x + 42 : x + 10, y + 22);
+  this.destroyBoatTravelSprite();
+  const x = centerX - 29;
+  const y = centerY - 22;
+  const eastFacing = directionPointsEast(travel.direction);
+  this.g.fillStyle(0x2f1d13, 1).fillRect(x + 8, y + 18, 42, 11);
+  this.g.fillStyle(0x8b5a2b, 1).fillRect(x + 14, y + 10, 30, 13);
+  this.g.fillStyle(0xe8d29c, 1).fillTriangle(x + 24, y + 5, x + 24, y + 24, eastFacing ? x + 42 : x + 10, y + 22);
+}
+
+export function drawBoatTravelSprite(this: CrystalOathSceneContext, centerX: number, centerY: number, frameIndex: number) {
+  let sprite = this.boatTravelSprite;
+  if (!sprite || !sprite.active) {
+    sprite = this.add.image(centerX * PIXEL_ART_SCALE, (centerY + BOAT_SPRITE_Y_OFFSET) * PIXEL_ART_SCALE, CHARTER_BOAT_8DIR_TEXTURE_KEY, frameIndex);
+    sprite.setOrigin(0.5, 0.5);
+    sprite.setDisplaySize(BOAT_FRAME_DISPLAY_SIZE * PIXEL_ART_SCALE, BOAT_FRAME_DISPLAY_SIZE * PIXEL_ART_SCALE);
+    sprite.setDepth(LAYER_CHARACTER_IMAGE);
+    sprite.setScrollFactor(0);
+    this.boatTravelSprite = sprite;
+    this.boatTravelBreathingTween = this.tweens.add({
+      targets: sprite,
+      scaleX: sprite.scaleX * BOAT_BREATHING_SCALE,
+      scaleY: sprite.scaleY * BOAT_BREATHING_SCALE,
+      duration: BOAT_BREATHING_HALF_CYCLE_MS,
+      ease: "Sine.easeInOut",
+      yoyo: true,
+      repeat: -1
+    });
+  }
+  sprite.setFrame(frameIndex);
+  sprite.setPosition(centerX * PIXEL_ART_SCALE, (centerY + BOAT_SPRITE_Y_OFFSET) * PIXEL_ART_SCALE);
+  sprite.setDepth(LAYER_CHARACTER_IMAGE);
+  sprite.setVisible(true);
+}
+
+export function destroyBoatTravelSprite(this: CrystalOathSceneContext) {
+  if (this.boatTravelSprite) this.tweens.killTweensOf(this.boatTravelSprite);
+  this.boatTravelBreathingTween?.stop();
+  this.boatTravelBreathingTween = undefined;
+  this.boatTravelSprite?.destroy();
+  this.boatTravelSprite = undefined;
 }
 
 export function drawBoatTravelDebug(this: CrystalOathSceneContext, cam: Vec) {
@@ -380,6 +433,29 @@ export function drawBoatTravelDebug(this: CrystalOathSceneContext, cam: Vec) {
   }
   this.g.fillStyle(0xffe28a, 0.9);
   for (const point of travel.waypoints) this.g.fillCircle(point.x * TILE - cam.x + TILE / 2, point.y * TILE - cam.y + TILE / 2, 3);
+}
+
+function initialBoatDirection(path: Vec[], sourceWaterTile: Vec, destinationWaterTile: Vec): BoatTravelDirection {
+  const from = path[0] ?? sourceWaterTile;
+  const to = path[1] ?? destinationWaterTile;
+  return boatDirectionFromDelta(to.x - from.x, to.y - from.y, "E");
+}
+
+function boatDirectionFromDelta(dx: number, dy: number, fallback: BoatTravelDirection): BoatTravelDirection {
+  if (Math.hypot(dx, dy) < BOAT_DIRECTION_EPSILON_TILES) return fallback;
+  const angle = (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360;
+  if (angle < 22.5 || angle >= 337.5) return "E";
+  if (angle < 67.5) return "SE";
+  if (angle < 112.5) return "S";
+  if (angle < 157.5) return "SW";
+  if (angle < 202.5) return "W";
+  if (angle < 247.5) return "NW";
+  if (angle < 292.5) return "N";
+  return "NE";
+}
+
+function directionPointsEast(direction: BoatTravelDirection): boolean {
+  return direction === "E" || direction === "NE" || direction === "SE";
 }
 
 function boatRoutePointAtDistance(travel: BoatTravelState, distance: number): Vec {
