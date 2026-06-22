@@ -7,7 +7,7 @@ The game now has two asset roots:
 - `assets/`: Batch 001 and verified fallback assets.
 - `assets_v2/`: improved SNES-style assets extracted from `D:\Projects\new_artwork`.
 
-Phaser preloads stable texture keys from `src/main.ts`. The loader prefers `assets_v2` for mapped keys and falls back to `assets/` when a v2 file is missing. Do not delete generated `Graphics` fallback rendering; missing or rejected assets must still leave the game playable.
+Phaser preloads stable texture keys from `src/assets/assetPaths.ts`, `src/assets/textureKeys.ts`, and `src/scene/sceneLifecycle.ts`. The loader prefers `assets_v2` for mapped keys and falls back to `assets/` when a v2 file is missing. Do not delete generated `Graphics` fallback rendering; missing or rejected assets must still leave the game playable.
 
 `assets_v2/source_sheets/` stores provenance copies of source sheets used by the importer. `assets_v2/previews/` stores contact sheets and quality reports. Runtime glob loading intentionally excludes `assets_v2/source_sheets/`, `assets_v2/previews/`, and the reference-only UI window crops with baked sample text.
 

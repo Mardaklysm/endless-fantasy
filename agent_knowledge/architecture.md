@@ -1,242 +1,250 @@
 # Architecture
 
-## Current File And Folder Structure
+Crystal Oath is a Phaser 3 + TypeScript + Vite browser RPG. The runtime is now split by domain so future work can read the smallest relevant slice instead of scanning a monolithic scene file.
+
+For quick navigation by task type, read `agent_knowledge/code-map.md`.
+
+## Current Source Structure
 
 ```text
-D:\Projects\Endless Fantasy\
-  AGENTS.md
-  README.md
-  ART_STYLE_GUIDE.md
-  ASSET_MANIFEST.md
-  ASSET_IMPLEMENTATION_PLAN.md
-  agent_knowledge/
+src/
+  main.ts                         # Vite entry; imports CSS and creates the game
+  style.css
+  app/
+    config.ts                     # resolution, tile, save key, timing, layer constants
+    createGame.ts                 # Phaser.Game config/bootstrap
+  scene/
+    CrystalOathScene.ts           # scene-owned state fields and prototype module registration
+    sceneContext.ts               # shared scene helper context type
+    sceneGlobals.ts               # barrel for extracted scene helper imports
+    sceneLifecycle.ts             # preload/create/update and renderer resolution setup
+    sceneState.ts                 # new game, flags, party creation, locations, towns, dungeons
+    sceneTypes.ts                 # mode/input/menu/dialogue/vector types
+  input/
+    keyboard.ts                   # keyboard predicate/direction helpers
+    sceneInput.ts                 # key/pointer dispatch for title/menu/dialogue/explore/battle
+  data/
+    gameDataTypes.ts
+    items.ts
+    spells.ts
+    gear.ts
+    enemies.ts
+    playerSkills.ts
+    battleTables.ts
+    towns.ts
+    characterSprites.ts
+    dungeonTiles.ts
+    worldTiles.ts
+    worldCurrentAssets.ts
+    worldCloudAssets.ts
+    worldObjects.ts
   assets/
-    characters/
-    effects/
-    enemies/
-    icons/
-    portraits/
-    tiles/
-    title/
-    ui/
-  index.html
-  package.json
-  package-lock.json
-  tsconfig.json
-  vite.config.ts
-  src/
-    data/
-      characterSprites.ts
-      dungeonTiles.ts
-      worldCloudAssets.ts
-      worldObjects.ts
-      worldTiles.ts
+    assetPaths.ts                 # root assets/assets_v2/src asset glob and URL resolution
+    assetTypes.ts
+    textureKeys.ts                # texture-key maps for gameplay renderers
     world/
-      cloudOverlay.ts
-      dungeonGenerator.ts
-      seededRng.ts
-      worldGenerator.ts
-      semantic/
-        semanticGenerator.ts
-        semanticMaskTerrainRenderer.ts
-        semanticProfiles.ts
-        semanticTypes.ts
-        semanticValidation.ts
-    main.ts
-    style.css
-    vite-env.d.ts
-  tools/
-    worldgen-lab/
-      worldgenLab.mjs
-      generator.mjs
-      renderPreview.mjs
-      README.md
+      current/
+      dungeon_atlas.png
+      dungeonAtlas.manifest.json
+  render/
+    common/
+      renderCore.ts               # immediate draw loop helpers, text/images, texture filtering
+      panels.ts                   # panels, bars, HUD, camera, dirty flag
+      drawActors.ts               # actor/portrait/enemy/crystal fallback drawing
+    title/drawTitle.ts
+    world/
+      drawWorld.ts                # overworld draw loop, semantic cache, overlays, F6 debug
+      drawWorldTerrain.ts         # raw/fallback terrain tile drawing
+      drawLocationIcon.ts         # POI/location icon rendering
+    town/drawTown.ts
+    dungeon/drawDungeon.ts
+    battle/drawBattle.ts
+    menu/drawMenu.ts
+  systems/
+    audio/synthAudio.ts
+    battle/
+      battleTypes.ts
+      battleFlow.ts
+      battleActions.ts
+      battleState.ts
+    menu/menuActions.ts
+    movement/exploreMovement.ts
+    save/
+      saveGame.ts
+      loadGame.ts
+    world/worldMath.ts
+  world/
+    cloudOverlay.ts
+    dungeonGenerator.ts
+    seededRng.ts
+    worldGenerator.ts
+    semantic/
+      semanticGenerator.ts
+      semanticMaskTerrainRenderer.ts
+      semanticProfiles.ts
+      semanticRouteRenderer.ts
+      semanticTypes.ts
+      semanticValidation.ts
 ```
-
-Ignored/generated folders:
-
-- `node_modules/`
-- `dist/`
-- `.vite/`
 
 ## Runtime Stack
 
-- Phaser 3 (`phaser` dependency) for game loop, canvas rendering, keyboard input, 16:9 scale fitting, and per-texture pixel-art filtering.
-- Phaser preload/image textures for PNG/JPEG assets in root `assets/` and `assets_v2/`.
-- TypeScript for source.
-- Vite for development server and production build.
-- Browser `localStorage` for saves.
-- WebAudio oscillators for generated blips and loop patterns.
+- Phaser 3 handles the game loop, canvas rendering, keyboard/pointer input, scale fitting, texture filtering, and fullscreen.
+- Vite builds and serves the browser entry.
+- TypeScript compiles the game code.
+- Browser `localStorage` stores saves under `crystal-oath-save-v1`.
+- WebAudio oscillator loops/effects are generated in `src/systems/audio/synthAudio.ts`.
+- No external art, sound, music, font, or sprite dependencies are used.
 
 ## Entry Points
 
 - `index.html` mounts `<div id="game"></div>` and loads `/src/main.ts`.
-- `src/style.css` centers the game canvas, sets dark background, and enables pixelated rendering.
-- `src/main.ts` creates `new Phaser.Game(config)`.
-- Default Phaser backing canvas size is 1920x1080. The browser display is fitted to the available viewport by Phaser `Scale.FIT`.
+- `src/main.ts` imports `src/style.css` and calls `createGame()`.
+- `src/app/createGame.ts` creates the Phaser config with a 1920x1080 backing canvas, `Phaser.Scale.FIT`, and `CrystalOathScene`.
+- `src/app/config.ts` owns the global constants:
+  - `DESIGN_WIDTH = 1920`
+  - `DESIGN_HEIGHT = 1080`
+  - `PIXEL_ART_SCALE = 2`
+  - `LAYOUT_WIDTH = 960`
+  - `LAYOUT_HEIGHT = 540`
+  - `TILE = 32`
+  - `SAVE_KEY = "crystal-oath-save-v1"`
+  - `WORLD_W = 96`
+  - `WORLD_H = 64`
 
-## Main Source Units
+Pointer coordinates still map back to layout coordinates by dividing by `PIXEL_ART_SCALE`.
 
-`src/main.ts` currently contains most logic:
+## Scene Organization
 
-- Data/interface types for modes, terrain, characters, enemies, items, spells, gear, menus, dialogue, and battles.
-- Asset texture key/path maps and renderer lookup maps for terrain, locations, dungeons, enemies, portraits, and NPCs.
-- Data tables: `ITEMS`, `SPELLS`, `WEAPONS`, `ARMORS`, `ENEMIES`, `WORLD_TABLES`.
-- Imported class sprite manifest from `src/data/characterSprites.ts` for fighter/priest/wizard frame rectangles, anchors, and source metadata.
-- Imported world tile compatibility registry from `src/data/worldTiles.ts` for semantic tile IDs, walkability, movement cost, encounter family, and tags. It no longer contains overworld atlas source rectangles.
-- Imported current world asset manifest helpers from `src/data/worldCurrentAssets.ts` for selected terrain fill texture keys, overlay/POI/route mappings, placeholder status, and deprecated-source metadata.
-- Imported cloud manifest helpers from `src/data/worldCloudAssets.ts` for island/theme cloud-pool fallback resolution.
-- Imported world object ID registry from `src/data/worldObjects.ts` for stable semantic object IDs, categories, and tags. Object rendering resolves through current manifest mappings, not atlas source rectangles.
-- Imported dungeon/city tile manifest from `src/data/dungeonTiles.ts` for the active `dungeon_atlas`, 8x8 source rectangles, shared source-edge inset, tile IDs, categories, themes, and tags. The current atlas has 64 classified dungeon/city cells.
-- `src/world/seededRng.ts`: deterministic RNG/hash/noise helpers shared by map and dungeon generation.
-- `src/world/semantic/`: runtime-safe semantic overworld generator and renderer helpers. `semanticProfiles.ts` defines the campaign profile with four major islands (Greenhaven, Coralreach, Frostmere, Highspire) plus seeded minor islands and per-island overlay rules. `semanticGenerator.ts` builds land/water masks, island IDs, coast distance bands, grass/sand/ice biomes, elevation/ridges, one-tile river centerlines, passable forests, connected mountain masks, footprint-validated POIs, harbors, road graph, road-river crossing candidates, overlay collision policies, and walkability. Unbridged river cells are hard-blocked; crossing candidates make road-river crossings walkable. `semanticMaskTerrainRenderer.ts` generates the normal Phaser terrain background as a crisp mask-rendered texture using selected individual material PNGs as repeating texture sources for ocean, beach, biomes, narrow freshwater rivers/lakes, and narrow packed-dirt roads. `semanticRouteRenderer.ts` generates debug-only road/river graph diagnostics. `semanticValidation.ts` validates starter spawn, major islands, harbors, POIs and key footprints, beach buffers, roads, rivers, mountain component size/connectivity/snow rules, forest passability, and overlay separation.
-- `src/world/worldGenerator.ts`: compatibility facade adapting `SemanticWorld` into the existing Phaser-facing `GeneratedWorld` contract: semantic tile ID grid, biome grid, island records, POIs, harbor travel points, road visual masks, river paths, current-folder harbor dock overlays, road-river crossing candidates, one soft-terrain tree sprite per semantic forest cell, one visual-only mountain sprite per semantic mountain cell, sea route dots, start position, and validation. This keeps `src/main.ts` gameplay systems working while the geography source is semantic.
-- `src/world/cloudOverlay.ts`: visual-only Phaser overlay controller for slow drifting overworld clouds. It selects from the active island/theme pool, falls back to the default grassland pool when region pools are empty, and renders above the world layers but below UI as screen-space sprites.
-- `src/world/dungeonGenerator.ts`: deterministic room-and-corridor dungeon floor generation from `worldSeed + dungeonId + tier`, including entrance/stairs, chests, switch/gate, and boss placement.
-- `tools/worldgen-lab/`: standalone Node/pngjs preview/report tool for the semantic overworld direction. It imports the runtime-safe core from `src/world/semantic/`, but keeps pngjs/filesystem rendering outside Phaser.
-- `SynthAudio`: WebAudio helper for generated music loops and sound effects.
-- `CrystalOathScene`: main Phaser scene containing game state, input handling, map movement, battles, menus, save/load, and rendering.
-- Input helpers: `isUp`, `isDown`, `isLeft`, `isRight`, `isConfirm`, `isCancel`, `keyDirection`.
-- Phaser config at bottom of file.
+`src/scene/CrystalOathScene.ts` owns Phaser scene state: graphics layers, transient text/image arrays, mode/menu/dialogue/battle state, generated world state, party/inventory/gold, positions, flags, discovered POIs, opened chests, settings, movement state, and cache keys.
 
-## Game States
+The scene class is intentionally a state shell. Runtime methods are attached from focused modules with `Object.assign(CrystalOathScene.prototype, ...)`. This preserves the existing Phaser scene-state model while moving behavior into domain files. The current helper context is broad (`CrystalOathSceneContext & Record<string, any>`) so the refactor could preserve behavior mechanically; future cleanup can narrow contexts after behavior is stable.
 
-The `Mode` union currently includes:
+## Data
 
-- `title`
-- `world`
-- `town`
-- `dungeon`
-- `dialogue`
-- `menu`
-- `battle`
-- `gameOver`
-- `ending`
+Static gameplay tables moved out of the scene:
 
-State transitions are managed inside `CrystalOathScene`.
+- `src/data/items.ts`
+- `src/data/spells.ts`
+- `src/data/gear.ts`
+- `src/data/enemies.ts`
+- `src/data/playerSkills.ts`
+- `src/data/battleTables.ts`
+- `src/data/towns.ts`
 
-## Rendering Approach
+World, cloud, object, character sprite, and dungeon atlas manifest helpers remain in their specialized `src/data/*` files.
 
-Rendering is layered Phaser `Graphics`, Phaser image textures, and live Phaser text. `preload()` loads Batch 001 PNGs from root `assets/` and newer PNG/JPEG files from `assets_v2/` through manifest-style texture keys. Draw paths are image-first and fallback-second where the first batch is strong enough; weak first-pass world terrain/markers are currently superseded by original procedural world art while the PNGs remain loaded.
+Town and dungeon definitions still live in `src/scene/sceneState.ts` because they close over current scene flags, generated dungeon floors, and arrival callbacks. If they grow, extract factory functions that accept explicit context instead of moving hidden scene dependencies into static data tables.
 
-Key draw functions:
+## Assets
 
-- `drawTitle`
-- `drawWorld`
-- `drawTown`
-- `drawDungeon`
-- `drawBattle`
-- `drawMenuScreen`
-- `drawDialogue`
-- `drawWorldTile`
-- `drawDungeonTile`
-- `drawLocationIcon`
-- `drawLeader`
-- `drawCharacterSpriteFrame`
-- `drawNpc`
-- `drawPortrait`
-- `drawEnemySprite`
-- `drawPixelCrystal`
-- `drawPanel`
-- `drawBar`
+Asset loading is split into:
 
-The renderer uses a dirty flag and redraws the full canvas on state/input changes. Smooth movement and battle action timers can also mark the scene dirty during `update()` so animation/timed flow redraws between input events.
+- `src/assets/assetPaths.ts`: root `assets/`, `assets_v2/`, and `src/assets/world/` glob URL resolution.
+- `src/assets/textureKeys.ts`: stable texture-key maps for locations, town services/props, party classes, enemies, portraits, dungeon atlas themes, and town/dungeon atlas picks.
+- `src/scene/sceneLifecycle.ts`: Phaser preload loop for resolved URLs, current world assets, and cloud assets.
 
-The scene keeps generated fallback drawing for missing textures. It also tracks transient Phaser image objects and destroys/recreates them on each redraw so image assets fit the existing immediate redraw model. Cropped texture rendering must use the requested display size directly; do not rescale cropped frames by the full source-sheet dimensions.
+Rules retained:
 
-Fighter/priest/wizard class sprites are normalized 5x2 transparent sheets in `assets_v2/characters/classes/`. Runtime rendering selects fixed manifest cells and positions each crop by manifest `bodyCenterX` and `feetBaselineY`, so walk and attack frames share a stable body anchor. The tiny Arlen/Mira/Kael map/battle PNGs are excluded from the runtime asset glob.
+- `assets_v2` overrides root `assets/` when a mapped v2 asset exists.
+- `src/assets/world/current/` manifest behavior remains active.
+- Generated fallback art remains available for missing textures.
+- Deleted generic placeholder PNGs should not be restored.
+- Dungeon/city atlas crops preserve `DUNGEON_ATLAS_SOURCE_INSET = 3`.
 
-Normal overworld base terrain uses `src/world/semantic/semanticMaskTerrainRenderer.ts`, not square atlas tile placement. It creates a Phaser canvas texture sized to `world.width * TILE` by `world.height * TILE`, classifies the semantic fields into a finer mask grid, fills deep ocean, shallow water, freshwater rivers/lakes, packed-dirt roads, beach, grass, sand, and ice with repeated selected material PNGs from `src/assets/world/current/terrain/`, and draws pixel-step coast/biome/water/road boundary accents. It does not blur the whole map and does not depend on a large coastline or route tileset. Collision, encounters, POIs, harbors, roads, rivers, mountain blocking, and island metadata still come from the semantic grid, not from rendered pixels.
+## World Generation
 
-Normal roads, rivers, and lakes are terrain-mask classes. `semanticRouteRenderer.ts` is debug-only for road/river graph diagnostics; it must not draw normal gameplay road or river bodies. Road-river crossings render as dirt-road traversal points in the mask terrain; harbor docks remain overlay sprites above the mask terrain.
+Semantic overworld generation remains under `src/world/semantic/`.
 
-The active overworld art set is `src/assets/world/current/` plus `world_asset_manifest.json`. `drawWorldTile` raw/debug fallback resolves semantic tile IDs to current material texture keys. Overworld object/POI/route/overlay texture resolution is premium-first: `objects_premium/` mappings imported from `D:\Tools\rembg\bg_output` win when present, then curated backup `objects/` mappings, then generated fallback drawing. There is no normal-runtime overworld atlas crop path; removed special tilesets, generated 10x10 atlases, and old overworld sheets are not active runtime terrain.
+- `semanticGenerator.ts` builds land/water masks, island IDs, shallow water, beaches, biomes, elevation/ridges, roads, rivers, road-river crossing candidates, forests, mountain masks, POI footprints, overlay collision policy, harbors, and walkability.
+- `worldGenerator.ts` adapts semantic output into the Phaser-facing `GeneratedWorld` contract.
+- `semanticMaskTerrainRenderer.ts` creates the normal gameplay overworld terrain texture from semantic masks and selected current material PNGs.
+- `semanticRouteRenderer.ts` is debug-only for road/river graph diagnostics.
+- `semanticValidation.ts` validates starter spawn, islands, harbors, POIs, roads, rivers, forests, mountains, and renderer assumptions.
 
-Dungeon and city/town rendering uses the active `dungeon_atlas` sheet at `src/assets/world/dungeon_atlas.png` plus `src/assets/world/dungeonAtlas.manifest.json`. `drawDungeonTile`, `drawTownFloorTile`, `drawTownWallTile`, and `drawTownServicePad` crop 8x8 atlas cells inward with `DUNGEON_ATLAS_SOURCE_INSET = 3` via `dungeonAtlasSourceRectWithInset`. Dungeons and towns use weighted atlas picks: one base floor/wall tile dominates, with sparse accent variants. Dungeon maps smaller than the viewport are centered, and unused `#` filler not adjacent to a carved room/corridor renders as dark void instead of wall wallpaper.
+Normal gameplay collision and encounters use semantic world data, not rendered pixels.
 
-Generated overworld base terrain is cached from semantic masks when a world seed/layout is built. The cache renders at final world pixel size with `imageSmoothingEnabled = false`; the internal mask grid uses 16 samples per semantic cell at the default 32px tile size, so boundaries can be diagonal/rounded while staying pixel-crisp. `TERRAIN_VARIANT_MODE` is currently `"off"` for the compatibility tile grid; later sparse detail should be overlays or controlled patches, not random base tile replacement. Collision, walkability, POIs, and tile IDs remain semantic. POI body footprints are blocked `poiBlock` cells with adjacent walkable approach tiles; movement into a blocked POI edge activates the location instead of relying on sprite bounds.
+## Rendering
 
-Render resolution is split into clear constants: `DESIGN_WIDTH = 1920`, `DESIGN_HEIGHT = 1080`, `PIXEL_ART_SCALE = 2`, `LAYOUT_WIDTH = DESIGN_WIDTH / PIXEL_ART_SCALE`, and `LAYOUT_HEIGHT = DESIGN_HEIGHT / PIXEL_ART_SCALE`. Graphics commands, Phaser images, and live text are scaled by `PIXEL_ART_SCALE` when rendered, so existing 960x540-style layout coordinates fill a true 1920x1080 canvas. Pointer input maps from canvas coordinates back to layout coordinates by dividing by `PIXEL_ART_SCALE`.
+Rendering is immediate-mode Phaser graphics/images/live text, split by surface:
 
-Texture filtering is per asset family: battle backgrounds use linear filtering and the canvas CSS uses `image-rendering: auto`; sprites, tiles, UI, icons, enemies, and class sheets use nearest-neighbor texture filtering.
+- Common rendering: `src/render/common/renderCore.ts`, `panels.ts`, `drawActors.ts`
+- Title: `src/render/title/drawTitle.ts`
+- World: `src/render/world/drawWorld.ts`, `drawWorldTerrain.ts`, `drawLocationIcon.ts`
+- Town: `src/render/town/drawTown.ts`
+- Dungeon: `src/render/dungeon/drawDungeon.ts`
+- Battle: `src/render/battle/drawBattle.ts`
+- Menu/dialogue/game over/ending: `src/render/menu/drawMenu.ts`
 
-New games call the semantic campaign generator through `generateWorld()`. The generated world includes the tile grid, island IDs per tile, island records, POI coordinates and object IDs, seed-derived ocean object overlays, mountain range/forest overlays with collision policies, start position, harbor docks, shallow-water coordinates, sea routes, road visual masks, river paths, road-river bridge candidates, entry triggers, semantic layers, and validation result. `CrystalOathScene.locations()` adapts generated POIs back into town/dungeon/gate/final entry behavior and also exposes harbor/landmark overworld interactions.
+Important rendering invariants:
 
-Seed-derived ocean overlays, one tree sprite per semantic forest cell, one visual-only mountain sprite per semantic mountain cell, current-folder harbor dock sprites, POIs, player, and UI are separate layers above the mask terrain background. Runtime no longer draws translucent POI apron/footprint squares; POI footprint coloring is debug/lab only. Road and river graph data remains in the semantic world; normal gameplay renders roads and freshwater bodies through the terrain mask cache. Mountain collision remains on the accepted semantic mountain mask, and each hard-blocked mountain cell gets a normal unscaled mountain sprite instead of debug-style footprint squares or terrain-massif fills. F6 `roads` and F6 `rivers` show graph diagnostics only. `drawLocationIcon` prefers theme-aware premium current POI texture mappings from `world_asset_manifest.json`, uses current asset scale/anchor metadata for approved object sprites, falls back to curated backup objects, then marker textures or generated art.
+- UI text remains live Phaser text.
+- Battle backgrounds use linear texture filtering; pixel sprites/tiles/UI/icons use nearest filtering.
+- Normal overworld terrain uses semantic mask rendering, not normal-runtime atlas tile stamping.
+- Roads/rivers/lakes render through terrain masks; F6 road/river graph strokes are debug-only.
+- Forests remain passable soft-terrain overlays.
+- Mountains render as one normal unscaled visual-only mountain sprite per accepted semantic mountain cell; collision remains semantic.
+- Runtime POI apron/footprint debug squares stay disabled in normal gameplay.
+- Dungeon and town floors/walls use weighted base/accent atlas picks, not even random checkerboarding.
+- Dungeon unused `#` filler renders as void unless adjacent to carved floor/corridor.
 
-The drifting cloud overlay is separate from generated world content. `CrystalOathScene` preloads cloud PNGs from `src/assets/world/current/clouds/`, passes island/theme context to `OverworldCloudOverlay` in world mode and world-backed menus/dialogues, and places cloud sprites at `LAYER_UI_GRAPHICS - 1` with scroll factor 0 so they sit above the map/world art, below HUD/menu panels, and drift independently of camera/player movement. F7 toggles the overlay for debug checks.
+## Input And Movement
 
-F6 semantic debug cycling includes normal/off, edge debug, raw square tiles, semantic masks, distance bands, walkability, overlay policy, mountain candidates/accepted range cells, forest soft-terrain cells, island themes, POI IDs/clearance, roads, and rivers. Edge debug draws water/beach edges cyan, sand/grass edges magenta, sand/ice edges white, and grass/ice edges blue.
+- `src/input/keyboard.ts` owns keyboard predicate and direction helpers.
+- `src/input/sceneInput.ts` dispatches key/pointer input by current mode and handles debug toggles.
+- `src/systems/movement/exploreMovement.ts` owns tile-step movement, held direction state, collision checks, visual/logical position syncing, town/dungeon/world interactions, location entry, harbor travel, and encounter triggers.
 
-Battle rendering is split into helper sections:
+Movement invariants:
 
-- `drawBattleBackdrop`: original scenic forest/plains backdrop.
-- `drawBattleEnemy` / `enemyBattleSlot`: enemies on the left with shadows, HP bars, target highlight, and visible intent labels.
-- `drawPartyBattler`: original procedural party battlers on the right.
-- `drawBattleTargetPanel`: lower-left target/log panel.
-- `drawBattleCommandPanel`: lower-middle command panel for the current party actor.
-- `drawBattleStatusPanel`: lower-right party status and next-turn preview.
+- Movement is tile-center based.
+- Gameplay tile positions commit only after the visual step completes.
+- Collision checks the destination tile center.
+- Location entry and random encounters trigger after completed steps.
+- World collision uses semantic walkability.
 
-Party battlers use the class sheets: Arlen -> fighter, Mira -> priest, Kael -> wizard. Battle idle uses `walk_left_a`; party attacks and skills swap through `attack_windup_left` and `attack_release_left` during the existing lunge animation.
+## Battle
 
-## Input Approach
+Battle logic is split into:
 
-Keyboard events are registered in `create()`:
+- `battleFlow.ts`: random/boss battle setup, enemy intent, initiative cycles, turn advancement, battle background selection.
+- `battleActions.ts`: command selection, player/enemy action resolution, skills, spells, items, animation queueing.
+- `battleState.ts`: status ticks, battle end checks, rewards, damage math, party/enemy helper state.
+- `battleTypes.ts`: battle state/action/initiative types.
 
-- Arrow keys/WASD: move/select.
-- Enter/Space/Z: confirm.
-- Escape/X: cancel/menu.
-- Shift: faster exploration movement.
-- M: mute toggle.
-- F: fullscreen.
-- F9: hidden debug menu outside battle.
+Battle rendering is in `src/render/battle/drawBattle.ts`.
 
-Exploration movement is tile-center based using persistent visual positions: `visualWorldPos`, `visualTownPos`, and `visualDungeonPos`. Direction keydown records held direction, keyup releases it, and update-time movement interpolates one accepted step from the current tile center to the adjacent tile center. Releasing input finishes the active step and stops with the leader's feet/shadow anchored on the destination tile center instead of leaving the player between tiles.
+Rules retained:
 
-Important movement rule: renderers read the persistent visual tile positions during the active step, but gameplay tile positions (`worldPos`, `townPos`, `dungeonPos`) commit only when the destination tile center is reached. Collision checks the requested destination tile center with `canOccupyExploreTile`, not a rectangle around the full sprite. Encounters, exits, dungeon objects, and location entry fire only after completed tile steps.
+- Individual initiative turns remain active.
+- The game does not use all-party queued rounds.
+- Enemy intent remains visible before enemy turns.
+- Skill command remains present.
+- Party battlers stay on the right facing left; enemies stay on the left facing right.
+- Fallen party members still receive victory XP and level-up stat gains without being revived.
 
-Mouse support is minimal and mainly starts audio/click blips.
+## Menu, Save, Audio
 
-## Save/Load Approach
+- `src/systems/menu/menuActions.ts`: main/status/items/magic/equipment/settings/debug menus, shops, inns, clinics, dialogue helpers.
+- `src/systems/save/saveGame.ts`: localStorage serialization.
+- `src/systems/save/loadGame.ts`: save normalization, world rebuild, position restoration, and scene state restoration.
+- `src/systems/audio/synthAudio.ts`: generated oscillator loops and blips plus mute state.
 
-`saveGame()` serializes party, inventory, gear, gold, world seed, current island id, positions, current town/dungeon, story/travel flags, discovered POIs, opened chests, puzzle flags, defeated bosses, cleared dungeons, settings, and encounter counter to `localStorage`.
+Save behavior remains under the existing key and schema shape. There is still no explicit numeric schema version.
 
-`loadGame()` reads `crystal-oath-save-v1`, rebuilds the generated overworld from the saved `worldSeed`, normalizes earlier saves with missing travel/discovery/skill fields, snaps invalid dungeon positions back to the generated entrance/stair marker for that dungeon floor, restores state, returns to `world`, and marks the scene dirty. There is still no explicit numeric schema version.
+## Validation
 
-## Audio Approach
+For code changes, run:
 
-`SynthAudio` uses WebAudio oscillators:
+```powershell
+npm test
+npm run build
+```
 
-- Loop patterns for title/world/battle/dungeon/ending.
-- Blips for confirm, cancel, hit, spell, victory, and error.
-- Mute is a setting and can be toggled with `M`.
-
-No external audio files are used.
-
-## Asset Placeholder Approach
-
-Current visuals use PNG assets where Batch 001 has been wired, with generated code fallbacks still present. Do not remove generated placeholders until each replacement path is loaded, shown, and verified.
-
-## Hardcoded Constants To Respect
-
-- `DESIGN_WIDTH = 1920`
-- `DESIGN_HEIGHT = 1080`
-- `PIXEL_ART_SCALE = 2`
-- `LAYOUT_WIDTH = 960` derived from the Full HD design width
-- `LAYOUT_HEIGHT = 540` derived from the Full HD design height
-- `TILE = 32`
-- `SAVE_KEY = "crystal-oath-save-v1"`
-- `WORLD_W = 96`
-- `WORLD_H = 64`
-- `DUNGEON_ATLAS_SOURCE_INSET = 3` crops away dirty source-cell edge pixels before drawing valid dungeon/city atlas tiles into full destination cells.
-- Town interior uses a 21x15 tile area offset at x=144, y=40.
-- Dungeon floors are 22x14 character maps.
-- Battle layout uses enemies on the left, party battlers on the right, and three lower panels for target/log, command, and party status.
-- Battle flow uses initiative entries for individual actor turns; do not rebuild the removed all-party action queue.
+For this architecture split, both commands passed after extraction.
 
 ## Known Architecture Risks
 
-- `src/main.ts` is large and combines data, state management, rendering, audio, and gameplay. Future refactors should be incremental and test after each extraction.
-- Asset maps now live in `src/main.ts`; they may deserve a small module if future batches grow the file further.
-- Battle actions have a short timed animation state with temporary render offsets for lunges/steps before returning to home positions. Damage/heal/item math remains in the existing battle resolvers.
-- Save data has no versioned migration layer yet.
+- Extracted scene methods currently share a broad scene context type for mechanical compatibility. Future refactors can narrow those contexts by domain.
+- Town and dungeon definitions still live in scene state because they depend on flags and callbacks.
+- Automated coverage is still mostly worldgen validation plus TypeScript/build. Browser smoke testing remains important for rendering and input changes.
+- Existing large pre-refactor source files such as `src/world/semantic/semanticGenerator.ts` and generated/manifests are still large; they were outside this scene-decomposition pass.

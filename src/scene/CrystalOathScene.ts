@@ -1,0 +1,142 @@
+import Phaser from "phaser";
+import type { ActiveMenu, Dialogue, ExploreStep, Mode, Terrain, Vec, DirectionName } from "./sceneTypes";
+import type { BattleState } from "../systems/battle/battleTypes";
+import type { CharacterState } from "../data/gameDataTypes";
+import type { GeneratedWorld, IslandId, WorldRoadVisual } from "../world/worldGenerator";
+import type { SemanticRouteOverlayMode } from "../world/semantic/semanticRouteRenderer";
+import { SynthAudio } from "../systems/audio/synthAudio";
+import { OverworldCloudOverlay } from "../world/cloudOverlay";
+
+import * as sceneLifecycle from "./sceneLifecycle";
+import * as sceneInput from "../input/sceneInput";
+import * as sceneState from "./sceneState";
+import * as exploreMovement from "../systems/movement/exploreMovement";
+import * as battleFlow from "../systems/battle/battleFlow";
+import * as battleActions from "../systems/battle/battleActions";
+import * as battleState from "../systems/battle/battleState";
+import * as menuActions from "../systems/menu/menuActions";
+import * as saveGame from "../systems/save/saveGame";
+import * as loadGame from "../systems/save/loadGame";
+import * as renderCore from "../render/common/renderCore";
+import * as drawTitle from "../render/title/drawTitle";
+import * as drawWorld from "../render/world/drawWorld";
+import * as drawWorldTerrain from "../render/world/drawWorldTerrain";
+import * as drawTown from "../render/town/drawTown";
+import * as drawDungeon from "../render/dungeon/drawDungeon";
+import * as drawBattle from "../render/battle/drawBattle";
+import * as drawMenu from "../render/menu/drawMenu";
+import * as drawLocationIcon from "../render/world/drawLocationIcon";
+import * as drawActors from "../render/common/drawActors";
+import * as panels from "../render/common/panels";
+
+export class CrystalOathScene extends Phaser.Scene {
+  g!: Phaser.GameObjects.Graphics;
+  worldOverlay!: Phaser.GameObjects.Graphics;
+  ui!: Phaser.GameObjects.Graphics;
+  cloudOverlay?: OverworldCloudOverlay;
+  texts: Phaser.GameObjects.Text[] = [];
+  images: Phaser.GameObjects.Image[] = [];
+  mode: Mode = "title";
+  titleOptions = ["Continue", "New Game"];
+  titleSelected = 0;
+  menu?: ActiveMenu;
+  dialogue?: Dialogue;
+  battle?: BattleState;
+  audio = new SynthAudio();
+  generatedWorld?: GeneratedWorld;
+  roadVisualsByKey = new Map<string, WorldRoadVisual>();
+  semanticDebugOverlay: "off" | "edgeDebug" | "rawTiles" | "masks" | "distance" | "grid" | "walkability" | "policy" | "mountains" | "forests" | "islands" | "pois" | "roads" | "rivers" = "off";
+  worldSeed = "title-preview";
+  world: Terrain[][] = [];
+  worldTerrainCacheKey = "world_terrain_cache";
+  worldTerrainCacheSeed = "";
+  worldRouteOverlayCacheKey = "world_route_overlay_cache";
+  worldRouteOverlayCacheSeed = "";
+  routeOverlayMode: SemanticRouteOverlayMode = "hidden";
+  riverOverlayMode: SemanticRouteOverlayMode = "hidden";
+  cloudOverlayEnabled = true;
+  party: CharacterState[] = [];
+  inventory: Record<string, number> = {};
+  gearBag: Record<string, number> = {};
+  gold = 0;
+  worldPos: Vec = { x: 10, y: 22 };
+  townPos: Vec = { x: 10, y: 12 };
+  dungeonPos: Vec = { x: 1, y: 1 };
+  visualWorldPos: Vec = { x: 10, y: 22 };
+  visualTownPos: Vec = { x: 10, y: 12 };
+  visualDungeonPos: Vec = { x: 1, y: 1 };
+  currentTown = "dawnford";
+  currentDungeon = "mossCave";
+  currentIslandId: IslandId = "greenhaven";
+  dungeonFloor = 0;
+  previousMode: Mode = "world";
+  pendingTownReturn: Vec = { x: 10, y: 22 };
+  encounterCounter = 10;
+  flags = {
+    relics: { root: false, flame: false, tide: false, gale: false },
+    boat: false,
+    skyship: false,
+    gateOpen: false,
+    introSeen: false,
+    travel: {
+      visitedIsland2: false,
+      visitedIsland3: false,
+      visitedFrostmere: false,
+      visitedHighspire: false,
+      unlockedIsland2: true,
+      unlockedIsland3: false,
+      unlockedFrostmere: false,
+      unlockedHighspire: false
+    }
+  };
+  openedChests = new Set<string>();
+  discoveredPois = new Set<string>();
+  puzzleFlags = new Set<string>();
+  defeatedBosses = new Set<string>();
+  clearedDungeons = new Set<string>();
+  settings = {
+    encounters: true,
+    xpMultiplier: 1,
+    fastText: false,
+    muted: false
+  };
+  dirty = true;
+  lastStepFrame = 0;
+  lastMoveDir: Vec = { x: 0, y: 1 };
+  heldDirections: DirectionName[] = [];
+  shiftHeld = false;
+  blockedMoveCooldown = 0;
+  walkAnimElapsed = 0;
+  playerMoving = false;
+  activeStep?: ExploreStep;
+  currentWorldAssetsValidated = false;
+
+  constructor() {
+    super("CrystalOathScene");
+  }
+}
+
+Object.assign(
+  CrystalOathScene.prototype,
+  sceneLifecycle,
+  sceneInput,
+  sceneState,
+  exploreMovement,
+  battleFlow,
+  battleActions,
+  battleState,
+  menuActions,
+  saveGame,
+  loadGame,
+  renderCore,
+  drawTitle,
+  drawWorld,
+  drawWorldTerrain,
+  drawTown,
+  drawDungeon,
+  drawBattle,
+  drawMenu,
+  drawLocationIcon,
+  drawActors,
+  panels
+);

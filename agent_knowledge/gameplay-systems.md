@@ -131,7 +131,7 @@ Bosses:
 
 Enemy data includes HP, attack, defense, speed, XP, gold, element, weaknesses, resistances, moves/intents, palette, sprite base shape, and boss flag.
 
-The first twelve normal enemy IDs and all five boss IDs map to `assets_v2` PNG textures in `src/main.ts`. Later-region normal enemies still use Batch 001/fallback textures until clean v2 crops exist. Generated enemy shapes remain as fallback if a texture is unavailable.
+The first twelve normal enemy IDs and all five boss IDs map to `assets_v2` PNG textures through `src/assets/textureKeys.ts`. Later-region normal enemies still use Batch 001/fallback textures until clean v2 crops exist. Generated enemy shapes remain as fallback if a texture is unavailable.
 
 ## Items
 

@@ -3,13 +3,13 @@
 ## Durable Project Decisions
 
 - The project is a browser game built with Phaser 3, TypeScript, and Vite.
-- The current main implementation lives in `src/main.ts`.
+- `src/main.ts` is a tiny Vite entry; Phaser bootstrap lives in `src/app/createGame.ts`, scene-owned state lives in `src/scene/CrystalOathScene.ts`, and domain behavior/rendering/data/assets live under `src/systems/`, `src/render/`, `src/data/`, and `src/assets/`.
 - Every completed code, docs, or asset change must be committed and pushed to the configured remote before the task is considered done.
 - The default Phaser backing canvas is 1920x1080. The scene keeps 960x540-equivalent layout coordinates derived from `DESIGN_WIDTH / PIXEL_ART_SCALE` and renders them at 2x into the Full HD canvas.
 - Canvas CSS uses `image-rendering: auto`; pixel-art crispness comes from nearest-neighbor texture filtering on sprites/tiles/UI plus integer render scaling, while battle backgrounds use linear filtering.
 - The tile grid is 32x32 display pixels.
 - The first playable game is intentionally compact, roughly 30-60 minutes when tuned.
-- Asset Batch 001 lives under root `assets/` and is loaded by Phaser from `src/main.ts`.
+- Asset Batch 001 lives under root `assets/` and is loaded by Phaser through `src/assets/assetPaths.ts`, `src/assets/textureKeys.ts`, and `src/scene/sceneLifecycle.ts`.
 - Improved extracted art lives under root `assets_v2/` and is preferred over `assets/` for mapped texture keys.
 - Fighter/priest/wizard class sprite sheets are imported from `D:\Tools\rembg\bg_output` by copying the alpha PNG sources into `assets_v2/source_sheets/class_sprites/`, normalizing to 5x2 transparent sheets in `assets_v2/characters/classes/`, and writing frame/anchor metadata to `src/data/characterSprites.ts`.
 - The active overworld art set is `src/assets/world/current/` plus `src/assets/world/current/world_asset_manifest.json`. It contains 37 approved individual 256x256 terrain fills imported from `D:\atlas\output\approved_materials`, restored atlas v3 terrain-cell extracts under `src/assets/world/current/terrain_v1/` for water, beach/sand, freshwater, and snow/ice, premium approved object sprites in `src/assets/world/current/objects_premium/` imported from `D:\Tools\rembg\bg_output`, the original strict approved backup object sprites from `D:\new_items\output\approved_objects`, and additive relaxed backup game-ready object sprites from `D:\new_items\output_relaxed\game_ready_objects`. Runtime object resolution is premium-first, backup-second, generated-fallback-last. User-deleted generic overlay/POI/route placeholder PNGs should stay deleted. The old atlas renderer is not a runtime source; only selected atlas v3 terrain cells are preserved as individual v1 PNG fills.
@@ -115,5 +115,5 @@ The current generated art fallback is still required for missing textures and fo
 
 - Automated coverage currently includes the world-generation simulation test (`npm test`) plus build validation. There are still no unit tests or browser E2E tests.
 - Saves are normalized for newly added travel/discovery/skill fields, but there is still no explicit versioned save schema.
-- The first asset loader is implemented in `src/main.ts`; future work may split it into modules if the file grows further.
+- Asset loading has been split into `src/assets/assetPaths.ts`, `src/assets/textureKeys.ts`, and `src/scene/sceneLifecycle.ts`; keep future asset additions there rather than expanding `src/main.ts`.
 - Balance has not had a full documented playthrough pass.

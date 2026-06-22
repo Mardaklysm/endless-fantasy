@@ -14,12 +14,20 @@
 Use source and docs first:
 
 ```powershell
-rg -n "class CrystalOathScene|type Mode|const ENEMIES|const SPELLS|drawWorldTile|drawEnemySprite|saveGame|loadGame" src/main.ts
+Get-Content agent_knowledge\code-map.md
+rg -n "export const ENEMIES|export const SPELLS|drawWorldTile|drawEnemySprite|saveGame|loadGame|class CrystalOathScene" src
 ```
 
 Useful files:
 
-- `src/main.ts`: game systems, data tables, asset loading/maps, image-first rendering, generated fallbacks, save/load, audio.
+- `agent_knowledge/code-map.md`: shortest route to the right source file by task type.
+- `src/main.ts`: Vite entry only.
+- `src/app/createGame.ts`: Phaser bootstrap/config.
+- `src/scene/CrystalOathScene.ts`: scene-owned state fields and prototype module registration.
+- `src/data/`: static gameplay data tables and shared data types.
+- `src/assets/`: asset path/glob and texture-key maps.
+- `src/render/`: surface-specific rendering.
+- `src/systems/`: movement, battle, menu, save, audio behavior.
 - `README.md`: run instructions and manual checklist.
 - `ART_STYLE_GUIDE.md`, `ASSET_MANIFEST.md`, `ASSET_IMPLEMENTATION_PLAN.md`: art planning and future asset pipeline.
 
@@ -72,7 +80,7 @@ There are no automated gameplay tests yet.
 
 - Prefer data-driven additions in existing tables where possible.
 - Preserve current controls and save/load compatibility unless the user explicitly approves a reset.
-- Avoid large rewrites of `src/main.ts` unless the task is specifically architecture cleanup.
+- Keep changes within the relevant domain module from `agent_knowledge/code-map.md`; `src/main.ts` should remain a tiny bootstrap entry.
 - If adding or changing save data, update `saveGame`, `loadGame`, manual test notes, and knowledge docs.
 - If changing battle, test at least one random encounter and one boss or debug encounter path.
 - If changing maps/dungeons, test entry/exit, collisions, chests/switches, and encounters.
@@ -81,7 +89,7 @@ There are no automated gameplay tests yet.
 
 Follow `ASSET_IMPLEMENTATION_PLAN.md`.
 
-Batch 001 is already integrated under root `assets/` with Phaser preload keys in `src/main.ts`. For future batches:
+Batch 001 is already integrated under root `assets/` with Phaser preload keys in `src/assets/assetPaths.ts` and `src/assets/textureKeys.ts`. For future batches:
 
 - Copy files into the existing `assets/` structure without creating `assets/assets/...`.
 - Add or update manifest-style texture keys in the asset map.

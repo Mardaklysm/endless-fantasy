@@ -13,7 +13,7 @@ The current implementation source of truth is:
 - Source copies: `assets_v2/source_sheets/class_sprites/*.png`
 - Manifest/metadata: `src/data/characterSprites.ts`
 - Debug previews/reports: `docs/debug/sprite-import/`
-- Runtime renderer: `src/main.ts`, especially `drawCharacterSpriteFrame`, `drawLeader`, and `drawPartyBattler`
+- Runtime renderer: `src/render/common/renderCore.ts` (`drawCharacterSpriteFrame`), `src/render/common/drawActors.ts` (`drawLeader`), and `src/render/battle/drawBattle.ts` (`drawPartyBattler`)
 
 Canonical model:
 

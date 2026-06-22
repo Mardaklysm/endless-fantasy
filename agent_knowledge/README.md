@@ -13,7 +13,7 @@ At the start of every task:
 3. `agent_knowledge/project-overview.md`
 4. `agent_knowledge/project-workflows.md`
 5. The task-relevant files below:
-   - Code architecture or refactors: `architecture.md`
+   - Code architecture, navigation, or refactors: `architecture.md`, then `code-map.md`
    - Gameplay/balance/content: `gameplay-systems.md`
    - Art/assets/UI visuals: `art-and-assets.md`, plus root `ART_STYLE_GUIDE.md`, `ASSET_MANIFEST.md`, and `ASSET_IMPLEMENTATION_PLAN.md`
    - Character sprite collage imports: `character-sprite-import.md`, plus the local Codex skill `C:\Users\Marku\.codex\skills\endless-fantasy-character-sprite-import\SKILL.md`
@@ -23,12 +23,15 @@ At the start of every task:
 
 ## Quick Project Summary
 
-Crystal Oath is a compact browser-playable retro 2D top-down turn-based fantasy RPG built with Phaser 3, TypeScript, and Vite. The current implementation is mostly in `src/main.ts`, with generated code art/audio placeholders and localStorage saves.
+Crystal Oath is a compact browser-playable retro 2D top-down turn-based fantasy RPG built with Phaser 3, TypeScript, and Vite. The runtime is split into domain modules under `src/app/`, `src/scene/`, `src/data/`, `src/assets/`, `src/render/`, and `src/systems/`, with generated code art/audio fallbacks and localStorage saves.
 
 ## Entry Point
 
 - Browser entry: `index.html`
-- Game source: `src/main.ts`
+- Vite entry: `src/main.ts`
+- Phaser bootstrap: `src/app/createGame.ts`
+- Main scene shell: `src/scene/CrystalOathScene.ts`
+- Code navigation: `agent_knowledge/code-map.md`
 - Styling: `src/style.css`
 - Vite config: `vite.config.ts`
 - Local dev URL: `http://127.0.0.1:5173`
@@ -38,6 +41,7 @@ Crystal Oath is a compact browser-playable retro 2D top-down turn-based fantasy 
 - Update `README.md` when run instructions, controls, high-level gameplay, or known limitations change.
 - Update `ART_STYLE_GUIDE.md`, `ASSET_MANIFEST.md`, or `ASSET_IMPLEMENTATION_PLAN.md` when art direction, asset naming, asset scope, or asset-loading strategy changes.
 - Update `agent_knowledge/architecture.md` when source structure, major classes/functions, state flow, or build/runtime architecture changes.
+- Update `agent_knowledge/code-map.md` when source navigation, module ownership, or common task routing changes.
 - Update `agent_knowledge/gameplay-systems.md` when gameplay rules, data tables, progression, balance, or save/state behavior changes.
 - Update `agent_knowledge/testing-and-validation.md` when validation commands or manual test coverage changes.
 - Update `agent_knowledge/known-decisions-and-rules.md` for durable decisions.

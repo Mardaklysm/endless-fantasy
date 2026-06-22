@@ -5,7 +5,6 @@ This backlog is practical project memory, not a full design document. Keep it sh
 ## Art Pipeline Next Steps
 
 - Keep Batch 001 assets under root `assets/`; do not nest a second `assets/` folder inside it.
-- Consider splitting asset key maps out of `src/main.ts` if future batches add many more files.
 - Consider splitting the v2 asset import scripts into shared helpers if more batches arrive.
 - Improve UI panel skinning further only if it preserves current live text space and readability. Exploration HUD and battle panels now have compact layouts, but the v2 panel art still has strong decorative lines that may deserve a future dedicated HUD frame.
 - Add item/equipment/relic icons to inventory, shops, equipment menus, and HUD when there is a clean layout slot.
@@ -40,6 +39,7 @@ This backlog is practical project memory, not a full design document. Keep it sh
 ## Gameplay Gaps
 
 - Save schema has no version/migration strategy.
+- The scene refactor preserves the existing scene-owned state model with prototype-bound domain modules. Future cleanup can replace the broad `CrystalOathSceneContext & Record<string, any>` helper type with narrower typed contexts when behavior is otherwise stable.
 - Balance needs a full manual playthrough pass.
 - Archipelago travel economy and early dungeon rewards need a manual tuning pass after several real playthroughs.
 - Coralreach/Frostmere/Highspire progression is implemented through the semantic world profile, but final relic ordering, route unlock pacing, and island encounter balance need end-to-end verification.
@@ -70,7 +70,6 @@ This backlog is practical project memory, not a full design document. Keep it sh
 
 ## Documentation Follow-Up
 
-- Update architecture docs if `src/main.ts` is split into modules.
 - Update gameplay docs when mechanics, data tables, progression flags, or balancing change.
 - Update art docs when the real asset pipeline starts.
 - Keep committing and pushing completed changes to `origin/main`.

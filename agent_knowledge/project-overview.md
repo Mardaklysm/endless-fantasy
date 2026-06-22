@@ -29,7 +29,7 @@ The player starts in Greenhaven on a seeded archipelago overworld, explores isla
 
 ## Current Development State
 
-The first playable iteration exists. It is implemented mostly in one TypeScript scene (`src/main.ts`) with modular world/dungeon generation under `src/world/`. It has working movement, menus, random/debug encounters, battles with enemy intent and player skills, rewards, leveling, shops, inns, clinics, deterministic procedural dungeon chests/switches/bosses, harbor travel, save/load, synthesized audio, and a title/ending flow.
+The first playable iteration exists. `src/main.ts` is now only the Vite entry, while Phaser bootstrap, scene state, data tables, rendering, battle/menu/save/movement systems, assets, and audio live in domain modules under `src/app/`, `src/scene/`, `src/data/`, `src/assets/`, `src/render/`, and `src/systems/`. Modular world/dungeon generation remains under `src/world/`. The game has working movement, menus, random/debug encounters, battles with enemy intent and player skills, rewards, leveling, shops, inns, clinics, deterministic procedural dungeon chests/switches/bosses, harbor travel, save/load, synthesized audio, and a title/ending flow.
 
 The project also has a complete art planning pass:
 
@@ -37,7 +37,7 @@ The project also has a complete art planning pass:
 - `ASSET_MANIFEST.md`
 - `ASSET_IMPLEMENTATION_PLAN.md`
 
-The runtime asset-loader pipeline is implemented in `src/main.ts`. Generated art/audio placeholders remain as fallbacks where real assets are missing or not yet accepted.
+The runtime asset-loader pipeline is implemented in `src/assets/assetPaths.ts`, `src/assets/textureKeys.ts`, and `src/scene/sceneLifecycle.ts`. Generated art/audio placeholders remain as fallbacks where real assets are missing or not yet accepted.
 
 ## Legal And Originality Constraints
 
