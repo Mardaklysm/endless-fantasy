@@ -16,6 +16,7 @@ import {
 } from "../../src/data/worldCurrentAssets.ts";
 import { WORLD_CLOUD_ASSET_BY_TEXTURE_KEY, WORLD_CLOUD_ASSETS, WORLD_CLOUD_MANIFEST, worldCloudPoolForContext, worldCloudThemeForContext } from "../../src/data/worldCloudAssets.ts";
 import { DUNGEON_ATLAS } from "../../src/data/dungeonTiles.ts";
+import { generateDungeonFloors, validateDungeonFloorsConnectivity } from "../../src/world/dungeonGenerator.ts";
 import { SEMANTIC_BIOME, SEMANTIC_WATER } from "../../src/world/semantic/semanticTypes.ts";
 import { SEMANTIC_MASK_TERRAIN_CLASSES, describeSemanticMaskTerrainRenderPlan } from "../../src/world/semantic/semanticMaskTerrainRenderer.ts";
 import { describeSemanticRouteRenderPlan } from "../../src/world/semantic/semanticRouteRenderer.ts";
@@ -28,6 +29,7 @@ const MAJOR_ISLAND_IDS = ["greenhaven", "coralreach", "frostmere", "highspire"];
 
 validateRuntimeAssets();
 validateSemanticWorldgen();
+validateDungeonGeneration();
 
 console.log("semantic worldgen runtime validation passed.");
 
@@ -48,6 +50,29 @@ function validateRuntimeAssets() {
   assert(WORLD_OBJECT_ID_SET.has("small_mountain_peak"), "world object registry lacks mountain overlay ID.");
   assert(WORLD_OBJECT_ID_SET.has("broadleaf_tree"), "world object registry lacks forest overlay ID.");
   assert(WORLD_OBJECT_ID_SET.has("harbor_signpost"), "world object registry lacks harbor overlay ID.");
+}
+
+function validateDungeonGeneration() {
+  const dungeonCases = [
+    { dungeonId: "mossCave", tier: 1 },
+    { dungeonId: "ashenKeep", tier: 3 },
+    { dungeonId: "tideShrine", tier: 2 },
+    { dungeonId: "skyglassTower", tier: 3 },
+    { dungeonId: "eclipseSpire", tier: 4, final: true }
+  ];
+  const seeds = [
+    "semantic-runtime-test-greenhaven",
+    "semantic-runtime-test-different",
+    "semantic-mqpn3h9e-g7a5av",
+    "semantic-mapofs5-mypv2s"
+  ];
+  for (const seed of seeds) {
+    for (const dungeon of dungeonCases) {
+      const floors = generateDungeonFloors({ seed, ...dungeon });
+      const validation = validateDungeonFloorsConnectivity(floors);
+      assert(validation.ok, `${dungeon.dungeonId} generated an unreachable floor for ${seed}: ${validation.errors.join("; ")}`);
+    }
+  }
 }
 
 function validateCurrentWorldAssetManifest() {

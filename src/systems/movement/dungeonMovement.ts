@@ -69,9 +69,30 @@ export function ensureValidDungeonPosition(this: CrystalOathSceneContext) {
     return;
   }
   this.dungeonFloor = Math.max(0, Math.min(this.dungeonFloor, dungeon.floors.length - 1));
-  if (!this.canOccupyExploreTile("dungeon", this.dungeonPos.x, this.dungeonPos.y)) {
-    this.dungeonPos = this.dungeonFloor === 0 ? this.dungeonEntranceSpawn(this.currentDungeon) : this.dungeonStairSpawn(this.currentDungeon, this.dungeonFloor);
+  const spawn = this.dungeonFloor === 0 ? this.dungeonEntranceSpawn(this.currentDungeon) : this.dungeonStairSpawn(this.currentDungeon, this.dungeonFloor);
+  const reachable = this.reachableDungeonTilesFrom(this.currentDungeon, this.dungeonFloor, spawn);
+  if (!this.canOccupyExploreTile("dungeon", this.dungeonPos.x, this.dungeonPos.y) || !reachable.has(`${this.dungeonPos.x},${this.dungeonPos.y}`)) this.dungeonPos = spawn;
+}
+
+export function reachableDungeonTilesFrom(this: CrystalOathSceneContext, dungeonId: string, floorIndex: number, start: Vec): Set<string> {
+  const floor = this.dungeonFloorRows(dungeonId, floorIndex);
+  const width = floor[0]?.length ?? 0;
+  const height = floor.length;
+  const seen = new Set<string>();
+  const queue = [start];
+  while (queue.length) {
+    const current = queue.shift()!;
+    const key = `${current.x},${current.y}`;
+    if (seen.has(key)) continue;
+    if (current.x < 0 || current.y < 0 || current.x >= width || current.y >= height) continue;
+    if (!this.isDungeonTileWalkable(dungeonId, floor[current.y]?.[current.x])) continue;
+    seen.add(key);
+    queue.push({ x: current.x + 1, y: current.y });
+    queue.push({ x: current.x - 1, y: current.y });
+    queue.push({ x: current.x, y: current.y + 1 });
+    queue.push({ x: current.x, y: current.y - 1 });
   }
+  return seen;
 }
 
 export function interactDungeon(this: CrystalOathSceneContext) {
