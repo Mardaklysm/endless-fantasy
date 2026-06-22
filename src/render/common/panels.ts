@@ -8,9 +8,9 @@ const COMPACT_PANEL_BG = 0x06111f;
 const COMPACT_PANEL_INNER = 0x0b1b30;
 const COMPACT_PANEL_GOLD = 0xb88b43;
 const COMPACT_PANEL_SHADOW = 0x020612;
-const WORLD_MINIMAP_FRAME_WIDTH = 216;
-const WORLD_MINIMAP_MAP_WIDTH = 208;
-const WORLD_MINIMAP_TOP = 42;
+const WORLD_MINIMAP_FRAME_WIDTH = 112;
+const WORLD_MINIMAP_MAP_WIDTH = 104;
+const WORLD_MINIMAP_TOP = 10;
 
 interface WorldMinimapLayout {
   frameX: number;
@@ -109,41 +109,27 @@ export function drawWorldClock(this: CrystalOathSceneContext) {
 
 export function drawOverworldHud(this: CrystalOathSceneContext) {
   const travel = this.flags.skyship ? "Skyship" : this.flags.boat ? "Boat" : "On Foot";
-  this.drawCompactHudPanel(10, 8, 204, 38, 0.76);
-  this.text(18, 12, this.currentIslandName(), 12, "#fff0a6", "left", { wordWrapWidth: 188, strokeThickness: 1 });
-  this.text(18, 27, `Gold ${this.gold}  Relics ${this.relicCount()}/4  ${travel}`, 8, "#dfe9ff", "left", {
-    wordWrapWidth: 188,
+  const x = 10;
+  const y = 8;
+  const w = 174;
+  const h = 30;
+  this.drawCompactHudPanel(x, y, w, h, 0.68);
+  this.text(x + 7, y + 4, this.currentIslandName(), 9, "#fff0a6", "left", { wordWrapWidth: 112, strokeThickness: 1 });
+  this.text(x + w - 43, y + 4, this.worldClockText(), 8, "#d7ecff", "left", { wordWrapWidth: 38, strokeThickness: 1 });
+  this.text(x + 7, y + 17, `Gold ${this.gold} | Relics ${this.relicCount()}/4 | ${travel}`, 7, "#dfe9ff", "left", {
+    wordWrapWidth: w - 14,
     strokeThickness: 1
   });
-
-  const clockW = 78;
-  const clockH = 24;
-  const clockX = Math.floor(WIDTH / 2 - clockW / 2);
-  this.drawCompactHudPanel(clockX, 8, clockW, clockH, 0.76);
-  this.text(clockX + clockW / 2, 13, this.worldClockText(), 12, "#edf6ff", "center", {
-    wordWrapWidth: clockW - 8,
-    strokeThickness: 1
-  });
-
-  const minimap = worldMinimapLayout.call(this);
-  this.drawCompactHudPanel(minimap.frameX, 8, minimap.frameWidth, 28, 0.62);
-  this.text(minimap.frameX + 7, 12, `Enc ${this.settings.encounters ? "ON" : "OFF"}  XP ${this.settings.xpMultiplier}x`, 8, "#dce7ff", "left", {
-    wordWrapWidth: minimap.frameWidth - 14,
-    strokeThickness: 1
-  });
-  this.text(minimap.frameX + 7, 24, `Seed ${this.worldSeed}`, 7, "#9eabc6", "left", {
-    wordWrapWidth: minimap.frameWidth - 14,
-    strokeThickness: 1
-  });
+  drawFaintOverworldDebug.call(this);
 }
 
 export function drawWorldMinimap(this: CrystalOathSceneContext) {
   if (!this.generatedWorld) return;
   const layout = worldMinimapLayout.call(this);
-  this.drawCompactHudPanel(layout.frameX, layout.frameY, layout.frameWidth, layout.frameHeight, 0.7);
-  this.text(layout.frameX + 7, layout.frameY + 3, "WORLD", 7, "#d9ae62", "left", { wordWrapWidth: 60, strokeThickness: 1 });
-  this.ui.fillStyle(0x020714, 0.82).fillRect(layout.mapX - 1, layout.mapY - 1, layout.mapWidth + 2, layout.mapHeight + 2);
-  this.ui.lineStyle(1, 0x203a5c, 0.9).strokeRect(layout.mapX - 1, layout.mapY - 1, layout.mapWidth + 2, layout.mapHeight + 2);
+  this.ui.fillStyle(COMPACT_PANEL_SHADOW, 0.3).fillRect(layout.frameX + 2, layout.frameY + 2, layout.frameWidth, layout.frameHeight);
+  this.ui.fillStyle(COMPACT_PANEL_BG, 0.18).fillRect(layout.frameX, layout.frameY, layout.frameWidth, layout.frameHeight);
+  this.ui.lineStyle(1, COMPACT_PANEL_GOLD, 0.82).strokeRect(layout.frameX, layout.frameY, layout.frameWidth, layout.frameHeight);
+  this.ui.lineStyle(1, 0x020714, 0.45).strokeRect(layout.frameX + 1, layout.frameY + 1, layout.frameWidth - 2, layout.frameHeight - 2);
   if (
     this.worldMinimapCacheSeed !== this.worldSeed ||
     this.worldMinimapCacheWidth !== layout.mapWidth ||
@@ -172,12 +158,25 @@ export function rebuildWorldMinimapCache(this: CrystalOathSceneContext, mapWidth
   canvas.height = mapHeight;
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
+  ctx.clearRect(0, 0, mapWidth, mapHeight);
   ctx.imageSmoothingEnabled = false;
   for (let py = 0; py < mapHeight; py += 1) {
     const wy = Math.min(world.height - 1, Math.floor((py / mapHeight) * world.height));
     for (let px = 0; px < mapWidth; px += 1) {
       const wx = Math.min(world.width - 1, Math.floor((px / mapWidth) * world.width));
-      ctx.fillStyle = minimapColorForSemanticCell(world.semantic, wx, wy);
+      if (!minimapCellDrawsOverTransparentSea(world.semantic, wx, wy)) continue;
+      ctx.fillStyle = "rgba(2, 7, 20, 0.48)";
+      ctx.fillRect(px - 1, py, 3, 1);
+      ctx.fillRect(px, py - 1, 1, 3);
+    }
+  }
+  for (let py = 0; py < mapHeight; py += 1) {
+    const wy = Math.min(world.height - 1, Math.floor((py / mapHeight) * world.height));
+    for (let px = 0; px < mapWidth; px += 1) {
+      const wx = Math.min(world.width - 1, Math.floor((px / mapWidth) * world.width));
+      const color = minimapColorForSemanticCell(world.semantic, wx, wy);
+      if (!color) continue;
+      ctx.fillStyle = color;
       ctx.fillRect(px, py, 1, 1);
     }
   }
@@ -217,9 +216,9 @@ function worldMinimapLayout(this: CrystalOathSceneContext): WorldMinimapLayout {
   const mapWidth = WORLD_MINIMAP_MAP_WIDTH;
   const worldWidth = this.generatedWorld?.width ?? 288;
   const worldHeight = this.generatedWorld?.height ?? 192;
-  const mapHeight = Math.max(112, Math.min(150, Math.round(mapWidth * (worldHeight / Math.max(1, worldWidth)))));
+  const mapHeight = Math.max(60, Math.min(78, Math.round(mapWidth * (worldHeight / Math.max(1, worldWidth)))));
   const frameWidth = WORLD_MINIMAP_FRAME_WIDTH;
-  const frameHeight = mapHeight + 18;
+  const frameHeight = mapHeight + 8;
   const frameX = WIDTH - frameWidth - 10;
   const frameY = WORLD_MINIMAP_TOP;
   return {
@@ -228,19 +227,19 @@ function worldMinimapLayout(this: CrystalOathSceneContext): WorldMinimapLayout {
     frameWidth,
     frameHeight,
     mapX: frameX + 4,
-    mapY: frameY + 12,
+    mapY: frameY + 4,
     mapWidth,
     mapHeight
   };
 }
 
-function minimapColorForSemanticCell(world: SemanticWorld, x: number, y: number): string {
+function minimapColorForSemanticCell(world: SemanticWorld, x: number, y: number): string | undefined {
   const i = y * world.width + x;
   const water = world.layers.waterClass[i];
-  if (world.layers.lakeMap[i] || world.layers.riverMap[i]) return "#249fbc";
+  if (world.layers.lakeMap[i] || world.layers.riverMap[i]) return "rgba(36, 159, 188, 0.78)";
   if (!world.layers.landMask[i]) {
-    if (water === SEMANTIC_WATER.SHALLOW) return "#146a8d";
-    return "#08284f";
+    if (water === SEMANTIC_WATER.SHALLOW) return "rgba(39, 169, 192, 0.44)";
+    return undefined;
   }
   if (world.layers.roadMap[i]) return "#9b7743";
   if (world.layers.mountainMap[i]) return world.layers.biome[i] === SEMANTIC_BIOME.ICE ? "#d6edf5" : "#696c62";
@@ -251,13 +250,18 @@ function minimapColorForSemanticCell(world: SemanticWorld, x: number, y: number)
   return "#5aa249";
 }
 
+function minimapCellDrawsOverTransparentSea(world: SemanticWorld, x: number, y: number): boolean {
+  const i = y * world.width + x;
+  return !!world.layers.landMask[i] || !!world.layers.lakeMap[i] || !!world.layers.riverMap[i] || world.layers.waterClass[i] === SEMANTIC_WATER.SHALLOW;
+}
+
 function drawVisitedLocationMarkers(this: CrystalOathSceneContext, layout: WorldMinimapLayout) {
   if (!this.generatedWorld) return;
   for (const loc of this.locations()) {
     if (!this.isLocationVisited(loc.id)) continue;
     const point = minimapPointForWorldPos(layout, this.generatedWorld.width, this.generatedWorld.height, loc);
-    drawUiPixelRect.call(this, point.x - 2, point.y - 2, 4, 4, 0x241705, 0.76, LAYER_UI_IMAGE + 1);
-    drawUiPixelRect.call(this, point.x - 1, point.y - 1, 2, 2, 0xffdc64, 1, LAYER_UI_IMAGE + 2);
+    drawUiPixelRect.call(this, point.x - 2, point.y - 2, 3, 3, 0x241705, 0.78, LAYER_UI_IMAGE + 1);
+    drawUiPixelRect.call(this, point.x - 1, point.y - 1, 1, 1, 0xffdc64, 1, LAYER_UI_IMAGE + 2);
   }
 }
 
@@ -265,9 +269,20 @@ function drawMinimapPlayerMarker(this: CrystalOathSceneContext, layout: WorldMin
   if (!this.generatedWorld) return;
   const pos = this.boatTravel?.boatPos ?? this.visualExplorePos("world");
   const point = minimapPointForWorldPos(layout, this.generatedWorld.width, this.generatedWorld.height, pos);
-  drawUiPixelRect.call(this, point.x - 3, point.y - 3, 6, 6, 0x210708, 0.9, LAYER_UI_IMAGE + 3);
-  drawUiPixelRect.call(this, point.x - 2, point.y - 2, 4, 4, 0xe82938, 1, LAYER_UI_IMAGE + 4);
+  drawUiPixelRect.call(this, point.x - 2, point.y - 2, 5, 5, 0x210708, 0.9, LAYER_UI_IMAGE + 3);
+  drawUiPixelRect.call(this, point.x - 1, point.y - 1, 3, 3, 0xe82938, 1, LAYER_UI_IMAGE + 4);
   drawUiPixelRect.call(this, point.x - 1, point.y - 1, 2, 2, 0xff8b8e, 1, LAYER_UI_IMAGE + 5);
+}
+
+function drawFaintOverworldDebug(this: CrystalOathSceneContext) {
+  const alpha = this.semanticDebugOverlay !== "off" ? 0.85 : 0.32;
+  const debugText = this.text(WIDTH - 10, HEIGHT - 31, `Enc ${this.settings.encounters ? "ON" : "OFF"}  XP ${this.settings.xpMultiplier}x\nSeed ${this.worldSeed}`, 7, "#9eabc6", "left", {
+    wordWrapWidth: 230,
+    stroke: "#020714",
+    strokeThickness: 1
+  });
+  debugText.setOrigin(1, 0);
+  debugText.setAlpha(alpha);
 }
 
 function minimapPointForWorldPos(layout: WorldMinimapLayout, worldWidth: number, worldHeight: number, pos: Vec): Vec {
