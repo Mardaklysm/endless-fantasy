@@ -35,9 +35,9 @@ export const WORLD_DAY_PHASES: readonly WorldDayPhaseConfig[] = [
   { id: "dawn", label: "Dawn", startProgress: 0, overlayColor: 0x5f7fd0, overlayAlpha: 0.18 },
   { id: "morning", label: "Morning", startProgress: 0.1, overlayColor: 0xffbe68, overlayAlpha: 0.09 },
   { id: "day", label: "Day", startProgress: 0.2, overlayColor: 0xfff8df, overlayAlpha: 0.015 },
-  { id: "evening", label: "Evening", startProgress: 0.55, overlayColor: 0xd0698f, overlayAlpha: 0.2 },
-  { id: "night", label: "Night", startProgress: 0.7, overlayColor: 0x173775, overlayAlpha: 0.36 },
-  { id: "lateNight", label: "Late Night", startProgress: 0.9, overlayColor: 0x101f52, overlayAlpha: 0.3 }
+  { id: "evening", label: "Evening", startProgress: 0.55, overlayColor: 0x8a4f74, overlayAlpha: 0.28 },
+  { id: "night", label: "Night", startProgress: 0.7, overlayColor: 0x04183d, overlayAlpha: 0.7 },
+  { id: "lateNight", label: "Late Night", startProgress: 0.9, overlayColor: 0x03122f, overlayAlpha: 0.75 }
 ];
 
 const WORLD_LIGHTING_TWEEN_MS = Math.max(120, MOVE_DURATION_MS);
@@ -118,6 +118,19 @@ export function worldTimeDebugText(this: CrystalOathSceneContext): string {
   const snapshot = worldLightingSnapshotForTicks(this.worldTimeTicks);
   const phasePercent = Math.round(snapshot.phaseProgress * 100);
   return `Time ${this.worldTimeTicks}  Day ${snapshot.dayNumber + 1} ${snapshot.phaseLabel} ${phasePercent}%  tick ${snapshot.dayTick}/${WORLD_TIME_TICKS_PER_FULL_DAY}`;
+}
+
+export function worldClockText(this: CrystalOathSceneContext): string {
+  const ticksPerFullDay = Math.max(1, Math.floor(this.ticksPerFullDay || WORLD_TIME_TICKS_PER_FULL_DAY));
+  const dayTick = normalizeWorldTimeTicks(this.worldTimeTicks) % ticksPerFullDay;
+  const minutesPerDay = 24 * 60;
+  const dawnStartMinutes = 6 * 60;
+  const rawMinutes = dawnStartMinutes + (dayTick / ticksPerFullDay) * minutesPerDay;
+  const roundedMinutes = Math.round(rawMinutes / 5) * 5;
+  const displayMinutes = ((roundedMinutes % minutesPerDay) + minutesPerDay) % minutesPerDay;
+  const hours = Math.floor(displayMinutes / 60);
+  const minutes = displayMinutes % 60;
+  return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
 }
 
 export function worldLightingSnapshotForTicks(ticks: number): WorldLightingSnapshot {

@@ -62,6 +62,21 @@ export function drawHud(this: CrystalOathSceneContext, place: string) {
   this.text(rightX + 16, 41, seedText, 11, "#c5d2f2", "left", { wordWrapWidth: rightW - 32 });
 }
 
+export function drawWorldClock(this: CrystalOathSceneContext) {
+  const w = 142;
+  const h = 40;
+  const x = Math.floor(WIDTH / 2 - w / 2);
+  const y = 14;
+  this.drawPanel(x, y, w, h);
+  this.ui.fillStyle(0x071225, 0.42).fillRect(x + 10, y + 9, w - 20, h - 18);
+  this.ui.lineStyle(1, 0x8f7241, 0.72).strokeRect(x + 9, y + 8, w - 18, h - 16);
+  this.text(x + w / 2, y + 10, this.worldClockText(), 18, "#eaf4ff", "center", {
+    stroke: "#020714",
+    strokeThickness: 2,
+    wordWrapWidth: w - 24
+  });
+}
+
 export function drawPrompt(this: CrystalOathSceneContext, text: string) {
   const w = 326;
   const h = 42;
