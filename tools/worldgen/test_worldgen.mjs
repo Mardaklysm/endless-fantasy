@@ -542,6 +542,11 @@ function validateRoadConnections(world) {
   for (const edge of requiredEdges) {
     assert(edge.connected, `Required road edge ${edge.from} -> ${edge.to} is disconnected.`);
     assert(edge.path.length > 1, `Required road edge ${edge.from} -> ${edge.to} has no path.`);
+    const fromPoi = world.pois.find((poi) => poi.id === edge.from);
+    const toPoi = world.pois.find((poi) => poi.id === edge.to);
+    assert(fromPoi && toPoi, `Required road edge ${edge.from} -> ${edge.to} is missing runtime POI data.`);
+    assert(roadEdgeTouchesPoiApproach(world, edge, fromPoi), `Required road edge ${edge.from} -> ${edge.to} does not touch ${edge.from}'s approach ring.`);
+    assert(roadEdgeTouchesPoiApproach(world, edge, toPoi), `Required road edge ${edge.from} -> ${edge.to} does not touch ${edge.to}'s approach ring.`);
   }
   for (const islandId of MAJOR_ISLAND_IDS) {
     const settlement = world.semantic.poiList.find((poi) => poi.islandId === islandId && poi.role === "settlement");
@@ -669,6 +674,14 @@ function hasAdjacentWalkablePoiApproach(world, poi) {
       return isWorldPositionWalkable(world, next.x, next.y);
     })
   );
+}
+
+function roadEdgeTouchesPoiApproach(world, edge, poi) {
+  const footprintKeys = new Set(poiFootprintCells(poi).map((cell) => `${cell.x},${cell.y}`));
+  return edge.path.some((cell) => {
+    if (footprintKeys.has(`${cell.x},${cell.y}`)) return false;
+    return neighbors4(cell.x, cell.y).some((next) => footprintKeys.has(`${next.x},${next.y}`));
+  });
 }
 
 function poiFootprintCells(poi) {

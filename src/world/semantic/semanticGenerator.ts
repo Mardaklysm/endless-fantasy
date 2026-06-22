@@ -1412,6 +1412,7 @@ function buildRoadGraph(
   roadMap: Uint8Array
 ) {
   const edges: SemanticRoadEdge[] = [];
+  const roadBlocked = semanticPoiFootprintKeySet(poiList);
   for (const island of islands) {
     if (!island.allowRoads) continue;
     const pois = poiList.filter((poi) => poi.islandId === island.id);
@@ -1423,7 +1424,9 @@ function buildRoadGraph(
       (poi) => poi.id
     );
     for (const target of targets) {
-      const path = findRoadPath(width, height, seed, landMask, islandId, island.order + 1, biome, waterClass, lakeMap, riverMap, distanceToWater, mountainMap, root, target);
+      const start = chooseRoadApproachCell(width, height, landMask, islandId, island.order + 1, waterClass, lakeMap, riverMap, mountainMap, root, target, roadBlocked) ?? root;
+      const goal = chooseRoadApproachCell(width, height, landMask, islandId, island.order + 1, waterClass, lakeMap, riverMap, mountainMap, target, root, roadBlocked) ?? target;
+      const path = findRoadPath(width, height, seed, landMask, islandId, island.order + 1, biome, waterClass, lakeMap, riverMap, distanceToWater, mountainMap, start, goal, roadBlocked);
       if (!path.length) {
         edges.push({ from: root.id, to: target.id, connected: false, length: 0, path: [] });
         continue;
@@ -1444,6 +1447,42 @@ function clearPoiFootprintRoadCells(width: number, height: number, roadMap: Uint
   }
 }
 
+function chooseRoadApproachCell(
+  width: number,
+  height: number,
+  landMask: Uint8Array,
+  islandId: Int16Array,
+  targetIslandNumber: number,
+  waterClass: Uint8Array,
+  lakeMap: Uint8Array,
+  riverMap: Uint8Array,
+  mountainMap: Uint8Array,
+  poi: SemanticPoi,
+  other: SemanticVec,
+  blocked: Set<string>
+): SemanticVec | undefined {
+  const footprintKeys = new Set(semanticPoiFootprintCells(poi).map(posKey));
+  const candidates = new Map<string, SemanticVec>();
+  for (const cell of semanticPoiFootprintCells(poi)) {
+    for (const next of cardinalNeighbors(cell.x, cell.y)) {
+      const key = posKey(next);
+      if (footprintKeys.has(key) || candidates.has(key) || blocked.has(key)) continue;
+      if (!inBounds(width, height, next.x, next.y)) continue;
+      const ni = index(width, next.x, next.y);
+      if (islandId[ni] !== targetIslandNumber) continue;
+      if (!landMask[ni] || waterClass[ni] !== SEMANTIC_WATER.NONE || lakeMap[ni] || riverMap[ni] || mountainMap[ni]) continue;
+      candidates.set(key, next);
+    }
+  }
+  return [...candidates.values()].sort((a, b) => roadApproachScore(a, poi, other) - roadApproachScore(b, poi, other))[0];
+}
+
+function roadApproachScore(candidate: SemanticVec, poi: SemanticPoi, other: SemanticVec): number {
+  const towardOther = Math.abs(candidate.x - other.x) + Math.abs(candidate.y - other.y);
+  const centerDistance = Math.abs(candidate.x - poi.x) + Math.abs(candidate.y - poi.y);
+  return towardOther + centerDistance * 0.08;
+}
+
 function findRoadPath(
   width: number,
   height: number,
@@ -1458,7 +1497,8 @@ function findRoadPath(
   distanceToWater: Int16Array,
   mountainMap: Uint8Array,
   start: SemanticVec,
-  goal: SemanticVec
+  goal: SemanticVec,
+  blocked?: Set<string>
 ) {
   const startKey = posKey(start);
   const goalKey = posKey(goal);
@@ -1474,11 +1514,12 @@ function findRoadPath(
       if (!inBounds(width, height, next.x, next.y)) continue;
       const ni = index(width, next.x, next.y);
       if (islandId[ni] !== targetIslandNumber) continue;
+      const nextKey = posKey(next);
+      if (blocked?.has(nextKey) && nextKey !== goalKey) continue;
       if (!isRoadStepAllowed(width, height, landMask, islandId, targetIslandNumber, waterClass, lakeMap, riverMap, distanceToWater, mountainMap, current, next)) continue;
       const cost = roadCost(width, seed, biome[ni], mountainMap[ni], current, next, cameFrom.get(key), riverMap[ni]);
       if (!Number.isFinite(cost)) continue;
       const nextG = current.g + cost;
-      const nextKey = posKey(next);
       if (best.has(nextKey) && best.get(nextKey)! <= nextG) continue;
       best.set(nextKey, nextG);
       cameFrom.set(nextKey, { x: current.x, y: current.y });
@@ -1877,6 +1918,14 @@ function poiFootprintCells(spec: RequiredPoiSpec, x: number, y: number): Semanti
 
 function semanticPoiFootprintCells(poi: SemanticPoi): SemanticVec[] {
   return footprintCells(poi.x, poi.y, poiFootprintSizeForPoi(poi));
+}
+
+function semanticPoiFootprintKeySet(pois: SemanticPoi[]): Set<string> {
+  const keys = new Set<string>();
+  for (const poi of pois) {
+    for (const cell of semanticPoiFootprintCells(poi)) keys.add(posKey(cell));
+  }
+  return keys;
 }
 
 const PORT_FOOTPRINT_SIZE = 3;
