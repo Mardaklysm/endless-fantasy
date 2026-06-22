@@ -505,10 +505,19 @@ function validateBeachBand(world) {
 function validatePois(world) {
   for (const poi of world.pois) {
     assert(poi.footprint >= 2, `POI ${poi.id} should render with at least a 2x2 footprint.`);
+    if (poi.kind === "harbor") assert(poi.footprint === 3, `Harbor ${poi.id} should render with a 3x3 footprint.`);
+    let harborWaterTiles = 0;
     for (const cell of poiFootprintCells(poi)) {
       const i = cell.y * world.width + cell.x;
-      assert(world.semantic.layers.waterClass[i] === SEMANTIC_WATER.NONE, `POI ${poi.id} spawned on blocked water at ${cell.x},${cell.y}.`);
-      assert(world.semantic.layers.landMask[i] === 1, `POI ${poi.id} footprint is not on land at ${cell.x},${cell.y}.`);
+      if (poi.kind === "harbor") {
+        const isShallowWater = world.semantic.layers.landMask[i] === 0 && world.semantic.layers.waterClass[i] === SEMANTIC_WATER.SHALLOW;
+        const isLand = world.semantic.layers.landMask[i] === 1 && world.semantic.layers.waterClass[i] === SEMANTIC_WATER.NONE;
+        if (isShallowWater) harborWaterTiles += 1;
+        assert(isLand || isShallowWater, `Harbor ${poi.id} footprint is not land or shallow water at ${cell.x},${cell.y}.`);
+      } else {
+        assert(world.semantic.layers.waterClass[i] === SEMANTIC_WATER.NONE, `POI ${poi.id} spawned on blocked water at ${cell.x},${cell.y}.`);
+        assert(world.semantic.layers.landMask[i] === 1, `POI ${poi.id} footprint is not on land at ${cell.x},${cell.y}.`);
+      }
       assert(!world.semantic.layers.mountainMap[i], `POI ${poi.id} footprint overlaps mountain at ${cell.x},${cell.y}.`);
       assert(!world.semantic.layers.riverMap[i], `POI ${poi.id} footprint overlaps river at ${cell.x},${cell.y}.`);
       assert(!world.semantic.layers.roadMap[i], `POI ${poi.id} footprint contains road at ${cell.x},${cell.y}.`);
@@ -516,6 +525,7 @@ function validatePois(world) {
       assert(world.semantic.layers.overlayCollisionPolicy[i] === "poiBlock", `POI ${poi.id} footprint is not tagged poiBlock at ${cell.x},${cell.y}.`);
       assert(!isWorldPositionWalkable(world, cell.x, cell.y), `POI ${poi.id} body cell ${cell.x},${cell.y} should block walking.`);
     }
+    if (poi.kind === "harbor") assert(harborWaterTiles >= 3, `Harbor ${poi.id} should place at least 3 footprint tiles in shallow water.`);
     assert(hasAdjacentWalkablePoiApproach(world, poi), `POI ${poi.id} has no walkable approach.`);
     const textureKey = worldCurrentPoiTextureKeyFor(poi);
     assert(textureKey && WORLD_CURRENT_ASSET_BY_TEXTURE_KEY[textureKey], `POI ${poi.id} lacks a current texture mapping.`);

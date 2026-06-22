@@ -374,7 +374,7 @@ function adaptPoi(poi: SemanticPoi): WorldPoi {
 }
 
 function poiFootprint(poi: SemanticPoi): number {
-  if (poi.role === "settlement" || poi.role === "final") return 3;
+  if (poi.role === "settlement" || poi.role === "final" || poi.role === "port") return 3;
   return 2;
 }
 

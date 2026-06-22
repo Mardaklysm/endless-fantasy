@@ -1347,13 +1347,15 @@ function poiScore(
   if (tooCloseToOccupied(occupied, x, y, spec.role === "port" ? 3 : 5)) return -Infinity;
   if (!isPoiFootprintValid(width, height, spec, x, y, landMask, waterClass, distanceToWater, mountainMap, lakeMap, occupied)) return -Infinity;
   if (spec.role === "port") {
+    const waterTiles = countPortFootprintWaterTiles(width, height, spec, x, y, waterClass);
+    if (waterTiles < PORT_MIN_SHALLOW_WATER_TILES) return -Infinity;
     if (!poiFootprintCells(spec, x, y).some((cell) => {
       const cellIndex = index(width, cell.x, cell.y);
       return biome[cellIndex] === SEMANTIC_BIOME.BEACH && distanceToWater[cellIndex] <= 1 && hasAdjacentWater(width, height, waterClass, cell.x, cell.y, SEMANTIC_WATER.SHALLOW);
     })) {
       return -Infinity;
     }
-    return 1 + edgeFacingScore(x, y, island.center.x, island.center.y) + hashNoise(`${seed}:semantic-poi:${spec.id}`, x, y) * 0.18;
+    return 1 + waterTiles * 0.08 + edgeFacingScore(x, y, island.center.x, island.center.y) + hashNoise(`${seed}:semantic-poi:${spec.id}`, x, y) * 0.18;
   }
   if (distanceToWater[i] < 3 || mountainMap[i]) return -Infinity;
   const preferred = spec.preferredBiome ? preferredBiomeScore(spec.preferredBiome, biome[i]) : 0.1;
@@ -1381,7 +1383,11 @@ function isPoiFootprintValid(
   for (const cell of poiFootprintCells(spec, x, y)) {
     if (!inBounds(width, height, cell.x, cell.y)) return false;
     const cellIndex = index(width, cell.x, cell.y);
-    if (!landMask[cellIndex] || waterClass[cellIndex] !== SEMANTIC_WATER.NONE || lakeMap[cellIndex] || mountainMap[cellIndex]) return false;
+    if (spec.role === "port") {
+      const isShallowWater = !landMask[cellIndex] && waterClass[cellIndex] === SEMANTIC_WATER.SHALLOW;
+      const isLand = landMask[cellIndex] && waterClass[cellIndex] === SEMANTIC_WATER.NONE;
+      if ((!isLand && !isShallowWater) || lakeMap[cellIndex] || mountainMap[cellIndex]) return false;
+    } else if (!landMask[cellIndex] || waterClass[cellIndex] !== SEMANTIC_WATER.NONE || lakeMap[cellIndex] || mountainMap[cellIndex]) return false;
     if (occupied.has(posKey(cell))) return false;
     if (spec.role !== "port" && distanceToWater[cellIndex] < 2) return false;
   }
@@ -1873,6 +1879,9 @@ function semanticPoiFootprintCells(poi: SemanticPoi): SemanticVec[] {
   return footprintCells(poi.x, poi.y, poiFootprintSizeForPoi(poi));
 }
 
+const PORT_FOOTPRINT_SIZE = 3;
+const PORT_MIN_SHALLOW_WATER_TILES = 3;
+
 function footprintCells(x: number, y: number, size: number): SemanticVec[] {
   const offset = Math.floor((size - 1) / 2);
   const minX = x - offset;
@@ -1885,13 +1894,24 @@ function footprintCells(x: number, y: number, size: number): SemanticVec[] {
 }
 
 function poiFootprintSizeForSpec(spec: RequiredPoiSpec): number {
+  if (spec.role === "port") return PORT_FOOTPRINT_SIZE;
   if (spec.role === "settlement" || spec.role === "final") return 3;
   return 2;
 }
 
 function poiFootprintSizeForPoi(poi: SemanticPoi): number {
+  if (poi.role === "port") return PORT_FOOTPRINT_SIZE;
   if (poi.role === "settlement" || poi.role === "final") return 3;
   return 2;
+}
+
+function countPortFootprintWaterTiles(width: number, height: number, spec: RequiredPoiSpec, x: number, y: number, waterClass: Uint8Array): number {
+  let waterTiles = 0;
+  for (const cell of poiFootprintCells(spec, x, y)) {
+    if (!inBounds(width, height, cell.x, cell.y)) continue;
+    if (waterClass[index(width, cell.x, cell.y)] === SEMANTIC_WATER.SHALLOW) waterTiles += 1;
+  }
+  return waterTiles;
 }
 
 function reservePoiFootprint(occupied: Set<string>, spec: RequiredPoiSpec, x: number, y: number, padding: number) {

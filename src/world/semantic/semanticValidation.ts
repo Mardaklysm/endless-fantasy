@@ -66,8 +66,8 @@ function validatePoi(world: SemanticWorld, poi: SemanticPoi, errors: string[]) {
   if (world.layers.waterClass[i] !== SEMANTIC_WATER.NONE) errors.push(`POI ${poi.id} is on blocked water.`);
   validatePoiFootprint(world, poi, errors);
   if (!hasAdjacentWalkableToPoiFootprint(world, poi)) errors.push(`POI ${poi.id} has no adjacent walkable approach cell.`);
-  if (poi.type === "port" && !poiFootprintCells(poi).some((cell) => hasAdjacentWater(world, cell.x, cell.y, SEMANTIC_WATER.SHALLOW))) {
-    errors.push(`Port ${poi.id} is not adjacent to shallow water.`);
+  if (poi.type === "port" && countPoiFootprintShallowWater(world, poi) < PORT_MIN_SHALLOW_WATER_TILES) {
+    errors.push(`Port ${poi.id} does not place at least ${PORT_MIN_SHALLOW_WATER_TILES} footprint tiles in shallow water.`);
   }
 }
 
@@ -78,7 +78,13 @@ function validatePoiFootprint(world: SemanticWorld, poi: SemanticPoi, errors: st
       continue;
     }
     const i = index(world.width, cell.x, cell.y);
-    if (!world.layers.landMask[i] || world.layers.waterClass[i] !== SEMANTIC_WATER.NONE || world.layers.lakeMap[i] || world.layers.riverMap[i]) {
+    if (poi.type === "port") {
+      const isShallowWater = !world.layers.landMask[i] && world.layers.waterClass[i] === SEMANTIC_WATER.SHALLOW;
+      const isLand = world.layers.landMask[i] && world.layers.waterClass[i] === SEMANTIC_WATER.NONE;
+      if ((!isLand && !isShallowWater) || world.layers.lakeMap[i] || world.layers.riverMap[i]) {
+        errors.push(`POI ${poi.id} footprint touches invalid harbor terrain at ${cell.x},${cell.y}.`);
+      }
+    } else if (!world.layers.landMask[i] || world.layers.waterClass[i] !== SEMANTIC_WATER.NONE || world.layers.lakeMap[i] || world.layers.riverMap[i]) {
       errors.push(`POI ${poi.id} footprint touches invalid water terrain at ${cell.x},${cell.y}.`);
     }
     if (world.layers.mountainMap[i]) errors.push(`POI ${poi.id} footprint overlaps mountain terrain at ${cell.x},${cell.y}.`);
@@ -297,7 +303,7 @@ function hasAdjacentWalkableToPoiFootprint(world: SemanticWorld, poi: SemanticPo
 }
 
 function poiFootprintCells(poi: SemanticPoi): { x: number; y: number }[] {
-  const size = poi.role === "settlement" || poi.role === "final" ? 3 : 2;
+  const size = poi.role === "settlement" || poi.role === "final" || poi.role === "port" ? 3 : 2;
   const offset = Math.floor((size - 1) / 2);
   const minX = poi.x - offset;
   const minY = poi.y - offset;
@@ -308,12 +314,19 @@ function poiFootprintCells(poi: SemanticPoi): { x: number; y: number }[] {
   return cells;
 }
 
-function isWalkable(world: SemanticWorld, x: number, y: number): boolean {
-  return world.layers.walkability[index(world.width, x, y)] === 1;
+const PORT_MIN_SHALLOW_WATER_TILES = 3;
+
+function countPoiFootprintShallowWater(world: SemanticWorld, poi: SemanticPoi): number {
+  let waterTiles = 0;
+  for (const cell of poiFootprintCells(poi)) {
+    if (!inBounds(world, cell.x, cell.y)) continue;
+    if (world.layers.waterClass[index(world.width, cell.x, cell.y)] === SEMANTIC_WATER.SHALLOW) waterTiles += 1;
+  }
+  return waterTiles;
 }
 
-function hasAdjacentWater(world: SemanticWorld, x: number, y: number, value: number): boolean {
-  return neighbors4(x, y).some((next) => inBounds(world, next.x, next.y) && world.layers.waterClass[index(world.width, next.x, next.y)] === value);
+function isWalkable(world: SemanticWorld, x: number, y: number): boolean {
+  return world.layers.walkability[index(world.width, x, y)] === 1;
 }
 
 function nearbyCount(world: SemanticWorld, map: Uint8Array, x: number, y: number, radius: number): number {
