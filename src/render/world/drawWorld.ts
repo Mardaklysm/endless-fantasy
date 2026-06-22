@@ -28,6 +28,8 @@ import { SEMANTIC_BIOME, SEMANTIC_WATER } from "../../world/semantic/semanticTyp
 import type { GeneratedWorld, WorldRoadVisual } from "../../world/worldGenerator";
 import type { CrystalOathSceneContext } from "../../scene/sceneContext";
 
+const HORIZONTAL_BRIDGE_Y_OFFSET = -2;
+
 export function drawWorld(this: CrystalOathSceneContext) {
   this.g.fillStyle(0x050812, 1).fillRect(0, 0, WIDTH, HEIGHT);
   const leaderPos = this.visualExplorePos("world");
@@ -147,10 +149,11 @@ export function drawWorldOverlays(this: CrystalOathSceneContext, startX: number,
       continue;
     }
     if (this.drawPierDockTile(bridge, sx, sy)) continue;
+    const bridgeSy = bridge.orientation === "horizontal" ? sy + HORIZONTAL_BRIDGE_Y_OFFSET : sy;
     const color = bridge.material === "stone" ? 0xa69b86 : 0x9a6a3d;
-    overlayGraphics.fillStyle(0x07101d, 0.35).fillRect(sx + 5, sy + 5, TILE - 10, TILE - 10);
-    overlayGraphics.fillStyle(color, 0.95).fillRect(sx + 7, sy + 12, TILE - 14, 8);
-    overlayGraphics.lineStyle(1, 0xffefbd, 0.65).lineBetween(sx + 8, sy + 16, sx + TILE - 8, sy + 16);
+    overlayGraphics.fillStyle(0x07101d, 0.35).fillRect(sx + 5, bridgeSy + 5, TILE - 10, TILE - 10);
+    overlayGraphics.fillStyle(color, 0.95).fillRect(sx + 7, bridgeSy + 12, TILE - 14, 8);
+    overlayGraphics.lineStyle(1, 0xffefbd, 0.65).lineBetween(sx + 8, bridgeSy + 16, sx + TILE - 8, bridgeSy + 16);
   }
   for (const overlay of visibleObjectOverlays) {
     const displaySize = TILE * overlay.scale;
@@ -406,7 +409,8 @@ export function drawPierDockTile(this: CrystalOathSceneContext, bridge: { orient
         ? WORLD_CURRENT_ROUTE_TEXTURE_KEYS.dockVertical
         : WORLD_CURRENT_ROUTE_TEXTURE_KEYS.dockHorizontal;
   if (!textureKey || textureKey === "procedural_styled_stroke" || !this.hasTexture(textureKey)) return false;
-  this.drawTexture(textureKey, sx, sy, TILE, TILE, LAYER_OBJECT_IMAGE);
+  const y = bridge.orientation === "horizontal" ? sy + HORIZONTAL_BRIDGE_Y_OFFSET : sy;
+  this.drawTexture(textureKey, sx, y, TILE, TILE, LAYER_OBJECT_IMAGE);
   return true;
 }
 
@@ -418,10 +422,11 @@ export function drawRiverCrossingTile(this: CrystalOathSceneContext, bridge: { o
   const highlight = bridge.material === "ford" ? 0xe4d49a : 0xe1b26f;
   const edge = bridge.material === "ford" ? 0x736441 : 0x6d452b;
   if (horizontal) {
-    g.fillStyle(shadow, 0.48).fillRect(sx - 2, sy + 12, TILE + 4, 10);
-    g.fillStyle(deck, 0.96).fillRect(sx - 1, sy + 13, TILE + 2, 7);
-    g.fillStyle(edge, 0.84).fillRect(sx - 1, sy + 12, TILE + 2, 1).fillRect(sx - 1, sy + 20, TILE + 2, 1);
-    for (let x = sx + 4; x < sx + TILE; x += 7) g.lineStyle(1, highlight, 0.62).lineBetween(x, sy + 13, x - 2, sy + 20);
+    const y = sy + HORIZONTAL_BRIDGE_Y_OFFSET;
+    g.fillStyle(shadow, 0.48).fillRect(sx - 2, y + 12, TILE + 4, 10);
+    g.fillStyle(deck, 0.96).fillRect(sx - 1, y + 13, TILE + 2, 7);
+    g.fillStyle(edge, 0.84).fillRect(sx - 1, y + 12, TILE + 2, 1).fillRect(sx - 1, y + 20, TILE + 2, 1);
+    for (let x = sx + 4; x < sx + TILE; x += 7) g.lineStyle(1, highlight, 0.62).lineBetween(x, y + 13, x - 2, y + 20);
   } else {
     g.fillStyle(shadow, 0.48).fillRect(sx + 12, sy - 2, 10, TILE + 4);
     g.fillStyle(deck, 0.96).fillRect(sx + 13, sy - 1, 7, TILE + 2);
