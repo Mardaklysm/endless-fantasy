@@ -8,6 +8,7 @@ import type { CrystalOathSceneContext } from "./sceneContext";
 export function buildWorldFromSeed(this: CrystalOathSceneContext, seed: string) {
   this.generatedWorld = generateWorld({ seed, width: WORLD_W, height: WORLD_H });
   this.worldSeed = this.generatedWorld.seed;
+  this.dungeonCache = undefined;
   this.world = this.generatedWorld.tiles;
   this.roadVisualsByKey = new Map(this.generatedWorld.roadVisuals.map((visual) => [`${visual.x},${visual.y}`, visual]));
   this.rebuildWorldTerrainCache();
@@ -303,7 +304,8 @@ export function generatedDungeonFloors(this: CrystalOathSceneContext, dungeonId:
 }
 
 export function dungeons(this: CrystalOathSceneContext): Record<string, DungeonDef> {
-  return {
+  if (this.dungeonCache?.seed === this.worldSeed) return this.dungeonCache.dungeons;
+  const dungeons: Record<string, DungeonDef> = {
     mossCave: {
       id: "mossCave",
       name: "Mossy Cave",
@@ -389,6 +391,8 @@ export function dungeons(this: CrystalOathSceneContext): Record<string, DungeonD
       rewardText: ["The Crown cracks. Morning remembers every road in Asterra."]
     }
   };
+  this.dungeonCache = { seed: this.worldSeed, dungeons };
+  return dungeons;
 }
 
 export function isExploreMode(this: CrystalOathSceneContext, mode: Mode): mode is ExploreMode {

@@ -55,12 +55,12 @@ export function isDungeonChestOpen(this: CrystalOathSceneContext, dungeon: Dunge
 }
 
 export function drawDungeonTile(this: CrystalOathSceneContext, tile: string, sx: number, sy: number, dungeon: DungeonDef, tileX: number, tileY: number) {
-  const theme = this.dungeonThemeTiles(dungeon);
   if (tile === "#") {
     if (!this.isDungeonWallEdge(tileX, tileY)) {
       this.g.fillStyle(0x050812, 1).fillRect(sx, sy, TILE, TILE);
       return;
     }
+    const theme = this.dungeonThemeTiles(dungeon);
     const wallTile = this.pickDungeonAtlasTile(theme.walls, dungeon, tileX, tileY, 19);
     if (this.drawDungeonAtlasTile(wallTile, sx, sy)) return;
     if (this.drawTileTexture("dungeon_wall_base", sx, sy)) return;
@@ -68,9 +68,7 @@ export function drawDungeonTile(this: CrystalOathSceneContext, tile: string, sx:
     this.g.fillStyle(dungeon.palette.accent, 0.25).fillRect(sx + 4, sy + 4, 7, 7);
     return;
   }
-  const floorTile = this.pickDungeonAtlasTile(theme.floors, dungeon, tileX, tileY, 7);
   const drewFloor =
-    this.drawDungeonAtlasTile(floorTile, sx, sy) ||
     this.drawTileTexture(DUNGEON_FLOOR_TEXTURES[dungeon.id] ?? "dungeon_floor_moss", sx, sy);
   if (!drewFloor) {
     this.g.fillStyle(dungeon.palette.floor, 1).fillRect(sx, sy, TILE, TILE);

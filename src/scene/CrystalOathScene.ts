@@ -9,7 +9,7 @@ import type {
   DirectionName
 } from "./sceneTypes";
 import type { BattleState } from "../systems/battle/battleTypes";
-import type { CharacterState } from "../data/gameDataTypes";
+import type { CharacterState, DungeonDef } from "../data/gameDataTypes";
 import type { GeneratedWorld, IslandId, WorldRoadVisual } from "../world/worldGenerator";
 import type { SemanticRouteOverlayMode } from "../world/semantic/semanticRouteRenderer";
 import { SynthAudio } from "../systems/audio/synthAudio";
@@ -97,6 +97,7 @@ export class CrystalOathScene extends Phaser.Scene {
   audio = new SynthAudio();
   generatedWorld?: GeneratedWorld;
   roadVisualsByKey = new Map<string, WorldRoadVisual>();
+  dungeonCache?: { seed: string; dungeons: Record<string, DungeonDef> };
   semanticDebugOverlay: "off" | "edgeDebug" | "rawTiles" | "masks" | "distance" | "grid" | "walkability" | "policy" | "mountains" | "forests" | "islands" | "pois" | "roads" | "rivers" = "off";
   worldSeed = "title-preview";
   world: Terrain[][] = [];
