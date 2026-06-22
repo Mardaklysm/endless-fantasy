@@ -149,7 +149,7 @@ The generated world contains:
 - Ice/snow cells: ${world.stats.iceCells}
 - Mountain mask cells: ${world.stats.mountainCells}
 - Mountain ranges: ${world.mountainRanges.length}
-- Decorative mountain overlays: ${(world.objectOverlays ?? []).filter((overlay) => String(overlay.id ?? "").startsWith("mountain-")).length}
+- Visible mountain sprites: ${(world.objectOverlays ?? []).filter((overlay) => String(overlay.id ?? "").startsWith("mountain-")).length}
 - Forest overlay cells: ${world.stats.forestCells}
 - River cells: ${world.stats.riverCells}
 - Road cells: ${world.stats.roadCells}
@@ -228,7 +228,7 @@ Biome assignment uses elevation, moisture, coldness, distance from coast, island
 
 ## E. Elevation And Mountains
 
-Elevation is separate from biome. It combines inland distance, base island height, ridge field, and noise. Mountains are generated as connected semantic massif masks: a few seed peaks are chosen from high ridge/elevation candidates per island, deterministic flood-fill grows each seed into an organic region, a smoothing pass merges close cells, and cleanup removes tiny fragments before collision is written. Snow mountains are chosen when elevation plus coldness is high. Mountain collision uses the accepted mask cells only, not surrounding visual pixels.
+Elevation is separate from biome. It combines inland distance, base island height, ridge field, and noise. Mountains are generated as connected semantic masks: a few seed peaks are chosen from high ridge/elevation candidates per island, deterministic flood-fill grows each seed into an organic region, a smoothing pass merges close cells, and cleanup removes tiny fragments before collision is written. Snow mountains are chosen when elevation plus coldness is high. Mountain collision uses the accepted mask cells only, not surrounding visual pixels. Normal runtime rendering places one visual-only mountain sprite on every accepted mountain mask cell.
 
 ## F. Rivers And Lakes
 
@@ -279,7 +279,7 @@ The prototype renderer draws in layers:
 7. packed-dirt road masks
 8. bridges/docks
 9. forest overlays
-10. semantic mountain massif terrain and visual-only ridge overlays
+10. one visual-only mountain sprite per semantic mountain mask cell
 11. towns/POIs/ports
 
 The current lab art is deliberately procedural: flat colors, light texture noise, simple symbolic mountains/forests, and styled route strokes. The algorithm and semantic separation are the point.
@@ -318,7 +318,7 @@ Recommended v1 approach:
 
 - semantic archipelago masks and fields
 - minimal terrain fills and brush-like edges
-- semantic mountain massif masks plus visual-only ridge overlays, forests, towns, ports, and dungeons
+- semantic mountain masks plus one visual-only mountain sprite per mask cell, forests, towns, ports, and dungeons
 - packed-dirt road masks and freshwater river/lake masks
 - validation against logical world rules before visual polish
 
@@ -326,7 +326,7 @@ Recommended v1 approach:
 
 - Roads are grid paths with simple A* costs; future visual smoothing should improve the same semantic road mask and graph rather than normal route strokes.
 - Rivers are semantic freshwater ribbons rendered by the terrain mask; future versions should improve basin selection and add stronger bank/pass shaping where roads cross wide rivers.
-- Mountain terrain is semantic-mask driven; ridge/peak art is sparse visual-only placeholder overlay art.
+- Mountain collision is semantic-mask driven; visible mountain art is one unscaled visual-only sprite per mask cell.
 - Biome smoothing is simple and should eventually use connected-region cleanup.
   - This lab preview remains isolated from Phaser-specific rendering even though it shares the runtime-safe semantic generator core.
 `;
@@ -503,7 +503,6 @@ This list supports the semantic-mask world generator direction. It avoids asking
 | Sand/beach fill texture | required now | tile/fill | Used for beaches and desert interiors. |
 | Snow/ice fill texture | required now | tile/fill | Used for cold/high regions. |
 | Freshwater terrain fill | required now | semantic mask fill | Uses the current freshwater material sheet for river and lake masks. |
-| Mountain massif / scree terrain fill | required now | semantic mask fill | Opaque terrain-level fill for blocked mountain cells; decorative ridge sprites do not drive collision. |
 | Lake edge accents | useful soon | mask accent | Small lake edge highlights beyond the shared freshwater mask. |
 
 ## 2. Edge / Mask Rendering Assets

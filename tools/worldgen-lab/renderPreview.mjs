@@ -262,7 +262,6 @@ export function renderWorldPreview(world, scale = 6) {
   renderOcean(image, world, scale);
   renderLand(image, world, scale);
   renderCoastOutline(image, world, scale);
-  renderMountainEdges(image, world, scale);
   renderRoads(image, world, scale);
   renderForests(image, world, scale);
   renderMountains(image, world, scale);
@@ -298,15 +297,6 @@ function renderLand(image, world, scale) {
       fillCell(image, x, y, scale, world.layers.lakeMap[i] ? COLORS.lake : n > 0.52 ? COLORS.shallow : COLORS.river);
       return;
     }
-    if (world.layers.mountainMap[i]) {
-      const color = mountainCellColor(world, x, y, i);
-      fillCell(image, x, y, scale, color);
-      if ((x * 5 + y * 11 + Math.floor(n * 23)) % 4 === 0) {
-        const fleck = world.layers.biome[i] === BIOME.ICE ? COLORS.mountainSnow : COLORS.mountainLight;
-        fillRect(image, x * scale + Math.floor(scale * 0.58), y * scale + Math.floor(scale * 0.32), Math.max(1, Math.floor(scale * 0.2)), 1, fleck);
-      }
-      return;
-    }
     if (world.layers.roadMap[i]) {
       fillCell(image, x, y, scale, n > 0.52 ? [196, 151, 83, 255] : COLORS.road);
       return;
@@ -337,31 +327,6 @@ function renderCoastOutline(image, world, scale) {
   });
 }
 
-function renderMountainEdges(image, world, scale) {
-  const directions = [
-    { dx: 0, dy: -1, side: "n" },
-    { dx: 1, dy: 0, side: "e" },
-    { dx: 0, dy: 1, side: "s" },
-    { dx: -1, dy: 0, side: "w" }
-  ];
-  forEachCell(world, (x, y, i) => {
-    if (!world.layers.mountainMap[i]) return;
-    for (const direction of directions) {
-      const nx = x + direction.dx;
-      const ny = y + direction.dy;
-      if (isMountainCell(world, nx, ny)) continue;
-      const color = mountainEdgeColor(world, x, y, i, nx, ny);
-      const px = x * scale;
-      const py = y * scale;
-      if (direction.side === "n") drawLine(image, px, py, px + scale - 1, py, color);
-      else if (direction.side === "e") drawLine(image, px + scale - 1, py, px + scale - 1, py + scale - 1, color);
-      else if (direction.side === "s") drawLine(image, px, py + scale - 1, px + scale - 1, py + scale - 1, color);
-      else drawLine(image, px, py, px, py + scale - 1, color);
-      if (scale >= 6 && direction.side === "s") drawLine(image, px + 1, py + scale - 2, px + scale - 2, py + scale - 2, COLORS.mountainDark);
-    }
-  });
-}
-
 function renderForests(image, world, scale) {
   forEachCell(world, (x, y, i) => {
     if (!world.layers.forestMap[i]) return;
@@ -374,10 +339,10 @@ function renderForests(image, world, scale) {
 
 function renderMountains(image, world, scale) {
   let visuals = mountainObjectOverlays(world).map((overlay) => ({
-    x: overlay.x + (overlay.offsetX ?? 0),
-    y: overlay.y + (overlay.offsetY ?? 0),
+    x: overlay.x,
+    y: overlay.y,
     kind: mountainKindForOverlay(world, overlay),
-    scaleBoost: Math.max(0.9, overlay.scale / 2.35)
+    scaleBoost: 1
   }));
   if (!visuals.length) visuals = fallbackMountainVisuals(world);
   visuals.sort((a, b) => a.y - b.y || a.x - b.x);
@@ -399,14 +364,7 @@ function mountainKindForOverlay(world, overlay) {
 function fallbackMountainVisuals(world) {
   const visuals = [];
   for (const range of world.mountainRanges) {
-    const cells = [...range.cells].sort((a, b) => b.y - a.y || b.x - a.x);
-    if (!cells.length) continue;
-    const count = range.smallOutcrop ? 1 : Math.max(1, Math.min(6, Math.ceil(cells.length / 16)));
-    const step = Math.max(1, Math.floor(cells.length / count));
-    for (let visualIndex = 0; visualIndex < count; visualIndex += 1) {
-      const cell = cells[Math.min(cells.length - 1, visualIndex * step)];
-      visuals.push({ x: cell.x, y: cell.y, kind: range.kind, scaleBoost: range.smallOutcrop ? 0.9 : 1.15 });
-    }
+    for (const cell of [...range.cells].sort((a, b) => a.y - b.y || a.x - b.x)) visuals.push({ x: cell.x, y: cell.y, kind: range.kind, scaleBoost: 1 });
   }
   return visuals;
 }
@@ -416,21 +374,6 @@ function mountainCellColor(world, x, y, i = y * world.width + x) {
   if (world.layers.biome[i] === BIOME.ICE) return n > 0.56 ? COLORS.mountainSnow : COLORS.mountainSnowShade;
   if (world.layers.biome[i] === BIOME.BEACH || world.layers.biome[i] === BIOME.SAND) return n > 0.54 ? COLORS.mountainSandLight : COLORS.mountainSand;
   return n > 0.56 ? COLORS.mountainLight : COLORS.mountain;
-}
-
-function mountainEdgeColor(world, x, y, i, nx, ny) {
-  if (nx < 0 || ny < 0 || nx >= world.width || ny >= world.height) return COLORS.mountainDark;
-  const ni = ny * world.width + nx;
-  if (!world.layers.landMask[ni] || world.layers.waterClass[ni] !== WATER.NONE || world.layers.lakeMap[ni] || world.layers.riverMap[ni]) return [93, 80, 67, 255];
-  if (world.layers.biome[i] === BIOME.ICE || world.layers.biome[ni] === BIOME.ICE) return [111, 145, 163, 255];
-  if (world.layers.biome[i] === BIOME.SAND || world.layers.biome[i] === BIOME.BEACH || world.layers.biome[ni] === BIOME.SAND || world.layers.biome[ni] === BIOME.BEACH) {
-    return [138, 112, 72, 255];
-  }
-  return COLORS.mountainDark;
-}
-
-function isMountainCell(world, x, y) {
-  return x >= 0 && y >= 0 && x < world.width && y < world.height && world.layers.mountainMap[y * world.width + x] === 1;
 }
 
 function renderRoads(image, world, scale) {

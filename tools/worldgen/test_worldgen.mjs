@@ -288,15 +288,21 @@ function validateSemanticWorldgen() {
   assert(worldA.semantic.rivers.length > 0, "Semantic river data is missing.");
   assert(worldA.objectOverlays.some((overlay) => overlay.objectId === "small_mountain_peak" || overlay.objectId === "snowy_mountain_peak"), "No mountain overlays were generated.");
   const mountainVisualOverlays = worldA.objectOverlays.filter((overlay) => overlay.id.startsWith("mountain-"));
-  assert(mountainVisualOverlays.length > 0, "Mountain visual overlays should decorate semantic mountain ranges.");
-  assert(mountainVisualOverlays.length < worldA.semantic.mountains.length, "Mountain ridge sprites should be sparse decoration, not one overlay per blocked cell.");
-  assert(mountainVisualOverlays.every((overlay) => overlay.collisionPolicy === "visualOnly"), "Mountain ridge overlays must be visual-only; semantic mountainMap owns collision.");
-  assert(mountainVisualOverlays.some((overlay) => Math.abs(overlay.offsetX ?? 0) > 0 || Math.abs(overlay.offsetY ?? 0) > 0), "Mountain visual overlays should use patch jitter.");
+  assert(mountainVisualOverlays.length === worldA.semantic.mountains.length, "Every semantic mountain cell should get exactly one mountain sprite.");
+  assert(mountainVisualOverlays.every((overlay) => overlay.collisionPolicy === "visualOnly"), "Mountain sprites must be visual-only; semantic mountainMap owns collision.");
+  assert(mountainVisualOverlays.every((overlay) => overlay.scale === 1), "Mountain sprites should render at normal unscaled size.");
+  assert(mountainVisualOverlays.every((overlay) => (overlay.offsetX ?? 0) === 0 && (overlay.offsetY ?? 0) === 0), "Mountain sprites should stay centered on their semantic cell.");
+  const mountainVisualKeys = new Set(mountainVisualOverlays.map((overlay) => `${overlay.x},${overlay.y}`));
+  assert(mountainVisualKeys.size === mountainVisualOverlays.length, "Mountain sprites should not duplicate the same semantic cell.");
+  for (const mountain of worldA.semantic.mountains) {
+    assert(mountainVisualKeys.has(`${mountain.x},${mountain.y}`), `Mountain cell ${mountain.x},${mountain.y} is missing a visible mountain sprite.`);
+  }
   for (const range of worldA.semantic.mountainRanges) {
-    const patchVisuals = mountainVisualOverlays.filter((overlay) => overlay.id.startsWith(`mountain-${range.id}-patch-`));
-    assert(patchVisuals.length >= 1, `${range.id} should get at least one decorative ridge sprite.`);
-    assert(patchVisuals.length <= Math.max(1, Math.ceil(range.cells.length / 4)), `${range.id} should not spam decorative ridge sprites.`);
-    assert(new Set(patchVisuals.map((overlay) => overlay.objectId)).size === 1, `${range.id} should use one mountain asset across the whole massif.`);
+    const tileVisuals = mountainVisualOverlays.filter((overlay) => overlay.id.startsWith(`mountain-${range.id}-tile-`));
+    assert(tileVisuals.length === range.cells.length, `${range.id} should get one visible mountain sprite per mask cell.`);
+    for (const cell of range.cells) {
+      assert(tileVisuals.some((overlay) => overlay.x === cell.x && overlay.y === cell.y), `${range.id} is missing a mountain sprite at ${cell.x},${cell.y}.`);
+    }
   }
   assert(worldA.objectOverlays.some((overlay) => overlay.objectId === "broadleaf_tree" || overlay.objectId === "dark_pine_tree"), "No forest overlays were generated.");
   const mountainIndex = worldA.semantic.layers.mountainMap.findIndex((value) => value === 1);
@@ -367,7 +373,7 @@ function validateIslandOverlayRules(world) {
   const snowCounts = new Map();
   const rangeCellCount = world.semantic.mountainRanges.reduce((sum, range) => sum + range.cells.length, 0);
   assert(world.semantic.mountainRanges.length > 0, "No semantic mountain ranges were generated.");
-  assert(rangeCellCount === world.semantic.mountains.length, "Mountain range cells do not match flat mountain overlays.");
+  assert(rangeCellCount === world.semantic.mountains.length, "Mountain range cells do not match flat semantic mountain cells.");
   assert(world.semantic.mountainDebug.singletonComponents === 0, "Mountain cleanup left singleton components.");
   assert(world.semantic.mountainDebug.componentCount === world.semantic.mountainRanges.length, "Mountain debug component count does not match ranges.");
   for (const range of world.semantic.mountainRanges) {
@@ -396,7 +402,7 @@ function validateIslandOverlayRules(world) {
   }
   assert((snowCounts.get("greenhaven") ?? 0) === 0, "Greenhaven must not have snow mountains.");
   assert((snowCounts.get("coralreach") ?? 0) === 0, "Coralreach must not have snow mountains.");
-  assert((mountainCounts.get("highspire") ?? 0) >= 24, "Highspire should keep a readable mountain massif.");
+  assert((mountainCounts.get("highspire") ?? 0) >= 24, "Highspire should keep a readable mountain region.");
 }
 
 function validateCanonicalTerrainPalette(world) {
@@ -541,7 +547,6 @@ function validateSemanticMaskTerrainRendererPlan(world) {
   assert(plan.waterGrassBoundarySamples + plan.waterIceBoundarySamples > 0, "Semantic mask terrain plan found no inland water/land boundaries.");
   assert(plan.roadBoundarySamples > 0, "Semantic mask terrain plan found no road terrain boundaries.");
   assert(plan.sandGrassBoundarySamples > 0, "Semantic mask terrain plan found no sand/grass boundaries.");
-  assert(plan.mountainBoundarySamples > 0, "Semantic mask terrain plan found no mountain massif boundaries.");
   assert(before === after, "Semantic mask terrain planning mutated the generated world.");
 }
 

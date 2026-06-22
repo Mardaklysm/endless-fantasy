@@ -1631,11 +1631,10 @@ class CrystalOathScene extends Phaser.Scene {
         `Grassland: ${WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.grassland}`,
         `Sand: ${WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.sand}`,
         `Ice/snow: ${WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.ice}`,
-        `Mountain: ${WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.mountain}`,
         `Freshwater terrain: ${WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.freshWater}`,
         "Deprecated overworld atlases active: false",
         "Random base terrain variants active: false",
-        "Roads, rivers, lakes, and mountain massifs render through the semantic terrain mask; ridge sprites, forests, and POIs remain overlays",
+        "Roads, rivers, and lakes render through the semantic terrain mask; mountain sprites, forests, and POIs remain overlays",
         `Dungeon atlas: ${DUNGEON_ATLAS.image}`,
         `Dungeon atlas source inset: ${DUNGEON_ATLAS_SOURCE_INSET}`,
         `Dungeon atlas entries: ${DUNGEON_TILE_ID_SET.size}`
@@ -5550,7 +5549,7 @@ Statuses: ${statuses}`;
     if (tile.biome === "water") return worldTileHasTag(tileId, "deep") ? WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.deepOcean : WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.shallowWater;
     if (tile.blendGroup === "snow" || tile.blendGroup === "ice") return WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.ice;
     if (tile.blendGroup === "desert") return tileId === "beach_sand" || tileId === "wet_beach_sand" ? WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.beach : WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.sand;
-    if (tile.blendGroup === "rock") return "world_current_terrain_mountain_scree_ground";
+    if (tile.blendGroup === "rock") return undefined;
     if (tile.blendGroup === "lava") return "world_current_terrain_lava_crust";
     if (tile.blendGroup === "dark") return "world_current_terrain_black_ash_ground";
     if (tile.id.includes("road") || tile.id.includes("trail")) return "world_current_terrain_packed_dirt_surface";

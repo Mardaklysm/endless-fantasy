@@ -532,35 +532,15 @@ function buildObjectOverlays(semantic: SemanticWorld, reefs: WorldVec[]): WorldO
 
 function buildMountainPatchOverlays(semantic: SemanticWorld, range: SemanticWorld["mountainRanges"][number]): WorldObjectOverlay[] {
   const cells = [...range.cells].sort((a, b) => a.y - b.y || a.x - b.x);
-  if (!cells.length) return [];
-  const overlays: WorldObjectOverlay[] = [];
-  const rangeObjectId = mountainRangeObjectId(semantic, range);
-  const width = range.bounds.maxX - range.bounds.minX + 1;
-  const height = range.bounds.maxY - range.bounds.minY + 1;
-  const longAxis = Math.max(width, height);
-  const visualCount = range.smallOutcrop ? 1 : Math.max(1, Math.min(8, Math.ceil(cells.length / 16), Math.ceil(longAxis / 4)));
-  const anchors = pickMountainRidgeAnchors(semantic.seed, range.id, cells, visualCount);
-  for (let visualIndex = 0; visualIndex < anchors.length; visualIndex += 1) {
-    const anchor = anchors[visualIndex];
-    const scaleRoll = hashNoise(`${semantic.seed}:mountain-patch-scale:${range.id}:${visualIndex}`, anchor.x, anchor.y);
-    const offsetRollX = hashNoise(`${semantic.seed}:mountain-patch-offset-x:${range.id}:${visualIndex}`, anchor.x, anchor.y);
-    const offsetRollY = hashNoise(`${semantic.seed}:mountain-patch-offset-y:${range.id}:${visualIndex}`, anchor.x, anchor.y);
-    const normalizedY = range.bounds.maxY === range.bounds.minY ? 0.5 : (anchor.y - range.bounds.minY) / (range.bounds.maxY - range.bounds.minY);
-    const largeBackPeakBias = 1 - normalizedY;
-    const coverageScale = Math.min(4.55, Math.max(2.15, Math.sqrt(cells.length / Math.max(1, visualCount)) * 0.88, Math.min(width, height) * 0.5));
-    overlays.push({
-      id: `mountain-${range.id}-patch-${visualIndex}`,
-      x: anchor.x,
-      y: anchor.y,
-      objectId: rangeObjectId,
-      scale: range.smallOutcrop ? 1.22 + scaleRoll * 0.16 : coverageScale + largeBackPeakBias * 0.16 + scaleRoll * 0.16,
-      offsetX: (offsetRollX - 0.5) * (range.smallOutcrop ? 0.1 : 0.3),
-      offsetY: (offsetRollY - 0.5) * (range.smallOutcrop ? 0.08 : 0.2) - largeBackPeakBias * 0.08,
-      alpha: 0.96,
-      collisionPolicy: "visualOnly"
-    });
-  }
-  return overlays;
+  return cells.map((cell, cellIndex) => ({
+    id: `mountain-${range.id}-tile-${cellIndex}-${cell.x}-${cell.y}`,
+    x: cell.x,
+    y: cell.y,
+    objectId: mountainObjectIdForCell(semantic, range, cell),
+    scale: 1,
+    alpha: 0.96,
+    collisionPolicy: "visualOnly"
+  }));
 }
 
 function buildForestPatchOverlays(semantic: SemanticWorld): WorldObjectOverlay[] {
@@ -639,76 +619,13 @@ function pickSpreadAnchors(seed: string, salt: string, cells: WorldVec[], count:
   return anchors.length ? anchors : [cells[Math.floor(cells.length / 2)]];
 }
 
-function pickMountainRidgeAnchors(seed: string, salt: string, cells: WorldVec[], count: number): WorldVec[] {
-  if (count <= 1 || cells.length <= 1) return [mountainCenterlineCell(seed, salt, cells)];
-  const depths = mountainInteriorDepths(cells);
-  const anchors = [mountainCenterlineCell(seed, salt, cells, depths)];
-  while (anchors.length < count) {
-    let bestCell: WorldVec | undefined;
-    let bestScore = -Infinity;
-    for (const cell of cells) {
-      if (anchors.some((anchor) => anchor.x === cell.x && anchor.y === cell.y)) continue;
-      const nearestDistance = Math.min(...anchors.map((anchor) => Math.hypot(anchor.x - cell.x, anchor.y - cell.y)));
-      const interiorBias = depths.get(posKey(cell)) ?? 0;
-      const jitter = hashNoise(`${seed}:coverage-anchor:${salt}:${anchors.length}`, cell.x, cell.y) * 0.18;
-      const score = nearestDistance + interiorBias * 1.35 + jitter;
-      if (score > bestScore) {
-        bestScore = score;
-        bestCell = cell;
-      }
-    }
-    if (!bestCell) break;
-    anchors.push(bestCell);
-  }
-  return anchors;
-}
-
-function mountainCenterlineCell(seed: string, salt: string, cells: WorldVec[], depths = mountainInteriorDepths(cells)): WorldVec {
-  const center = cells.reduce((sum, cell) => ({ x: sum.x + cell.x, y: sum.y + cell.y }), { x: 0, y: 0 });
-  center.x /= cells.length;
-  center.y /= cells.length;
-  return [...cells].sort((a, b) => {
-    const distanceA = Math.hypot(a.x - center.x, a.y - center.y);
-    const distanceB = Math.hypot(b.x - center.x, b.y - center.y);
-    const depthA = depths.get(posKey(a)) ?? 0;
-    const depthB = depths.get(posKey(b)) ?? 0;
-    return depthB - depthA || distanceA - distanceB || hashNoise(`${seed}:center-anchor:${salt}`, b.x, b.y) - hashNoise(`${seed}:center-anchor:${salt}`, a.x, a.y);
-  })[0];
-}
-
-function mountainInteriorDepths(cells: WorldVec[]): Map<string, number> {
-  const cellKeys = new Set(cells.map(posKey));
-  const depths = new Map<string, number>();
-  const queue: WorldVec[] = [];
-  for (const cell of cells) {
-    const isEdge = neighbors4(cell.x, cell.y).some((next) => !cellKeys.has(posKey(next)));
-    if (!isEdge) continue;
-    depths.set(posKey(cell), 0);
-    queue.push(cell);
-  }
-  if (!queue.length) {
-    for (const cell of cells) depths.set(posKey(cell), 1);
-    return depths;
-  }
-  for (let head = 0; head < queue.length; head += 1) {
-    const cell = queue[head];
-    const depth = depths.get(posKey(cell)) ?? 0;
-    for (const next of neighbors4(cell.x, cell.y)) {
-      const key = posKey(next);
-      if (!cellKeys.has(key) || depths.has(key)) continue;
-      depths.set(key, depth + 1);
-      queue.push(next);
-    }
-  }
-  return depths;
-}
-
-function mountainRangeObjectId(
+function mountainObjectIdForCell(
   semantic: SemanticWorld,
-  range: SemanticWorld["mountainRanges"][number]
+  range: SemanticWorld["mountainRanges"][number],
+  cell: WorldVec
 ): WorldObjectId {
-  const snowCells = range.cells.filter((cell) => semantic.layers.biome[cell.y * semantic.width + cell.x] === SEMANTIC_BIOME.ICE).length;
-  if (range.kind === "snow_mountain" || snowCells >= range.cells.length / 2) return WORLD_OBJECT_IDS.snowyMountainPeak;
+  const i = cell.y * semantic.width + cell.x;
+  if (range.kind === "snow_mountain" || semantic.layers.biome[i] === SEMANTIC_BIOME.ICE) return WORLD_OBJECT_IDS.snowyMountainPeak;
   return WORLD_OBJECT_IDS.smallMountainPeak;
 }
 
@@ -820,10 +737,6 @@ function hasNearbySemanticMountain(semantic: SemanticWorld, x: number, y: number
 function pointInPoiFootprint(poi: WorldPoi, x: number, y: number): boolean {
   const radius = Math.floor(poi.footprint / 2);
   return x >= poi.x - radius && x <= poi.x + radius && y >= poi.y - radius && y <= poi.y + radius;
-}
-
-function posKey(pos: WorldVec): string {
-  return `${pos.x},${pos.y}`;
 }
 
 function pickByNoise(ids: WorldTileId[], seed: string, salt: string, x: number, y: number, weights?: number[]): WorldTileId {
