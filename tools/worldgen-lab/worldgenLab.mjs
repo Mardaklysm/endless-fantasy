@@ -32,6 +32,9 @@ async function main() {
   outputs.push(writeImage(outDir, "elevation_debug.png", previews.elevation));
   outputs.push(writeImage(outDir, "mountain_mask_debug.png", previews.mountainMask));
   outputs.push(writeImage(outDir, "mountain_collision_debug.png", previews.mountainCollision));
+  outputs.push(writeImage(outDir, "forest_mask_debug.png", previews.forestMask));
+  outputs.push(writeImage(outDir, "poi_footprints_debug.png", previews.poiFootprints));
+  outputs.push(writeImage(outDir, "passability_debug.png", previews.passability));
   outputs.push(writeImage(outDir, "river_mask_debug.png", previews.riverMask));
   outputs.push(writeImage(outDir, "river_connectivity_debug.png", previews.riverConnectivity));
   outputs.push(writeImage(outDir, "rivers_roads_debug.png", previews.riversRoads));

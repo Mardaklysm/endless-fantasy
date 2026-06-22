@@ -28,7 +28,7 @@ export function validateSemanticWorld(world: SemanticWorld) {
   if (!starterIsland) errors.push(`Starter island ${world.profile.startingIslandId} is missing.`);
   const starterSettlement = world.poiList.find((poi) => poi.islandId === world.profile.startingIslandId && poi.role === "settlement");
   if (!starterSettlement) errors.push(`Starter island ${world.profile.startingIslandId} has no settlement.`);
-  else if (!isWalkable(world, starterSettlement.x, starterSettlement.y)) errors.push(`Starter settlement ${starterSettlement.id} is not walkable.`);
+  else if (!hasAdjacentWalkableToPoiFootprint(world, starterSettlement)) errors.push(`Starter settlement ${starterSettlement.id} has no walkable approach.`);
 
   for (const id of MAJOR_ISLAND_IDS) {
     const harbor = world.harbors.find((poi) => poi.islandId === id);
@@ -55,26 +55,27 @@ function validatePoi(world: SemanticWorld, poi: SemanticPoi, errors: string[]) {
   if (!world.layers.landMask[i] && poi.type !== "port") errors.push(`POI ${poi.id} is not on land.`);
   if (world.layers.waterClass[i] !== SEMANTIC_WATER.NONE) errors.push(`POI ${poi.id} is on blocked water.`);
   validatePoiFootprint(world, poi, errors);
-  if (!hasAdjacentWalkable(world, poi.x, poi.y) && !isWalkable(world, poi.x, poi.y)) errors.push(`POI ${poi.id} has no adjacent walkable approach cell.`);
-  if (poi.type === "port" && !hasAdjacentWater(world, poi.x, poi.y, SEMANTIC_WATER.SHALLOW)) {
+  if (!hasAdjacentWalkableToPoiFootprint(world, poi)) errors.push(`POI ${poi.id} has no adjacent walkable approach cell.`);
+  if (poi.type === "port" && !poiFootprintCells(poi).some((cell) => hasAdjacentWater(world, cell.x, cell.y, SEMANTIC_WATER.SHALLOW))) {
     errors.push(`Port ${poi.id} is not adjacent to shallow water.`);
   }
 }
 
 function validatePoiFootprint(world: SemanticWorld, poi: SemanticPoi, errors: string[]) {
-  const radius = poi.role === "settlement" || poi.role === "final" ? 1 : 0;
-  for (let y = poi.y - radius; y <= poi.y + radius; y += 1) {
-    for (let x = poi.x - radius; x <= poi.x + radius; x += 1) {
-      if (!inBounds(world, x, y)) {
-        errors.push(`POI ${poi.id} footprint is out of bounds at ${x},${y}.`);
-        continue;
-      }
-      const i = index(world.width, x, y);
-      if (!world.layers.landMask[i] || world.layers.waterClass[i] !== SEMANTIC_WATER.NONE || world.layers.lakeMap[i] || world.layers.riverMap[i]) {
-        errors.push(`POI ${poi.id} footprint touches invalid water terrain at ${x},${y}.`);
-      }
-      if (world.layers.mountainMap[i]) errors.push(`POI ${poi.id} footprint overlaps mountain terrain at ${x},${y}.`);
+  for (const cell of poiFootprintCells(poi)) {
+    if (!inBounds(world, cell.x, cell.y)) {
+      errors.push(`POI ${poi.id} footprint is out of bounds at ${cell.x},${cell.y}.`);
+      continue;
     }
+    const i = index(world.width, cell.x, cell.y);
+    if (!world.layers.landMask[i] || world.layers.waterClass[i] !== SEMANTIC_WATER.NONE || world.layers.lakeMap[i] || world.layers.riverMap[i]) {
+      errors.push(`POI ${poi.id} footprint touches invalid water terrain at ${cell.x},${cell.y}.`);
+    }
+    if (world.layers.mountainMap[i]) errors.push(`POI ${poi.id} footprint overlaps mountain terrain at ${cell.x},${cell.y}.`);
+    if (world.layers.roadMap[i]) errors.push(`POI ${poi.id} footprint contains road terrain at ${cell.x},${cell.y}.`);
+    if (world.layers.forestMap[i]) errors.push(`POI ${poi.id} footprint overlaps forest terrain at ${cell.x},${cell.y}.`);
+    if (world.layers.overlayCollisionPolicy[i] !== "poiBlock") errors.push(`POI ${poi.id} footprint cell ${cell.x},${cell.y} is not tagged poiBlock.`);
+    if (world.layers.walkability[i]) errors.push(`POI ${poi.id} footprint cell ${cell.x},${cell.y} is walkable.`);
   }
 }
 
@@ -173,6 +174,29 @@ function validateOverlaySpacingAndWalkability(world: SemanticWorld, errors: stri
     if (nearbyCount(world, world.layers.mountainMap, poi.x, poi.y, clearance) > 0) errors.push(`Mountain crowds POI ${poi.id}.`);
     if (nearbyCount(world, world.layers.forestMap, poi.x, poi.y, 1) > 0) errors.push(`Forest crowds POI ${poi.id}.`);
   }
+}
+
+function hasAdjacentWalkableToPoiFootprint(world: SemanticWorld, poi: SemanticPoi): boolean {
+  const footprintKeys = new Set(poiFootprintCells(poi).map((cell) => `${cell.x},${cell.y}`));
+  for (const cell of poiFootprintCells(poi)) {
+    for (const next of neighbors4(cell.x, cell.y)) {
+      if (!inBounds(world, next.x, next.y) || footprintKeys.has(`${next.x},${next.y}`)) continue;
+      if (isWalkable(world, next.x, next.y)) return true;
+    }
+  }
+  return false;
+}
+
+function poiFootprintCells(poi: SemanticPoi): { x: number; y: number }[] {
+  const size = poi.role === "settlement" || poi.role === "final" ? 3 : 2;
+  const offset = Math.floor((size - 1) / 2);
+  const minX = poi.x - offset;
+  const minY = poi.y - offset;
+  const cells: { x: number; y: number }[] = [];
+  for (let y = minY; y < minY + size; y += 1) {
+    for (let x = minX; x < minX + size; x += 1) cells.push({ x, y });
+  }
+  return cells;
 }
 
 function isWalkable(world: SemanticWorld, x: number, y: number): boolean {

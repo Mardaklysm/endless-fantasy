@@ -274,12 +274,13 @@ function validateSemanticWorldgen() {
 
   const greenhavenSettlement = worldA.pois.find((poi) => poi.islandId === "greenhaven" && poi.kind === "town");
   assert(greenhavenSettlement, "Greenhaven has no settlement POI.");
-  assert(isWorldPositionWalkable(worldA, greenhavenSettlement.x, greenhavenSettlement.y), "Greenhaven settlement is not walkable.");
+  assert(!isWorldPositionWalkable(worldA, greenhavenSettlement.x, greenhavenSettlement.y), "Greenhaven settlement body should block walking.");
+  assert(hasAdjacentWalkablePoiApproach(worldA, greenhavenSettlement), "Greenhaven settlement has no walkable approach.");
 
   for (const id of MAJOR_ISLAND_IDS) {
     const harbor = worldA.pois.find((poi) => poi.islandId === id && poi.kind === "harbor");
     assert(harbor, `${id} has no harbor/travel point.`);
-    assert(hasAdjacentWater(worldA, harbor.x, harbor.y, SEMANTIC_WATER.SHALLOW), `${harbor.id} is not adjacent to shallow water.`);
+    assert(poiFootprintCells(harbor).some((cell) => hasAdjacentWater(worldA, cell.x, cell.y, SEMANTIC_WATER.SHALLOW)), `${harbor.id} is not adjacent to shallow water.`);
   }
 
   assert(worldA.roads.length > 0, "No runtime road overlays were generated.");
@@ -304,7 +305,8 @@ function validateSemanticWorldgen() {
       assert(tileVisuals.some((overlay) => overlay.x === cell.x && overlay.y === cell.y), `${range.id} is missing a mountain sprite at ${cell.x},${cell.y}.`);
     }
   }
-  assert(worldA.objectOverlays.some((overlay) => overlay.objectId === "broadleaf_tree" || overlay.objectId === "dark_pine_tree"), "No forest overlays were generated.");
+  assert(worldA.objectOverlays.some((overlay) => overlay.objectId === "broadleaf_tree" || overlay.objectId === "dark_pine_tree" || overlay.objectId === "palm_tree"), "No forest overlays were generated.");
+  validateForestOverlayInvariant(worldA);
   const mountainIndex = worldA.semantic.layers.mountainMap.findIndex((value) => value === 1);
   assert(mountainIndex >= 0, "No semantic mountain collision cells were generated.");
   assert(!isWorldPositionWalkable(worldA, mountainIndex % worldA.width, Math.floor(mountainIndex / worldA.width)), "Semantic mountain mask cell should block walking.");
@@ -333,7 +335,7 @@ function validateSemanticWorldgen() {
     );
   }
   assert(worldA.routeBridgeCandidates.length === worldA.semantic.bridgeCandidates.length, "Runtime bridge candidates should mirror semantic road-river crossings.");
-  assert(worldA.bridges.length >= worldA.routeBridgeCandidates.length, "Visible bridge/dock list should include route bridge crossings.");
+  assert(worldA.bridges.every((bridge) => worldA.semantic.layers.waterClass[bridge.y * worldA.width + bridge.x] !== SEMANTIC_WATER.NONE), "Visible dock/bridge overlays should sit on water.");
   const poiPolicyIndex = worldA.pois[0].y * worldA.width + worldA.pois[0].x;
   assert(worldA.semantic.layers.overlayCollisionPolicy[poiPolicyIndex] === "poiBlock", "POI cells should be tagged poiBlock for debug/interaction policy.");
   assert(worldA.objectOverlays.every((overlay) => ["visualOnly", "softTerrain", "hardBlock", "poiBlock"].includes(overlay.collisionPolicy)), "Object overlays are missing collision policies.");
@@ -366,6 +368,29 @@ function validateMountainCollisionInvariant(world) {
   }
   assert(mountainCells > 0, "Expected semantic mountain mask cells for collision validation.");
   assert(blockedByMountain === mountainCells, "Blocked mountain cells should exactly match semantic mountain mask cells.");
+}
+
+function validateForestOverlayInvariant(world) {
+  const forestOverlays = world.objectOverlays.filter((overlay) => String(overlay.id ?? "").startsWith("forest-"));
+  const forestCells = [];
+  for (let y = 0; y < world.height; y += 1) {
+    for (let x = 0; x < world.width; x += 1) {
+      const i = y * world.width + x;
+      if (world.semantic.layers.forestMap[i]) forestCells.push({ x, y });
+    }
+  }
+  assert(forestOverlays.length === forestCells.length, "Every semantic forest cell should get exactly one tree sprite.");
+  assert(forestOverlays.every((overlay) => overlay.collisionPolicy === "softTerrain"), "Forest sprites should remain softTerrain.");
+  assert(forestOverlays.every((overlay) => overlay.scale === 1), "Forest sprites should render at normal unscaled size.");
+  assert(forestOverlays.every((overlay) => (overlay.offsetX ?? 0) === 0 && (overlay.offsetY ?? 0) === 0), "Forest sprites should stay centered on their semantic cell.");
+  const overlayKeys = new Set(forestOverlays.map((overlay) => `${overlay.x},${overlay.y}`));
+  assert(overlayKeys.size === forestOverlays.length, "Forest sprites should not duplicate the same semantic cell.");
+  for (const cell of forestCells) {
+    assert(overlayKeys.has(`${cell.x},${cell.y}`), `Forest cell ${cell.x},${cell.y} is missing a visible tree sprite.`);
+    assert(isWorldPositionWalkable(world, cell.x, cell.y), `Forest cell ${cell.x},${cell.y} should stay walkable.`);
+  }
+  const components = connectedMaskComponents(world, world.semantic.layers.forestMap);
+  assert(components.every((component) => component.length >= 6), "Forest semantic components should not be isolated tiny tree fragments.");
 }
 
 function validateIslandOverlayRules(world) {
@@ -467,11 +492,19 @@ function validateBeachBand(world) {
 
 function validatePois(world) {
   for (const poi of world.pois) {
-    const i = poi.y * world.width + poi.x;
-    assert(world.semantic.layers.waterClass[i] === SEMANTIC_WATER.NONE, `POI ${poi.id} spawned on blocked water.`);
-    assert(world.semantic.layers.landMask[i] === 1, `POI ${poi.id} is not on land.`);
-    assert(isWorldPositionWalkable(world, poi.x, poi.y), `POI ${poi.id} is not reachable/walkable.`);
-    assert(hasAdjacentWalkable(world, poi.x, poi.y) || isWorldPositionWalkable(world, poi.x, poi.y), `POI ${poi.id} has no walkable approach.`);
+    assert(poi.footprint >= 2, `POI ${poi.id} should render with at least a 2x2 footprint.`);
+    for (const cell of poiFootprintCells(poi)) {
+      const i = cell.y * world.width + cell.x;
+      assert(world.semantic.layers.waterClass[i] === SEMANTIC_WATER.NONE, `POI ${poi.id} spawned on blocked water at ${cell.x},${cell.y}.`);
+      assert(world.semantic.layers.landMask[i] === 1, `POI ${poi.id} footprint is not on land at ${cell.x},${cell.y}.`);
+      assert(!world.semantic.layers.mountainMap[i], `POI ${poi.id} footprint overlaps mountain at ${cell.x},${cell.y}.`);
+      assert(!world.semantic.layers.riverMap[i], `POI ${poi.id} footprint overlaps river at ${cell.x},${cell.y}.`);
+      assert(!world.semantic.layers.roadMap[i], `POI ${poi.id} footprint contains road at ${cell.x},${cell.y}.`);
+      assert(!world.semantic.layers.forestMap[i], `POI ${poi.id} footprint overlaps forest at ${cell.x},${cell.y}.`);
+      assert(world.semantic.layers.overlayCollisionPolicy[i] === "poiBlock", `POI ${poi.id} footprint is not tagged poiBlock at ${cell.x},${cell.y}.`);
+      assert(!isWorldPositionWalkable(world, cell.x, cell.y), `POI ${poi.id} body cell ${cell.x},${cell.y} should block walking.`);
+    }
+    assert(hasAdjacentWalkablePoiApproach(world, poi), `POI ${poi.id} has no walkable approach.`);
     const textureKey = worldCurrentPoiTextureKeyFor(poi);
     assert(textureKey && WORLD_CURRENT_ASSET_BY_TEXTURE_KEY[textureKey], `POI ${poi.id} lacks a current texture mapping.`);
   }
@@ -593,6 +626,51 @@ function hasAdjacentWalkable(world, x, y) {
     if (next.x < 0 || next.y < 0 || next.x >= world.width || next.y >= world.height) return false;
     return isWorldPositionWalkable(world, next.x, next.y);
   });
+}
+
+function hasAdjacentWalkablePoiApproach(world, poi) {
+  const footprintKeys = new Set(poiFootprintCells(poi).map((cell) => `${cell.x},${cell.y}`));
+  return poiFootprintCells(poi).some((cell) =>
+    neighbors4(cell.x, cell.y).some((next) => {
+      if (next.x < 0 || next.y < 0 || next.x >= world.width || next.y >= world.height || footprintKeys.has(`${next.x},${next.y}`)) return false;
+      return isWorldPositionWalkable(world, next.x, next.y);
+    })
+  );
+}
+
+function poiFootprintCells(poi) {
+  const offset = Math.floor((poi.footprint - 1) / 2);
+  const minX = poi.x - offset;
+  const minY = poi.y - offset;
+  const cells = [];
+  for (let y = minY; y < minY + poi.footprint; y += 1) {
+    for (let x = minX; x < minX + poi.footprint; x += 1) cells.push({ x, y });
+  }
+  return cells;
+}
+
+function connectedMaskComponents(world, mask) {
+  const seen = new Set();
+  const components = [];
+  for (let i = 0; i < mask.length; i += 1) {
+    if (!mask[i] || seen.has(i)) continue;
+    const component = [];
+    const queue = [{ x: i % world.width, y: Math.floor(i / world.width) }];
+    seen.add(i);
+    for (let head = 0; head < queue.length; head += 1) {
+      const cell = queue[head];
+      component.push(cell);
+      for (const next of neighbors4(cell.x, cell.y)) {
+        if (next.x < 0 || next.y < 0 || next.x >= world.width || next.y >= world.height) continue;
+        const ni = next.y * world.width + next.x;
+        if (!mask[ni] || seen.has(ni)) continue;
+        seen.add(ni);
+        queue.push(next);
+      }
+    }
+    components.push(component);
+  }
+  return components;
 }
 
 function hasNearbyMountain(world, x, y, radius) {

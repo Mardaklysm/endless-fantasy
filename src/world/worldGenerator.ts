@@ -349,8 +349,8 @@ function adaptPoi(poi: SemanticPoi): WorldPoi {
 }
 
 function poiFootprint(poi: SemanticPoi): number {
-  if (poi.role === "settlement" || poi.type === "port" || poi.role === "final") return 3;
-  return 1;
+  if (poi.role === "settlement" || poi.role === "final") return 3;
+  return 2;
 }
 
 function poiKind(poi: SemanticPoi): WorldPoiKind {
@@ -547,19 +547,16 @@ function buildForestPatchOverlays(semantic: SemanticWorld): WorldObjectOverlay[]
   const overlays: WorldObjectOverlay[] = [];
   for (const component of connectedMaskComponents(semantic, semantic.layers.forestMap)) {
     const objectId = forestObjectIdForComponent(semantic, component);
-    const visualCount = Math.max(1, Math.min(6, Math.ceil(component.length / 5)));
-    const anchors = pickSpreadAnchors(semantic.seed, `forest-${component[0]?.x ?? 0}-${component[0]?.y ?? 0}`, component, visualCount);
-    for (let indexValue = 0; indexValue < anchors.length; indexValue += 1) {
-      const anchor = anchors[indexValue];
-      const scaleRoll = hashNoise(`${semantic.seed}:forest-patch-scale:${component.length}:${indexValue}`, anchor.x, anchor.y);
+    const cells = [...component].sort((a, b) => a.y - b.y || a.x - b.x);
+    for (let indexValue = 0; indexValue < cells.length; indexValue += 1) {
+      const cell = cells[indexValue];
       overlays.push({
-        id: `forest-${anchor.x}-${anchor.y}-${indexValue}`,
-        x: anchor.x,
-        y: anchor.y,
+        id: `forest-${component[0]?.x ?? 0}-${component[0]?.y ?? 0}-tile-${indexValue}-${cell.x}-${cell.y}`,
+        x: cell.x,
+        y: cell.y,
         objectId,
-        scale: component.length <= 2 ? 0.8 : 0.96 + scaleRoll * 0.12,
-        offsetX: (hashNoise(`${semantic.seed}:forest-patch-x:${indexValue}`, anchor.x, anchor.y) - 0.5) * 0.18,
-        offsetY: (hashNoise(`${semantic.seed}:forest-patch-y:${indexValue}`, anchor.x, anchor.y) - 0.5) * 0.14,
+        scale: 1,
+        alpha: 0.94,
         collisionPolicy: "softTerrain"
       });
     }
@@ -608,17 +605,6 @@ function connectedMaskComponents(semantic: SemanticWorld, mask: Uint8Array): Wor
   return components;
 }
 
-function pickSpreadAnchors(seed: string, salt: string, cells: WorldVec[], count: number): WorldVec[] {
-  const sorted = [...cells].sort((a, b) => hashNoise(`${seed}:anchor:${salt}`, b.x, b.y) - hashNoise(`${seed}:anchor:${salt}`, a.x, a.y));
-  const anchors: WorldVec[] = [];
-  const minDistance = Math.max(1.6, Math.sqrt(cells.length / Math.max(1, count)) * 0.62);
-  for (const cell of sorted) {
-    if (anchors.every((anchor) => Math.hypot(anchor.x - cell.x, anchor.y - cell.y) >= minDistance)) anchors.push(cell);
-    if (anchors.length >= count) break;
-  }
-  return anchors.length ? anchors : [cells[Math.floor(cells.length / 2)]];
-}
-
 function mountainObjectIdForCell(
   semantic: SemanticWorld,
   range: SemanticWorld["mountainRanges"][number],
@@ -632,17 +618,23 @@ function mountainObjectIdForCell(
 function buildDockTiles(semantic: SemanticWorld, pois: WorldPoi[], tiles: WorldTileId[][]): WorldBridge[] {
   const bridges: WorldBridge[] = [];
   for (const harbor of pois.filter((poi) => poi.kind === "harbor")) {
-    for (const next of neighbors4(harbor.x, harbor.y)) {
-      if (!inBounds(semantic.width, semantic.height, next.x, next.y)) continue;
-      if (!isWaterTile(tiles[next.y][next.x])) continue;
-      bridges.push({
-        x: next.x,
-        y: next.y,
-        orientation: next.x === harbor.x ? "vertical" : "horizontal",
-        material: harbor.islandId === "highspire" || harbor.islandId === "frostmere" ? "stone" : "wood"
-      });
-      break;
+    const footprintKeys = new Set(poiFootprintCells(harbor).map((cell) => `${cell.x},${cell.y}`));
+    let dock: WorldBridge | undefined;
+    for (const cell of poiFootprintCells(harbor)) {
+      for (const next of neighbors4(cell.x, cell.y)) {
+        if (!inBounds(semantic.width, semantic.height, next.x, next.y) || footprintKeys.has(`${next.x},${next.y}`)) continue;
+        if (!isWaterTile(tiles[next.y][next.x])) continue;
+        dock = {
+          x: next.x,
+          y: next.y,
+          orientation: next.x === cell.x ? "vertical" : "horizontal",
+          material: harbor.islandId === "highspire" || harbor.islandId === "frostmere" ? "stone" : "wood"
+        };
+        break;
+      }
+      if (dock) break;
     }
+    if (dock) bridges.push(dock);
   }
   return bridges;
 }
@@ -665,18 +657,18 @@ function buildSeaRoutes(pois: WorldPoi[]): WorldVec[][] {
 }
 
 function chooseStartPosition(semantic: SemanticWorld, pois: WorldPoi[]): WorldVec {
+  const poiKeys = poiFootprintKeySet(pois);
   const starterTown = pois.find((poi) => poi.islandId === CAMPAIGN_WORLD_PROFILE.startingIslandId && poi.kind === "town");
   if (starterTown) {
+    const bounds = poiFootprintBounds(starterTown);
     const candidates = [
-      { x: starterTown.x, y: starterTown.y + 2 },
-      { x: starterTown.x - 2, y: starterTown.y },
-      { x: starterTown.x + 2, y: starterTown.y },
-      { x: starterTown.x, y: starterTown.y - 2 },
-      { x: starterTown.x, y: starterTown.y + 1 },
-      { x: starterTown.x - 1, y: starterTown.y },
-      { x: starterTown.x + 1, y: starterTown.y }
+      { x: Math.floor((bounds.minX + bounds.maxX) / 2), y: bounds.maxY + 1 },
+      { x: bounds.minX - 1, y: bounds.maxY },
+      { x: bounds.maxX + 1, y: bounds.maxY },
+      { x: bounds.minX - 1, y: Math.floor((bounds.minY + bounds.maxY) / 2) },
+      { x: bounds.maxX + 1, y: Math.floor((bounds.minY + bounds.maxY) / 2) },
+      { x: Math.floor((bounds.minX + bounds.maxX) / 2), y: bounds.minY - 1 }
     ];
-    const poiKeys = new Set(pois.map((poi) => `${poi.x},${poi.y}`));
     const isValidStart = (candidate: WorldVec) => isSemanticWalkable(semantic, candidate.x, candidate.y) && !poiKeys.has(`${candidate.x},${candidate.y}`);
     const clear = candidates.find((candidate) => isValidStart(candidate) && !hasNearbySemanticMountain(semantic, candidate.x, candidate.y, 2));
     if (clear) return clear;
@@ -690,6 +682,7 @@ function chooseStartPosition(semantic: SemanticWorld, pois: WorldPoi[]): WorldVe
       for (let y = Math.round(starterIsland.center.y) - radius; y <= Math.round(starterIsland.center.y) + radius; y += 1) {
         for (let x = Math.round(starterIsland.center.x) - radius; x <= Math.round(starterIsland.center.x) + radius; x += 1) {
           if (!isSemanticWalkable(semantic, x, y)) continue;
+          if (poiKeys.has(`${x},${y}`)) continue;
           firstWalkable ??= { x, y };
           if (!hasNearbySemanticMountain(semantic, x, y, 2)) return { x, y };
         }
@@ -705,7 +698,7 @@ function buildValidationResult(semantic: SemanticWorld, pois: WorldPoi[]): World
   for (const row of buildBiomes(semantic)) {
     for (const biome of row) biomeCounts[biome] = (biomeCounts[biome] ?? 0) + 1;
   }
-  const reachablePoiIds = pois.filter((poi) => isSemanticWalkable(semantic, poi.x, poi.y)).map((poi) => poi.id);
+  const reachablePoiIds = pois.filter((poi) => hasAdjacentWalkablePoiApproach(semantic, poi)).map((poi) => poi.id);
   const errors = [...semantic.validation.errors];
   const warnings = [...semantic.validation.warnings];
   const start = chooseStartPosition(semantic, pois);
@@ -734,9 +727,44 @@ function hasNearbySemanticMountain(semantic: SemanticWorld, x: number, y: number
   return false;
 }
 
+function hasAdjacentWalkablePoiApproach(semantic: SemanticWorld, poi: WorldPoi): boolean {
+  const footprintKeys = new Set(poiFootprintCells(poi).map((cell) => `${cell.x},${cell.y}`));
+  for (const cell of poiFootprintCells(poi)) {
+    for (const next of neighbors4(cell.x, cell.y)) {
+      if (!inBounds(semantic.width, semantic.height, next.x, next.y) || footprintKeys.has(`${next.x},${next.y}`)) continue;
+      if (isSemanticWalkable(semantic, next.x, next.y)) return true;
+    }
+  }
+  return false;
+}
+
 function pointInPoiFootprint(poi: WorldPoi, x: number, y: number): boolean {
-  const radius = Math.floor(poi.footprint / 2);
-  return x >= poi.x - radius && x <= poi.x + radius && y >= poi.y - radius && y <= poi.y + radius;
+  const bounds = poiFootprintBounds(poi);
+  return x >= bounds.minX && x <= bounds.maxX && y >= bounds.minY && y <= bounds.maxY;
+}
+
+function poiFootprintCells(poi: Pick<WorldPoi, "x" | "y" | "footprint">): WorldVec[] {
+  const bounds = poiFootprintBounds(poi);
+  const cells: WorldVec[] = [];
+  for (let y = bounds.minY; y <= bounds.maxY; y += 1) {
+    for (let x = bounds.minX; x <= bounds.maxX; x += 1) cells.push({ x, y });
+  }
+  return cells;
+}
+
+function poiFootprintBounds(poi: Pick<WorldPoi, "x" | "y" | "footprint">): { minX: number; maxX: number; minY: number; maxY: number } {
+  const offset = Math.floor((poi.footprint - 1) / 2);
+  const minX = poi.x - offset;
+  const minY = poi.y - offset;
+  return { minX, minY, maxX: minX + poi.footprint - 1, maxY: minY + poi.footprint - 1 };
+}
+
+function poiFootprintKeySet(pois: Pick<WorldPoi, "x" | "y" | "footprint">[]): Set<string> {
+  const keys = new Set<string>();
+  for (const poi of pois) {
+    for (const cell of poiFootprintCells(poi)) keys.add(`${cell.x},${cell.y}`);
+  }
+  return keys;
 }
 
 function pickByNoise(ids: WorldTileId[], seed: string, salt: string, x: number, y: number, weights?: number[]): WorldTileId {

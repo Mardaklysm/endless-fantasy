@@ -53,6 +53,9 @@ export function renderAllPreviews(world, options = {}) {
     elevation: renderElevation(world, scale),
     mountainMask: renderMountainMaskDebug(world, scale),
     mountainCollision: renderMountainCollisionDebug(world, scale),
+    forestMask: renderForestMaskDebug(world, scale),
+    poiFootprints: renderPoiFootprintsDebug(world, scale),
+    passability: renderPassabilityDebug(world, scale),
     riverMask: renderRiverMaskDebug(world, scale),
     riverConnectivity: renderRiverConnectivityDebug(world, scale),
     riversRoads: renderRiversRoads(world, scale),
@@ -188,6 +191,40 @@ export function renderMountainCollisionDebug(world, scale = 6) {
     drawRectOutline(image, left, top, displaySize, displaySize, color);
     drawLine(image, centerX - 2, centerY, centerX + 2, centerY, color);
     drawLine(image, centerX, centerY - 2, centerX, centerY + 2, color);
+  }
+  return image;
+}
+
+export function renderForestMaskDebug(world, scale = 6) {
+  const image = renderSemanticMap(world, scale);
+  forEachCell(world, (x, y, i) => {
+    if (!world.layers.forestMap[i]) return;
+    fillCell(image, x, y, scale, [20, 156, 78, 180]);
+    drawCellOutline(image, x, y, scale, [6, 76, 36, 255]);
+  });
+  return image;
+}
+
+export function renderPoiFootprintsDebug(world, scale = 6) {
+  const image = renderSemanticMap(world, scale);
+  for (const poi of world.poiList) {
+    const color = poi.role === "settlement" || poi.role === "port" ? [255, 72, 116, 190] : [238, 210, 96, 185];
+    for (const cell of poiFootprintCells(poi)) {
+      fillCell(image, cell.x, cell.y, scale, color);
+      drawCellOutline(image, cell.x, cell.y, scale, [86, 28, 64, 255]);
+    }
+    drawDebugDot(image, poi.x, poi.y, scale, [255, 255, 255, 255]);
+  }
+  return image;
+}
+
+export function renderPassabilityDebug(world, scale = 6) {
+  const image = renderSemanticMap(world, scale);
+  forEachCell(world, (x, y, i) => {
+    fillCell(image, x, y, scale, world.layers.walkability[i] ? [82, 236, 118, 92] : [255, 49, 86, 110]);
+  });
+  for (const poi of world.poiList) {
+    for (const cell of poiFootprintCells(poi)) drawCellOutline(image, cell.x, cell.y, scale, [255, 222, 118, 255]);
   }
   return image;
 }
@@ -434,14 +471,19 @@ function drawMountainSymbol(image, x, y, scale, kind, scaleBoost = 1) {
 }
 
 function renderPois(image, world, scale) {
-  const sorted = [...world.poiList].sort((a, b) => a.y - b.y);
+  const sorted = [...world.poiList].sort((a, b) => poiFootprintBounds(a).minY - poiFootprintBounds(b).minY || poiFootprintBounds(a).minX - poiFootprintBounds(b).minX);
   for (const poi of sorted) {
-    if (poi.type === "port") drawPort(image, poi.x, poi.y, scale);
-    else if (poi.type === "cave") drawCave(image, poi.x, poi.y, scale);
-    else if (poi.type === "ice_shrine") drawShrine(image, poi.x, poi.y, scale, [172, 224, 238, 255]);
-    else if (poi.type === "desert_ruin") drawShrine(image, poi.x, poi.y, scale, [187, 143, 77, 255]);
-    else if (poi.type === "tower") drawTower(image, poi.x, poi.y, scale);
-    else drawTown(image, poi.x, poi.y, scale);
+    const bounds = poiFootprintBounds(poi);
+    const footprint = poiFootprintSize(poi);
+    const drawScale = scale * footprint;
+    const drawX = bounds.minX / footprint;
+    const drawY = bounds.minY / footprint;
+    if (poi.type === "port") drawPort(image, drawX, drawY, drawScale);
+    else if (poi.type === "cave") drawCave(image, drawX, drawY, drawScale);
+    else if (poi.type === "ice_shrine") drawShrine(image, drawX, drawY, drawScale, [172, 224, 238, 255]);
+    else if (poi.type === "desert_ruin") drawShrine(image, drawX, drawY, drawScale, [187, 143, 77, 255]);
+    else if (poi.type === "tower") drawTower(image, drawX, drawY, drawScale);
+    else drawTown(image, drawX, drawY, drawScale);
   }
 }
 
@@ -480,6 +522,27 @@ function drawTower(image, x, y, scale) {
   const py = y * scale;
   fillRect(image, px + Math.floor(scale / 3), py - Math.floor(scale / 2), Math.max(2, Math.floor(scale / 2)), scale + Math.floor(scale / 2), [98, 86, 99, 255]);
   drawTriangle(image, px + Math.floor(scale / 2), py - scale, px + 1, py, px + scale, py, [143, 67, 89, 255]);
+}
+
+function poiFootprintCells(poi) {
+  const bounds = poiFootprintBounds(poi);
+  const cells = [];
+  for (let y = bounds.minY; y <= bounds.maxY; y += 1) {
+    for (let x = bounds.minX; x <= bounds.maxX; x += 1) cells.push({ x, y });
+  }
+  return cells;
+}
+
+function poiFootprintBounds(poi) {
+  const size = poiFootprintSize(poi);
+  const offset = Math.floor((size - 1) / 2);
+  const minX = poi.x - offset;
+  const minY = poi.y - offset;
+  return { minX, minY, maxX: minX + size - 1, maxY: minY + size - 1 };
+}
+
+function poiFootprintSize(poi) {
+  return poi.role === "settlement" || poi.role === "final" ? 3 : 2;
 }
 
 function drawPath(image, path, scale, color, width) {

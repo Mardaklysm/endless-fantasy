@@ -2326,7 +2326,16 @@ class CrystalOathScene extends Phaser.Scene {
       return true;
     }
     const to = { x: from.x + dir.x, y: from.y + dir.y };
-    if (!this.canOccupyExploreTile(mode, to.x, to.y)) return false;
+    if (!this.canOccupyExploreTile(mode, to.x, to.y)) {
+      if (mode === "world") {
+        const loc = this.locationAt(to.x, to.y);
+        if (loc) {
+          this.activateWorldLocation(loc);
+          return true;
+        }
+      }
+      return false;
+    }
     this.setVisualExplorePos(mode, from);
     this.activeStep = { mode, from, to, dir: { ...dir } };
     return true;
@@ -2462,8 +2471,7 @@ class CrystalOathScene extends Phaser.Scene {
       this.applyWalkPoison();
       this.syncCurrentIslandFromWorldPos();
       const loc = this.locationAt(tile.x, tile.y);
-      if (loc && (loc.kind === "harbor" || loc.kind === "landmark")) this.interactWorldLocation(loc);
-      else if (loc) this.enterLocation(loc);
+      if (loc) this.activateWorldLocation(loc);
       else this.maybeEncounter();
       return;
     }
@@ -2539,10 +2547,9 @@ class CrystalOathScene extends Phaser.Scene {
 
   private interact() {
     if (this.mode === "world") {
-      const loc = this.locationAt(this.worldPos.x, this.worldPos.y);
+      const loc = this.locationAt(this.worldPos.x, this.worldPos.y) ?? this.facingLocation();
       if (loc) {
-        if (loc.kind === "harbor" || loc.kind === "landmark") this.interactWorldLocation(loc);
-        else this.enterLocation(loc);
+        this.activateWorldLocation(loc);
       }
       return;
     }
@@ -2556,22 +2563,26 @@ class CrystalOathScene extends Phaser.Scene {
   }
 
   private worldReturnTileForLocation(loc: LocationDef): Vec {
-    const radius = Math.floor(this.locationFootprint(loc) / 2);
+    const bounds = this.locationFootprintBounds(loc);
+    const centerX = Math.floor((bounds.minX + bounds.maxX) / 2);
+    const centerY = Math.floor((bounds.minY + bounds.maxY) / 2);
     const candidates: Vec[] = [
-      { x: loc.x, y: loc.y + radius + 1 },
-      { x: loc.x - 1, y: loc.y + radius + 1 },
-      { x: loc.x + 1, y: loc.y + radius + 1 },
-      { x: loc.x - radius - 1, y: loc.y },
-      { x: loc.x + radius + 1, y: loc.y },
-      { x: loc.x, y: loc.y - radius - 1 }
+      { x: centerX, y: bounds.maxY + 1 },
+      { x: bounds.minX, y: bounds.maxY + 1 },
+      { x: bounds.maxX, y: bounds.maxY + 1 },
+      { x: bounds.minX - 1, y: centerY },
+      { x: bounds.maxX + 1, y: centerY },
+      { x: centerX, y: bounds.minY - 1 }
     ];
     for (const candidate of candidates) {
       if (this.canOccupyExploreTile("world", candidate.x, candidate.y)) return candidate;
     }
-    for (let searchRadius = radius + 1; searchRadius <= radius + 5; searchRadius += 1) {
-      for (let y = loc.y - searchRadius; y <= loc.y + searchRadius; y += 1) {
-        for (let x = loc.x - searchRadius; x <= loc.x + searchRadius; x += 1) {
-          if (Math.abs(x - loc.x) !== searchRadius && Math.abs(y - loc.y) !== searchRadius) continue;
+    for (let searchRadius = 1; searchRadius <= 5; searchRadius += 1) {
+      for (let y = bounds.minY - searchRadius; y <= bounds.maxY + searchRadius; y += 1) {
+        for (let x = bounds.minX - searchRadius; x <= bounds.maxX + searchRadius; x += 1) {
+          const outsideRing = x < bounds.minX || x > bounds.maxX || y < bounds.minY || y > bounds.maxY;
+          if (!outsideRing) continue;
+          if (x > bounds.minX - searchRadius && x < bounds.maxX + searchRadius && y > bounds.minY - searchRadius && y < bounds.maxY + searchRadius) continue;
           if (this.canOccupyExploreTile("world", x, y)) return { x, y };
         }
       }
@@ -2709,13 +2720,30 @@ class CrystalOathScene extends Phaser.Scene {
     return loc.footprint ?? LANDMARK_FOOTPRINT;
   }
 
+  private locationFootprintBounds(loc: LocationDef): { minX: number; maxX: number; minY: number; maxY: number } {
+    const footprint = this.locationFootprint(loc);
+    const offset = Math.floor((footprint - 1) / 2);
+    const minX = loc.x - offset;
+    const minY = loc.y - offset;
+    return { minX, minY, maxX: minX + footprint - 1, maxY: minY + footprint - 1 };
+  }
+
   private locationContainsTile(loc: LocationDef, x: number, y: number): boolean {
-    const radius = Math.floor(this.locationFootprint(loc) / 2);
-    return x >= loc.x - radius && x <= loc.x + radius && y >= loc.y - radius && y <= loc.y + radius;
+    const bounds = this.locationFootprintBounds(loc);
+    return x >= bounds.minX && x <= bounds.maxX && y >= bounds.minY && y <= bounds.maxY;
   }
 
   private locationAt(x: number, y: number): LocationDef | undefined {
     return this.locations().find((loc) => this.locationContainsTile(loc, x, y));
+  }
+
+  private facingLocation(): LocationDef | undefined {
+    return this.locationAt(this.worldPos.x + this.lastMoveDir.x, this.worldPos.y + this.lastMoveDir.y);
+  }
+
+  private activateWorldLocation(loc: LocationDef) {
+    if (loc.kind === "harbor" || loc.kind === "landmark") this.interactWorldLocation(loc);
+    else this.enterLocation(loc);
   }
 
   private canEnterTerrain(terrain: Terrain): boolean {
@@ -2847,12 +2875,15 @@ class CrystalOathScene extends Phaser.Scene {
     const island = this.generatedWorld?.islands.find((candidate) => candidate.id === islandId);
     const harbor = island?.harborPosition;
     if (!harbor) return this.generatedWorld?.startPosition ?? { x: 10, y: 22 };
+    const harborLoc = this.locations().find((loc) => loc.islandId === islandId && loc.kind === "harbor");
+    const bounds = harborLoc ? this.locationFootprintBounds(harborLoc) : { minX: harbor.x, maxX: harbor.x, minY: harbor.y, maxY: harbor.y };
+    const centerX = Math.floor((bounds.minX + bounds.maxX) / 2);
+    const centerY = Math.floor((bounds.minY + bounds.maxY) / 2);
     const candidates = [
-      { x: harbor.x, y: harbor.y + 2 },
-      { x: harbor.x - 2, y: harbor.y },
-      { x: harbor.x + 2, y: harbor.y },
-      { x: harbor.x, y: harbor.y - 2 },
-      { x: harbor.x, y: harbor.y }
+      { x: centerX, y: bounds.maxY + 1 },
+      { x: bounds.minX - 1, y: centerY },
+      { x: bounds.maxX + 1, y: centerY },
+      { x: centerX, y: bounds.minY - 1 }
     ];
     return candidates.find((pos) => this.canOccupyExploreTile("world", pos.x, pos.y)) ?? harbor;
   }
@@ -4951,17 +4982,16 @@ Statuses: ${statuses}`;
       }
     }
     this.drawCachedWorldRouteOverlay(tileCam);
-    this.drawWorldPoiAprons(startX, endX, startY, endY, tileCam);
     this.drawWorldOverlays(startX, endX, startY, endY, tileCam);
     this.drawSemanticDebugOverlay(startX, endX, startY, endY, tileCam);
     for (const loc of this.locations()) {
-      const radius = Math.floor(this.locationFootprint(loc) / 2);
-      if (loc.x + radius < startX || loc.x - radius > endX || loc.y + radius < startY || loc.y - radius > endY) continue;
-      this.drawLocationIcon(loc, (loc.x - radius) * TILE - tileCam.x, (loc.y - radius) * TILE - tileCam.y);
+      const bounds = this.locationFootprintBounds(loc);
+      if (bounds.maxX < startX || bounds.minX > endX || bounds.maxY < startY || bounds.minY > endY) continue;
+      this.drawLocationIcon(loc, bounds.minX * TILE - tileCam.x, bounds.minY * TILE - tileCam.y);
     }
     this.drawLeader(leaderPos.x * TILE - cam.x + 4, leaderPos.y * TILE - cam.y + 3, "world");
     this.drawHud(this.currentIslandName());
-    const loc = this.locationAt(this.worldPos.x, this.worldPos.y);
+    const loc = this.locationAt(this.worldPos.x, this.worldPos.y) ?? this.facingLocation();
     if (loc) this.drawPrompt(loc.kind === "harbor" ? `Use ${loc.name}` : loc.kind === "landmark" ? `Inspect ${loc.name}` : `Enter ${loc.name}`);
     if (DEBUG_WORLD_LAYOUT) {
       const mapPixelW = this.world[0]?.length ?? 0;
@@ -5566,7 +5596,12 @@ Statuses: ${statuses}`;
     const inView = (pos: Vec, margin = 0) => pos.x >= startX - margin && pos.x <= endX + margin && pos.y >= startY - margin && pos.y <= endY + margin;
     const visibleObjectOverlays = this.generatedWorld.objectOverlays
       .filter((overlay) => inView(overlay, 2))
-      .sort((a, b) => a.y + (a.offsetY ?? 0) - (b.y + (b.offsetY ?? 0)) || a.x + (a.offsetX ?? 0) - (b.x + (b.offsetX ?? 0)));
+      .sort(
+        (a, b) =>
+          this.worldOverlayDrawRank(a) - this.worldOverlayDrawRank(b) ||
+          a.y + (a.offsetY ?? 0) - (b.y + (b.offsetY ?? 0)) ||
+          a.x + (a.offsetX ?? 0) - (b.x + (b.offsetX ?? 0))
+      );
     const reefTextureKey = WORLD_CURRENT_OBJECT_TEXTURE_KEY_BY_ID.coral_cluster_blue;
     if (!reefTextureKey || !this.hasTexture(reefTextureKey)) {
       for (const reef of this.generatedWorld.reefs) {
@@ -5595,43 +5630,11 @@ Statuses: ${statuses}`;
     }
   }
 
-  private drawWorldPoiAprons(startX: number, endX: number, startY: number, endY: number, tileCam: Vec) {
-    if (!this.generatedWorld) return;
-    const semantic = this.generatedWorld.semantic;
-    for (const poi of this.generatedWorld.pois) {
-      const radius = Math.floor(this.locationFootprint(poi) / 2);
-      const apronRadius = poi.kind === "town" || poi.kind === "harbor" || poi.kind === "final" ? radius + 1 : 1;
-      if (poi.x + apronRadius < startX || poi.x - apronRadius > endX || poi.y + apronRadius < startY || poi.y - apronRadius > endY) continue;
-      const colors = this.poiApronColors(poi);
-      for (let y = poi.y - apronRadius; y <= poi.y + apronRadius; y += 1) {
-        for (let x = poi.x - apronRadius; x <= poi.x + apronRadius; x += 1) {
-          if (x < 0 || y < 0 || x >= semantic.width || y >= semantic.height) continue;
-          const distance = Math.hypot(x - poi.x, y - poi.y);
-          if (distance > apronRadius + 0.15) continue;
-          if (distance > radius + 0.2 && hashNoise(`${this.worldSeed}:poi-apron-edge:${poi.id}`, x, y) < 0.42) continue;
-          const i = y * semantic.width + x;
-          if (!semantic.layers.landMask[i] || semantic.layers.waterClass[i] !== SEMANTIC_WATER.NONE || semantic.layers.lakeMap[i] || semantic.layers.riverMap[i] || semantic.layers.roadMap[i]) continue;
-          if (poi.kind !== "harbor" && semantic.layers.biome[i] === SEMANTIC_BIOME.BEACH) continue;
-          const sx = x * TILE - tileCam.x;
-          const sy = y * TILE - tileCam.y;
-          const inset = distance <= radius + 0.15 ? 4 : 7;
-          const alpha = distance <= radius + 0.15 ? 0.34 : 0.22;
-          this.worldOverlay.fillStyle(colors.base, alpha).fillRect(sx + inset, sy + inset, TILE - inset * 2, TILE - inset * 2);
-          if (hashNoise(`${this.worldSeed}:poi-apron-fleck:${poi.id}`, x, y) > 0.62) {
-            this.worldOverlay.fillStyle(colors.accent, 0.2).fillRect(sx + 11, sy + 18, 10, 4);
-          }
-        }
-      }
-    }
-  }
-
-  private poiApronColors(poi: LocationDef): { base: number; accent: number } {
-    const islandId = poi.islandId ?? this.currentIslandId;
-    if (islandId === "frostmere") return { base: 0xd6e9ec, accent: 0x9fb9c7 };
-    if (islandId === "coralreach") return { base: 0xc99b5a, accent: 0xe0bd73 };
-    if (islandId === "highspire") return { base: 0x524c48, accent: 0x7a5e45 };
-    if (poi.kind === "harbor") return { base: 0xb98752, accent: 0xd0ac73 };
-    return { base: 0x8b6a3c, accent: 0xb08b55 };
+  private worldOverlayDrawRank(overlay: { id: string }): number {
+    if (overlay.id.startsWith("reef-")) return 0;
+    if (overlay.id.startsWith("forest-")) return 1;
+    if (overlay.id.startsWith("mountain-")) return 2;
+    return 3;
   }
 
   private drawSemanticDebugOverlay(startX: number, endX: number, startY: number, endY: number, tileCam: Vec) {
@@ -5754,10 +5757,10 @@ Statuses: ${statuses}`;
     }
     if (this.semanticDebugOverlay === "pois") {
       for (const poi of this.generatedWorld.pois) {
-        if (poi.x < startX || poi.x > endX || poi.y < startY || poi.y > endY) continue;
-        const radius = Math.floor(poi.footprint / 2);
-        const sx = (poi.x - radius) * TILE - tileCam.x;
-        const sy = (poi.y - radius) * TILE - tileCam.y;
+        const bounds = this.locationFootprintBounds(poi);
+        if (bounds.maxX < startX || bounds.minX > endX || bounds.maxY < startY || bounds.minY > endY) continue;
+        const sx = bounds.minX * TILE - tileCam.x;
+        const sy = bounds.minY * TILE - tileCam.y;
         debugGraphics.lineStyle(2, 0xff4f8f, 0.85).strokeRect(sx, sy, poi.footprint * TILE, poi.footprint * TILE);
         debugGraphics.lineStyle(1, 0xffd36a, 0.5).strokeCircle(poi.x * TILE - tileCam.x + TILE / 2, poi.y * TILE - tileCam.y + TILE / 2, TILE * 1.5);
         this.text(poi.x * TILE - tileCam.x + TILE / 2, poi.y * TILE - tileCam.y - 8, poi.id, 9, "#fff2a8", "center");
@@ -6305,25 +6308,28 @@ Statuses: ${statuses}`;
         loc.kind === "town" || loc.kind === "harbor"
           ? footprintSize * 1.04
           : loc.kind === "final"
-            ? TILE * 2.35
+            ? footprintSize * 1.04
             : loc.kind === "gate"
-              ? TILE * 1.45
+              ? footprintSize
               : loc.kind === "dungeon"
-                ? TILE * 1.35
-                : TILE * 1.22;
-      const minSize = loc.kind === "town" || loc.kind === "harbor" ? TILE * 1.55 : loc.kind === "final" ? TILE * 1.8 : TILE * 0.82;
+                ? footprintSize
+                : footprintSize;
+      const minSize =
+        loc.kind === "town" || loc.kind === "harbor"
+          ? Math.min(footprintSize, TILE * 2.25)
+          : loc.kind === "final"
+            ? Math.min(footprintSize, TILE * 2.4)
+            : Math.min(footprintSize, TILE * 2);
       return Math.min(maxSize, Math.max(minSize, footprintSize * scale));
     }
     const byKind: Record<WorldPoiKind, number> = {
-      town: 2.45,
-      harbor: 1.55,
-      dungeon: 1.2,
-      gate: 1.25,
-      final: 2.35,
-      landmark: 1.1
+      town: 2.65,
+      harbor: 2.25,
+      dungeon: 2,
+      gate: 2,
+      final: 2.65,
+      landmark: 2
     };
-    if (loc.landmarkKind === "shipwreck" || loc.landmarkKind === "secretMerchant") return Math.min(footprintSize, TILE * 1.15);
-    if (loc.landmarkKind === "ancientDoor" || loc.landmarkKind === "ruins") return Math.min(footprintSize, TILE * 1.2);
     return Math.min(footprintSize, TILE * (byKind[loc.kind] ?? 1.75));
   }
 

@@ -113,11 +113,12 @@ export function generateSemanticWorld(options: {
   const rivers = traceRivers(width, height, seed, landMask, waterClass, lakeMap, distanceToWater, islandId, islands, elevation, coldness, ridge, mountainMap, poiList, riverMap);
   const roadMap = new Uint8Array(width * height);
   const roadGraph = buildRoadGraph(width, height, islandId, islands, biome, waterClass, mountainMap, lakeMap, poiList, harbors, roadMap);
+  clearPoiFootprintRoadCells(width, height, roadMap, poiList);
   ({ mountains, mountainRanges, mountainDebug } = placeMountains(width, height, seed, landMask, distanceToWater, islandId, islands, biome, elevation, ridge, coldness, mountainCandidateScore, mountainMap, combineBlockMaps(lakeMap, riverMap, roadMap), poiList));
   const bridgeCandidates = detectBridgeCandidates(width, height, islandId, islands, roadMap, riverMap);
   const forestMap = placeForests(width, height, seed, landMask, islandId, islands, biome, moisture, mountainMap, lakeMap, riverMap, roadMap, poiList);
   const overlayCollisionPolicy = buildOverlayCollisionPolicy(width, height, mountainMap, forestMap, roadMap, riverMap, bridgeCandidates, poiList);
-  const walkability = buildWalkability(width, height, landMask, waterClass, lakeMap, mountainMap, riverMap, bridgeCandidates);
+  const walkability = buildWalkability(width, height, landMask, waterClass, lakeMap, mountainMap, riverMap, bridgeCandidates, poiList);
   const layers = {
     elevation,
     landMask,
@@ -1073,7 +1074,7 @@ function traceRivers(
   const islandByOrder = new Map(islands.map((island) => [island.order + 1, island]));
   const poiBlocked = new Set<string>();
   for (const poi of poiList) {
-    reservePoi(poiBlocked, poi, poi.role === "settlement" || poi.role === "port" ? 2 : 1);
+    reserveSemanticPoiFootprint(poiBlocked, poi, poi.role === "settlement" || poi.role === "port" ? 2 : 1);
   }
   const candidates: { x: number; y: number; i: number; score: number }[] = [];
   forEachCell(width, height, (x, y, i) => {
@@ -1208,7 +1209,7 @@ function placePois(
         y: candidate.y,
         difficultyTier: island.major ? island.order + 1 : 1
       };
-      reservePoi(occupied, poi, poiReserveRadius(spec));
+      reservePoiFootprint(occupied, spec, poi.x, poi.y, poiReservePadding(spec));
       poiList.push(poi);
       if (poi.type === "port") harbors.push(poi);
     }
@@ -1239,8 +1240,12 @@ function poiScore(
   if (tooCloseToOccupied(occupied, x, y, spec.role === "port" ? 3 : 5)) return -Infinity;
   if (!isPoiFootprintValid(width, height, spec, x, y, landMask, waterClass, distanceToWater, mountainMap, lakeMap, occupied)) return -Infinity;
   if (spec.role === "port") {
-    if (distanceToWater[i] > 1 || biome[i] !== SEMANTIC_BIOME.BEACH) return -Infinity;
-    if (!hasAdjacentWater(width, height, waterClass, x, y, SEMANTIC_WATER.SHALLOW)) return -Infinity;
+    if (!poiFootprintCells(spec, x, y).some((cell) => {
+      const cellIndex = index(width, cell.x, cell.y);
+      return biome[cellIndex] === SEMANTIC_BIOME.BEACH && distanceToWater[cellIndex] <= 1 && hasAdjacentWater(width, height, waterClass, cell.x, cell.y, SEMANTIC_WATER.SHALLOW);
+    })) {
+      return -Infinity;
+    }
     return 1 + edgeFacingScore(x, y, island.center.x, island.center.y) + hashNoise(`${seed}:semantic-poi:${spec.id}`, x, y) * 0.18;
   }
   if (distanceToWater[i] < 3 || mountainMap[i]) return -Infinity;
@@ -1266,15 +1271,12 @@ function isPoiFootprintValid(
   lakeMap: Uint8Array,
   occupied: Set<string>
 ): boolean {
-  const radius = poiFootprintRadius(spec);
-  for (let yy = y - radius; yy <= y + radius; yy += 1) {
-    for (let xx = x - radius; xx <= x + radius; xx += 1) {
-      if (!inBounds(width, height, xx, yy)) return false;
-      const cellIndex = index(width, xx, yy);
-      if (!landMask[cellIndex] || waterClass[cellIndex] !== SEMANTIC_WATER.NONE || lakeMap[cellIndex] || mountainMap[cellIndex]) return false;
-      if (occupied.has(`${xx},${yy}`)) return false;
-      if (spec.role !== "port" && distanceToWater[cellIndex] < 2) return false;
-    }
+  for (const cell of poiFootprintCells(spec, x, y)) {
+    if (!inBounds(width, height, cell.x, cell.y)) return false;
+    const cellIndex = index(width, cell.x, cell.y);
+    if (!landMask[cellIndex] || waterClass[cellIndex] !== SEMANTIC_WATER.NONE || lakeMap[cellIndex] || mountainMap[cellIndex]) return false;
+    if (occupied.has(posKey(cell))) return false;
+    if (spec.role !== "port" && distanceToWater[cellIndex] < 2) return false;
   }
   return true;
 }
@@ -1314,6 +1316,15 @@ function buildRoadGraph(
     }
   }
   return { edges };
+}
+
+function clearPoiFootprintRoadCells(width: number, height: number, roadMap: Uint8Array, poiList: SemanticPoi[]) {
+  for (const poi of poiList) {
+    for (const cell of semanticPoiFootprintCells(poi)) {
+      if (!inBounds(width, height, cell.x, cell.y)) continue;
+      roadMap[index(width, cell.x, cell.y)] = 0;
+    }
+  }
 }
 
 function findRoadPath(
@@ -1408,7 +1419,7 @@ function placeForests(
   const islandByOrder = new Map(islands.map((island) => [island.order + 1, island]));
   for (const poi of poiList) {
     const island = islands.find((candidate) => candidate.id === poi.islandId);
-    reservePoi(occupied, poi, island?.overlayRules.forestPoiClearance ?? 2);
+    reserveSemanticPoiFootprint(occupied, poi, island?.overlayRules.forestPoiClearance ?? 2);
   }
   const roadReserved = new Set<string>();
   forEachCell(width, height, (x, y, i) => {
@@ -1451,7 +1462,31 @@ function placeForests(
     const noise = fbm(`${seed}:semantic-forest-edge`, x / 4, y / 4, 2);
     if (value + (moisture[i] - forestMoistureThreshold(island)) * 0.32 + noise * 0.12 > 0.34) forestMap[i] = 1;
   });
+  removeTinyForestComponents(width, height, forestMap, 6);
   return forestMap;
+}
+
+function removeTinyForestComponents(width: number, height: number, forestMap: Uint8Array, minSize: number) {
+  const seen = new Set<number>();
+  forEachCell(width, height, (x, y, i) => {
+    if (!forestMap[i] || seen.has(i)) return;
+    const component: SemanticVec[] = [];
+    const queue: SemanticVec[] = [{ x, y }];
+    seen.add(i);
+    for (let head = 0; head < queue.length; head += 1) {
+      const cell = queue[head];
+      component.push(cell);
+      for (const next of cardinalNeighbors(cell.x, cell.y)) {
+        if (!inBounds(width, height, next.x, next.y)) continue;
+        const ni = index(width, next.x, next.y);
+        if (!forestMap[ni] || seen.has(ni)) continue;
+        seen.add(ni);
+        queue.push(next);
+      }
+    }
+    if (component.length >= minSize) return;
+    for (const cell of component) forestMap[index(width, cell.x, cell.y)] = 0;
+  });
 }
 
 function buildWalkability(
@@ -1462,7 +1497,8 @@ function buildWalkability(
   lakeMap: Uint8Array,
   mountainMap: Uint8Array,
   riverMap: Uint8Array,
-  bridgeCandidates: SemanticBridgeCandidate[]
+  bridgeCandidates: SemanticBridgeCandidate[],
+  poiList: SemanticPoi[]
 ) {
   const walkability = new Uint8Array(width * height);
   const bridgeKeys = bridgeCandidateKeySet(bridgeCandidates);
@@ -1470,6 +1506,12 @@ function buildWalkability(
     const isBridgeCrossing = bridgeKeys.has(posKey({ x, y }));
     walkability[i] = landMask[i] && waterClass[i] === SEMANTIC_WATER.NONE && !lakeMap[i] && !mountainMap[i] && (!riverMap[i] || isBridgeCrossing) ? 1 : 0;
   });
+  for (const poi of poiList) {
+    for (const cell of semanticPoiFootprintCells(poi)) {
+      if (!inBounds(width, height, cell.x, cell.y)) continue;
+      walkability[index(width, cell.x, cell.y)] = 0;
+    }
+  }
   return walkability;
 }
 
@@ -1493,12 +1535,9 @@ function buildOverlayCollisionPolicy(
     if (mountainMap[i]) policy[i] = "hardBlock";
   });
   for (const poi of poiList) {
-    const radius = poi.role === "settlement" || poi.role === "port" ? 1 : 0;
-    for (let y = poi.y - radius; y <= poi.y + radius; y += 1) {
-      for (let x = poi.x - radius; x <= poi.x + radius; x += 1) {
-        if (!inBounds(width, height, x, y)) continue;
-        policy[index(width, x, y)] = "poiBlock";
-      }
+    for (const cell of semanticPoiFootprintCells(poi)) {
+      if (!inBounds(width, height, cell.x, cell.y)) continue;
+      policy[index(width, cell.x, cell.y)] = "poiBlock";
     }
   }
   return policy;
@@ -1664,13 +1703,54 @@ function reservePoi(occupied: Set<string>, poi: SemanticVec, radius: number) {
   }
 }
 
-function poiFootprintRadius(spec: RequiredPoiSpec): number {
-  if (spec.role === "settlement" || spec.role === "final") return 1;
-  return 0;
+function poiFootprintCells(spec: RequiredPoiSpec, x: number, y: number): SemanticVec[] {
+  return footprintCells(x, y, poiFootprintSizeForSpec(spec));
 }
 
-function poiReserveRadius(spec: RequiredPoiSpec): number {
-  return poiFootprintRadius(spec) + (spec.role === "port" ? 1 : 2);
+function semanticPoiFootprintCells(poi: SemanticPoi): SemanticVec[] {
+  return footprintCells(poi.x, poi.y, poiFootprintSizeForPoi(poi));
+}
+
+function footprintCells(x: number, y: number, size: number): SemanticVec[] {
+  const offset = Math.floor((size - 1) / 2);
+  const minX = x - offset;
+  const minY = y - offset;
+  const cells: SemanticVec[] = [];
+  for (let yy = minY; yy < minY + size; yy += 1) {
+    for (let xx = minX; xx < minX + size; xx += 1) cells.push({ x: xx, y: yy });
+  }
+  return cells;
+}
+
+function poiFootprintSizeForSpec(spec: RequiredPoiSpec): number {
+  if (spec.role === "settlement" || spec.role === "final") return 3;
+  return 2;
+}
+
+function poiFootprintSizeForPoi(poi: SemanticPoi): number {
+  if (poi.role === "settlement" || poi.role === "final") return 3;
+  return 2;
+}
+
+function reservePoiFootprint(occupied: Set<string>, spec: RequiredPoiSpec, x: number, y: number, padding: number) {
+  const cells = poiFootprintCells(spec, x, y);
+  for (const cell of cells) {
+    for (let yy = cell.y - padding; yy <= cell.y + padding; yy += 1) {
+      for (let xx = cell.x - padding; xx <= cell.x + padding; xx += 1) occupied.add(`${xx},${yy}`);
+    }
+  }
+}
+
+function reserveSemanticPoiFootprint(occupied: Set<string>, poi: SemanticPoi, padding: number) {
+  for (const cell of semanticPoiFootprintCells(poi)) {
+    for (let yy = cell.y - padding; yy <= cell.y + padding; yy += 1) {
+      for (let xx = cell.x - padding; xx <= cell.x + padding; xx += 1) occupied.add(`${xx},${yy}`);
+    }
+  }
+}
+
+function poiReservePadding(spec: RequiredPoiSpec): number {
+  return spec.role === "port" ? 1 : 2;
 }
 
 function tooCloseToOccupied(occupied: Set<string>, x: number, y: number, radius: number): boolean {
