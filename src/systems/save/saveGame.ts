@@ -8,6 +8,7 @@ export function saveGame(this: CrystalOathSceneContext) {
     gearBag: this.gearBag,
     gold: this.gold,
     worldSeed: this.worldSeed,
+    worldTimeTicks: this.worldTimeTicks,
     currentIslandId: this.currentIslandId,
     worldPos: this.worldPos,
     townPos: this.townPos,

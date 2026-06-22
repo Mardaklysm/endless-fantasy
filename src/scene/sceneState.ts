@@ -25,6 +25,7 @@ export function newGame(this: CrystalOathSceneContext) {
   this.gearBag = { trainingBlade: 1, willowRod: 2, travelCloth: 3 };
   this.gold = 80;
   this.buildWorldFromSeed(createWorldSeed());
+  this.setWorldTimeTicks(0);
   this.worldPos = { ...(this.generatedWorld?.startPosition ?? { x: 10, y: 22 }) };
   this.townPos = { x: 10, y: 12 };
   this.dungeonPos = { x: 1, y: 1 };

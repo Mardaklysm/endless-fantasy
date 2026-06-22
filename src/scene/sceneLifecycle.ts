@@ -32,6 +32,7 @@ export function create(this: CrystalOathSceneContext) {
   this.worldOverlay.setDepth(LAYER_WORLD_IMAGE + 0.5);
   this.ui = this.add.graphics();
   this.ui.setDepth(LAYER_UI_GRAPHICS);
+  this.createWorldLightingLayer();
   this.cloudOverlay = new OverworldCloudOverlay(this);
   this.configureRenderResolution();
   this.logActiveWorldTileset();

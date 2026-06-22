@@ -28,6 +28,7 @@ export function loadGame(this: CrystalOathSceneContext): boolean {
     this.settings = { ...this.settings, ...data.settings };
     this.audio.setMuted(this.settings.muted);
     this.encounterCounter = data.encounterCounter ?? 10;
+    this.setWorldTimeTicks(data.worldTimeTicks ?? 0);
     this.ensureValidDungeonPosition();
     if (!this.canOccupyExploreTile("world", this.worldPos.x, this.worldPos.y)) {
       this.worldPos = { ...(this.generatedWorld?.startPosition ?? { x: 10, y: 22 }) };

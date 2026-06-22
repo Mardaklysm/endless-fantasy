@@ -136,6 +136,7 @@ export function completeExploreStep(this: CrystalOathSceneContext, step: Explore
   this.setCurrentExploreTile(step.mode, step.to);
   this.activeStep = undefined;
   this.lastStepFrame += 1;
+  if (step.mode === "world") this.advanceWorldTimeTick();
   this.handleCompletedExploreTile(step.mode, step.to, step.dir);
 }
 

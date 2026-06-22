@@ -65,6 +65,7 @@ export function drawWorld(this: CrystalOathSceneContext) {
   }
   if (this.semanticDebugOverlay !== "off") {
     const cloudState = this.cloudOverlay?.debugState();
+    this.text(16, HEIGHT - 66, this.worldTimeDebugText(), 10, "#ffe4b4", "left");
     this.text(
       16,
       HEIGHT - 48,

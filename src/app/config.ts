@@ -29,5 +29,6 @@ export const LAYER_OBJECT_IMAGE = 2;
 export const LAYER_CHARACTER_IMAGE = 3;
 export const LAYER_BATTLE_IMAGE = 4;
 export const LAYER_UI_GRAPHICS = 10;
+export const LAYER_WORLD_LIGHTING = LAYER_UI_GRAPHICS - 0.5;
 export const LAYER_UI_IMAGE = 12;
 export const LAYER_TEXT = 20;

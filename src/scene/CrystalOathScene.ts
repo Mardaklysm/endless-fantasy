@@ -26,6 +26,9 @@ import * as battleActions from "../systems/battle/battleActions";
 import * as battleState from "../systems/battle/battleState";
 import * as menuActions from "../systems/menu/menuActions";
 import * as encounters from "../systems/world/encounters";
+import type { WorldDayPhaseId } from "../systems/world/dayNight";
+import { WORLD_TIME_TICKS_PER_FULL_DAY } from "../systems/world/dayNight";
+import * as dayNight from "../systems/world/dayNight";
 import * as harborTravel from "../systems/world/harborTravel";
 import * as locations from "../systems/world/locations";
 import * as saveGame from "../systems/save/saveGame";
@@ -60,6 +63,7 @@ export interface CrystalOathScene
     SceneModuleMethods<typeof battleState>,
     SceneModuleMethods<typeof menuActions>,
     SceneModuleMethods<typeof encounters>,
+    SceneModuleMethods<typeof dayNight>,
     SceneModuleMethods<typeof harborTravel>,
     SceneModuleMethods<typeof locations>,
     SceneModuleMethods<typeof saveGame>,
@@ -79,6 +83,7 @@ export interface CrystalOathScene
 export class CrystalOathScene extends Phaser.Scene {
   g!: Phaser.GameObjects.Graphics;
   worldOverlay!: Phaser.GameObjects.Graphics;
+  worldLightingOverlay?: Phaser.GameObjects.Rectangle;
   ui!: Phaser.GameObjects.Graphics;
   cloudOverlay?: OverworldCloudOverlay;
   texts: Phaser.GameObjects.Text[] = [];
@@ -102,6 +107,12 @@ export class CrystalOathScene extends Phaser.Scene {
   routeOverlayMode: SemanticRouteOverlayMode = "hidden";
   riverOverlayMode: SemanticRouteOverlayMode = "hidden";
   cloudOverlayEnabled = true;
+  ticksPerFullDay = WORLD_TIME_TICKS_PER_FULL_DAY;
+  worldTimeTicks = 0;
+  currentDayPhase: WorldDayPhaseId = "dawn";
+  currentDayPhaseProgress = 0;
+  worldLightingVisual = { red: 95, green: 127, blue: 208, alpha: 0.18 };
+  worldLightingTween?: Phaser.Tweens.Tween;
   party: CharacterState[] = [];
   inventory: Record<string, number> = {};
   gearBag: Record<string, number> = {};
@@ -176,6 +187,7 @@ Object.assign(
   battleState,
   menuActions,
   encounters,
+  dayNight,
   harborTravel,
   locations,
   saveGame,

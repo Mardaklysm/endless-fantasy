@@ -31,6 +31,7 @@ export function draw(this: CrystalOathSceneContext) {
   this.worldOverlay.clear();
   this.ui.clear();
   this.clearText();
+  this.syncWorldLightingLayer();
   if (this.mode === "title") this.drawTitle();
   else if (this.mode === "world") this.drawWorld();
   else if (this.mode === "town") this.drawTown();
