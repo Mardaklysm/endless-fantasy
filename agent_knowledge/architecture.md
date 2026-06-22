@@ -162,7 +162,7 @@ Rules retained:
 
 Semantic overworld generation remains under `src/world/semantic/`.
 
-- `semanticGenerator.ts` builds land/water masks, island IDs, shallow water, beaches, biomes, elevation/ridges, roads, rivers, road-river crossing candidates, forests, mountain masks, POI footprints, overlay collision policy, harbors, and walkability.
+- `semanticGenerator.ts` builds land/water masks, island IDs, shallow water, beaches, biomes, elevation/ridges, roads, one-cell river centerlines, explicit `riverCrossingMap` cells plus road-river bridge/ford candidates, forests, mountain masks, POI footprints, overlay collision policy, harbors, and walkability.
 - `worldGenerator.ts` adapts semantic output into the Phaser-facing `GeneratedWorld` contract.
 - `semanticMaskTerrainRenderer.ts` creates the normal gameplay overworld terrain texture from semantic masks and selected current material PNGs.
 - `semanticRouteRenderer.ts` is debug-only for road/river graph diagnostics.

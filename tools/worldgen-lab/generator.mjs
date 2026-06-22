@@ -68,6 +68,7 @@ export function serializeWorld(world) {
       mountainMap: row(world.layers.mountainMap),
       lakeMap: row(world.layers.lakeMap),
       riverMap: row(world.layers.riverMap),
+      riverCrossingMap: row(world.layers.riverCrossingMap),
       forestMap: row(world.layers.forestMap),
       roadMap: row(world.layers.roadMap),
       overlayCollisionPolicy: row(world.layers.overlayCollisionPolicy),

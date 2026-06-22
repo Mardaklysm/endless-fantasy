@@ -177,6 +177,7 @@ The lab stores a logical world model separately from its rendered preview. The s
 - river mask
 - forest overlay map
 - road mask and road graph
+- river crossing map
 - POI list and harbor list
 - walkability/logical terrain map
 
@@ -235,7 +236,7 @@ Elevation is separate from biome. It combines inland distance, base island heigh
 
 ## F. Rivers And Lakes
 
-River sources are chosen from high-elevation or cold/ridge areas while avoiding mountain masks and POI footprints. Rivers greedily flow toward lower elevation and coast/lakes with cardinal seeded tie-breaking, then expand into deterministic semantic freshwater ribbons before roads, bridges, collision, and rendering are resolved. Surviving river/lake masks render as freshwater terrain inside the semantic mask terrain renderer; the old styled river stroke renderer, connected river-tile overlay, and full-square freshwater stamp path are disabled for normal output.
+River sources are chosen from high-elevation or cold/ridge areas while avoiding mountain masks and POI footprints. Rivers greedily flow toward lower elevation and coast/lakes with cardinal seeded tie-breaking, then remain one-cell semantic centerlines before roads, crossings, collision, and rendering are resolved. Surviving river/lake masks render as freshwater terrain inside the semantic mask terrain renderer; the old styled river stroke renderer, connected river-tile overlay, and full-square freshwater stamp path are disabled for normal output.
 
 Lakes are optional freshwater terrain masks in moist inland basins.
 
@@ -251,8 +252,9 @@ POIs are placed first. Roads are then generated from a graph between settlements
 - beach: cheap/medium
 - sand: medium
 - ice: medium/high
-- mountains: very high
+- mountains: blocked
 - water/lakes: blocked
+- rivers: blocked except at validated one-tile road-river crossings
 
 Roads are semantic paths rendered as packed-dirt terrain masks in the same semantic mask terrain renderer as coast, biome, river, and lake water. They do not rewrite the semantic biome, and they do not use the old smooth route stroke in normal output.
 
@@ -280,7 +282,7 @@ The prototype renderer draws in layers:
 5. biome fills
 6. freshwater river/lake masks
 7. packed-dirt road masks
-8. bridges/docks
+8. semantic bridge/ford crossing overlays
 9. forest overlays
 10. one visual-only mountain sprite per semantic mountain mask cell
 11. towns/POIs/ports
@@ -328,7 +330,7 @@ Recommended v1 approach:
 ## Known Prototype Limitations
 
 - Roads are grid paths with simple A* costs; future visual smoothing should improve the same semantic road mask and graph rather than normal route strokes.
-- Rivers are semantic freshwater ribbons rendered by the terrain mask; future versions should improve basin selection and add stronger bank/pass shaping where roads cross wide rivers.
+- Rivers are semantic one-cell centerlines rendered by the terrain mask; future versions should improve basin selection and add stronger bank/pass shaping if deliberate wider rivers are added.
 - Mountain collision is semantic-mask driven; visible mountain art is one unscaled visual-only sprite per mask cell.
 - Biome smoothing is simple and should eventually use connected-region cleanup.
   - This lab preview remains isolated from Phaser-specific rendering even though it shares the runtime-safe semantic generator core.
@@ -373,7 +375,7 @@ function buildRiverTileReport(world) {
 - River corner mask cells: ${metrics.cornerTileCount}
 - River straight mask cells: ${metrics.straightTileCount}
 - River junction mask cells: ${metrics.junctionTileCount}
-- River crossing mask cells: ${metrics.crossingTileCount}
+- Semantic river crossing cells: ${metrics.crossingTileCount}
 - Rivers connected to coast/lake: ${metrics.connectedMouthCount}/${world.rivers.length}
 - Road/river crossings: ${metrics.roadRiverCrossings}
 - Bridges created/used: ${metrics.bridgeTileCount}
@@ -392,7 +394,7 @@ function riverTileMetrics(world) {
     cornerTileCount: 0,
     straightTileCount: 0,
     junctionTileCount: 0,
-    crossingTileCount: 0,
+    crossingTileCount: countValues(world.layers.riverCrossingMap ?? [], 1),
     roadRiverCrossings: countMaskOverlap(world, world.layers.roadMap, world.layers.riverMap),
     bridgeTileCount: bridgeKeys.size,
     connectedMouthCount: 0,
@@ -412,8 +414,7 @@ function riverTileMetrics(world) {
     if (kind === "isolated" || kind === "end") metrics.sourceEndTileCount += 1;
     else if (kind === "corner") metrics.cornerTileCount += 1;
     else if (kind === "straight") metrics.straightTileCount += 1;
-    else if (kind === "junction") metrics.junctionTileCount += 1;
-    else if (kind === "cross") metrics.crossingTileCount += 1;
+    else if (kind === "junction" || kind === "cross") metrics.junctionTileCount += 1;
   });
   return metrics;
 }
@@ -468,6 +469,12 @@ function bitCount(value) {
 function countMaskOverlap(world, a, b) {
   let count = 0;
   for (let i = 0; i < a.length; i += 1) if (a[i] && b[i]) count += 1;
+  return count;
+}
+
+function countValues(array, value) {
+  let count = 0;
+  for (const item of array) if (item === value) count += 1;
   return count;
 }
 

@@ -30,6 +30,9 @@ const SHALLOW_BAND = 5;
 const BEACH_BAND = 1;
 const INF = 30_000;
 
+export const ENABLE_RIVER_CROSSINGS = true;
+export const ENABLE_RANDOM_BRIDGE_DECORATION = false;
+
 interface IslandSpec {
   id: SemanticIslandId;
   name: string;
@@ -111,10 +114,11 @@ export function generateSemanticWorld(options: {
   ({ mountains, mountainRanges, mountainDebug } = placeMountains(width, height, seed, landMask, distanceToWater, islandId, islands, biome, elevation, ridge, coldness, mountainCandidateScore, mountainMap, lakeMap, poiList));
   const rivers = traceRivers(width, height, seed, landMask, waterClass, lakeMap, distanceToWater, islandId, islands, elevation, coldness, ridge, mountainMap, poiList, riverMap);
   const roadMap = new Uint8Array(width * height);
-  const roadGraph = buildRoadGraph(width, height, islandId, islands, biome, waterClass, mountainMap, lakeMap, poiList, harbors, roadMap);
+  const roadGraph = buildRoadGraph(width, height, seed, landMask, islandId, islands, biome, waterClass, lakeMap, riverMap, distanceToWater, mountainMap, poiList, harbors, roadMap);
   clearPoiFootprintRoadCells(width, height, roadMap, poiList);
   ({ mountains, mountainRanges, mountainDebug } = placeMountains(width, height, seed, landMask, distanceToWater, islandId, islands, biome, elevation, ridge, coldness, mountainCandidateScore, mountainMap, combineBlockMaps(lakeMap, riverMap, roadMap), poiList));
-  const bridgeCandidates = detectBridgeCandidates(width, height, islandId, islands, roadMap, riverMap);
+  const riverCrossingMap = new Uint8Array(width * height);
+  const bridgeCandidates = detectBridgeCandidates(width, height, islandId, islands, landMask, waterClass, lakeMap, riverMap, roadMap, distanceToWater, mountainMap, riverCrossingMap);
   const forestMap = placeForests(width, height, seed, landMask, islandId, islands, biome, moisture, mountainMap, lakeMap, riverMap, roadMap, poiList);
   const overlayCollisionPolicy = buildOverlayCollisionPolicy(width, height, mountainMap, forestMap, roadMap, riverMap, bridgeCandidates, poiList);
   const walkability = buildWalkability(width, height, landMask, waterClass, lakeMap, mountainMap, riverMap, bridgeCandidates, poiList);
@@ -134,6 +138,7 @@ export function generateSemanticWorld(options: {
     mountainMap,
     lakeMap,
     riverMap,
+    riverCrossingMap,
     forestMap,
     roadMap,
     overlayCollisionPolicy,
@@ -931,6 +936,89 @@ function shapeMountainMask(
     if (neighbors === 1 && candidate.score < plan.seedThreshold && noise < 0.36) removals.push(candidate.i);
   }
   for (const i of removals) mask[i] = 0;
+  roughenMountainMask(width, height, seed, islandNumber, island, plan, mask, candidateByIndex);
+  notchRectangularMountainComponents(width, height, seed, islandNumber, island, plan, mask, candidateByIndex);
+}
+
+function roughenMountainMask(
+  width: number,
+  height: number,
+  seed: string,
+  islandNumber: number,
+  island: SemanticIslandRecord,
+  plan: MountainMassifPlan,
+  mask: Uint8Array,
+  candidateByIndex: Map<number, MountainCandidate>
+) {
+  const removals: number[] = [];
+  for (const candidate of candidateByIndex.values()) {
+    if (!mask[candidate.i] || candidate.islandNumber !== islandNumber) continue;
+    const neighbors = maskNeighborCount(width, height, mask, candidate.x, candidate.y);
+    const diagonalNeighbors = diagonalMaskNeighborCount(width, height, mask, candidate.x, candidate.y);
+    const noise = hashNoise(`${seed}:semantic-mountain-roughen:${island.id}`, candidate.x, candidate.y);
+    if (neighbors <= 1 && noise < 0.42) {
+      removals.push(candidate.i);
+      continue;
+    }
+    if (neighbors === 2 && diagonalNeighbors <= 2 && candidate.score < plan.seedThreshold + 0.05 && noise < 0.2) removals.push(candidate.i);
+    if (neighbors === 3 && candidate.score < plan.seedThreshold - 0.01 && noise < 0.07) removals.push(candidate.i);
+    if (neighbors === 4 && diagonalNeighbors >= 4 && candidate.score < plan.seedThreshold + 0.02 && noise < 0.025) removals.push(candidate.i);
+  }
+  for (const i of removals) mask[i] = 0;
+}
+
+function notchRectangularMountainComponents(
+  width: number,
+  height: number,
+  seed: string,
+  islandNumber: number,
+  island: SemanticIslandRecord,
+  plan: MountainMassifPlan,
+  mask: Uint8Array,
+  candidateByIndex: Map<number, MountainCandidate>
+) {
+  const components = mountainMaskComponents(width, height, mask, candidateByIndex).filter((component) => component.islandNumber === islandNumber);
+  for (const component of components) {
+    if (component.cells.length <= plan.minSize + 1) continue;
+    const bounds = boundsForCells(component.cells);
+    const rectArea = (bounds.maxX - bounds.minX + 1) * (bounds.maxY - bounds.minY + 1);
+    if (rectArea < 10 || component.cells.length / rectArea < 0.84) continue;
+    const maxRemovals = Math.min(component.cells.length - plan.minSize, Math.max(1, Math.ceil(component.cells.length * 0.18)));
+    const edgeCells = component.cells
+      .filter((cell) => {
+        const neighbors = maskNeighborCount(width, height, mask, cell.x, cell.y);
+        const onBounds = cell.x === bounds.minX || cell.x === bounds.maxX || cell.y === bounds.minY || cell.y === bounds.maxY;
+        return onBounds && neighbors <= 3;
+      })
+      .sort((a, b) => hashNoise(`${seed}:semantic-mountain-notch:${island.id}`, a.x, a.y) - hashNoise(`${seed}:semantic-mountain-notch:${island.id}`, b.x, b.y));
+    let removed = 0;
+    for (const cell of edgeCells) {
+      if (removed >= maxRemovals) break;
+      mask[cell.i] = 0;
+      if (componentCellsRemainConnected(width, height, mask, component.cells)) removed += 1;
+      else mask[cell.i] = 1;
+    }
+  }
+}
+
+function componentCellsRemainConnected(width: number, height: number, mask: Uint8Array, cells: MountainCandidate[]): boolean {
+  const remaining = cells.filter((cell) => mask[cell.i]);
+  if (remaining.length <= 1) return true;
+  const remainingKeys = new Set(remaining.map((cell) => posKey(cell)));
+  const seen = new Set<string>();
+  const queue: SemanticVec[] = [{ x: remaining[0].x, y: remaining[0].y }];
+  seen.add(posKey(queue[0]));
+  for (let head = 0; head < queue.length; head += 1) {
+    const cell = queue[head];
+    for (const next of cardinalNeighbors(cell.x, cell.y)) {
+      if (!inBounds(width, height, next.x, next.y)) continue;
+      const key = posKey(next);
+      if (!remainingKeys.has(key) || seen.has(key) || !mask[index(width, next.x, next.y)]) continue;
+      seen.add(key);
+      queue.push(next);
+    }
+  }
+  return seen.size === remaining.length;
 }
 
 function mountainMaskComponents(width: number, height: number, mask: Uint8Array, candidateByIndex: Map<number, MountainCandidate>): { islandNumber: number; cells: MountainCandidate[] }[] {
@@ -974,6 +1062,19 @@ function cardinalMountainNeighborCount(width: number, height: number, selected: 
 function maskNeighborCount(width: number, height: number, mask: Uint8Array, x: number, y: number): number {
   let count = 0;
   for (const next of cardinalNeighbors(x, y)) {
+    if (inBounds(width, height, next.x, next.y) && mask[index(width, next.x, next.y)]) count += 1;
+  }
+  return count;
+}
+
+function diagonalMaskNeighborCount(width: number, height: number, mask: Uint8Array, x: number, y: number): number {
+  let count = 0;
+  for (const next of [
+    { x: x - 1, y: y - 1 },
+    { x: x + 1, y: y - 1 },
+    { x: x + 1, y: y + 1 },
+    { x: x - 1, y: y + 1 }
+  ]) {
     if (inBounds(width, height, next.x, next.y) && mask[index(width, next.x, next.y)]) count += 1;
   }
   return count;
@@ -1129,6 +1230,7 @@ function traceRiverPath(
   const seen = new Set<string>();
   let current = { x: source.x, y: source.y };
   let previous: SemanticVec | undefined;
+  let straightRun = 0;
   for (let step = 0; step < 160; step += 1) {
     const key = posKey(current);
     if (seen.has(key)) return [];
@@ -1151,14 +1253,20 @@ function traceRiverPath(
         const downhill = elevation[ni] - elevation[i];
         const waterPull = distanceToWater[ni] * 0.025;
         const noise = hashNoise(`${seed}:semantic-river:${riverIndex}`, next.x, next.y) * 0.045;
+        const meander = fbm(`${seed}:semantic-river-meander:${riverIndex}`, next.x / 5, next.y / 5, 2) * 0.075;
         const direction = { x: next.x - current.x, y: next.y - current.y };
         const reversePenalty = currentDirection && direction.x === -currentDirection.x && direction.y === -currentDirection.y ? 3.5 : 0;
-        const turnPenalty = currentDirection && (direction.x !== currentDirection.x || direction.y !== currentDirection.y) ? 0.12 : -0.04;
-        return { ...next, cost: downhill + waterPull + noise + islandPenalty + reversePenalty + turnPenalty };
+        const keepsDirection = currentDirection && direction.x === currentDirection.x && direction.y === currentDirection.y;
+        const longStraightPenalty = keepsDirection ? Math.min(0.22, Math.max(0, straightRun - 3) * 0.035) : 0;
+        const turnPenalty = currentDirection && !keepsDirection ? (straightRun >= 4 ? -0.04 : 0.13) : -0.035;
+        return { ...next, cost: downhill + waterPull + noise + meander + islandPenalty + reversePenalty + turnPenalty + longStraightPenalty };
       })
       .filter((next) => Number.isFinite(next.cost))
       .sort((a, b) => a.cost - b.cost);
     if (!neighbors.length) return [];
+    const nextDirection = { x: neighbors[0].x - current.x, y: neighbors[0].y - current.y };
+    const currentDirectionBeforeStep = previous ? { x: current.x - previous.x, y: current.y - previous.y } : undefined;
+    straightRun = currentDirectionBeforeStep && nextDirection.x === currentDirectionBeforeStep.x && nextDirection.y === currentDirectionBeforeStep.y ? straightRun + 1 : 1;
     previous = current;
     current = { x: neighbors[0].x, y: neighbors[0].y };
   }
@@ -1283,12 +1391,16 @@ function isPoiFootprintValid(
 function buildRoadGraph(
   width: number,
   height: number,
+  seed: string,
+  landMask: Uint8Array,
   islandId: Int16Array,
   islands: SemanticIslandRecord[],
   biome: Uint8Array,
   waterClass: Uint8Array,
-  mountainMap: Uint8Array,
   lakeMap: Uint8Array,
+  riverMap: Uint8Array,
+  distanceToWater: Int16Array,
+  mountainMap: Uint8Array,
   poiList: SemanticPoi[],
   harbors: SemanticPoi[],
   roadMap: Uint8Array
@@ -1305,7 +1417,7 @@ function buildRoadGraph(
       (poi) => poi.id
     );
     for (const target of targets) {
-      const path = findRoadPath(width, height, islandId, island.order + 1, biome, waterClass, mountainMap, lakeMap, root, target);
+      const path = findRoadPath(width, height, seed, landMask, islandId, island.order + 1, biome, waterClass, lakeMap, riverMap, distanceToWater, mountainMap, root, target);
       if (!path.length) {
         edges.push({ from: root.id, to: target.id, connected: false, length: 0, path: [] });
         continue;
@@ -1329,12 +1441,16 @@ function clearPoiFootprintRoadCells(width: number, height: number, roadMap: Uint
 function findRoadPath(
   width: number,
   height: number,
+  seed: string,
+  landMask: Uint8Array,
   islandId: Int16Array,
   targetIslandNumber: number,
   biome: Uint8Array,
   waterClass: Uint8Array,
-  mountainMap: Uint8Array,
   lakeMap: Uint8Array,
+  riverMap: Uint8Array,
+  distanceToWater: Int16Array,
+  mountainMap: Uint8Array,
   start: SemanticVec,
   goal: SemanticVec
 ) {
@@ -1352,8 +1468,8 @@ function findRoadPath(
       if (!inBounds(width, height, next.x, next.y)) continue;
       const ni = index(width, next.x, next.y);
       if (islandId[ni] !== targetIslandNumber) continue;
-      if (waterClass[ni] !== SEMANTIC_WATER.NONE || lakeMap[ni]) continue;
-      const cost = roadCost(biome[ni], mountainMap[ni]);
+      if (!isRoadStepAllowed(width, height, landMask, islandId, targetIslandNumber, waterClass, lakeMap, riverMap, distanceToWater, mountainMap, current, next)) continue;
+      const cost = roadCost(width, seed, biome[ni], mountainMap[ni], current, next, cameFrom.get(key), riverMap[ni]);
       if (!Number.isFinite(cost)) continue;
       const nextG = current.g + cost;
       const nextKey = posKey(next);
@@ -1371,31 +1487,39 @@ function detectBridgeCandidates(
   height: number,
   islandId: Int16Array,
   islands: SemanticIslandRecord[],
+  landMask: Uint8Array,
+  waterClass: Uint8Array,
+  lakeMap: Uint8Array,
+  riverMap: Uint8Array,
   roadMap: Uint8Array,
-  riverMap: Uint8Array
+  distanceToWater: Int16Array,
+  mountainMap: Uint8Array,
+  riverCrossingMap: Uint8Array
 ): SemanticBridgeCandidate[] {
+  riverCrossingMap.fill(0);
+  if (!ENABLE_RIVER_CROSSINGS) return [];
   const islandByOrder = new Map(islands.map((island) => [island.order + 1, island]));
   const candidates: SemanticBridgeCandidate[] = [];
   forEachCell(width, height, (x, y, i) => {
     if (!roadMap[i] || !riverMap[i]) return;
     const island = islandByOrder.get(islandId[i]);
     if (!island) return;
-    const horizontal = isRoadLike(width, height, roadMap, x - 1, y) || isRoadLike(width, height, roadMap, x + 1, y);
-    const vertical = isRoadLike(width, height, roadMap, x, y - 1) || isRoadLike(width, height, roadMap, x, y + 1);
+    const crossing = riverCrossingOrientationAt(width, height, riverMap, x, y);
+    if (!crossing) return;
+    if (!isPotentialRiverCrossing(width, height, landMask, islandId, islandId[i], waterClass, lakeMap, riverMap, distanceToWater, mountainMap, x, y, crossing)) return;
+    if (!hasRoadContinuationForCrossing(width, height, roadMap, x, y, crossing)) return;
+    riverCrossingMap[i] = 1;
     candidates.push({
       id: `bridge_${candidates.length + 1}`,
       islandId: island.id,
       x,
       y,
-      orientation: horizontal && !vertical ? "horizontal" : "vertical",
-      kind: "road_river"
+      orientation: crossing,
+      kind: "road_river",
+      crossingType: island.theme === "sand_coast" ? "ford" : "bridge"
     });
   });
   return candidates;
-}
-
-function isRoadLike(width: number, height: number, roadMap: Uint8Array, x: number, y: number): boolean {
-  return inBounds(width, height, x, y) && roadMap[index(width, x, y)] === 1;
 }
 
 function placeForests(
@@ -1759,13 +1883,123 @@ function tooCloseToOccupied(occupied: Set<string>, x: number, y: number, radius:
   return false;
 }
 
-function roadCost(biome: number, mountain: number): number {
-  if (mountain) return 12;
-  if (biome === SEMANTIC_BIOME.GRASS) return 1;
-  if (biome === SEMANTIC_BIOME.BEACH) return 1.35;
-  if (biome === SEMANTIC_BIOME.SAND) return 1.55;
-  if (biome === SEMANTIC_BIOME.ICE) return 2.0;
-  return Infinity;
+function isRoadStepAllowed(
+  width: number,
+  height: number,
+  landMask: Uint8Array,
+  islandId: Int16Array,
+  targetIslandNumber: number,
+  waterClass: Uint8Array,
+  lakeMap: Uint8Array,
+  riverMap: Uint8Array,
+  distanceToWater: Int16Array,
+  mountainMap: Uint8Array,
+  current: SemanticVec,
+  next: SemanticVec
+): boolean {
+  const ni = index(width, next.x, next.y);
+  const ci = index(width, current.x, current.y);
+  if (!landMask[ni] || waterClass[ni] !== SEMANTIC_WATER.NONE || lakeMap[ni] || mountainMap[ni]) return false;
+  if (!riverMap[ni] && !riverMap[ci]) return true;
+  const direction = { x: next.x - current.x, y: next.y - current.y };
+  const crossingCell = riverMap[ni] ? next : current;
+  const crossingIndex = index(width, crossingCell.x, crossingCell.y);
+  if (islandId[crossingIndex] !== targetIslandNumber) return false;
+  const orientation = riverCrossingOrientationAt(width, height, riverMap, crossingCell.x, crossingCell.y);
+  if (!orientation) return false;
+  if (!isPotentialRiverCrossing(width, height, landMask, islandId, targetIslandNumber, waterClass, lakeMap, riverMap, distanceToWater, mountainMap, crossingCell.x, crossingCell.y, orientation)) return false;
+  return crossingMoveMatchesOrientation(direction, orientation);
+}
+
+function riverCrossingOrientationAt(width: number, height: number, riverMap: Uint8Array, x: number, y: number): "horizontal" | "vertical" | undefined {
+  if (!inBounds(width, height, x, y) || !riverMap[index(width, x, y)]) return undefined;
+  const north = isRiverCell(width, height, riverMap, x, y - 1);
+  const east = isRiverCell(width, height, riverMap, x + 1, y);
+  const south = isRiverCell(width, height, riverMap, x, y + 1);
+  const west = isRiverCell(width, height, riverMap, x - 1, y);
+  if (north && south && !east && !west) return "horizontal";
+  if (east && west && !north && !south) return "vertical";
+  return undefined;
+}
+
+function isPotentialRiverCrossing(
+  width: number,
+  height: number,
+  landMask: Uint8Array,
+  islandId: Int16Array,
+  targetIslandNumber: number,
+  waterClass: Uint8Array,
+  lakeMap: Uint8Array,
+  riverMap: Uint8Array,
+  distanceToWater: Int16Array,
+  mountainMap: Uint8Array,
+  x: number,
+  y: number,
+  orientation: "horizontal" | "vertical"
+): boolean {
+  const i = index(width, x, y);
+  if (!landMask[i] || waterClass[i] !== SEMANTIC_WATER.NONE || lakeMap[i] || !riverMap[i] || mountainMap[i]) return false;
+  if (distanceToWater[i] <= 1) return false;
+  if (hasDiagonalRiverNeighbor(width, height, riverMap, x, y)) return false;
+  const sides = crossingContinuationCells(x, y, orientation);
+  return sides.every((cell) => {
+    if (!inBounds(width, height, cell.x, cell.y)) return false;
+    const ci = index(width, cell.x, cell.y);
+    return (
+      islandId[ci] === targetIslandNumber &&
+      landMask[ci] === 1 &&
+      waterClass[ci] === SEMANTIC_WATER.NONE &&
+      lakeMap[ci] === 0 &&
+      riverMap[ci] === 0 &&
+      mountainMap[ci] === 0
+    );
+  });
+}
+
+function hasRoadContinuationForCrossing(width: number, height: number, roadMap: Uint8Array, x: number, y: number, orientation: "horizontal" | "vertical"): boolean {
+  return crossingContinuationCells(x, y, orientation).every((cell) => inBounds(width, height, cell.x, cell.y) && roadMap[index(width, cell.x, cell.y)] === 1);
+}
+
+function crossingContinuationCells(x: number, y: number, orientation: "horizontal" | "vertical"): SemanticVec[] {
+  return orientation === "horizontal" ? [{ x: x - 1, y }, { x: x + 1, y }] : [{ x, y: y - 1 }, { x, y: y + 1 }];
+}
+
+function crossingMoveMatchesOrientation(direction: SemanticVec, orientation: "horizontal" | "vertical"): boolean {
+  return orientation === "horizontal" ? direction.y === 0 && Math.abs(direction.x) === 1 : direction.x === 0 && Math.abs(direction.y) === 1;
+}
+
+function isRiverCell(width: number, height: number, riverMap: Uint8Array, x: number, y: number): boolean {
+  return inBounds(width, height, x, y) && riverMap[index(width, x, y)] === 1;
+}
+
+function hasDiagonalRiverNeighbor(width: number, height: number, riverMap: Uint8Array, x: number, y: number): boolean {
+  for (const diagonal of [
+    { x: x - 1, y: y - 1 },
+    { x: x + 1, y: y - 1 },
+    { x: x + 1, y: y + 1 },
+    { x: x - 1, y: y + 1 }
+  ]) {
+    if (isRiverCell(width, height, riverMap, diagonal.x, diagonal.y)) return true;
+  }
+  return false;
+}
+
+function roadCost(width: number, seed: string, biome: number, mountain: number, current: SemanticVec, next: SemanticVec, previous: SemanticVec | undefined, river: number): number {
+  if (mountain) return Infinity;
+  let base = Infinity;
+  if (biome === SEMANTIC_BIOME.GRASS) base = 1;
+  else if (biome === SEMANTIC_BIOME.BEACH) base = 1.35;
+  else if (biome === SEMANTIC_BIOME.SAND) base = 1.55;
+  else if (biome === SEMANTIC_BIOME.ICE) base = 2.0;
+  if (!Number.isFinite(base)) return Infinity;
+  const noise = hashNoise(`${seed}:semantic-road-cost`, next.x, next.y) * 0.34;
+  const lowFrequencyNoise = fbm(`${seed}:semantic-road-meander`, next.x / 7, next.y / 7, 2) * 0.22;
+  const direction = { x: next.x - current.x, y: next.y - current.y };
+  const previousDirection = previous ? { x: current.x - previous.x, y: current.y - previous.y } : undefined;
+  const turnPenalty = previousDirection && (previousDirection.x !== direction.x || previousDirection.y !== direction.y) ? 0.08 : 0;
+  const riverPenalty = river ? 5.5 : 0;
+  const islandColumnBias = Math.abs(((next.x * 17 + next.y * 7) % Math.max(5, Math.floor(width / 4))) - width / 8) * 0.002;
+  return base + noise + lowFrequencyNoise + turnPenalty + islandColumnBias + riverPenalty;
 }
 
 function reconstructPath(cameFrom: Map<string, SemanticVec>, current: SemanticVec) {

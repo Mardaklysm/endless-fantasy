@@ -7,7 +7,7 @@ import {
 } from "../data/worldTiles.ts";
 import { WORLD_OBJECT_IDS, type WorldObjectId } from "../data/worldObjects.ts";
 import { hashNoise } from "./seededRng.ts";
-import { generateSemanticWorld } from "./semantic/semanticGenerator.ts";
+import { ENABLE_RANDOM_BRIDGE_DECORATION, generateSemanticWorld } from "./semantic/semanticGenerator.ts";
 import { CAMPAIGN_WORLD_PROFILE } from "./semantic/semanticProfiles.ts";
 import {
   SEMANTIC_BIOME,
@@ -71,7 +71,8 @@ export interface WorldEntryTrigger {
 
 export interface WorldBridge extends WorldVec {
   orientation: "horizontal" | "vertical";
-  material: "wood" | "stone";
+  material: "wood" | "stone" | "ford";
+  kind: "roadRiverCrossing" | "dockDecoration";
 }
 
 export type RoadRotation = 0 | 90 | 180 | 270;
@@ -233,14 +234,15 @@ function adaptSemanticWorld(semantic: SemanticWorld): GeneratedWorld {
   const shallows = collectCells(semantic, (i) => semantic.layers.waterClass[i] === SEMANTIC_WATER.SHALLOW);
   const reefs = pickReefs(semantic, shallows);
   const objectOverlays = buildObjectOverlays(semantic, reefs);
-  const dockBridges = buildDockTiles(semantic, pois, tiles);
+  const dockBridges = ENABLE_RANDOM_BRIDGE_DECORATION ? buildDockTiles(semantic, pois, tiles) : [];
   const routeBridgeCandidates: WorldBridge[] = semantic.bridgeCandidates.map((bridge) => ({
     x: bridge.x,
     y: bridge.y,
     orientation: bridge.orientation,
-    material: "wood"
+    material: bridge.crossingType === "ford" ? "ford" : "wood",
+    kind: "roadRiverCrossing"
   }));
-  const bridges = dockBridges;
+  const bridges = [...routeBridgeCandidates, ...dockBridges];
   const seaRoutes = buildSeaRoutes(pois);
   const entryTriggers = pois.map((poi) => ({ poiId: poi.id, x: poi.x, y: poi.y }));
   const islands = semantic.islands.map((island) => adaptIsland(semantic, tiles, pois, island.id as IslandId));
@@ -624,6 +626,10 @@ function mountainObjectIdForCell(
 ): WorldObjectId {
   const i = cell.y * semantic.width + cell.x;
   if (range.kind === "snow_mountain" || semantic.layers.biome[i] === SEMANTIC_BIOME.ICE) return WORLD_OBJECT_IDS.snowyMountainPeak;
+  const neighbors = neighbors4(cell.x, cell.y).filter((next) => inBounds(semantic.width, semantic.height, next.x, next.y) && semantic.layers.mountainMap[next.y * semantic.width + next.x]).length;
+  const roll = hashNoise(`${semantic.seed}:mountain-object:${range.id}`, cell.x, cell.y);
+  if (neighbors <= 2 && roll > 0.42) return WORLD_OBJECT_IDS.grayBoulderPile;
+  if (neighbors <= 3 && roll > 0.68) return WORLD_OBJECT_IDS.rockyHillObject;
   return WORLD_OBJECT_IDS.smallMountainPeak;
 }
 
@@ -640,7 +646,8 @@ function buildDockTiles(semantic: SemanticWorld, pois: WorldPoi[], tiles: WorldT
           x: next.x,
           y: next.y,
           orientation: next.x === cell.x ? "vertical" : "horizontal",
-          material: harbor.islandId === "highspire" || harbor.islandId === "frostmere" ? "stone" : "wood"
+          material: harbor.islandId === "highspire" || harbor.islandId === "frostmere" ? "stone" : "wood",
+          kind: "dockDecoration"
         };
         break;
       }

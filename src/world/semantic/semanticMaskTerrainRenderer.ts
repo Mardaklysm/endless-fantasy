@@ -190,10 +190,13 @@ function classifySample(world: SemanticWorld, sampleX: number, sampleY: number):
   const noiseY = Math.floor(sampleY * 8);
   const boundaryNoise = hashNoise(`${world.seed}:mask-terrain-boundary`, noiseX, noiseY, 0) - 0.5;
 
-  if (routeMaskSample(world, world.layers.roadMap, sampleX, sampleY, 0.16)) return TERRAIN_CLASS_IDS.road;
+  const roadHit = routeMaskSample(world, world.layers.roadMap, sampleX, sampleY, 0.11);
+  const riverHit = routeMaskSample(world, world.layers.riverMap, sampleX, sampleY, 0.27);
+  const crossingHit = routeMaskSample(world, world.layers.riverCrossingMap, sampleX, sampleY, 0.18);
+  if (roadHit && (!riverHit || crossingHit)) return TERRAIN_CLASS_IDS.road;
 
   const lakeScore = samplePredicate(world, world.layers.lakeMap, sampleX, sampleY, (value) => value > 0);
-  if (routeMaskSample(world, world.layers.riverMap, sampleX, sampleY, 0.28) || lakeScore + boundaryNoise * 0.08 > 0.32) {
+  if (riverHit || lakeScore + boundaryNoise * 0.08 > 0.32) {
     return TERRAIN_CLASS_IDS.freshWater;
   }
 
@@ -397,8 +400,8 @@ function drawBoundaryPair(
     return;
   }
   if (boundary === "roadBoundary") {
-    drawBoundaryStrip(ctx, x, y, side, length, accentWidth, COLORS.roadEdge, 0.2);
-    drawBoundaryStrip(ctx, x, y, side, length, lineWidth, COLORS.roadDust, 0.24);
+    drawBoundaryStrip(ctx, x, y, side, length, lineWidth, COLORS.roadEdge, 0.18);
+    drawBoundaryStrip(ctx, x, y, side, length, lineWidth, COLORS.roadDust, 0.2);
     return;
   }
   if (boundary === "sandGrass") {

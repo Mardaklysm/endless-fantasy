@@ -138,6 +138,10 @@ export function drawWorldOverlays(this: CrystalOathSceneContext, startX: number,
     if (!inView(bridge)) continue;
     const sx = bridge.x * TILE - tileCam.x;
     const sy = bridge.y * TILE - tileCam.y;
+    if (bridge.kind === "roadRiverCrossing") {
+      this.drawRiverCrossingTile(bridge, sx, sy);
+      continue;
+    }
     if (this.drawPierDockTile(bridge, sx, sy)) continue;
     const color = bridge.material === "stone" ? 0xa69b86 : 0x9a6a3d;
     overlayGraphics.fillStyle(0x07101d, 0.35).fillRect(sx + 5, sy + 5, TILE - 10, TILE - 10);
@@ -388,7 +392,7 @@ export function drawWorldObjectCell(this: CrystalOathSceneContext, objectId: Wor
   return true;
 }
 
-export function drawPierDockTile(this: CrystalOathSceneContext, bridge: { orientation: "horizontal" | "vertical"; material: "wood" | "stone" }, sx: number, sy: number): boolean {
+export function drawPierDockTile(this: CrystalOathSceneContext, bridge: { orientation: "horizontal" | "vertical"; material: "wood" | "stone" | "ford" }, sx: number, sy: number): boolean {
   const textureKey =
     bridge.material === "stone"
       ? bridge.orientation === "vertical"
@@ -400,6 +404,26 @@ export function drawPierDockTile(this: CrystalOathSceneContext, bridge: { orient
   if (!textureKey || textureKey === "procedural_styled_stroke" || !this.hasTexture(textureKey)) return false;
   this.drawTexture(textureKey, sx, sy, TILE, TILE, LAYER_OBJECT_IMAGE);
   return true;
+}
+
+export function drawRiverCrossingTile(this: CrystalOathSceneContext, bridge: { orientation: "horizontal" | "vertical"; material: "wood" | "stone" | "ford" }, sx: number, sy: number) {
+  const g = this.worldOverlay;
+  const horizontal = bridge.orientation === "horizontal";
+  const shadow = bridge.material === "ford" ? 0x5b6f72 : 0x4b2f21;
+  const deck = bridge.material === "ford" ? 0xb9a070 : 0xa86f3f;
+  const highlight = bridge.material === "ford" ? 0xe4d49a : 0xe1b26f;
+  const edge = bridge.material === "ford" ? 0x736441 : 0x6d452b;
+  if (horizontal) {
+    g.fillStyle(shadow, 0.48).fillRect(sx - 2, sy + 12, TILE + 4, 10);
+    g.fillStyle(deck, 0.96).fillRect(sx - 1, sy + 13, TILE + 2, 7);
+    g.fillStyle(edge, 0.84).fillRect(sx - 1, sy + 12, TILE + 2, 1).fillRect(sx - 1, sy + 20, TILE + 2, 1);
+    for (let x = sx + 4; x < sx + TILE; x += 7) g.lineStyle(1, highlight, 0.62).lineBetween(x, sy + 13, x - 2, sy + 20);
+  } else {
+    g.fillStyle(shadow, 0.48).fillRect(sx + 12, sy - 2, 10, TILE + 4);
+    g.fillStyle(deck, 0.96).fillRect(sx + 13, sy - 1, 7, TILE + 2);
+    g.fillStyle(edge, 0.84).fillRect(sx + 12, sy - 1, 1, TILE + 2).fillRect(sx + 20, sy - 1, 1, TILE + 2);
+    for (let y = sy + 4; y < sy + TILE; y += 7) g.lineStyle(1, highlight, 0.62).lineBetween(sx + 13, y, sx + 20, y - 2);
+  }
 }
 
 export function rebuildWorldTerrainCache(this: CrystalOathSceneContext) {

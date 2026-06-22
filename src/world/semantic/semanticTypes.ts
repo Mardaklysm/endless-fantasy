@@ -174,6 +174,7 @@ export interface SemanticBridgeCandidate extends SemanticVec {
   islandId: SemanticIslandId;
   orientation: "horizontal" | "vertical";
   kind: "road_river";
+  crossingType: "bridge" | "ford";
 }
 
 export interface SemanticValidationResult {
@@ -198,6 +199,7 @@ export interface SemanticWorldLayers {
   mountainMap: Uint8Array;
   lakeMap: Uint8Array;
   riverMap: Uint8Array;
+  riverCrossingMap: Uint8Array;
   forestMap: Uint8Array;
   roadMap: Uint8Array;
   overlayCollisionPolicy: OverlayCollisionPolicy[];

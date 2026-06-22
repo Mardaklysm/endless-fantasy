@@ -78,7 +78,8 @@ export function renderSemanticMap(world, scale = 6) {
     fillCell(image, x, y, scale, color);
   });
   overlayMask(image, world, world.layers.riverMap, scale, COLORS.river);
-  overlayMask(image, world, world.layers.roadMap, scale, COLORS.road);
+  overlayRoadMask(image, world, scale, COLORS.road);
+  renderBridgeCrossings(image, world, scale);
   for (const poi of world.poiList) drawDebugDot(image, poi.x, poi.y, scale, COLORS.debugPoi);
   return image;
 }
@@ -556,6 +557,14 @@ function drawPath(image, path, scale, color, width) {
 function overlayMask(image, world, mask, scale, color) {
   forEachCell(world, (x, y, i) => {
     if (mask[i]) fillCell(image, x, y, scale, color);
+  });
+}
+
+function overlayRoadMask(image, world, scale, color) {
+  forEachCell(world, (x, y, i) => {
+    if (!world.layers.roadMap[i]) return;
+    if (world.layers.riverMap[i] && !world.layers.riverCrossingMap?.[i]) return;
+    fillCell(image, x, y, scale, color);
   });
 }
 

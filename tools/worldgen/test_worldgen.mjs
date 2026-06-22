@@ -335,7 +335,13 @@ function validateSemanticWorldgen() {
     );
   }
   assert(worldA.routeBridgeCandidates.length === worldA.semantic.bridgeCandidates.length, "Runtime bridge candidates should mirror semantic road-river crossings.");
-  assert(worldA.bridges.every((bridge) => worldA.semantic.layers.waterClass[bridge.y * worldA.width + bridge.x] !== SEMANTIC_WATER.NONE), "Visible dock/bridge overlays should sit on water.");
+  assert(worldA.bridges.length === worldA.semantic.bridgeCandidates.length, "Visible bridge overlays should only come from road-river crossings by default.");
+  for (const bridge of worldA.bridges) {
+    const i = bridge.y * worldA.width + bridge.x;
+    assert(bridge.kind === "roadRiverCrossing", `Visible bridge at ${bridge.x},${bridge.y} should be a road-river crossing, not decoration.`);
+    assert(worldA.semantic.layers.roadMap[i] === 1 && worldA.semantic.layers.riverMap[i] === 1, `Visible bridge at ${bridge.x},${bridge.y} should sit on road and river masks.`);
+    assert(worldA.semantic.layers.riverCrossingMap[i] === 1, `Visible bridge at ${bridge.x},${bridge.y} should be marked in riverCrossingMap.`);
+  }
   const poiPolicyIndex = worldA.pois[0].y * worldA.width + worldA.pois[0].x;
   assert(worldA.semantic.layers.overlayCollisionPolicy[poiPolicyIndex] === "poiBlock", "POI cells should be tagged poiBlock for debug/interaction policy.");
   assert(worldA.objectOverlays.every((overlay) => ["visualOnly", "softTerrain", "hardBlock", "poiBlock"].includes(overlay.collisionPolicy)), "Object overlays are missing collision policies.");

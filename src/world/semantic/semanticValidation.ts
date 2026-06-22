@@ -48,6 +48,10 @@ export function validateSemanticWorld(world: SemanticWorld) {
   validatePortRoadConnectivity(world, errors);
   validateBeachBuffer(world, errors);
   validateOverlaySpacingAndWalkability(world, errors);
+  validateRiverCrossings(world, errors);
+  validateRiverConnectivity(world, errors);
+  validateRoadShape(world, warnings);
+  validateMountainShape(world, warnings);
 
   return { ok: errors.length === 0, errors, warnings };
 }
@@ -174,12 +178,110 @@ function validateOverlaySpacingAndWalkability(world: SemanticWorld, errors: stri
       if (isBridge && !world.layers.walkability[i]) errors.push(`Bridge river crossing is blocked at ${x},${y}.`);
       if (!isBridge && world.layers.walkability[i]) errors.push(`Unbridged river cell is walkable at ${x},${y}.`);
     }
+    if (world.layers.riverCrossingMap[i] && !bridgeKeys.has(`${x},${y}`)) errors.push(`River crossing map contains non-bridge cell at ${x},${y}.`);
   }
   for (const poi of world.poiList) {
     const clearance = poi.role === "settlement" || poi.role === "port" ? 2 : 1;
     if (nearbyCount(world, world.layers.mountainMap, poi.x, poi.y, clearance) > 0) errors.push(`Mountain crowds POI ${poi.id}.`);
     if (nearbyCount(world, world.layers.forestMap, poi.x, poi.y, 1) > 0) errors.push(`Forest crowds POI ${poi.id}.`);
   }
+}
+
+function validateRiverCrossings(world: SemanticWorld, errors: string[]) {
+  const bridgeKeys = new Set(world.bridgeCandidates.map((bridge) => `${bridge.x},${bridge.y}`));
+  for (let y = 0; y < world.height; y += 1) {
+    for (let x = 0; x < world.width; x += 1) {
+      const i = index(world.width, x, y);
+      if (world.layers.roadMap[i] && world.layers.riverMap[i] && !bridgeKeys.has(`${x},${y}`)) {
+        errors.push(`Road overlaps normal river water without a crossing at ${x},${y}.`);
+      }
+    }
+  }
+  for (const bridge of world.bridgeCandidates) {
+    const i = index(world.width, bridge.x, bridge.y);
+    if (!world.layers.roadMap[i] || !world.layers.riverMap[i]) errors.push(`Bridge ${bridge.id} is not on a road-river overlap.`);
+    if (!world.layers.riverCrossingMap[i]) errors.push(`Bridge ${bridge.id} is missing from riverCrossingMap.`);
+    if (world.layers.waterClass[i] !== SEMANTIC_WATER.NONE || !world.layers.landMask[i]) errors.push(`Bridge ${bridge.id} is on ocean/coast water.`);
+    const orientation = crossingOrientationAt(world, bridge.x, bridge.y);
+    if (!orientation) errors.push(`Bridge ${bridge.id} is not on a straight one-tile river segment.`);
+    else if (orientation !== bridge.orientation) errors.push(`Bridge ${bridge.id} orientation ${bridge.orientation} does not match river crossing ${orientation}.`);
+    if (!hasCrossingRoadContinuation(world, bridge.x, bridge.y, bridge.orientation)) errors.push(`Bridge ${bridge.id} lacks road continuation on both sides.`);
+  }
+}
+
+function validateRiverConnectivity(world: SemanticWorld, errors: string[]) {
+  for (const river of world.rivers) {
+    if (!river.path.length) {
+      errors.push(`River ${river.id} has an empty path.`);
+      continue;
+    }
+    for (let i = 1; i < river.path.length; i += 1) {
+      if (Math.abs(river.path[i].x - river.path[i - 1].x) + Math.abs(river.path[i].y - river.path[i - 1].y) !== 1) {
+        errors.push(`River ${river.id} is disconnected between ${river.path[i - 1].x},${river.path[i - 1].y} and ${river.path[i].x},${river.path[i].y}.`);
+      }
+    }
+  }
+}
+
+function validateRoadShape(world: SemanticWorld, warnings: string[]) {
+  let roadCells = 0;
+  let twoByTwoBlocks = 0;
+  for (let y = 0; y < world.height; y += 1) {
+    for (let x = 0; x < world.width; x += 1) {
+      const i = index(world.width, x, y);
+      if (world.layers.roadMap[i]) roadCells += 1;
+      if (x >= world.width - 1 || y >= world.height - 1) continue;
+      if (
+        world.layers.roadMap[i] &&
+        world.layers.roadMap[index(world.width, x + 1, y)] &&
+        world.layers.roadMap[index(world.width, x, y + 1)] &&
+        world.layers.roadMap[index(world.width, x + 1, y + 1)]
+      ) {
+        twoByTwoBlocks += 1;
+      }
+    }
+  }
+  if (roadCells > 0 && twoByTwoBlocks / roadCells > 0.035) warnings.push(`Road mask has ${twoByTwoBlocks} dense 2x2 block(s), suggesting roads are getting too wide.`);
+}
+
+function validateMountainShape(world: SemanticWorld, warnings: string[]) {
+  for (const range of world.mountainRanges) {
+    if (range.cells.length < 10) continue;
+    const width = range.bounds.maxX - range.bounds.minX + 1;
+    const height = range.bounds.maxY - range.bounds.minY + 1;
+    const rectArea = width * height;
+    const fillRatio = range.cells.length / Math.max(1, rectArea);
+    const edgeCells = range.cells.filter((cell) => maskNeighborCount(world, world.layers.mountainMap, cell.x, cell.y) < 4).length;
+    if (rectArea >= 12 && fillRatio > 0.88) warnings.push(`${range.id} is ${Math.round(fillRatio * 100)}% rectangle-filled; mountain outline may be too grid-like.`);
+    if (edgeCells / range.cells.length < 0.24) warnings.push(`${range.id} has very few edge cells; mountain cluster may be too solid.`);
+  }
+}
+
+function crossingOrientationAt(world: SemanticWorld, x: number, y: number): "horizontal" | "vertical" | undefined {
+  const north = isRiverTile(world, x, y - 1);
+  const east = isRiverTile(world, x + 1, y);
+  const south = isRiverTile(world, x, y + 1);
+  const west = isRiverTile(world, x - 1, y);
+  if (north && south && !east && !west) return "horizontal";
+  if (east && west && !north && !south) return "vertical";
+  return undefined;
+}
+
+function hasCrossingRoadContinuation(world: SemanticWorld, x: number, y: number, orientation: "horizontal" | "vertical"): boolean {
+  const cells = orientation === "horizontal" ? [{ x: x - 1, y }, { x: x + 1, y }] : [{ x, y: y - 1 }, { x, y: y + 1 }];
+  return cells.every((cell) => inBounds(world, cell.x, cell.y) && world.layers.roadMap[index(world.width, cell.x, cell.y)] === 1 && world.layers.riverMap[index(world.width, cell.x, cell.y)] === 0);
+}
+
+function isRiverTile(world: SemanticWorld, x: number, y: number): boolean {
+  return inBounds(world, x, y) && world.layers.riverMap[index(world.width, x, y)] === 1;
+}
+
+function maskNeighborCount(world: SemanticWorld, map: Uint8Array, x: number, y: number): number {
+  let count = 0;
+  for (const next of neighbors4(x, y)) {
+    if (inBounds(world, next.x, next.y) && map[index(world.width, next.x, next.y)]) count += 1;
+  }
+  return count;
 }
 
 function hasAdjacentWalkableToPoiFootprint(world: SemanticWorld, poi: SemanticPoi): boolean {

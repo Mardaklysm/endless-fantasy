@@ -41,7 +41,10 @@ This runs `tools/worldgen/test_worldgen.mjs`. It validates the active semantic r
 - overlay collision policies tag semantic mountain mask cells as `hardBlock`, mountain sprites as `visualOnly`, forests as `softTerrain`, and all POI footprint cells as `poiBlock`
 - forests remain walkable, while semantic mountain mask cells remain blocked
 - mountain ranges exist as connected semantic components, flat mountain mask cells belong to ranges, components meet their island minimum size, singleton mountain components are cleaned to zero, and Greenhaven/Coralreach do not receive snow mountains
+- mountain shape validation warns on overly rectangle-filled clusters
 - roads are walkable and not overlapped by mountain/forest overlays or POI body footprints
+- roads remain mostly one semantic tile wide; validation warns when the road mask develops dense 2x2 blocks
+- random bridge decoration is disabled by default; every visible bridge/ford overlay must correspond to a validated road-river crossing cell in `riverCrossingMap`, and normal road masks must not paint over unbridged river water
 - the semantic compatibility tile grid uses exactly one canonical tile ID each for deep water, shallow water, beach, grassland, sand/desert, and ice/snow while `TERRAIN_VARIANT_MODE` is off
 - the semantic mask terrain renderer plan reports the expected texture dimensions, mask resolution, class samples, boundary samples, and does not mutate the generated world
 - the semantic mask terrain renderer uses manifest texture source IDs for deep water, shallow water, freshwater, packed-dirt roads, beach, grassland, sand/desert, and ice/snow; normal runtime mountain visuals come from object sprites
