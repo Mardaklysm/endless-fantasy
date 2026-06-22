@@ -1,7 +1,6 @@
 export class SynthAudio {
   private ctx?: AudioContext;
   private muted = false;
-  private timer?: number;
   private step = 0;
   private mode: "title" | "world" | "battle" | "dungeon" | "ending" = "title";
 
@@ -13,7 +12,7 @@ export class SynthAudio {
     if (this.ctx) return;
     const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     this.ctx = new AudioCtx();
-    this.timer = window.setInterval(() => this.tickLoop(), 220);
+    window.setInterval(() => this.tickLoop(), 220);
   }
 
   setMode(mode: SynthAudio["mode"]) {

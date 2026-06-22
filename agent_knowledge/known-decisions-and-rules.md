@@ -4,6 +4,7 @@
 
 - The project is a browser game built with Phaser 3, TypeScript, and Vite.
 - `src/main.ts` is a tiny Vite entry; Phaser bootstrap lives in `src/app/createGame.ts`, scene-owned state lives in `src/scene/CrystalOathScene.ts`, and domain behavior/rendering/data/assets live under `src/systems/`, `src/render/`, `src/data/`, and `src/assets/`.
+- Scene helper methods are prototype mixins registered in `src/scene/CrystalOathScene.ts`, with an explicit TypeScript mixin interface and `src/scene/sceneContext.ts` aliasing the typed scene. Do not recreate a broad `sceneGlobals` barrel or `Record<string, any>` scene context.
 - Every completed code, docs, or asset change must be committed and pushed to the configured remote before the task is considered done.
 - The default Phaser backing canvas is 1920x1080. The scene keeps 960x540-equivalent layout coordinates derived from `DESIGN_WIDTH / PIXEL_ART_SCALE` and renders them at 2x into the Full HD canvas.
 - Canvas CSS uses `image-rendering: auto`; pixel-art crispness comes from nearest-neighbor texture filtering on sprites/tiles/UI plus integer render scaling, while battle backgrounds use linear filtering.

@@ -15,6 +15,10 @@ export type ExploreMode = "world" | "town" | "dungeon";
 export type DirectionName = "up" | "down" | "left" | "right";
 export type Terrain = WorldTileId;
 
+export function isExploreModeValue(mode: Mode): mode is ExploreMode {
+  return mode === "world" || mode === "town" || mode === "dungeon";
+}
+
 export interface Vec {
   x: number;
   y: number;

@@ -15,7 +15,7 @@ Use source and docs first:
 
 ```powershell
 Get-Content agent_knowledge\code-map.md
-rg -n "export const ENEMIES|export const SPELLS|drawWorldTile|drawEnemySprite|saveGame|loadGame|class CrystalOathScene" src
+rg -n "export const ENEMIES|export const SPELLS|drawWorldTile|drawEnemySprite|saveGame|loadGame|class CrystalOathScene|travelToIsland|maybeEncounter" src
 ```
 
 Useful files:
@@ -27,7 +27,7 @@ Useful files:
 - `src/data/`: static gameplay data tables and shared data types.
 - `src/assets/`: asset path/glob and texture-key maps.
 - `src/render/`: surface-specific rendering.
-- `src/systems/`: movement, battle, menu, save, audio behavior.
+- `src/systems/`: movement, world interaction/travel/encounters, battle, menu, save, audio behavior.
 - `README.md`: run instructions and manual checklist.
 - `ART_STYLE_GUIDE.md`, `ASSET_MANIFEST.md`, `ASSET_IMPLEMENTATION_PLAN.md`: art planning and future asset pipeline.
 

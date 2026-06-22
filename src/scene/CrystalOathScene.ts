@@ -1,5 +1,13 @@
 import Phaser from "phaser";
-import type { ActiveMenu, Dialogue, ExploreStep, Mode, Terrain, Vec, DirectionName } from "./sceneTypes";
+import type {
+  ActiveMenu,
+  Dialogue,
+  ExploreStep,
+  Mode,
+  Terrain,
+  Vec,
+  DirectionName
+} from "./sceneTypes";
 import type { BattleState } from "../systems/battle/battleTypes";
 import type { CharacterState } from "../data/gameDataTypes";
 import type { GeneratedWorld, IslandId, WorldRoadVisual } from "../world/worldGenerator";
@@ -10,11 +18,16 @@ import { OverworldCloudOverlay } from "../world/cloudOverlay";
 import * as sceneLifecycle from "./sceneLifecycle";
 import * as sceneInput from "../input/sceneInput";
 import * as sceneState from "./sceneState";
+import * as dungeonMovement from "../systems/movement/dungeonMovement";
 import * as exploreMovement from "../systems/movement/exploreMovement";
+import * as locationEntry from "../systems/movement/locationEntry";
 import * as battleFlow from "../systems/battle/battleFlow";
 import * as battleActions from "../systems/battle/battleActions";
 import * as battleState from "../systems/battle/battleState";
 import * as menuActions from "../systems/menu/menuActions";
+import * as encounters from "../systems/world/encounters";
+import * as harborTravel from "../systems/world/harborTravel";
+import * as locations from "../systems/world/locations";
 import * as saveGame from "../systems/save/saveGame";
 import * as loadGame from "../systems/save/loadGame";
 import * as renderCore from "../render/common/renderCore";
@@ -28,6 +41,40 @@ import * as drawMenu from "../render/menu/drawMenu";
 import * as drawLocationIcon from "../render/world/drawLocationIcon";
 import * as drawActors from "../render/common/drawActors";
 import * as panels from "../render/common/panels";
+
+type SceneModuleMethods<T> = {
+  [K in keyof T as T[K] extends (...args: never[]) => unknown ? K : never]: T[K] extends (...args: never[]) => unknown
+    ? OmitThisParameter<T[K]>
+    : never;
+};
+
+export interface CrystalOathScene
+  extends SceneModuleMethods<typeof sceneLifecycle>,
+    SceneModuleMethods<typeof sceneInput>,
+    SceneModuleMethods<typeof sceneState>,
+    SceneModuleMethods<typeof dungeonMovement>,
+    SceneModuleMethods<typeof exploreMovement>,
+    SceneModuleMethods<typeof locationEntry>,
+    SceneModuleMethods<typeof battleFlow>,
+    SceneModuleMethods<typeof battleActions>,
+    SceneModuleMethods<typeof battleState>,
+    SceneModuleMethods<typeof menuActions>,
+    SceneModuleMethods<typeof encounters>,
+    SceneModuleMethods<typeof harborTravel>,
+    SceneModuleMethods<typeof locations>,
+    SceneModuleMethods<typeof saveGame>,
+    SceneModuleMethods<typeof loadGame>,
+    SceneModuleMethods<typeof renderCore>,
+    SceneModuleMethods<typeof drawTitle>,
+    SceneModuleMethods<typeof drawWorld>,
+    SceneModuleMethods<typeof drawWorldTerrain>,
+    SceneModuleMethods<typeof drawTown>,
+    SceneModuleMethods<typeof drawDungeon>,
+    SceneModuleMethods<typeof drawBattle>,
+    SceneModuleMethods<typeof drawMenu>,
+    SceneModuleMethods<typeof drawLocationIcon>,
+    SceneModuleMethods<typeof drawActors>,
+    SceneModuleMethods<typeof panels> {}
 
 export class CrystalOathScene extends Phaser.Scene {
   g!: Phaser.GameObjects.Graphics;
@@ -121,11 +168,16 @@ Object.assign(
   sceneLifecycle,
   sceneInput,
   sceneState,
+  dungeonMovement,
   exploreMovement,
+  locationEntry,
   battleFlow,
   battleActions,
   battleState,
   menuActions,
+  encounters,
+  harborTravel,
+  locations,
   saveGame,
   loadGame,
   renderCore,

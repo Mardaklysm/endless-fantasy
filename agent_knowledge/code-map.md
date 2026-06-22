@@ -9,6 +9,7 @@ Use this map to jump to the right source before reading broad code.
 - Phaser game config/bootstrap: `src/app/createGame.ts`
 - Global resolution, canvas, tile, save key, movement timing, battle timing, and layer/depth constants: `src/app/config.ts`
 - Main Phaser scene state shell: `src/scene/CrystalOathScene.ts`
+- Prototype mixin context type: `src/scene/sceneContext.ts`; method surface is declared in `src/scene/CrystalOathScene.ts`
 - Scene lifecycle and preload/create/update glue: `src/scene/sceneLifecycle.ts`
 
 ## Data And Types
@@ -41,7 +42,12 @@ Use this map to jump to the right source before reading broad code.
 - Phaser-facing generated world facade: `src/world/worldGenerator.ts`
 - Normal overworld mask terrain renderer: `src/world/semantic/semanticMaskTerrainRenderer.ts`
 - Debug-only road/river graph renderer: `src/world/semantic/semanticRouteRenderer.ts`
-- Exploration movement, collision, location entry, harbor travel, and encounter triggers: `src/systems/movement/exploreMovement.ts`
+- Tile-step movement, visual/logical position syncing, and collision checks: `src/systems/movement/exploreMovement.ts`
+- Dungeon movement helpers, floor markers, stairs, and chests: `src/systems/movement/dungeonMovement.ts`
+- Town/world/dungeon entry and location footprint helpers: `src/systems/movement/locationEntry.ts`
+- World location interactions, terrain encounter keys, and island naming/theme helpers: `src/systems/world/locations.ts`
+- Harbor destination menu and island travel: `src/systems/world/harborTravel.ts`
+- Random and dungeon encounter triggers: `src/systems/world/encounters.ts`
 - Keyboard helpers: `src/input/keyboard.ts`
 - Scene key/pointer dispatch: `src/input/sceneInput.ts`
 
@@ -74,7 +80,10 @@ Use this map to jump to the right source before reading broad code.
 - Adding or tuning items/spells/gear/enemies/skills: read `src/data/*` first, then battle/menu files only if behavior changes.
 - Changing battle flow or rewards: read `src/systems/battle/*` and `src/render/battle/drawBattle.ts`.
 - Changing overworld geography, mountains, forests, roads, rivers, or POIs: read `src/world/semantic/*`, `src/world/worldGenerator.ts`, then `src/render/world/*`.
-- Changing movement/collision/location entry/random encounters: read `src/systems/movement/exploreMovement.ts`.
+- Changing movement/collision: read `src/systems/movement/exploreMovement.ts`.
+- Changing location entry/town exits/POI footprints: read `src/systems/movement/locationEntry.ts`.
+- Changing harbor travel/island arrival: read `src/systems/world/harborTravel.ts`.
+- Changing random encounter triggers or terrain encounter keys: read `src/systems/world/encounters.ts` and `src/systems/world/locations.ts`.
 - Changing towns: read `src/render/town/drawTown.ts`, `src/data/towns.ts`, and town definitions in `src/scene/sceneState.ts`.
 - Changing dungeons: read `src/world/dungeonGenerator.ts`, dungeon definitions in `src/scene/sceneState.ts`, `src/data/dungeonTiles.ts`, and `src/render/dungeon/drawDungeon.ts`.
 - Changing save/load: read `src/systems/save/saveGame.ts`, `src/systems/save/loadGame.ts`, and the relevant state fields in `src/scene/CrystalOathScene.ts`.

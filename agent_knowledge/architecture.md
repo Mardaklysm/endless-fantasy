@@ -15,8 +15,7 @@ src/
     createGame.ts                 # Phaser.Game config/bootstrap
   scene/
     CrystalOathScene.ts           # scene-owned state fields and prototype module registration
-    sceneContext.ts               # shared scene helper context type
-    sceneGlobals.ts               # barrel for extracted scene helper imports
+    sceneContext.ts               # shared typed scene helper context alias
     sceneLifecycle.ts             # preload/create/update and renderer resolution setup
     sceneState.ts                 # new game, flags, party creation, locations, towns, dungeons
     sceneTypes.ts                 # mode/input/menu/dialogue/vector types
@@ -68,11 +67,18 @@ src/
       battleActions.ts
       battleState.ts
     menu/menuActions.ts
-    movement/exploreMovement.ts
+    movement/
+      exploreMovement.ts          # tile-step movement, visual/logical position syncing, collision checks
+      dungeonMovement.ts          # dungeon floors, markers, stairs, chests
+      locationEntry.ts            # town/world/dungeon entry and POI footprint helpers
     save/
       saveGame.ts
       loadGame.ts
-    world/worldMath.ts
+    world/
+      encounters.ts               # random and dungeon encounter triggers
+      harborTravel.ts             # harbor menu and island arrival travel
+      locations.ts                # world location interactions, terrain encounter keys, island labels
+      worldMath.ts
   world/
     cloudOverlay.ts
     dungeonGenerator.ts
@@ -118,7 +124,7 @@ Pointer coordinates still map back to layout coordinates by dividing by `PIXEL_A
 
 `src/scene/CrystalOathScene.ts` owns Phaser scene state: graphics layers, transient text/image arrays, mode/menu/dialogue/battle state, generated world state, party/inventory/gold, positions, flags, discovered POIs, opened chests, settings, movement state, and cache keys.
 
-The scene class is intentionally a state shell. Runtime methods are attached from focused modules with `Object.assign(CrystalOathScene.prototype, ...)`. This preserves the existing Phaser scene-state model while moving behavior into domain files. The current helper context is broad (`CrystalOathSceneContext & Record<string, any>`) so the refactor could preserve behavior mechanically; future cleanup can narrow contexts after behavior is stable.
+The scene class is intentionally a state shell. Runtime methods are attached from focused modules with `Object.assign(CrystalOathScene.prototype, ...)`. `CrystalOathScene.ts` also declares the mixin method surface from those modules, and `src/scene/sceneContext.ts` aliases that typed scene for helper modules. Do not reintroduce a catch-all globals barrel or `Record<string, any>` scene context; import constants/data/types from their owning modules.
 
 ## Data
 
@@ -192,7 +198,12 @@ Important rendering invariants:
 
 - `src/input/keyboard.ts` owns keyboard predicate and direction helpers.
 - `src/input/sceneInput.ts` dispatches key/pointer input by current mode and handles debug toggles.
-- `src/systems/movement/exploreMovement.ts` owns tile-step movement, held direction state, collision checks, visual/logical position syncing, town/dungeon/world interactions, location entry, harbor travel, and encounter triggers.
+- `src/systems/movement/exploreMovement.ts` owns tile-step movement, held direction state, collision checks, and visual/logical position syncing.
+- `src/systems/movement/dungeonMovement.ts` owns dungeon floor rows, marker spawn positions, stairs, valid spawn fallback, and chest interactions.
+- `src/systems/movement/locationEntry.ts` owns town exits, generic interact routing, world return tiles, dungeon/town entry, and POI footprint helpers.
+- `src/systems/world/locations.ts` owns terrain encounter keys, road checks, island labels/themes, world location activation, and landmark discovery.
+- `src/systems/world/harborTravel.ts` owns harbor destination menus, travel unlock checks, gold costs, and island arrival positions.
+- `src/systems/world/encounters.ts` owns random overworld and dungeon encounter triggers.
 
 Movement invariants:
 
@@ -244,7 +255,7 @@ For this architecture split, both commands passed after extraction.
 
 ## Known Architecture Risks
 
-- Extracted scene methods currently share a broad scene context type for mechanical compatibility. Future refactors can narrow those contexts by domain.
+- Scene modules still share one scene-owned state object and are attached with prototype mixins. This is intentional for Phaser lifecycle compatibility, but future narrow-context work should happen by domain rather than recreating a global import barrel.
 - Town and dungeon definitions still live in scene state because they depend on flags and callbacks.
 - Automated coverage is still mostly worldgen validation plus TypeScript/build. Browser smoke testing remains important for rendering and input changes.
-- Existing large pre-refactor source files such as `src/world/semantic/semanticGenerator.ts` and generated/manifests are still large; they were outside this scene-decomposition pass.
+- Existing large worldgen/data files such as `src/world/semantic/semanticGenerator.ts`, `src/world/worldGenerator.ts`, and `src/data/characterSprites.ts` are large but domain-focused.

@@ -1,4 +1,10 @@
-import { SEMANTIC_BIOME, SEMANTIC_WATER, type MajorIslandId, type SemanticPoi, type SemanticWorld } from "./semanticTypes.ts";
+import {
+  SEMANTIC_BIOME,
+  SEMANTIC_WATER,
+  type MajorIslandId,
+  type SemanticPoi,
+  type SemanticWorld
+} from "./semanticTypes.ts";
 
 const MAJOR_ISLAND_IDS: MajorIslandId[] = ["greenhaven", "coralreach", "frostmere", "highspire"];
 
@@ -205,10 +211,6 @@ function isWalkable(world: SemanticWorld, x: number, y: number): boolean {
 
 function hasAdjacentWater(world: SemanticWorld, x: number, y: number, value: number): boolean {
   return neighbors4(x, y).some((next) => inBounds(world, next.x, next.y) && world.layers.waterClass[index(world.width, next.x, next.y)] === value);
-}
-
-function hasAdjacentWalkable(world: SemanticWorld, x: number, y: number): boolean {
-  return neighbors4(x, y).some((next) => inBounds(world, next.x, next.y) && isWalkable(world, next.x, next.y));
 }
 
 function nearbyCount(world: SemanticWorld, map: Uint8Array, x: number, y: number, radius: number): number {

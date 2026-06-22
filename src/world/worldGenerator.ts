@@ -1,9 +1,21 @@
-import { WORLD_TILE_IDS, WORLD_TILES, isWorldTileWalkable, type WorldBiome, type WorldTileId } from "../data/worldTiles.ts";
+import {
+  WORLD_TILE_IDS,
+  WORLD_TILES,
+  isWorldTileWalkable,
+  type WorldBiome,
+  type WorldTileId
+} from "../data/worldTiles.ts";
 import { WORLD_OBJECT_IDS, type WorldObjectId } from "../data/worldObjects.ts";
 import { hashNoise } from "./seededRng.ts";
 import { generateSemanticWorld } from "./semantic/semanticGenerator.ts";
 import { CAMPAIGN_WORLD_PROFILE } from "./semantic/semanticProfiles.ts";
-import { SEMANTIC_BIOME, SEMANTIC_WATER, type OverlayCollisionPolicy, type SemanticPoi, type SemanticVec, type SemanticWorld } from "./semantic/semanticTypes.ts";
+import {
+  SEMANTIC_BIOME,
+  SEMANTIC_WATER,
+  type OverlayCollisionPolicy,
+  type SemanticPoi,
+  type SemanticWorld
+} from "./semantic/semanticTypes.ts";
 
 export const DEFAULT_WORLD_WIDTH = 96;
 export const DEFAULT_WORLD_HEIGHT = 64;
@@ -806,10 +818,6 @@ function carveLinePath(from: WorldVec, to: WorldVec): WorldVec[] {
     if (!path.some((cell) => cell.x === current.x && cell.y === current.y)) path.push(current);
   }
   return path;
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
 }
 
 function inBounds(width: number, height: number, x: number, y: number): boolean {

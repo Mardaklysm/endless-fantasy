@@ -17,7 +17,6 @@ import {
   type SemanticMountainDebug,
   type SemanticMountainRange,
   type SemanticPoi,
-  type SemanticPoiType,
   type SemanticRiver,
   type SemanticRoadEdge,
   type SemanticVec,

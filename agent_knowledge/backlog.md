@@ -39,7 +39,7 @@ This backlog is practical project memory, not a full design document. Keep it sh
 ## Gameplay Gaps
 
 - Save schema has no version/migration strategy.
-- The scene refactor preserves the existing scene-owned state model with prototype-bound domain modules. Future cleanup can replace the broad `CrystalOathSceneContext & Record<string, any>` helper type with narrower typed contexts when behavior is otherwise stable.
+- The scene still uses prototype-bound domain modules over one scene-owned state object. Future cleanup can narrow individual render/system helper contexts by domain when a change naturally touches those files.
 - Balance needs a full manual playthrough pass.
 - Archipelago travel economy and early dungeon rewards need a manual tuning pass after several real playthroughs.
 - Coralreach/Frostmere/Highspire progression is implemented through the semantic world profile, but final relic ordering, route unlock pacing, and island encounter balance need end-to-end verification.
