@@ -5,6 +5,13 @@ import {
   type SemanticPoi,
   type SemanticWorld
 } from "./semanticTypes.ts";
+import {
+  REQUIRED_MAJOR_HARBOR_ROUTE_PAIRS,
+  findHarborWaterTile,
+  harborPointFromPoi,
+  isBoatNavigableTile,
+  validateBoatPath
+} from "./boatNavigation.ts";
 
 const MAJOR_ISLAND_IDS: MajorIslandId[] = ["greenhaven", "coralreach", "frostmere", "highspire"];
 
@@ -40,6 +47,8 @@ export function validateSemanticWorld(world: SemanticWorld) {
     const harbor = world.harbors.find((poi) => poi.islandId === id);
     if (!harbor) errors.push(`Major island ${id} has no harbor/travel point.`);
   }
+  validateMajorIslandSeparation(world, errors);
+  validateBoatRoutes(world, errors);
 
   for (const poi of world.poiList) validatePoi(world, poi, errors);
   for (const edge of world.roadGraph.edges) {
@@ -157,6 +166,104 @@ function validatePortRoadConnectivity(world: SemanticWorld, errors: string[]) {
     });
     if (!edge?.connected) errors.push(`Port ${port.id} is not road-connected to settlement ${settlement.id}.`);
   }
+}
+
+function validateBoatRoutes(world: SemanticWorld, errors: string[]) {
+  const harborByIsland = new Map(world.harbors.map((harbor) => [harbor.islandId, harbor]));
+  for (const id of MAJOR_ISLAND_IDS) {
+    const harbor = harborByIsland.get(id);
+    if (!harbor) continue;
+    if (!hasAdjacentWalkableToPoiFootprint(world, harbor)) errors.push(`Harbor ${harbor.id} has no walkable land arrival tile.`);
+    const waterTile = findHarborWaterTile(world, harborPointFromPoi(harbor), undefined, 16);
+    if (!waterTile) errors.push(`Harbor ${harbor.id} has no valid boat embark water tile.`);
+  }
+
+  for (const [fromIslandId, toIslandId] of REQUIRED_MAJOR_HARBOR_ROUTE_PAIRS) {
+    const route = world.boatRoutes.find((candidate) => {
+      return (
+        (candidate.fromIslandId === fromIslandId && candidate.toIslandId === toIslandId) ||
+        (candidate.fromIslandId === toIslandId && candidate.toIslandId === fromIslandId)
+      );
+    });
+    if (!route) {
+      errors.push(`Missing required boat route ${fromIslandId} <-> ${toIslandId}.`);
+      continue;
+    }
+    for (const error of validateBoatPath(world, route.path)) errors.push(`${route.fromHarborId} -> ${route.toHarborId}: ${error}`);
+    for (let i = 1; i < route.waypoints.length; i += 1) {
+      if (!isLegalWaypointSegment(route.waypoints[i - 1], route.waypoints[i])) {
+        errors.push(`Boat route ${route.fromHarborId} -> ${route.toHarborId} has arbitrary-angle waypoint segment.`);
+      }
+    }
+    for (const cell of route.path) {
+      const i = index(world.width, cell.x, cell.y);
+      if (!world.layers.reservedBoatRouteMap[i]) errors.push(`Boat route ${route.fromHarborId} -> ${route.toHarborId} is not reserved at ${cell.x},${cell.y}.`);
+      if (!isBoatNavigableTile(world, cell.x, cell.y)) errors.push(`Boat route ${route.fromHarborId} -> ${route.toHarborId} crosses blocked terrain at ${cell.x},${cell.y}.`);
+    }
+  }
+}
+
+function validateMajorIslandSeparation(world: SemanticWorld, errors: string[]) {
+  const components = majorIslandComponents(world);
+  if (components.length !== 4) errors.push(`Expected exactly 4 separated major island land components, got ${components.length}.`);
+  for (let a = 0; a < components.length; a += 1) {
+    for (let b = a + 1; b < components.length; b += 1) {
+      const gap = minimumChebyshevGap(components[a].cells, components[b].cells);
+      if (gap < 10) {
+        errors.push(`Major islands ${components[a].ids.join("+")} and ${components[b].ids.join("+")} have only ${gap} open-sea tile(s) between them.`);
+      }
+    }
+  }
+}
+
+function majorIslandComponents(world: SemanticWorld): { ids: string[]; cells: { x: number; y: number }[] }[] {
+  const majorIds = new Set<MajorIslandId>(MAJOR_ISLAND_IDS);
+  const seen = new Uint8Array(world.width * world.height);
+  const components: { ids: string[]; cells: { x: number; y: number }[] }[] = [];
+  for (let i = 0; i < world.layers.landMask.length; i += 1) {
+    if (!world.layers.landMask[i] || seen[i]) continue;
+    const islandId = world.islandIndexToId.get(world.layers.islandId[i]);
+    if (!majorIds.has(islandId as MajorIslandId)) continue;
+    const ids = new Set<string>();
+    const cells: { x: number; y: number }[] = [];
+    const queue = [{ x: i % world.width, y: Math.floor(i / world.width) }];
+    seen[i] = 1;
+    for (let head = 0; head < queue.length; head += 1) {
+      const cell = queue[head];
+      const ci = index(world.width, cell.x, cell.y);
+      const id = world.islandIndexToId.get(world.layers.islandId[ci]);
+      if (id) ids.add(id);
+      cells.push(cell);
+      for (const next of neighbors4(cell.x, cell.y)) {
+        if (!inBounds(world, next.x, next.y)) continue;
+        const ni = index(world.width, next.x, next.y);
+        if (seen[ni] || !world.layers.landMask[ni]) continue;
+        const nextIslandId = world.islandIndexToId.get(world.layers.islandId[ni]);
+        if (!majorIds.has(nextIslandId as MajorIslandId)) continue;
+        seen[ni] = 1;
+        queue.push(next);
+      }
+    }
+    components.push({ ids: [...ids].sort(), cells });
+  }
+  return components;
+}
+
+function minimumChebyshevGap(a: { x: number; y: number }[], b: { x: number; y: number }[]): number {
+  let best = Infinity;
+  for (const ca of a) {
+    for (const cb of b) {
+      const distance = Math.max(Math.abs(ca.x - cb.x), Math.abs(ca.y - cb.y)) - 1;
+      if (distance < best) best = distance;
+    }
+  }
+  return Math.max(0, best);
+}
+
+function isLegalWaypointSegment(from: { x: number; y: number }, to: { x: number; y: number }): boolean {
+  const dx = Math.abs(to.x - from.x);
+  const dy = Math.abs(to.y - from.y);
+  return (dx !== 0 || dy !== 0) && (dx === 0 || dy === 0 || dx === dy);
 }
 
 function validateBeachBuffer(world: SemanticWorld, errors: string[]) {

@@ -42,7 +42,9 @@ const COLORS = {
   debugRiver: [14, 96, 255, 255],
   debugPoi: [255, 46, 108, 255],
   debugMountainBlock: [255, 104, 54, 255],
-  debugOverlayBounds: [214, 72, 255, 255]
+  debugOverlayBounds: [214, 72, 255, 255],
+  debugShippingLane: [116, 230, 255, 145],
+  debugBoatRoute: [255, 239, 120, 255]
 };
 
 export function renderAllPreviews(world, options = {}) {
@@ -59,6 +61,7 @@ export function renderAllPreviews(world, options = {}) {
     riverMask: renderRiverMaskDebug(world, scale),
     riverConnectivity: renderRiverConnectivityDebug(world, scale),
     riversRoads: renderRiversRoads(world, scale),
+    shippingLanes: renderShippingLanesDebug(world, scale),
     renderedWorld: renderWorldPreview(world, scale)
   };
 }
@@ -292,6 +295,18 @@ export function renderRiversRoads(world, scale = 6) {
     const color = poi.type === "port" ? [255, 230, 96, 255] : COLORS.debugPoi;
     drawMarkerSquare(image, poi.x, poi.y, scale, color);
   }
+  return image;
+}
+
+export function renderShippingLanesDebug(world, scale = 6) {
+  const image = renderSemanticMap(world, scale);
+  overlayMask(image, world, world.layers.reservedBoatRouteMap, scale, COLORS.debugShippingLane);
+  for (const route of world.boatRoutes ?? []) {
+    drawPath(image, route.path ?? [], scale, COLORS.debugBoatRoute, Math.max(1, Math.round(scale * 0.35)));
+    drawMarkerSquare(image, route.sourceWaterTile.x, route.sourceWaterTile.y, scale, [98, 255, 174, 255]);
+    drawMarkerSquare(image, route.destinationWaterTile.x, route.destinationWaterTile.y, scale, [255, 162, 98, 255]);
+  }
+  for (const harbor of world.harbors ?? []) drawMarkerSquare(image, harbor.x, harbor.y, scale, [255, 255, 255, 255]);
   return image;
 }
 

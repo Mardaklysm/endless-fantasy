@@ -13,6 +13,7 @@ The semantic world under `src/world/semantic/` is gameplay truth. Rendering cons
 - `src/world/semantic/semanticProfiles.ts`
 - `src/world/semantic/semanticMaskTerrainRenderer.ts`
 - `src/world/semantic/semanticValidation.ts`
+- `src/world/semantic/boatNavigation.ts`
 - `src/world/worldGenerator.ts`
 - `src/render/world/drawWorld.ts`
 - `src/render/world/drawLocationIcon.ts`
@@ -34,6 +35,10 @@ Use `rg` before opening additional files.
 - POIs are blocked footprints with walkable approaches.
 - Normal POIs are overlays; eligible land POIs may add tiny data-driven sub-tile local ground masks under the POI base before normal mask transitions. These masks stay inside the exact POI footprint, should remain low/compact base patches that only peek out from under the sprite, and are sampled at renderer mask resolution; never use full bounding-box fills, tile-only platforms, padding, radius blobs, falloff, random spreading, late overlays, or per-sample edge noise.
 - Preserve the beach/sand buffer between land and water.
+- Default overworld size is 288x192 semantic cells. Do not shrink or simulate size by camera/tile scaling.
+- Required major harbor routes are semantic boat routes. Use `boatNavigation.ts` for boat-navigable water, diagonal corner-cutting prevention, A* pathfinding, and route validation.
+- Boat routes reserve hidden shipping lanes in `reservedBoatRouteMap`; later detail passes should avoid blocking those cells.
+- Charter boat runtime movement consumes the same boat route rules and may only move on horizontal, vertical, or exact 45-degree segments.
 
 ## Validation
 
@@ -47,6 +52,8 @@ Optional lab preview for visual algorithm checks:
 ```powershell
 npm run worldgen:lab -- --seed test-greenhaven --out tmp/worldgen-lab/test-greenhaven
 ```
+
+The lab writes `shipping_lanes_debug.png` for hidden boat route/corridor inspection.
 
 Do not inspect or commit generated lab outputs unless the task explicitly requires them.
 

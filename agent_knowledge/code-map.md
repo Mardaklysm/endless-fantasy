@@ -39,6 +39,7 @@ Use this map to jump to the right source before reading broad code.
 - Semantic world generation: `src/world/semantic/semanticGenerator.ts`
 - Semantic profile and island rules: `src/world/semantic/semanticProfiles.ts`
 - Semantic world validation: `src/world/semantic/semanticValidation.ts`
+- Shared harbor boat navigability/pathfinding rules: `src/world/semantic/boatNavigation.ts`
 - Phaser-facing generated world facade: `src/world/worldGenerator.ts`
 - Normal overworld mask terrain renderer: `src/world/semantic/semanticMaskTerrainRenderer.ts`
 - Debug-only road/river graph renderer: `src/world/semantic/semanticRouteRenderer.ts`
@@ -47,6 +48,7 @@ Use this map to jump to the right source before reading broad code.
 - Town/world/dungeon entry and location footprint helpers: `src/systems/movement/locationEntry.ts`
 - World location interactions, terrain encounter keys, and island naming/theme helpers: `src/systems/world/locations.ts`
 - Harbor destination menu and island travel: `src/systems/world/harborTravel.ts`
+- Smooth charter boat cutscene state, sprites, route movement, and boat-time ticks: `src/systems/world/boatTravel.ts`
 - Random and dungeon encounter triggers: `src/systems/world/encounters.ts`
 - Keyboard helpers: `src/input/keyboard.ts`
 - Scene key/pointer dispatch: `src/input/sceneInput.ts`
@@ -82,7 +84,7 @@ Use this map to jump to the right source before reading broad code.
 - Changing overworld geography, mountains, forests, roads, rivers, or POIs: read `src/world/semantic/*`, `src/world/worldGenerator.ts`, then `src/render/world/*`.
 - Changing movement/collision: read `src/systems/movement/exploreMovement.ts`.
 - Changing location entry/town exits/POI footprints: read `src/systems/movement/locationEntry.ts`.
-- Changing harbor travel/island arrival: read `src/systems/world/harborTravel.ts`.
+- Changing harbor travel/island arrival: read `src/systems/world/harborTravel.ts`, `src/systems/world/boatTravel.ts`, and `src/world/semantic/boatNavigation.ts`.
 - Changing random encounter triggers or terrain encounter keys: read `src/systems/world/encounters.ts` and `src/systems/world/locations.ts`.
 - Changing towns: read `src/render/town/drawTown.ts`, `src/data/towns.ts`, and town definitions in `src/scene/sceneState.ts`.
 - Changing dungeons: read `src/world/dungeonGenerator.ts`, dungeon definitions in `src/scene/sceneState.ts`, `src/data/dungeonTiles.ts`, and `src/render/dungeon/drawDungeon.ts`.

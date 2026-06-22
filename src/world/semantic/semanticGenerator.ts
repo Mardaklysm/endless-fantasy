@@ -1,6 +1,13 @@
 import { createSeededRng, fbm, hashNoise, type SeededRng } from "../seededRng.ts";
 import { CAMPAIGN_WORLD_PROFILE } from "./semanticProfiles.ts";
 import {
+  REQUIRED_MAJOR_HARBOR_ROUTE_PAIRS,
+  findBoatWaterPath,
+  findHarborWaterTile,
+  harborPointFromPoi,
+  simplifyBoatPathToCompassWaypoints
+} from "./boatNavigation.ts";
+import {
   SEMANTIC_BIOME,
   SEMANTIC_WATER,
   type IslandOverlayRules,
@@ -12,6 +19,7 @@ import {
   type SemanticIslandId,
   type SemanticIslandRecord,
   type SemanticBridgeCandidate,
+  type SemanticBoatRoute,
   type SemanticLake,
   type SemanticMountain,
   type SemanticMountainDebug,
@@ -111,6 +119,7 @@ export function generateSemanticWorld(options: {
   const lakes = placeLakes(width, height, seed, landMask, distanceToWater, elevation, moisture, biome, mountainMap, lakeMap);
   const riverMap = new Uint8Array(width * height);
   const { poiList, harbors } = placePois(width, height, seed, islands, islandId, landMask, waterClass, distanceToWater, biome, elevation, moisture, mountainMap, lakeMap);
+  const { boatRoutes, reservedBoatRouteMap } = buildRequiredBoatRoutes(width, height, landMask, waterClass, distanceToLand, lakeMap, riverMap, harbors);
   ({ mountains, mountainRanges, mountainDebug } = placeMountains(width, height, seed, landMask, distanceToWater, islandId, islands, biome, elevation, ridge, coldness, mountainCandidateScore, mountainMap, lakeMap, poiList));
   const rivers = traceRivers(width, height, seed, landMask, waterClass, lakeMap, distanceToWater, islandId, islands, elevation, coldness, ridge, mountainMap, poiList, riverMap);
   const roadMap = new Uint8Array(width * height);
@@ -141,6 +150,7 @@ export function generateSemanticWorld(options: {
     riverCrossingMap,
     forestMap,
     roadMap,
+    reservedBoatRouteMap,
     overlayCollisionPolicy,
     walkability
   };
@@ -161,6 +171,7 @@ export function generateSemanticWorld(options: {
     bridgeCandidates,
     poiList,
     harbors,
+    boatRoutes,
     roadGraph,
     stats,
     validation: { ok: true, errors: [], warnings: [] }
@@ -1322,6 +1333,76 @@ function placePois(
     }
   }
   return { poiList, harbors };
+}
+
+function buildRequiredBoatRoutes(
+  width: number,
+  height: number,
+  landMask: Uint8Array,
+  waterClass: Uint8Array,
+  distanceToLand: Int16Array,
+  lakeMap: Uint8Array,
+  riverMap: Uint8Array,
+  harbors: SemanticPoi[]
+): { boatRoutes: SemanticBoatRoute[]; reservedBoatRouteMap: Uint8Array } {
+  const reservedBoatRouteMap = new Uint8Array(width * height);
+  const boatWorld = { width, height, layers: { landMask, waterClass, distanceToLand, lakeMap, riverMap } };
+  const harborByIsland = new Map(harbors.map((harbor) => [harbor.islandId, harbor]));
+  const boatRoutes: SemanticBoatRoute[] = [];
+  for (const [fromIslandId, toIslandId] of REQUIRED_MAJOR_HARBOR_ROUTE_PAIRS) {
+    const fromHarbor = harborByIsland.get(fromIslandId);
+    const toHarbor = harborByIsland.get(toIslandId);
+    if (!fromHarbor || !toHarbor) continue;
+    const sourceWaterTile = findHarborWaterTile(boatWorld, harborPointFromPoi(fromHarbor), toHarbor, 16);
+    const destinationWaterTile = findHarborWaterTile(boatWorld, harborPointFromPoi(toHarbor), fromHarbor, 16);
+    if (!sourceWaterTile || !destinationWaterTile) continue;
+    const path =
+      findBoatWaterPath(boatWorld, sourceWaterTile, destinationWaterTile, true) ??
+      findBoatWaterPath(boatWorld, sourceWaterTile, destinationWaterTile, false);
+    if (!path || path.length < 2) continue;
+    const waypoints = simplifyBoatPathToCompassWaypoints(path);
+    for (const cell of path) reserveBoatCorridorCell(width, height, reservedBoatRouteMap, landMask, waterClass, lakeMap, riverMap, cell.x, cell.y);
+    boatRoutes.push({
+      fromIslandId,
+      toIslandId,
+      fromHarborId: fromHarbor.id,
+      toHarborId: toHarbor.id,
+      sourceWaterTile,
+      destinationWaterTile,
+      path,
+      waypoints,
+      length: pathLength(path)
+    });
+  }
+  return { boatRoutes, reservedBoatRouteMap };
+}
+
+function reserveBoatCorridorCell(
+  width: number,
+  height: number,
+  reservedBoatRouteMap: Uint8Array,
+  landMask: Uint8Array,
+  waterClass: Uint8Array,
+  lakeMap: Uint8Array,
+  riverMap: Uint8Array,
+  x: number,
+  y: number
+) {
+  for (let yy = y - 1; yy <= y + 1; yy += 1) {
+    for (let xx = x - 1; xx <= x + 1; xx += 1) {
+      if (!inBounds(width, height, xx, yy)) continue;
+      const i = index(width, xx, yy);
+      if (landMask[i] || lakeMap[i] || riverMap[i]) continue;
+      if (waterClass[i] !== SEMANTIC_WATER.DEEP && waterClass[i] !== SEMANTIC_WATER.SHALLOW) continue;
+      reservedBoatRouteMap[i] = 1;
+    }
+  }
+}
+
+function pathLength(path: readonly SemanticVec[]): number {
+  let length = 0;
+  for (let i = 1; i < path.length; i += 1) length += Math.hypot(path[i].x - path[i - 1].x, path[i].y - path[i - 1].y);
+  return length;
 }
 
 function poiScore(

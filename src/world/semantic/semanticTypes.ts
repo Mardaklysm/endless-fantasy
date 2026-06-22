@@ -169,6 +169,18 @@ export interface SemanticRoadEdge {
   path: SemanticVec[];
 }
 
+export interface SemanticBoatRoute {
+  fromIslandId: SemanticIslandId;
+  toIslandId: SemanticIslandId;
+  fromHarborId: string;
+  toHarborId: string;
+  sourceWaterTile: SemanticVec;
+  destinationWaterTile: SemanticVec;
+  path: SemanticVec[];
+  waypoints: SemanticVec[];
+  length: number;
+}
+
 export interface SemanticBridgeCandidate extends SemanticVec {
   id: string;
   islandId: SemanticIslandId;
@@ -202,6 +214,7 @@ export interface SemanticWorldLayers {
   riverCrossingMap: Uint8Array;
   forestMap: Uint8Array;
   roadMap: Uint8Array;
+  reservedBoatRouteMap: Uint8Array;
   overlayCollisionPolicy: OverlayCollisionPolicy[];
   walkability: Uint8Array;
 }
@@ -236,6 +249,7 @@ export interface SemanticWorld {
   bridgeCandidates: SemanticBridgeCandidate[];
   poiList: SemanticPoi[];
   harbors: SemanticPoi[];
+  boatRoutes: SemanticBoatRoute[];
   roadGraph: { edges: SemanticRoadEdge[] };
   stats: SemanticWorldStats;
   validation: SemanticValidationResult;

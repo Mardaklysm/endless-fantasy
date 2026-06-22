@@ -1,10 +1,11 @@
 import { generateSemanticWorld } from "../../src/world/semantic/semanticGenerator.ts";
 import { CAMPAIGN_WORLD_PROFILE } from "../../src/world/semantic/semanticProfiles.ts";
 import { SEMANTIC_BIOME, SEMANTIC_WATER } from "../../src/world/semantic/semanticTypes.ts";
-import { generateWorld } from "../../src/world/worldGenerator.ts";
+import { DEFAULT_WORLD_HEIGHT, DEFAULT_WORLD_WIDTH, generateWorld } from "../../src/world/worldGenerator.ts";
 
 export const BIOME = SEMANTIC_BIOME;
 export const WATER = SEMANTIC_WATER;
+export { DEFAULT_WORLD_HEIGHT, DEFAULT_WORLD_WIDTH };
 
 export const BIOME_NAMES = {
   [BIOME.WATER]: "water",
@@ -16,8 +17,8 @@ export const BIOME_NAMES = {
 
 export function generateWorldLab(options = {}) {
   const seed = options.seed ?? "worldgen-lab";
-  const width = options.width ?? 192;
-  const height = options.height ?? 120;
+  const width = options.width ?? DEFAULT_WORLD_WIDTH;
+  const height = options.height ?? DEFAULT_WORLD_HEIGHT;
   const runtimeWorld = generateWorld({ seed, width, height, maxAttempts: 1 });
   return adaptSemanticForLab(runtimeWorld.semantic ?? generateSemanticWorld({ seed, width, height, profile: CAMPAIGN_WORLD_PROFILE }), runtimeWorld);
 }
@@ -43,6 +44,7 @@ export function serializeWorld(world) {
     validation: world.validation,
     poiList: world.poiList,
     harbors: world.harbors,
+    boatRoutes: world.boatRoutes,
     mountains: world.mountains,
     mountainRanges: world.mountainRanges,
     mountainDebug: world.mountainDebug,
@@ -69,6 +71,7 @@ export function serializeWorld(world) {
       lakeMap: row(world.layers.lakeMap),
       riverMap: row(world.layers.riverMap),
       riverCrossingMap: row(world.layers.riverCrossingMap),
+      reservedBoatRouteMap: row(world.layers.reservedBoatRouteMap),
       forestMap: row(world.layers.forestMap),
       roadMap: row(world.layers.roadMap),
       overlayCollisionPolicy: row(world.layers.overlayCollisionPolicy),

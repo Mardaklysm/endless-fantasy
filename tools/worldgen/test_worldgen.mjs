@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { SEMANTIC_BASE_TILE_PALETTE, TERRAIN_VARIANT_MODE, generateWorld, getIslandAt, isWorldPositionWalkable } from "../../src/world/worldGenerator.ts";
+import { DEFAULT_WORLD_HEIGHT, DEFAULT_WORLD_WIDTH, SEMANTIC_BASE_TILE_PALETTE, TERRAIN_VARIANT_MODE, generateWorld, getIslandAt, isWorldPositionWalkable } from "../../src/world/worldGenerator.ts";
 import { WORLD_TILE_IDS, isWorldTileWalkable, worldTileById } from "../../src/data/worldTiles.ts";
 import { WORLD_OBJECT_ID_SET } from "../../src/data/worldObjects.ts";
 import {
@@ -19,6 +19,7 @@ import { DUNGEON_ATLAS } from "../../src/data/dungeonTiles.ts";
 import { SEMANTIC_BIOME, SEMANTIC_WATER } from "../../src/world/semantic/semanticTypes.ts";
 import { SEMANTIC_MASK_TERRAIN_CLASSES, describeSemanticMaskTerrainRenderPlan } from "../../src/world/semantic/semanticMaskTerrainRenderer.ts";
 import { describeSemanticRouteRenderPlan } from "../../src/world/semantic/semanticRouteRenderer.ts";
+import { REQUIRED_MAJOR_HARBOR_ROUTE_PAIRS, isBoatNavigableTile, validateBoatPath } from "../../src/world/semantic/boatNavigation.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -254,6 +255,7 @@ function validateSemanticWorldgen() {
   const worldB = generateWorld({ seed });
   const worldC = generateWorld({ seed: "semantic-runtime-test-different" });
 
+  assert(worldA.width === DEFAULT_WORLD_WIDTH && worldA.height === DEFAULT_WORLD_HEIGHT, `Default world size should be ${DEFAULT_WORLD_WIDTH}x${DEFAULT_WORLD_HEIGHT}, got ${worldA.width}x${worldA.height}.`);
   assert(worldA.validation.valid, `Semantic validation failed: ${worldA.validation.errors.join("; ")}`);
   assert(worldA.semantic.validation.ok, `Semantic core validation failed: ${worldA.semantic.validation.errors.join("; ")}`);
   assert(stableSummary(worldA) === stableSummary(worldB), "Same seed did not reproduce the same semantic world.");
@@ -351,6 +353,7 @@ function validateSemanticWorldgen() {
   validateBeachBand(worldA);
   validatePois(worldA);
   validateRoadConnections(worldA);
+  validateBoatRoutesAndIslandSeparation(worldA);
   validateRoadAndForestPolicies(worldA);
   validateSemanticMaskTerrainRendererPlan(worldA);
   validateSemanticRouteRendererPlan(worldA);
@@ -636,9 +639,85 @@ function stableSummary(world) {
     roads: world.roads,
     rivers: world.rivers.map((river) => river.length),
     bridgeCandidates: world.semantic.bridgeCandidates.length,
+    boatRoutes: world.semantic.boatRoutes.map((route) => ({
+      from: route.fromIslandId,
+      to: route.toIslandId,
+      length: route.length,
+      nodes: route.path.length,
+      waypoints: route.waypoints.length
+    })),
     start: world.startPosition,
     stats: world.semantic.stats
   });
+}
+
+function validateBoatRoutesAndIslandSeparation(world) {
+  assert(world.semantic.boatRoutes.length === REQUIRED_MAJOR_HARBOR_ROUTE_PAIRS.length, `Expected ${REQUIRED_MAJOR_HARBOR_ROUTE_PAIRS.length} required boat routes, got ${world.semantic.boatRoutes.length}.`);
+  for (const route of world.semantic.boatRoutes) {
+    const routeErrors = validateBoatPath(world.semantic, route.path);
+    assert(routeErrors.length === 0, `Boat route ${route.fromHarborId} -> ${route.toHarborId} failed terrain validation: ${routeErrors.join("; ")}`);
+    assert(route.waypoints.length >= 2, `Boat route ${route.fromHarborId} -> ${route.toHarborId} has no compass waypoints.`);
+    for (let i = 1; i < route.waypoints.length; i += 1) {
+      assert(isLegalBoatSegment(route.waypoints[i - 1], route.waypoints[i]), `Boat route ${route.fromHarborId} -> ${route.toHarborId} has arbitrary-angle segment ${route.waypoints[i - 1].x},${route.waypoints[i - 1].y} -> ${route.waypoints[i].x},${route.waypoints[i].y}.`);
+    }
+    for (const cell of route.path) {
+      const index = cell.y * world.width + cell.x;
+      assert(isBoatNavigableTile(world.semantic, cell.x, cell.y), `Boat route ${route.fromHarborId} -> ${route.toHarborId} crosses non-water at ${cell.x},${cell.y}.`);
+      assert(world.semantic.layers.reservedBoatRouteMap[index] === 1, `Boat route ${route.fromHarborId} -> ${route.toHarborId} is not reserved at ${cell.x},${cell.y}.`);
+    }
+  }
+
+  const components = majorIslandComponents(world);
+  assert(components.length === 4, `Expected 4 major island components, got ${components.length}.`);
+  for (let a = 0; a < components.length; a += 1) {
+    for (let b = a + 1; b < components.length; b += 1) {
+      const gap = minimumChebyshevGap(components[a], components[b]);
+      assert(gap >= 10, `Major islands ${components[a].id} and ${components[b].id} are only ${gap} open-sea tiles apart.`);
+    }
+  }
+}
+
+function majorIslandComponents(world) {
+  const seen = new Set();
+  const components = [];
+  const majorIds = new Set(MAJOR_ISLAND_IDS);
+  for (let i = 0; i < world.width * world.height; i += 1) {
+    const islandId = world.semantic.islandIndexToId.get(world.semantic.layers.islandId[i]);
+    if (!majorIds.has(islandId) || seen.has(i)) continue;
+    const component = { id: islandId, cells: [] };
+    const queue = [{ x: i % world.width, y: Math.floor(i / world.width) }];
+    seen.add(i);
+    for (let head = 0; head < queue.length; head += 1) {
+      const cell = queue[head];
+      component.cells.push(cell);
+      for (const next of neighbors4(cell.x, cell.y)) {
+        if (next.x < 0 || next.y < 0 || next.x >= world.width || next.y >= world.height) continue;
+        const ni = next.y * world.width + next.x;
+        if (seen.has(ni) || world.semantic.islandIndexToId.get(world.semantic.layers.islandId[ni]) !== islandId) continue;
+        seen.add(ni);
+        queue.push(next);
+      }
+    }
+    components.push(component);
+  }
+  return components;
+}
+
+function minimumChebyshevGap(a, b) {
+  let minimum = Number.POSITIVE_INFINITY;
+  for (const ac of a.cells) {
+    for (const bc of b.cells) {
+      const gap = Math.max(Math.abs(ac.x - bc.x), Math.abs(ac.y - bc.y)) - 1;
+      if (gap < minimum) minimum = gap;
+    }
+  }
+  return minimum;
+}
+
+function isLegalBoatSegment(from, to) {
+  const dx = Math.abs(to.x - from.x);
+  const dy = Math.abs(to.y - from.y);
+  return (dx !== 0 || dy !== 0) && (dx === 0 || dy === 0 || dx === dy);
 }
 
 function hasAdjacentWater(world, x, y, value) {

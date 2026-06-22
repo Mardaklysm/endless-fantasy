@@ -45,11 +45,13 @@ export interface BoatTravelState {
   sourceWaterTile: Vec;
   destinationWaterTile: Vec;
   rawPath: Vec[];
+  rawPathDistances: number[];
   waypoints: Vec[];
   path: Vec[];
   pathDistances: number[];
   routeLength: number;
   progressTiles: number;
+  nextWorldTimeRouteIndex: number;
   segmentIndex: number;
   boatPos: Vec;
   direction: BoatTravelDirection;

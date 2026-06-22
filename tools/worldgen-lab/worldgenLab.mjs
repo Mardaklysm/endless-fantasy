@@ -1,11 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
-import { generateWorldLab, serializeWorld } from "./generator.mjs";
+import { DEFAULT_WORLD_HEIGHT, DEFAULT_WORLD_WIDTH, generateWorldLab, serializeWorld } from "./generator.mjs";
 import { renderAllPreviews, writePng } from "./renderPreview.mjs";
 
 const DEFAULT_SEED = "test-greenhaven";
-const DEFAULT_WIDTH = 192;
-const DEFAULT_HEIGHT = 120;
+const DEFAULT_WIDTH = DEFAULT_WORLD_WIDTH;
+const DEFAULT_HEIGHT = DEFAULT_WORLD_HEIGHT;
 const DEFAULT_SCALE = 6;
 
 main().catch((error) => {
@@ -38,6 +38,7 @@ async function main() {
   outputs.push(writeImage(outDir, "river_mask_debug.png", previews.riverMask));
   outputs.push(writeImage(outDir, "river_connectivity_debug.png", previews.riverConnectivity));
   outputs.push(writeImage(outDir, "rivers_roads_debug.png", previews.riversRoads));
+  outputs.push(writeImage(outDir, "shipping_lanes_debug.png", previews.shippingLanes));
   outputs.push(writeImage(outDir, "rendered_world_preview.png", previews.renderedWorld));
   outputs.push(writeText(outDir, "semantic_world.json", JSON.stringify(serializeWorld(world), null, 2)));
   outputs.push(writeText(outDir, "worldgen_algorithm_report.md", buildAlgorithmReport(world, options)));
@@ -158,6 +159,7 @@ The generated world contains:
 - Road cells: ${world.stats.roadCells}
 - POIs: ${world.stats.poiCount}
 - Harbors/ports: ${world.stats.harborCount}
+- Required boat routes: ${world.boatRoutes.length}
 
 ## A. World Data Model
 

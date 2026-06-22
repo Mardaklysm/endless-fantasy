@@ -10,6 +10,7 @@ import { worldCurrentPoiAssetDebugLine, worldCurrentPremiumV2UnusedNotesFor } fr
 import { hashNoise } from "./seededRng.ts";
 import { ENABLE_RANDOM_BRIDGE_DECORATION, generateSemanticWorld } from "./semantic/semanticGenerator.ts";
 import { CAMPAIGN_WORLD_PROFILE } from "./semantic/semanticProfiles.ts";
+import { validateBoatPath } from "./semantic/boatNavigation.ts";
 import {
   SEMANTIC_BIOME,
   SEMANTIC_WATER,
@@ -18,8 +19,8 @@ import {
   type SemanticWorld
 } from "./semantic/semanticTypes.ts";
 
-export const DEFAULT_WORLD_WIDTH = 96;
-export const DEFAULT_WORLD_HEIGHT = 64;
+export const DEFAULT_WORLD_WIDTH = 288;
+export const DEFAULT_WORLD_HEIGHT = 192;
 export const ACTIVE_WORLDGEN_MODE = "semantic_campaign_archipelago_world" as const;
 
 export interface WorldVec {
@@ -165,7 +166,7 @@ export function generateWorld(options: { seed?: string; width?: number; height?:
   const requestedSeed = options.seed ?? createWorldSeed();
   const width = options.width ?? DEFAULT_WORLD_WIDTH;
   const height = options.height ?? DEFAULT_WORLD_HEIGHT;
-  const maxAttempts = Math.max(1, options.maxAttempts ?? 3);
+  const maxAttempts = Math.max(1, options.maxAttempts ?? 8);
   let lastWorld: GeneratedWorld | undefined;
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const seed = attempt === 0 ? requestedSeed : `${requestedSeed}:retry:${attempt}`;
@@ -254,7 +255,7 @@ function adaptSemanticWorld(semantic: SemanticWorld): GeneratedWorld {
     kind: "roadRiverCrossing"
   }));
   const bridges = [...routeBridgeCandidates, ...dockBridges];
-  const seaRoutes = buildSeaRoutes(pois);
+  const seaRoutes = buildSeaRoutes(semantic);
   const entryTriggers = pois.map((poi) => ({ poiId: poi.id, x: poi.x, y: poi.y }));
   const islands = semantic.islands.map((island) => adaptIsland(semantic, tiles, pois, island.id as IslandId));
   const startPosition = chooseStartPosition(semantic, pois);
@@ -537,7 +538,10 @@ function collectCells(semantic: SemanticWorld, predicate: (i: number) => boolean
 }
 
 function pickReefs(semantic: SemanticWorld, shallows: WorldVec[]): WorldVec[] {
-  return shallows.filter((pos) => hashNoise(`${semantic.seed}:reef`, pos.x, pos.y) > 0.92).slice(0, 22);
+  return shallows
+    .filter((pos) => !semantic.layers.reservedBoatRouteMap[pos.y * semantic.width + pos.x])
+    .filter((pos) => hashNoise(`${semantic.seed}:reef`, pos.x, pos.y) > 0.92)
+    .slice(0, 22);
 }
 
 function buildObjectOverlays(semantic: SemanticWorld, reefs: WorldVec[]): WorldObjectOverlay[] {
@@ -669,19 +673,13 @@ function buildDockTiles(semantic: SemanticWorld, pois: WorldPoi[], tiles: WorldT
   return bridges;
 }
 
-function buildSeaRoutes(pois: WorldPoi[]): WorldVec[][] {
-  const harborByIsland = new Map(pois.filter((poi) => poi.kind === "harbor").map((poi) => [poi.islandId, poi]));
-  const routePairs: [IslandId, IslandId][] = [
-    ["greenhaven", "coralreach"],
-    ["coralreach", "frostmere"],
-    ["frostmere", "highspire"],
-    ["highspire", "greenhaven"]
-  ];
-  return routePairs
-    .map(([fromId, toId]) => {
-      const from = harborByIsland.get(fromId);
-      const to = harborByIsland.get(toId);
-      return from && to ? carveLinePath(from, to) : [];
+function buildSeaRoutes(semantic: SemanticWorld): WorldVec[][] {
+  return semantic.boatRoutes
+    .map((route) => {
+      const routePath = route.waypoints.length >= 2 ? route.waypoints : route.path;
+      const errors = validateBoatPath(semantic, route.path);
+      if (errors.length) return [];
+      return routePath.map((cell) => ({ x: cell.x, y: cell.y }));
     })
     .filter((route) => route.length > 0);
 }
@@ -821,21 +819,6 @@ function neighbors4(x: number, y: number): WorldVec[] {
     { x, y: y + 1 },
     { x: x - 1, y }
   ];
-}
-
-function carveLinePath(from: WorldVec, to: WorldVec): WorldVec[] {
-  const path: WorldVec[] = [];
-  let x = from.x;
-  let y = from.y;
-  const steps = Math.max(Math.abs(to.x - from.x), Math.abs(to.y - from.y), 1);
-  for (let step = 0; step <= steps; step += 1) {
-    const t = step / steps;
-    x = Math.round(from.x + (to.x - from.x) * t);
-    y = Math.round(from.y + (to.y - from.y) * t);
-    const current = { x, y };
-    if (!path.some((cell) => cell.x === current.x && cell.y === current.y)) path.push(current);
-  }
-  return path;
 }
 
 function inBounds(width: number, height: number, x: number, y: number): boolean {
