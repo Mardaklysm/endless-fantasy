@@ -1,22 +1,31 @@
+import overworldTravelMusicUrl from "../../assets/audio/overworld_travel_scarlet_raven.mp3?url";
+
 export class SynthAudio {
   private ctx?: AudioContext;
   private muted = false;
   private step = 0;
   private mode: "title" | "world" | "battle" | "dungeon" | "ending" = "title";
+  private tickTimer?: number;
+  private worldMusic?: HTMLAudioElement;
 
   setMuted(value: boolean) {
     this.muted = value;
+    this.syncWorldMusic();
   }
 
   start() {
-    if (this.ctx) return;
-    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    this.ctx = new AudioCtx();
-    window.setInterval(() => this.tickLoop(), 220);
+    if (!this.ctx) {
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      this.ctx = new AudioCtx();
+    }
+    if (!this.tickTimer) this.tickTimer = window.setInterval(() => this.tickLoop(), 220);
+    this.ensureWorldMusic();
+    this.syncWorldMusic();
   }
 
   setMode(mode: SynthAudio["mode"]) {
     this.mode = mode;
+    this.syncWorldMusic();
   }
 
   blip(kind: "confirm" | "cancel" | "hit" | "spell" | "victory" | "error") {
@@ -35,6 +44,7 @@ export class SynthAudio {
 
   private tickLoop() {
     if (this.muted || !this.ctx) return;
+    if (this.mode === "world" && this.worldMusic) return;
     const patterns = {
       title: [392, 0, 494, 0, 587, 523, 494, 0],
       world: [262, 330, 392, 330, 440, 392, 330, 294],
@@ -59,5 +69,28 @@ export class SynthAudio {
     gain.connect(this.ctx.destination);
     osc.start();
     osc.stop(this.ctx.currentTime + length);
+  }
+
+  private ensureWorldMusic(): HTMLAudioElement | undefined {
+    if (this.worldMusic || typeof Audio === "undefined") return this.worldMusic;
+    const music = new Audio(overworldTravelMusicUrl);
+    music.loop = true;
+    music.preload = "auto";
+    music.volume = 0.42;
+    this.worldMusic = music;
+    return music;
+  }
+
+  private syncWorldMusic() {
+    const music = this.worldMusic;
+    if (!music) return;
+    music.muted = this.muted;
+    if (this.muted || this.mode !== "world") {
+      music.pause();
+      return;
+    }
+    void music.play().catch(() => {
+      // Browser autoplay policy may defer playback until the next accepted input gesture.
+    });
   }
 }
