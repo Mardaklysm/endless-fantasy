@@ -152,6 +152,7 @@ export function completeBoatTravel(this: CrystalOathSceneContext) {
   }
   this.currentIslandId = travel.destinationIslandId;
   this.worldPos = { ...travel.arrivalTile };
+  this.markLocationVisited(this.locations().find((loc) => loc.kind === "harbor" && loc.islandId === travel.destinationIslandId)?.id);
   this.lastMoveDir = directionToward(travel.arrivalTile, travel.destinationWaterTile);
   this.destroyBoatTravelSprite();
   this.boatTravel = undefined;

@@ -19,6 +19,7 @@ export function saveGame(this: CrystalOathSceneContext) {
     flags: this.flags,
     openedChests: [...this.openedChests],
     discoveredPois: [...this.discoveredPois],
+    visitedLocationIds: [...this.visitedLocationIds],
     puzzleFlags: [...this.puzzleFlags],
     defeatedBosses: [...this.defeatedBosses],
     clearedDungeons: [...this.clearedDungeons],

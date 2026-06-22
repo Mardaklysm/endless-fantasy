@@ -13,6 +13,9 @@ export function buildWorldFromSeed(this: CrystalOathSceneContext, seed: string) 
   if (this.worldControlLockReason === "boatTravel") this.worldControlLockReason = undefined;
   this.world = this.generatedWorld.tiles;
   this.roadVisualsByKey = new Map(this.generatedWorld.roadVisuals.map((visual) => [`${visual.x},${visual.y}`, visual]));
+  this.worldMinimapCacheSeed = "";
+  this.worldMinimapCacheWidth = 0;
+  this.worldMinimapCacheHeight = 0;
   this.rebuildWorldTerrainCache();
   this.rebuildWorldRouteOverlayCache();
   console.info(`Crystal Oath world seed: ${this.worldSeed}`);
@@ -40,6 +43,7 @@ export function newGame(this: CrystalOathSceneContext) {
   this.flags = { ...this.defaultFlags(), introSeen: true };
   this.openedChests = new Set();
   this.discoveredPois = new Set();
+  this.visitedLocationIds = new Set();
   this.puzzleFlags = new Set();
   this.defeatedBosses = new Set();
   this.clearedDungeons = new Set();
@@ -49,6 +53,7 @@ export function newGame(this: CrystalOathSceneContext) {
   this.clearHeldMovement();
   this.mode = "town";
   this.currentTown = "dawnford";
+  this.markLocationVisited(this.currentTown);
   this.syncAllVisualPositions();
   this.audio.setMode("world");
   this.dialogue = {

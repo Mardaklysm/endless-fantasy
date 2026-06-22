@@ -91,7 +91,7 @@ export class CrystalOathScene extends Phaser.Scene {
   ui!: Phaser.GameObjects.Graphics;
   cloudOverlay?: OverworldCloudOverlay;
   texts: Phaser.GameObjects.Text[] = [];
-  images: Phaser.GameObjects.Image[] = [];
+  images: Phaser.GameObjects.GameObject[] = [];
   mode: Mode = "title";
   titleOptions = ["Continue", "New Game"];
   titleSelected = 0;
@@ -113,6 +113,10 @@ export class CrystalOathScene extends Phaser.Scene {
   worldTerrainCacheSeed = "";
   worldRouteOverlayCacheKey = "world_route_overlay_cache";
   worldRouteOverlayCacheSeed = "";
+  worldMinimapCacheKey = "world_minimap_cache";
+  worldMinimapCacheSeed = "";
+  worldMinimapCacheWidth = 0;
+  worldMinimapCacheHeight = 0;
   routeOverlayMode: SemanticRouteOverlayMode = "hidden";
   riverOverlayMode: SemanticRouteOverlayMode = "hidden";
   cloudOverlayEnabled = true;
@@ -158,6 +162,7 @@ export class CrystalOathScene extends Phaser.Scene {
   };
   openedChests = new Set<string>();
   discoveredPois = new Set<string>();
+  visitedLocationIds = new Set<string>();
   puzzleFlags = new Set<string>();
   defeatedBosses = new Set<string>();
   clearedDungeons = new Set<string>();

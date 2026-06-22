@@ -98,11 +98,14 @@ export function interactTown(this: CrystalOathSceneContext) {
 export function enterLocation(this: CrystalOathSceneContext, loc: LocationDef) {
   this.clearHeldMovement();
   if (loc.islandId) this.currentIslandId = loc.islandId;
+  const newlyVisited = this.markLocationVisited(loc.id);
   if (loc.kind === "harbor" || loc.kind === "landmark") {
+    if (newlyVisited) this.saveGame();
     this.interactWorldLocation(loc);
     return;
   }
   if (loc.requires && !loc.requires()) {
+    if (newlyVisited) this.saveGame();
     this.say([loc.lockedText ?? "A strange force blocks the way."]);
     return;
   }

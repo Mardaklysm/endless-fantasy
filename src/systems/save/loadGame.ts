@@ -22,6 +22,7 @@ export function loadGame(this: CrystalOathSceneContext): boolean {
     this.flags = this.normalizeFlags(data.flags);
     this.openedChests = new Set(data.openedChests ?? []);
     this.discoveredPois = new Set(data.discoveredPois ?? data.discoveredPoints ?? []);
+    this.visitedLocationIds = new Set(data.visitedLocationIds ?? data.discoveredPois ?? data.discoveredPoints ?? []);
     this.puzzleFlags = new Set(data.puzzleFlags ?? []);
     this.defeatedBosses = new Set(data.defeatedBosses ?? []);
     this.clearedDungeons = new Set(data.clearedDungeons ?? []);
@@ -34,6 +35,7 @@ export function loadGame(this: CrystalOathSceneContext): boolean {
       this.worldPos = { ...(this.generatedWorld?.startPosition ?? { x: 10, y: 22 }) };
     }
     this.syncCurrentIslandFromWorldPos();
+    this.markCurrentLocationVisited();
     this.mode = "world";
     this.clearHeldMovement();
     this.syncAllVisualPositions();

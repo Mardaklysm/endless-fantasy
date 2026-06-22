@@ -47,11 +47,28 @@ export function currentIslandTheme(this: CrystalOathSceneContext): IslandTheme |
 
 export function interactWorldLocation(this: CrystalOathSceneContext, loc: LocationDef) {
   if (loc.islandId) this.currentIslandId = loc.islandId;
+  if (this.markLocationVisited(loc.id)) this.saveGame();
   if (loc.kind === "harbor") {
     this.openHarborMenu(loc);
     return;
   }
   if (loc.kind === "landmark") this.discoverLandmark(loc);
+}
+
+export function markLocationVisited(this: CrystalOathSceneContext, locationId: string | undefined): boolean {
+  if (!locationId || this.visitedLocationIds.has(locationId)) return false;
+  this.visitedLocationIds.add(locationId);
+  this.markDirty();
+  return true;
+}
+
+export function isLocationVisited(this: CrystalOathSceneContext, locationId: string | undefined): boolean {
+  return !!locationId && this.visitedLocationIds.has(locationId);
+}
+
+export function markCurrentLocationVisited(this: CrystalOathSceneContext): boolean {
+  const current = this.locationAt(this.worldPos.x, this.worldPos.y) ?? this.locations().find((loc) => loc.id === this.currentTown || loc.id === this.currentDungeon);
+  return this.markLocationVisited(current?.id);
 }
 
 export function discoverLandmark(this: CrystalOathSceneContext, loc: LocationDef) {

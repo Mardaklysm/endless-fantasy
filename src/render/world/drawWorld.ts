@@ -56,8 +56,8 @@ export function drawWorld(this: CrystalOathSceneContext) {
   }
   if (this.boatTravel) this.drawBoatTravel(cam);
   else this.drawLeader(leaderPos.x * TILE - cam.x + 4, leaderPos.y * TILE - cam.y + 3);
-  this.drawHud(this.currentIslandName());
-  this.drawWorldClock();
+  this.drawOverworldHud();
+  this.drawWorldMinimap();
   const loc = this.locationAt(this.worldPos.x, this.worldPos.y) ?? this.facingLocation();
   if (loc && !this.boatTravel) this.drawPrompt(loc.kind === "harbor" ? `Use ${loc.name}` : loc.kind === "landmark" ? `Inspect ${loc.name}` : `Enter ${loc.name}`);
   if (DEBUG_WORLD_LAYOUT) {
