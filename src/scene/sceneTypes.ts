@@ -1,4 +1,5 @@
 import type { WorldTileId } from "../data/worldTiles";
+import type { IslandId } from "../world/worldGenerator";
 
 export type Mode =
   | "title"
@@ -29,6 +30,30 @@ export interface ExploreStep {
   from: Vec;
   to: Vec;
   dir: Vec;
+}
+
+export type WorldControlLockReason = "boatTravel";
+
+export interface BoatTravelState {
+  sourceIslandId: IslandId;
+  destinationIslandId: IslandId;
+  destinationName: string;
+  costGold: number;
+  previousBoatFlag: boolean;
+  arrivalTile: Vec;
+  sourceWaterTile: Vec;
+  destinationWaterTile: Vec;
+  rawPath: Vec[];
+  waypoints: Vec[];
+  path: Vec[];
+  pathDistances: number[];
+  routeLength: number;
+  progressTiles: number;
+  segmentIndex: number;
+  boatPos: Vec;
+  facing: "left" | "right";
+  phase: "departing" | "sailing" | "arriving";
+  phaseElapsedMs: number;
 }
 
 export interface MenuOption {

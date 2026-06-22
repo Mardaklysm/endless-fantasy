@@ -4,6 +4,7 @@ import type { IslandId } from "../../world/worldGenerator";
 import type { CrystalOathSceneContext } from "../../scene/sceneContext";
 
 export function openHarborMenu(this: CrystalOathSceneContext, loc: LocationDef) {
+  if (this.worldControlLockReason === "boatTravel") return;
   this.rememberMenuReturnMode();
   const options: MenuOption[] = this.getAvailableDestinations(loc.islandId ?? this.currentIslandId).map((destination) => ({
     label: () => {
@@ -15,7 +16,7 @@ export function openHarborMenu(this: CrystalOathSceneContext, loc: LocationDef) 
         this.flashMessage("The Harbor Master needs a proper chart for that route.");
         return;
       }
-      this.travelToIsland(destination);
+      this.travelToIsland(destination, loc);
     }
   }));
   options.push({ label: "Leave harbor", action: () => this.closeMenuTo("world") });
@@ -55,30 +56,18 @@ export function isDestinationLocked(this: CrystalOathSceneContext, destination: 
   return !this.flags.travel[destination.requiredUnlockFlag];
 }
 
-export function travelToIsland(this: CrystalOathSceneContext, destination: TravelDestination) {
+export function travelToIsland(this: CrystalOathSceneContext, destination: TravelDestination, sourceHarbor?: LocationDef) {
+  if (this.boatTravel || this.worldControlLockReason === "boatTravel") return;
   if (this.gold < destination.costGold) {
     this.flashMessage(`You need ${destination.costGold} gold for passage.`);
     return;
   }
-  this.gold -= destination.costGold;
-  this.flags.boat = true;
-  if (destination.destinationIslandId === "coralreach") this.flags.travel.visitedIsland2 = true;
-  if (destination.destinationIslandId === "frostmere") this.flags.travel.visitedFrostmere = true;
-  if (destination.destinationIslandId === "highspire") {
-    this.flags.travel.visitedIsland3 = true;
-    this.flags.travel.visitedHighspire = true;
+  const harbor = sourceHarbor ?? this.locationAt(this.worldPos.x, this.worldPos.y) ?? this.facingLocation();
+  if (!harbor || harbor.kind !== "harbor") {
+    this.flashMessage("The Harbor Master cannot find your dock.");
+    return;
   }
-  this.currentIslandId = destination.destinationIslandId;
-  this.worldPos = this.arrivalTileForIsland(destination.destinationIslandId);
-  this.mode = "world";
-  this.menu = undefined;
-  this.syncAllVisualPositions();
-  this.audio.setMode("world");
-  this.saveGame();
-  this.say([`You board the boat and sail across the glittering sea to ${destination.displayName}.`], () => {
-    this.mode = "world";
-    this.audio.setMode("world");
-  });
+  this.beginBoatTravel(harbor, destination);
 }
 
 export function arrivalTileForIsland(this: CrystalOathSceneContext, islandId: IslandId): Vec {
@@ -86,7 +75,8 @@ export function arrivalTileForIsland(this: CrystalOathSceneContext, islandId: Is
   const harbor = island?.harborPosition;
   if (!harbor) return this.generatedWorld?.startPosition ?? { x: 10, y: 22 };
   const harborLoc = this.locations().find((loc) => loc.islandId === islandId && loc.kind === "harbor");
-  const bounds = harborLoc ? this.locationFootprintBounds(harborLoc) : { minX: harbor.x, maxX: harbor.x, minY: harbor.y, maxY: harbor.y };
+  if (harborLoc) return this.worldReturnTileForLocation(harborLoc);
+  const bounds = { minX: harbor.x, maxX: harbor.x, minY: harbor.y, maxY: harbor.y };
   const centerX = Math.floor((bounds.minX + bounds.maxX) / 2);
   const centerY = Math.floor((bounds.minY + bounds.maxY) / 2);
   const candidates = [

@@ -1,12 +1,14 @@
 import Phaser from "phaser";
 import type {
   ActiveMenu,
+  BoatTravelState,
   Dialogue,
   ExploreStep,
   Mode,
   Terrain,
   Vec,
-  DirectionName
+  DirectionName,
+  WorldControlLockReason
 } from "./sceneTypes";
 import type { BattleState } from "../systems/battle/battleTypes";
 import type { CharacterState, DungeonDef } from "../data/gameDataTypes";
@@ -29,6 +31,7 @@ import * as encounters from "../systems/world/encounters";
 import type { WorldDayPhaseId } from "../systems/world/dayNight";
 import { WORLD_TIME_TICKS_PER_FULL_DAY } from "../systems/world/dayNight";
 import * as dayNight from "../systems/world/dayNight";
+import * as boatTravel from "../systems/world/boatTravel";
 import * as harborTravel from "../systems/world/harborTravel";
 import * as locations from "../systems/world/locations";
 import * as saveGame from "../systems/save/saveGame";
@@ -64,6 +67,7 @@ export interface CrystalOathScene
     SceneModuleMethods<typeof menuActions>,
     SceneModuleMethods<typeof encounters>,
     SceneModuleMethods<typeof dayNight>,
+    SceneModuleMethods<typeof boatTravel>,
     SceneModuleMethods<typeof harborTravel>,
     SceneModuleMethods<typeof locations>,
     SceneModuleMethods<typeof saveGame>,
@@ -94,6 +98,8 @@ export class CrystalOathScene extends Phaser.Scene {
   menu?: ActiveMenu;
   dialogue?: Dialogue;
   battle?: BattleState;
+  boatTravel?: BoatTravelState;
+  worldControlLockReason?: WorldControlLockReason;
   audio = new SynthAudio();
   generatedWorld?: GeneratedWorld;
   roadVisualsByKey = new Map<string, WorldRoadVisual>();
@@ -189,6 +195,7 @@ Object.assign(
   menuActions,
   encounters,
   dayNight,
+  boatTravel,
   harborTravel,
   locations,
   saveGame,

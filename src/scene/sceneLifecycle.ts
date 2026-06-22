@@ -87,6 +87,7 @@ export function logActiveWorldTileset(this: CrystalOathSceneContext) {
 
 export function update(this: CrystalOathSceneContext, _time: number, delta: number) {
   const dt = Math.min(delta, 50);
+  this.updateBoatTravel(dt);
   this.updateMovement(dt);
   this.updateBattleFlow(dt);
   if (this.dirty) this.draw();

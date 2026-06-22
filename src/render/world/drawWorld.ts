@@ -31,7 +31,8 @@ import type { CrystalOathSceneContext } from "../../scene/sceneContext";
 export function drawWorld(this: CrystalOathSceneContext) {
   this.g.fillStyle(0x050812, 1).fillRect(0, 0, WIDTH, HEIGHT);
   const leaderPos = this.visualExplorePos("world");
-  const cam = this.cameraFor(leaderPos, WORLD_W, WORLD_H);
+  const focusPos = this.boatTravel?.boatPos ?? leaderPos;
+  const cam = this.cameraFor(focusPos, WORLD_W, WORLD_H);
   const tileCam = { x: Math.round(cam.x), y: Math.round(cam.y) };
   const startX = Math.max(0, Math.floor(tileCam.x / TILE) - 1);
   const endX = Math.min(WORLD_W - 1, Math.ceil((tileCam.x + WIDTH) / TILE));
@@ -53,11 +54,12 @@ export function drawWorld(this: CrystalOathSceneContext) {
     if (bounds.maxX < startX || bounds.minX > endX || bounds.maxY < startY || bounds.minY > endY) continue;
     this.drawLocationIcon(loc, bounds.minX * TILE - tileCam.x, bounds.minY * TILE - tileCam.y);
   }
-  this.drawLeader(leaderPos.x * TILE - cam.x + 4, leaderPos.y * TILE - cam.y + 3);
+  if (this.boatTravel) this.drawBoatTravel(cam);
+  else this.drawLeader(leaderPos.x * TILE - cam.x + 4, leaderPos.y * TILE - cam.y + 3);
   this.drawHud(this.currentIslandName());
   this.drawWorldClock();
   const loc = this.locationAt(this.worldPos.x, this.worldPos.y) ?? this.facingLocation();
-  if (loc) this.drawPrompt(loc.kind === "harbor" ? `Use ${loc.name}` : loc.kind === "landmark" ? `Inspect ${loc.name}` : `Enter ${loc.name}`);
+  if (loc && !this.boatTravel) this.drawPrompt(loc.kind === "harbor" ? `Use ${loc.name}` : loc.kind === "landmark" ? `Inspect ${loc.name}` : `Enter ${loc.name}`);
   if (DEBUG_WORLD_LAYOUT) {
     const mapPixelW = this.world[0]?.length ?? 0;
     const mapPixelH = this.world.length;

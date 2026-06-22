@@ -9,6 +9,8 @@ export function buildWorldFromSeed(this: CrystalOathSceneContext, seed: string) 
   this.generatedWorld = generateWorld({ seed, width: WORLD_W, height: WORLD_H });
   this.worldSeed = this.generatedWorld.seed;
   this.dungeonCache = undefined;
+  this.boatTravel = undefined;
+  if (this.worldControlLockReason === "boatTravel") this.worldControlLockReason = undefined;
   this.world = this.generatedWorld.tiles;
   this.roadVisualsByKey = new Map(this.generatedWorld.roadVisuals.map((visual) => [`${visual.x},${visual.y}`, visual]));
   this.rebuildWorldTerrainCache();

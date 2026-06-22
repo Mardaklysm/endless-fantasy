@@ -13,6 +13,7 @@ export function rememberMenuReturnMode(this: CrystalOathSceneContext) {
 }
 
 export function openMainMenu(this: CrystalOathSceneContext) {
+  if (this.worldControlLockReason === "boatTravel") return;
   this.rememberMenuReturnMode();
   this.openMenu(
     "Menu",
@@ -450,6 +451,7 @@ export function flashMessage(this: CrystalOathSceneContext, message: string) {
 }
 
 export function openMenu(this: CrystalOathSceneContext, title: string, options: MenuOption[], cancel: () => void, footer?: string | (() => string)) {
+  if (this.worldControlLockReason === "boatTravel") return;
   this.rememberMenuReturnMode();
   this.clearHeldMovement();
   this.menu = { title, options, selected: 0, cancel, footer };

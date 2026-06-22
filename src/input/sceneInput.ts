@@ -24,7 +24,7 @@ export function handleKey(this: CrystalOathSceneContext, event: KeyboardEvent) {
   if (this.isGameControlKey(event)) event.preventDefault();
   this.shiftHeld = event.shiftKey || event.code === "ShiftLeft" || event.code === "ShiftRight";
   const directionName = directionNameForEvent(event);
-  if (directionName && this.isExploreMode(this.mode)) {
+  if (directionName && this.isExploreMode(this.mode) && this.worldControlLockReason !== "boatTravel") {
     this.rememberHeldDirection(directionName);
   }
   if (event.code === "KeyM") {
@@ -38,6 +38,7 @@ export function handleKey(this: CrystalOathSceneContext, event: KeyboardEvent) {
     else this.scale.startFullscreen();
     return;
   }
+  if (this.worldControlLockReason === "boatTravel") return;
   if (event.code === "F9" && this.mode !== "battle") {
     this.openDebugMenu();
     return;
@@ -106,6 +107,7 @@ export function handleTitle(this: CrystalOathSceneContext, event: KeyboardEvent)
 
 export function handlePointer(this: CrystalOathSceneContext, pointer: Phaser.Input.Pointer) {
   this.audio.start();
+  if (this.worldControlLockReason === "boatTravel") return;
   const point = this.pointerToLayout(pointer);
   if (this.mode === "title" && this.handleTitlePointer(point)) return;
   this.audio.blip("confirm");

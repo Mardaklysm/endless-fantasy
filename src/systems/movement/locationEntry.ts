@@ -21,6 +21,7 @@ export function exitTownToWorld(this: CrystalOathSceneContext) {
 }
 
 export function interact(this: CrystalOathSceneContext) {
+  if (this.worldControlLockReason === "boatTravel") return;
   if (this.mode === "world") {
     const loc = this.locationAt(this.worldPos.x, this.worldPos.y) ?? this.facingLocation();
     if (loc) {
@@ -161,6 +162,7 @@ export function facingLocation(this: CrystalOathSceneContext): LocationDef | und
 }
 
 export function activateWorldLocation(this: CrystalOathSceneContext, loc: LocationDef) {
+  if (this.worldControlLockReason === "boatTravel") return;
   if (loc.kind === "harbor" || loc.kind === "landmark") this.interactWorldLocation(loc);
   else this.enterLocation(loc);
 }

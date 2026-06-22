@@ -27,6 +27,11 @@ export function currentHeldDirection(this: CrystalOathSceneContext): Vec | undef
 export function updateMovement(this: CrystalOathSceneContext, delta: number) {
   this.blockedMoveCooldown = Math.max(0, this.blockedMoveCooldown - delta);
   this.playerMoving = false;
+  if (this.worldControlLockReason === "boatTravel") {
+    this.walkAnimElapsed = 0;
+    this.activeStep = undefined;
+    return;
+  }
   const mode = this.mode;
   if (!isExploreModeValue(mode)) {
     this.walkAnimElapsed = 0;
@@ -62,6 +67,7 @@ export function updateMovement(this: CrystalOathSceneContext, delta: number) {
 }
 
 export function beginExploreStep(this: CrystalOathSceneContext, mode: ExploreMode, dir: Vec): boolean {
+  if (this.worldControlLockReason === "boatTravel") return false;
   if (!this.isExploreMode(this.mode)) return false;
   if (this.activeStep) return true;
   const from = this.currentExploreTile(mode);

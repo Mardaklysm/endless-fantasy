@@ -4,6 +4,7 @@ import type { DungeonDef } from "../../data/gameDataTypes";
 import type { CrystalOathSceneContext } from "../../scene/sceneContext";
 
 export function maybeEncounter(this: CrystalOathSceneContext) {
+  if (this.worldControlLockReason === "boatTravel") return;
   if (!this.settings.encounters) return;
   const tableKey = this.worldEncounterKeyAt(this.worldPos.x, this.worldPos.y);
   if (!tableKey) return;
@@ -15,6 +16,7 @@ export function maybeEncounter(this: CrystalOathSceneContext) {
 }
 
 export function maybeDungeonEncounter(this: CrystalOathSceneContext, dungeon: DungeonDef) {
+  if (this.worldControlLockReason === "boatTravel") return;
   if (!this.settings.encounters) return;
   this.encounterCounter -= 1;
   if (this.encounterCounter <= 0) {
