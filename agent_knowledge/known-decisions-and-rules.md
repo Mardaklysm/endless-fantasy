@@ -3,6 +3,7 @@
 ## Durable Project Decisions
 
 - The project is a browser game built with Phaser 3, TypeScript, and Vite.
+- Agent startup is context-budget-first: read `AGENTS.md`, `agent_knowledge/code-map.md`, and one relevant `agent_knowledge/task-profiles/` doc when available; broaden only with a task-specific reason.
 - `src/main.ts` is a tiny Vite entry; Phaser bootstrap lives in `src/app/createGame.ts`, scene-owned state lives in `src/scene/CrystalOathScene.ts`, and domain behavior/rendering/data/assets live under `src/systems/`, `src/render/`, `src/data/`, and `src/assets/`.
 - Scene helper methods are prototype mixins registered in `src/scene/CrystalOathScene.ts`, with an explicit TypeScript mixin interface and `src/scene/sceneContext.ts` aliasing the typed scene. Do not recreate a broad `sceneGlobals` barrel or `Record<string, any>` scene context.
 - Every completed code, docs, or asset change must be committed and pushed to the configured remote before the task is considered done.
