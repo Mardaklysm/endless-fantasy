@@ -31,3 +31,5 @@ docs/debug/runtime/
 docs/debug/world-atlas/
 docs/debug/world-tileset-import/
 docs/debug/worldgen/
+
+/_tmp/*
