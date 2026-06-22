@@ -39,7 +39,7 @@ This runs `tools/worldgen/test_worldgen.mjs`. It validates the active semantic r
 - required settlement-to-port/dungeon/gate/final road graph edges connect
 - runtime roads, rivers, one visual-only mountain sprite per semantic mountain cell, and one soft-terrain tree sprite per semantic forest cell exist
 - overlay collision policies tag semantic mountain mask cells as `hardBlock`, mountain sprites as `visualOnly`, forests as `softTerrain`, and all POI footprint cells as `poiBlock`
-- forests remain walkable, while semantic mountain mask cells remain blocked
+- forests remain walkable, keep a one-cell clearance from ocean/coast water, lakes, and rivers, while semantic mountain mask cells remain blocked
 - mountain ranges exist as connected semantic components, flat mountain mask cells belong to ranges, components meet their island minimum size, singleton mountain components are cleaned to zero, and Greenhaven/Coralreach do not receive snow mountains
 - mountain shape validation warns on overly rectangle-filled clusters
 - roads are walkable and not overlapped by mountain/forest overlays or POI body footprints

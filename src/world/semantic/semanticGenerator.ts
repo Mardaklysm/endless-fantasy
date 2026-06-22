@@ -119,7 +119,7 @@ export function generateSemanticWorld(options: {
   ({ mountains, mountainRanges, mountainDebug } = placeMountains(width, height, seed, landMask, distanceToWater, islandId, islands, biome, elevation, ridge, coldness, mountainCandidateScore, mountainMap, combineBlockMaps(lakeMap, riverMap, roadMap), poiList));
   const riverCrossingMap = new Uint8Array(width * height);
   const bridgeCandidates = detectBridgeCandidates(width, height, islandId, islands, landMask, waterClass, lakeMap, riverMap, roadMap, distanceToWater, mountainMap, riverCrossingMap);
-  const forestMap = placeForests(width, height, seed, landMask, islandId, islands, biome, moisture, mountainMap, lakeMap, riverMap, roadMap, poiList);
+  const forestMap = placeForests(width, height, seed, landMask, islandId, islands, biome, moisture, mountainMap, waterClass, lakeMap, riverMap, roadMap, poiList);
   const overlayCollisionPolicy = buildOverlayCollisionPolicy(width, height, mountainMap, forestMap, roadMap, riverMap, bridgeCandidates, poiList);
   const walkability = buildWalkability(width, height, landMask, waterClass, lakeMap, mountainMap, riverMap, bridgeCandidates, poiList);
   const layers = {
@@ -1532,6 +1532,7 @@ function placeForests(
   biome: Uint8Array,
   moisture: Float32Array,
   mountainMap: Uint8Array,
+  waterClass: Uint8Array,
   lakeMap: Uint8Array,
   riverMap: Uint8Array,
   roadMap: Uint8Array,
@@ -1557,7 +1558,14 @@ function placeForests(
     const cells = cellsForIsland(islandId, island.order + 1).filter((i) => {
       const x = i % width;
       const y = Math.floor(i / width);
-      return forestBiomeAllowed(island, biome[i]) && moisture[i] > forestMoistureThreshold(island) && !mountainMap[i] && !lakeMap[i] && !riverMap[i] && !occupied.has(posKey({ x, y })) && !roadReserved.has(posKey({ x, y }));
+      return (
+        forestBiomeAllowed(island, biome[i]) &&
+        moisture[i] > forestMoistureThreshold(island) &&
+        !mountainMap[i] &&
+        !hasNearbyWaterFeature(width, height, waterClass, lakeMap, riverMap, x, y, 1) &&
+        !occupied.has(posKey({ x, y })) &&
+        !roadReserved.has(posKey({ x, y }))
+      );
     });
     if (!cells.length || targetClusters <= 0) continue;
     for (let count = 0; count < targetClusters; count += 1) {
@@ -1575,7 +1583,16 @@ function placeForests(
   }
   forEachCell(width, height, (x, y, i) => {
     const island = islandByOrder.get(islandId[i]);
-    if (!landMask[i] || !island || !forestBiomeAllowed(island, biome[i]) || mountainMap[i] || lakeMap[i] || riverMap[i] || roadMap[i] || occupied.has(posKey({ x, y })) || roadReserved.has(posKey({ x, y }))) return;
+    if (
+      !landMask[i] ||
+      !island ||
+      !forestBiomeAllowed(island, biome[i]) ||
+      mountainMap[i] ||
+      hasNearbyWaterFeature(width, height, waterClass, lakeMap, riverMap, x, y, 1) ||
+      roadMap[i] ||
+      occupied.has(posKey({ x, y })) ||
+      roadReserved.has(posKey({ x, y }))
+    ) return;
     let value = 0;
     for (const cluster of clusters) {
       const dx = (x - cluster.x) / cluster.rx;
@@ -1587,6 +1604,28 @@ function placeForests(
   });
   removeTinyForestComponents(width, height, forestMap, 6);
   return forestMap;
+}
+
+function hasNearbyWaterFeature(
+  width: number,
+  height: number,
+  waterClass: Uint8Array,
+  lakeMap: Uint8Array,
+  riverMap: Uint8Array,
+  x: number,
+  y: number,
+  radius: number
+): boolean {
+  for (let dy = -radius; dy <= radius; dy += 1) {
+    for (let dx = -radius; dx <= radius; dx += 1) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (!inBounds(width, height, nx, ny)) continue;
+      const i = index(width, nx, ny);
+      if (waterClass[i] !== SEMANTIC_WATER.NONE || lakeMap[i] || riverMap[i]) return true;
+    }
+  }
+  return false;
 }
 
 function removeTinyForestComponents(width: number, height: number, forestMap: Uint8Array, minSize: number) {

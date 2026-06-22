@@ -170,6 +170,7 @@ function validateOverlaySpacingAndWalkability(world: SemanticWorld, errors: stri
     const x = i % world.width;
     const y = Math.floor(i / world.width);
     if (world.layers.forestMap[i] && !world.layers.walkability[i]) errors.push(`Forest soft-terrain cell blocks walking at ${x},${y}.`);
+    if (world.layers.forestMap[i] && nearbyWaterFeature(world, x, y, 1)) errors.push(`Forest cell crowds water at ${x},${y}.`);
     if (world.layers.forestMap[i] && nearbyCount(world, world.layers.roadMap, x, y, 1) > 0) errors.push(`Forest overlaps or crowds a road corridor at ${x},${y}.`);
     if (world.layers.roadMap[i] && !world.layers.walkability[i]) errors.push(`Road cell is blocked by terrain or overlay at ${x},${y}.`);
     if (world.layers.roadMap[i] && world.layers.mountainMap[i]) errors.push(`Mountain overlaps road at ${x},${y}.`);
@@ -324,6 +325,17 @@ function nearbyCount(world: SemanticWorld, map: Uint8Array, x: number, y: number
     }
   }
   return count;
+}
+
+function nearbyWaterFeature(world: SemanticWorld, x: number, y: number, radius: number): boolean {
+  for (let yy = y - radius; yy <= y + radius; yy += 1) {
+    for (let xx = x - radius; xx <= x + radius; xx += 1) {
+      if (!inBounds(world, xx, yy)) continue;
+      const i = index(world.width, xx, yy);
+      if (world.layers.waterClass[i] !== SEMANTIC_WATER.NONE || world.layers.lakeMap[i] || world.layers.riverMap[i]) return true;
+    }
+  }
+  return false;
 }
 
 function hasDuplicateCells(path: { x: number; y: number }[]): boolean {

@@ -392,8 +392,14 @@ function validateForestOverlayInvariant(world) {
   const overlayKeys = new Set(forestOverlays.map((overlay) => `${overlay.x},${overlay.y}`));
   assert(overlayKeys.size === forestOverlays.length, "Forest sprites should not duplicate the same semantic cell.");
   for (const cell of forestCells) {
+    const i = cell.y * world.width + cell.x;
     assert(overlayKeys.has(`${cell.x},${cell.y}`), `Forest cell ${cell.x},${cell.y} is missing a visible tree sprite.`);
     assert(isWorldPositionWalkable(world, cell.x, cell.y), `Forest cell ${cell.x},${cell.y} should stay walkable.`);
+    assert(world.semantic.layers.landMask[i], `Forest cell ${cell.x},${cell.y} should be on land.`);
+    assert(world.semantic.layers.waterClass[i] === SEMANTIC_WATER.NONE, `Forest cell ${cell.x},${cell.y} should not be on ocean/coast water.`);
+    assert(!world.semantic.layers.lakeMap[i], `Forest cell ${cell.x},${cell.y} should not be on lake water.`);
+    assert(!world.semantic.layers.riverMap[i], `Forest cell ${cell.x},${cell.y} should not be on river water.`);
+    assert(!hasNearbyWaterFeature(world, cell.x, cell.y, 1), `Forest cell ${cell.x},${cell.y} should not visually crowd water.`);
   }
   const components = connectedMaskComponents(world, world.semantic.layers.forestMap);
   assert(components.every((component) => component.length >= 6), "Forest semantic components should not be isolated tiny tree fragments.");
@@ -625,6 +631,17 @@ function hasAdjacentWater(world, x, y, value) {
     if (next.x < 0 || next.y < 0 || next.x >= world.width || next.y >= world.height) return false;
     return world.semantic.layers.waterClass[next.y * world.width + next.x] === value;
   });
+}
+
+function hasNearbyWaterFeature(world, x, y, radius) {
+  for (let yy = y - radius; yy <= y + radius; yy += 1) {
+    for (let xx = x - radius; xx <= x + radius; xx += 1) {
+      if (xx < 0 || yy < 0 || xx >= world.width || yy >= world.height) continue;
+      const i = yy * world.width + xx;
+      if (world.semantic.layers.waterClass[i] !== SEMANTIC_WATER.NONE || world.semantic.layers.lakeMap[i] || world.semantic.layers.riverMap[i]) return true;
+    }
+  }
+  return false;
 }
 
 function hasAdjacentWalkable(world, x, y) {
