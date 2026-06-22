@@ -7,6 +7,7 @@ Use this profile for asset import, asset manifests, runtime texture mapping, art
 - Root fallback/Batch 001 assets: `assets/`
 - Improved extracted assets: `assets_v2/`
 - Active overworld current asset set: `src/assets/world/current/`
+- Active common/boss enemy battle art: `src/assets/enemies/`
 - Active overworld manifest: `src/assets/world/current/world_asset_manifest.json`
 - Active cloud manifest: `src/assets/world/current/clouds/cloud_manifest.json`
 - Active dungeon atlas manifest: `src/assets/world/dungeonAtlas.manifest.json`
@@ -23,6 +24,7 @@ Runtime loading and lookups:
 ## Core Rules
 
 - Runtime asset resolution is premium-first, backup-second, generated-fallback-last.
+- For assets that have been promoted into `src/assets/`, prefer `src/assets` over `assets_v2`/root fallback paths.
 - Keep image-first rendering with generated fallback behavior.
 - Do not restore deleted generic overworld overlay/POI/route placeholder PNGs.
 - Do not run rembg on terrain, the opaque dungeon atlas, opaque battle backgrounds, or alpha character sheets.

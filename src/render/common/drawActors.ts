@@ -72,7 +72,7 @@ export function drawPortrait(this: CrystalOathSceneContext, c: CharacterState, x
 export function drawEnemySprite(this: CrystalOathSceneContext, enemy: EnemyState, x: number, y: number, s: number, displaySize = 96) {
   const texture = ENEMY_TEXTURES[enemy.id];
   if (texture && this.hasTexture(texture)) {
-    this.drawTexture(texture, x, y, displaySize, displaySize, LAYER_BATTLE_IMAGE, enemy.hp <= 0 ? 0.28 : 1, undefined, true);
+    this.drawTexture(texture, x, y, displaySize, displaySize, LAYER_BATTLE_IMAGE, enemy.hp <= 0 ? 0.28 : 1);
     return;
   }
   const p = enemy.palette.map((c) => parseInt(c.slice(1), 16));

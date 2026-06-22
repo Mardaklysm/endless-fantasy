@@ -27,9 +27,10 @@ Use this map to jump to the right source before reading broad code.
 
 ## Assets
 
-- Root `assets/`, `assets_v2/`, and `src/assets/world/` asset path/glob resolution: `src/assets/assetPaths.ts`
+- Root `assets/`, legacy `assets_v2/`, and runtime-preferred `src/assets/` asset path/glob resolution: `src/assets/assetPaths.ts`
 - Texture-key lookup maps for locations, enemies, portraits, party classes, towns, and dungeon atlas themes: `src/assets/textureKeys.ts`
 - Active current overworld asset manifest helpers: `src/data/worldCurrentAssets.ts`
+- Active common/boss enemy battle art: `src/assets/enemies/`
 - Cloud manifest helpers: `src/data/worldCloudAssets.ts`
 - Character class sprite manifest: `src/data/characterSprites.ts`
 - Dungeon atlas manifest helpers and `DUNGEON_ATLAS_SOURCE_INSET`: `src/data/dungeonTiles.ts`
