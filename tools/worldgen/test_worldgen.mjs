@@ -98,14 +98,14 @@ function validateCurrentWorldAssetManifest() {
     if (asset.assetKind === "world object") {
       assert(asset.qualityFlag === "approved" && !asset.placeholder, `${asset.id} must be an approved world object, not a placeholder.`);
       assert(
-        asset.source === "world_objects_v2" || asset.source === "world_objects_v2_relaxed" || asset.source === "premium_bg_output",
+        asset.source === "world_objects_v2" || asset.source === "world_objects_v2_relaxed" || asset.source === "premium_bg_output" || asset.source === "objects_premium_v2",
         `${asset.id} should record an approved world object source.`
       );
       assert(asset.transparencyStatus === "alpha", `${asset.id} world object should be transparent.`);
       assert(asset.backgroundRemovalMethod, `${asset.id} should record its background removal method.`);
       if (asset.premium) {
-        assert(asset.source === "premium_bg_output", `${asset.id} premium object should record premium_bg_output as its source.`);
-        assert(asset.filename.startsWith("objects_premium/"), `${asset.id} premium object should live in objects_premium.`);
+        assert(asset.source === "premium_bg_output" || asset.source === "objects_premium_v2", `${asset.id} premium object should record an approved premium source.`);
+        assert(asset.filename.startsWith("objects_premium/") || asset.filename.startsWith("objects_premium_v2/"), `${asset.id} premium object should live in a premium object folder.`);
         assert(
           asset.dimensions.width >= 64 && asset.dimensions.width <= 1024 && asset.dimensions.height >= 64 && asset.dimensions.height <= 1024,
           `${asset.id} premium object should keep sane runtime dimensions, got ${asset.dimensions.width}x${asset.dimensions.height}.`
@@ -121,7 +121,7 @@ function validateCurrentWorldAssetManifest() {
   }
   const approvedObjectFilenames = new Set(worldObjectAssets.map((asset) => asset.filename.replaceAll("\\", "/")));
   const runtimeObjectFiles = [];
-  for (const folder of ["objects", "objects_premium"]) {
+  for (const folder of ["objects", "objects_premium", "objects_premium_v2"]) {
     const objectRuntimeFolder = path.join(PROJECT_ROOT, WORLD_CURRENT_ASSET_MANIFEST.runtimeRoot, folder);
     const filenames = fs.existsSync(objectRuntimeFolder) ? fs.readdirSync(objectRuntimeFolder).filter((filename) => filename.endsWith(".png")) : [];
     for (const filename of filenames) runtimeObjectFiles.push(`${folder}/${filename}`);

@@ -66,7 +66,7 @@ export function logActiveWorldTileset(this: CrystalOathSceneContext) {
       `Backup world objects: ${worldObjectAssets.length - premiumWorldObjectAssets.length}`,
       `Cloud overlay fallback theme: ${WORLD_CLOUD_MANIFEST.fallbackTheme} (${WORLD_CLOUD_ASSETS.length} loaded base cloud assets)`,
       `Temporary current-folder placeholders: ${placeholderAssets.length}`,
-      "World object resolution: premium objects_premium first, backup objects second, generated fallback last",
+      "World object resolution: premium objects_premium_v2 first, objects_premium second, backup objects third, generated fallback last",
       `Deep ocean: ${WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.deepOcean}`,
       `Shallow water: ${WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.shallowWater}`,
       `Beach: ${WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.beach}`,

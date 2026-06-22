@@ -44,6 +44,27 @@ export interface WorldCurrentAssetRecord {
   notes: string;
 }
 
+export type WorldPremiumV2PoiCategory =
+  | "harbor"
+  | "camp"
+  | "cave"
+  | "ice_palace"
+  | "village"
+  | "dark_fortress"
+  | "desert_ruins"
+  | "desert_settlement"
+  | "volcanic_fortress"
+  | "farming_settlement";
+
+export interface WorldPremiumV2PoiClassification {
+  textureKey: string;
+  category: WorldPremiumV2PoiCategory;
+  sourceFolder: "objects_premium_v2";
+  visualSummary: string;
+  preferredPoiRoles: string[];
+  unusedReason?: string;
+}
+
 export interface WorldCurrentAssetManifest {
   schemaVersion: number;
   id: string;
@@ -94,8 +115,45 @@ export interface WorldCurrentAssetManifest {
   assets: WorldCurrentAssetRecord[];
 }
 
+const WORLD_CURRENT_PREMIUM_V2_RECORDS = [
+  v2Asset("premium_v2_harbor_fishing_village", "Fantasy_JRPG_POI_asset_202606221516.png", "harbor", "Fishing village with huts, dock, boat, and water edge.", ["harbor", "coastal settlement"], 0.98),
+  v2Asset("premium_v2_adventurer_camp", "Fantasy_JRPG_POI_asset_202606221516_2.png", "camp", "Canvas tents around a campfire on dry ground.", ["camp", "settlement", "minor harbor fallback"], 0.9),
+  v2Asset("premium_v2_sandy_cave_bones", "Fantasy_JRPG_POI_asset_202606221516_3.png", "cave", "Sandy cave mouth with bones and clawlike remains.", ["cave", "desert cave"], 0.9),
+  v2Asset("premium_v2_ice_palace", "Fantasy_JRPG_POI_asset_202606221516_4.png", "ice_palace", "Blue ice palace framed by frozen spires.", ["ice dungeon", "snow landmark"], 0.96),
+  v2Asset("premium_v2_greenhaven_village", "Fantasy_JRPG_POI_asset_202606221516_5.png", "village", "Bright grassland village with cottages and trees.", ["starting village", "grass settlement"], 1),
+  v2Asset("premium_v2_moss_cave", "Fantasy_JRPG_POI_asset_202606221516_6.png", "cave", "Mossy green cave entrance in a rocky hill.", ["cave", "grass dungeon"], 0.95),
+  v2Asset("premium_v2_dark_fortress", "Fantasy_JRPG_POI_asset_202606221516_7.png", "dark_fortress", "Black spired evil fortress with a dark gate.", ["final", "dark fortress", "major danger"], 0.97),
+  v2Asset("premium_v2_desert_ruins", "Fantasy_JRPG_POI_asset_202606221516_8.png", "desert_ruins", "Sandstone ruin/cave structure with palms.", ["desert ruins", "sand dungeon"], 0.94),
+  v2Asset("premium_v2_desert_town_market", "premium_desert_town_market.png_202606221516.png", "desert_settlement", "Desert market town with domes, palms, and stalls.", ["desert settlement", "sand town"], 0.96, undefined, 512),
+  v2Asset("premium_v2_volcanic_fortress", "premium_volcanic_fortress.png_202606221516.png", "volcanic_fortress", "Volcanic black fortress with lava and red-lit towers.", ["volcanic dungeon", "fire landmark"], 0.98, undefined, 512),
+  v2Asset("premium_v2_sandy_cave_arch", "Use_the_first_attached_image_202606221516.png", "cave", "Large sandy cave arch with a dark entrance.", ["cave", "desert cave"], 0.9),
+  v2Asset(
+    "premium_v2_farming_village",
+    "Use_the_first_attached_image_202606221516_2.png",
+    "farming_settlement",
+    "Farm village with barn, silo, cottages, and fields.",
+    ["farm settlement", "grass settlement"],
+    0.95,
+    "No non-starting grass settlement slot exists in the current campaign; Greenhaven is hard-pinned to premium_v2_greenhaven_village."
+  )
+] as const satisfies readonly WorldCurrentAssetRecord[];
+
+export const WORLD_CURRENT_PREMIUM_V2_CLASSIFICATIONS = Object.fromEntries(
+  WORLD_CURRENT_PREMIUM_V2_RECORDS.map((asset) => [
+    asset.textureKey,
+    {
+      textureKey: asset.textureKey,
+      category: asset.subcategory,
+      sourceFolder: "objects_premium_v2",
+      visualSummary: asset.visualRationale,
+      preferredPoiRoles: asset.tags ?? [],
+      unusedReason: asset.notes.startsWith("Potentially unused: ") ? asset.notes.replace("Potentially unused: ", "") : undefined
+    }
+  ])
+) as Record<string, WorldPremiumV2PoiClassification>;
+
 export const WORLD_CURRENT_ASSET_MANIFEST = worldAssetManifestJson as WorldCurrentAssetManifest;
-export const WORLD_CURRENT_ASSETS = WORLD_CURRENT_ASSET_MANIFEST.assets as readonly WorldCurrentAssetRecord[];
+export const WORLD_CURRENT_ASSETS = [...WORLD_CURRENT_ASSET_MANIFEST.assets, ...WORLD_CURRENT_PREMIUM_V2_RECORDS] as readonly WorldCurrentAssetRecord[];
 export const WORLD_CURRENT_ASSET_BY_TEXTURE_KEY = Object.fromEntries(WORLD_CURRENT_ASSETS.map((asset) => [asset.textureKey, asset])) as Record<
   string,
   WorldCurrentAssetRecord
@@ -137,6 +195,8 @@ export function worldCurrentObjectTextureKey(objectId?: string): string | undefi
 }
 
 export function worldCurrentPoiTextureKeyFor(poi: WorldCurrentPoiDescriptor): string | undefined {
+  const premiumV2Key = worldCurrentPremiumV2PoiTextureKeyFor(poi);
+  if (premiumV2Key) return premiumV2Key;
   const themedKey = worldCurrentThemedPoiTextureKeyFor(poi);
   if (themedKey) return themedKey;
   if (poi.id && WORLD_CURRENT_LOCATION_TEXTURE_KEY_BY_ID[poi.id]) return WORLD_CURRENT_LOCATION_TEXTURE_KEY_BY_ID[poi.id];
@@ -147,6 +207,81 @@ export function worldCurrentPoiTextureKeyFor(poi: WorldCurrentPoiDescriptor): st
   if (variantKey) return variantKey;
   if (poi.kind && WORLD_CURRENT_POI_TEXTURE_KEYS[poi.kind]) return WORLD_CURRENT_POI_TEXTURE_KEYS[poi.kind];
   return worldCurrentObjectTextureKey(poi.objectId);
+}
+
+export function worldCurrentPremiumV2PoiTextureKeyFor(poi: WorldCurrentPoiDescriptor): string | undefined {
+  const exact = premiumV2ExactTextureKeyFor(poi);
+  if (exact) return exact;
+  const islandId = poi.islandId ?? "";
+  if (poi.kind === "harbor") return existingTextureKey("world_current_object_premium_v2_harbor_fishing_village");
+  if (poi.kind === "town") {
+    if (islandId === "coralreach") return existingTextureKey("world_current_object_premium_v2_desert_town_market");
+    if (islandId === "highspire") return existingTextureKey("world_current_object_premium_v2_adventurer_camp");
+  }
+  if (poi.kind === "dungeon") {
+    if (islandId === "frostmere") return existingTextureKey("world_current_object_premium_v2_ice_palace");
+    if (islandId === "coralreach") return existingTextureKey("world_current_object_premium_v2_desert_ruins");
+    if (islandId === "highspire") return existingTextureKey("world_current_object_premium_v2_volcanic_fortress");
+    if (islandId === "greenhaven") return existingTextureKey("world_current_object_premium_v2_moss_cave");
+  }
+  if (poi.kind === "final") return existingTextureKey("world_current_object_premium_v2_dark_fortress");
+  if (poi.landmarkKind === "cave") return deterministicPremiumV2CaveTextureKeyFor(poi);
+  if (poi.landmarkKind === "ruins" && (islandId === "coralreach" || poi.id?.toLowerCase().includes("tide"))) {
+    return existingTextureKey("world_current_object_premium_v2_desert_ruins");
+  }
+  return undefined;
+}
+
+export function worldCurrentPoiAssetDebugLine(poi: WorldCurrentPoiDescriptor): string {
+  const textureKey = worldCurrentPoiTextureKeyFor(poi);
+  const asset = worldCurrentAssetByTextureKey(textureKey);
+  const v2 = textureKey ? WORLD_CURRENT_PREMIUM_V2_CLASSIFICATIONS[textureKey] : undefined;
+  const sourceFolder = asset?.filename.includes("/") ? asset.filename.split("/")[0] : "generated";
+  const visual = v2 ? ` (${v2.category}: ${v2.visualSummary})` : "";
+  return `${poi.id ?? "unknown"} [${poi.kind ?? poi.landmarkKind ?? "unknown"}] -> ${textureKey ?? "generated fallback"} from ${sourceFolder}${visual}`;
+}
+
+export function worldCurrentPremiumV2UnusedNotesFor(pois: readonly WorldCurrentPoiDescriptor[]): string[] {
+  const used = new Set(pois.map((poi) => worldCurrentPoiTextureKeyFor(poi)).filter((key): key is string => !!key));
+  return WORLD_CURRENT_PREMIUM_V2_RECORDS.filter((asset) => !used.has(asset.textureKey)).map((asset) => {
+    const classification = WORLD_CURRENT_PREMIUM_V2_CLASSIFICATIONS[asset.textureKey];
+    const reason = classification.unusedReason ?? `No generated POI in this seed matched ${classification.preferredPoiRoles.join(", ")} without visual mismatch.`;
+    return `${asset.textureKey} (${classification.category}) unused: ${reason}`;
+  });
+}
+
+function premiumV2ExactTextureKeyFor(poi: WorldCurrentPoiDescriptor): string | undefined {
+  const byId: Record<string, string> = {
+    dawnford: "world_current_object_premium_v2_greenhaven_village",
+    greenhavenHarbor: "world_current_object_premium_v2_harbor_fishing_village",
+    mossCave: "world_current_object_premium_v2_moss_cave",
+    brinewick: "world_current_object_premium_v2_desert_town_market",
+    coralreachHarbor: "world_current_object_premium_v2_harbor_fishing_village",
+    tideShrine: "world_current_object_premium_v2_desert_ruins",
+    elderleaf: "world_current_object_premium_snow_village",
+    frostmereHarbor: "world_current_object_premium_v2_harbor_fishing_village",
+    skyglassTower: "world_current_object_premium_v2_ice_palace",
+    sunbarrow: "world_current_object_premium_v2_adventurer_camp",
+    highspireHarbor: "world_current_object_premium_v2_harbor_fishing_village",
+    ashenKeep: "world_current_object_premium_v2_volcanic_fortress",
+    eclipseSpire: "world_current_object_premium_v2_dark_fortress"
+  };
+  return existingTextureKey(poi.id ? byId[poi.id] : undefined);
+}
+
+function deterministicPremiumV2CaveTextureKeyFor(poi: WorldCurrentPoiDescriptor): string | undefined {
+  const caveKeys =
+    poi.islandId === "greenhaven"
+      ? ["world_current_object_premium_v2_moss_cave", "world_current_object_premium_v2_sandy_cave_bones", "world_current_object_premium_v2_sandy_cave_arch"]
+      : ["world_current_object_premium_v2_sandy_cave_arch", "world_current_object_premium_v2_sandy_cave_bones", "world_current_object_premium_v2_moss_cave"];
+  const basis = `${poi.id ?? "cave"}:${poi.islandId ?? ""}:${poi.x ?? 0}:${poi.y ?? 0}`;
+  const offset = stableHash(basis) % caveKeys.length;
+  for (let index = 0; index < caveKeys.length; index += 1) {
+    const key = caveKeys[(offset + index) % caveKeys.length];
+    const existing = existingTextureKey(key);
+    if (existing) return existing;
+  }
+  return undefined;
 }
 
 function worldCurrentThemedPoiTextureKeyFor(poi: WorldCurrentPoiDescriptor): string | undefined {
@@ -222,6 +357,61 @@ function worldCurrentPoiVariantTextureKeyFor(poi: WorldCurrentPoiDescriptor): st
   return variants[hash % variants.length];
 }
 
+function stableHash(value: string): number {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  return hash;
+}
+
 function mergeTextureMaps<T extends Record<string, string>>(fallback: T, preferred?: Record<string, string>): T {
   return { ...fallback, ...(preferred ?? {}) } as T;
+}
+
+function v2Asset(
+  id: string,
+  filename: string,
+  category: WorldPremiumV2PoiCategory,
+  visualRationale: string,
+  tags: string[],
+  recommendedScale: number,
+  unusedReason?: string,
+  dimensions = 1024
+): WorldCurrentAssetRecord {
+  return {
+    id,
+    textureKey: `world_current_object_${id}`,
+    sourceFilename: filename,
+    sourceSemanticId: id,
+    newCanonicalFilename: `objects_premium_v2/${filename}`,
+    filename: `objects_premium_v2/${filename}`,
+    category: "premium_v2_poi",
+    subcategory: category,
+    semanticRole: `poi:${category}`,
+    intendedRuntimeUsage: tags.join(", "),
+    assetKind: "world object",
+    dimensions: { width: dimensions, height: dimensions },
+    transparencyStatus: "alpha",
+    magentaKeyRemovalNeeded: false,
+    scaleCropPadNeeded: "none",
+    placeholder: false,
+    qualityFlag: "approved",
+    selectedSourceFile: filename,
+    selectedSourceRow: null,
+    selectedSourceCol: null,
+    visualRationale,
+    backgroundRemovalMethod: "alpha_preserved",
+    anchorX: 0.5,
+    anchorY: 0.92,
+    footprintWidth: 2,
+    footprintHeight: 2,
+    recommendedScale,
+    placementLayer: "poi",
+    tags,
+    source: "objects_premium_v2",
+    premium: true,
+    qualityBucket: "premium_v2",
+    integrationRole: `poi:${category}`,
+    integrationStatus: "integrated",
+    notes: unusedReason ? `Potentially unused: ${unusedReason}` : "Premium v2 visually classified POI asset; preferred before objects_premium and objects fallbacks."
+  };
 }

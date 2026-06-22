@@ -6,6 +6,7 @@ import {
   type WorldTileId
 } from "../data/worldTiles.ts";
 import { WORLD_OBJECT_IDS, type WorldObjectId } from "../data/worldObjects.ts";
+import { worldCurrentPoiAssetDebugLine, worldCurrentPremiumV2UnusedNotesFor } from "../data/worldCurrentAssets.ts";
 import { hashNoise } from "./seededRng.ts";
 import { ENABLE_RANDOM_BRIDGE_DECORATION, generateSemanticWorld } from "./semantic/semanticGenerator.ts";
 import { CAMPAIGN_WORLD_PROFILE } from "./semantic/semanticProfiles.ts";
@@ -200,6 +201,8 @@ export function validateGeneratedWorld(world: GeneratedWorld): WorldValidationRe
 }
 
 export function buildWorldDebugReport(world: GeneratedWorld): string {
+  const poiAssetLines = world.pois.map((poi) => worldCurrentPoiAssetDebugLine(poi));
+  const unusedPremiumV2Lines = worldCurrentPremiumV2UnusedNotesFor(world.pois);
   const lines = [
     `# Semantic World Debug Report`,
     ``,
@@ -218,7 +221,15 @@ export function buildWorldDebugReport(world: GeneratedWorld): string {
     ``,
     `Valid: ${world.validation.valid ? "yes" : "no"}`,
     `Errors: ${world.validation.errors.length ? world.validation.errors.join("; ") : "none"}`,
-    `Warnings: ${world.validation.warnings.length ? world.validation.warnings.join("; ") : "none"}`
+    `Warnings: ${world.validation.warnings.length ? world.validation.warnings.join("; ") : "none"}`,
+    ``,
+    `## POI Assets`,
+    ``,
+    ...poiAssetLines,
+    ``,
+    `## Premium V2 Unused`,
+    ``,
+    ...(unusedPremiumV2Lines.length ? unusedPremiumV2Lines : ["none"])
   ];
   return `${lines.join("\n")}\n`;
 }

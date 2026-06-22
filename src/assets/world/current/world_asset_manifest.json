@@ -9,7 +9,7 @@
     "selectionStandard": "approved-subset-only; missing art is preferred to bad art",
     "approvedObjectsFolder": "D:\\new_items\\output\\approved_objects",
     "approvedObjectsMetadata": "D:\\new_items\\output\\world_objects_v2_metadata.json",
-    "approvedWorldObjectCount": 304,
+    "approvedWorldObjectCount": 316,
     "objectSelectionStandard": "strict/relaxed curated backup assets plus approved premium bg_output pass; premium objects are preferred, backup objects remain fallback, and deleted backup PNGs stay removed",
     "relaxedObjectsFolder": "D:\\new_items\\output_relaxed\\game_ready_objects",
     "relaxedTouchupObjectsFolder": "D:\\new_items\\output_relaxed\\touchup_needed_objects",
@@ -19,7 +19,8 @@
     "backupWorldObjectCount": 160,
     "premiumSourceFolder": "D:\\Tools\\rembg\\bg_output",
     "premiumRuntimeFolder": "src/assets/world/current/objects_premium",
-    "premiumWorldObjectCount": 144,
+    "premiumV2RuntimeFolder": "src/assets/world/current/objects_premium_v2",
+    "premiumWorldObjectCount": 156,
     "legacyAtlasV3RuntimeFolder": "src/assets/world/current/terrain_v1",
     "legacyAtlasV3SourceCommit": "2b01833",
     "legacyAtlasV3Selection": "Restored atlas_v3 semantic mask source cells for water, sand, and snow after current material fill regression."
@@ -151,7 +152,7 @@
     {
       "role": "premium object layer",
       "status": "active_premium_first",
-      "notes": "Premium transparent objects from objects_premium are preferred for matching object, POI, route, and overlay roles; src/assets/world/current/objects remains backup/fallback."
+      "notes": "Premium transparent POI assets from objects_premium_v2 are preferred first when visually appropriate, then objects_premium, then src/assets/world/current/objects as backup/fallback."
     },
     {
       "role": "settlement/city/harbor/castle POI sprites",
