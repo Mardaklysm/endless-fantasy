@@ -526,10 +526,11 @@ function buildMountainPatchOverlays(semantic: SemanticWorld, range: SemanticWorl
   if (!cells.length) return [];
   const overlays: WorldObjectOverlay[] = [];
   const rangeObjectId = mountainRangeObjectId(semantic, range);
-  const visualCount = range.smallOutcrop ? 1 : Math.max(1, Math.min(5, Math.ceil(cells.length / 18)));
-  const anchors = pickSpreadAnchors(semantic.seed, range.id, cells, visualCount);
   const width = range.bounds.maxX - range.bounds.minX + 1;
   const height = range.bounds.maxY - range.bounds.minY + 1;
+  const longAxis = Math.max(width, height);
+  const visualCount = range.smallOutcrop ? 1 : Math.max(1, Math.min(10, Math.ceil(cells.length / 10), Math.ceil(longAxis / 2.6)));
+  const anchors = pickCoverageAnchors(semantic.seed, range.id, cells, visualCount);
   for (let visualIndex = 0; visualIndex < anchors.length; visualIndex += 1) {
     const anchor = anchors[visualIndex];
     const scaleRoll = hashNoise(`${semantic.seed}:mountain-patch-scale:${range.id}:${visualIndex}`, anchor.x, anchor.y);
@@ -537,7 +538,7 @@ function buildMountainPatchOverlays(semantic: SemanticWorld, range: SemanticWorl
     const offsetRollY = hashNoise(`${semantic.seed}:mountain-patch-offset-y:${range.id}:${visualIndex}`, anchor.x, anchor.y);
     const normalizedY = range.bounds.maxY === range.bounds.minY ? 0.5 : (anchor.y - range.bounds.minY) / (range.bounds.maxY - range.bounds.minY);
     const largeBackPeakBias = 1 - normalizedY;
-    const coverageScale = Math.min(4.35, Math.max(1.6, Math.sqrt(cells.length / Math.max(1, visualCount)) * 0.82, Math.min(width, height) * 0.48));
+    const coverageScale = Math.min(4.55, Math.max(2.15, Math.sqrt(cells.length / Math.max(1, visualCount)) * 0.88, Math.min(width, height) * 0.5));
     overlays.push({
       id: `mountain-${range.id}-patch-${visualIndex}`,
       x: anchor.x,
@@ -627,6 +628,40 @@ function pickSpreadAnchors(seed: string, salt: string, cells: WorldVec[], count:
     if (anchors.length >= count) break;
   }
   return anchors.length ? anchors : [cells[Math.floor(cells.length / 2)]];
+}
+
+function pickCoverageAnchors(seed: string, salt: string, cells: WorldVec[], count: number): WorldVec[] {
+  if (count <= 1 || cells.length <= 1) return [centerCell(seed, salt, cells)];
+  const anchors = [centerCell(seed, salt, cells)];
+  while (anchors.length < count) {
+    let bestCell: WorldVec | undefined;
+    let bestScore = -Infinity;
+    for (const cell of cells) {
+      if (anchors.some((anchor) => anchor.x === cell.x && anchor.y === cell.y)) continue;
+      const nearestDistance = Math.min(...anchors.map((anchor) => Math.hypot(anchor.x - cell.x, anchor.y - cell.y)));
+      const edgeBias = Math.abs(cell.x - anchors[0].x) + Math.abs(cell.y - anchors[0].y);
+      const jitter = hashNoise(`${seed}:coverage-anchor:${salt}:${anchors.length}`, cell.x, cell.y) * 0.18;
+      const score = nearestDistance + edgeBias * 0.08 + jitter;
+      if (score > bestScore) {
+        bestScore = score;
+        bestCell = cell;
+      }
+    }
+    if (!bestCell) break;
+    anchors.push(bestCell);
+  }
+  return anchors;
+}
+
+function centerCell(seed: string, salt: string, cells: WorldVec[]): WorldVec {
+  const center = cells.reduce((sum, cell) => ({ x: sum.x + cell.x, y: sum.y + cell.y }), { x: 0, y: 0 });
+  center.x /= cells.length;
+  center.y /= cells.length;
+  return [...cells].sort((a, b) => {
+    const distanceA = Math.hypot(a.x - center.x, a.y - center.y);
+    const distanceB = Math.hypot(b.x - center.x, b.y - center.y);
+    return distanceA - distanceB || hashNoise(`${seed}:center-anchor:${salt}`, b.x, b.y) - hashNoise(`${seed}:center-anchor:${salt}`, a.x, a.y);
+  })[0];
 }
 
 function mountainRangeObjectId(

@@ -5563,6 +5563,7 @@ Statuses: ${statuses}`;
   private drawWorldOverlays(startX: number, endX: number, startY: number, endY: number, tileCam: Vec) {
     if (!this.generatedWorld) return;
     const overlayGraphics = this.worldOverlay;
+    this.drawMountainFootprints(startX, endX, startY, endY, tileCam);
     const inView = (pos: Vec, margin = 0) => pos.x >= startX - margin && pos.x <= endX + margin && pos.y >= startY - margin && pos.y <= endY + margin;
     const visibleObjectOverlays = this.generatedWorld.objectOverlays
       .filter((overlay) => inView(overlay, 2))
@@ -5593,6 +5594,51 @@ Statuses: ${statuses}`;
       const sy = (overlay.y + (overlay.offsetY ?? 0)) * TILE - tileCam.y + TILE / 2 - displaySize / 2;
       this.drawWorldObjectCell(overlay.objectId, sx, sy, displaySize, displaySize, overlay.alpha ?? 0.92);
     }
+  }
+
+  private drawMountainFootprints(startX: number, endX: number, startY: number, endY: number, tileCam: Vec) {
+    const semantic = this.generatedWorld?.semantic;
+    if (!semantic) return;
+    for (let y = startY; y <= endY; y += 1) {
+      for (let x = startX; x <= endX; x += 1) {
+        if (x < 0 || y < 0 || x >= semantic.width || y >= semantic.height) continue;
+        const i = y * semantic.width + x;
+        if (!semantic.layers.mountainMap[i]) continue;
+        const islandId = semantic.islandIndexToId.get(semantic.layers.islandId[i]);
+        const palette = this.mountainFootprintPalette(semantic.layers.biome[i], islandId);
+        const sx = x * TILE - tileCam.x;
+        const sy = y * TILE - tileCam.y;
+        const north = y > 0 && semantic.layers.mountainMap[(y - 1) * semantic.width + x];
+        const south = y < semantic.height - 1 && semantic.layers.mountainMap[(y + 1) * semantic.width + x];
+        const west = x > 0 && semantic.layers.mountainMap[y * semantic.width + x - 1];
+        const east = x < semantic.width - 1 && semantic.layers.mountainMap[y * semantic.width + x + 1];
+        const roll = hashNoise(`${semantic.seed}:mountain-footprint:${islandId ?? "minor"}`, x, y);
+        const inset = 3 + Math.floor(roll * 3);
+        this.worldOverlay.fillStyle(palette.shadow, south ? 0.2 : 0.32).fillRect(sx + inset, sy + TILE - 8, TILE - inset * 2, 5);
+        this.worldOverlay.fillStyle(palette.base, 0.34).fillRect(sx + inset, sy + 6, TILE - inset * 2, TILE - 11);
+        this.worldOverlay.fillStyle(palette.accent, 0.16).fillTriangle(sx + 7, sy + 23, sx + 15, sy + 9, sx + 22, sy + 23);
+        if (!north) this.worldOverlay.fillStyle(palette.highlight, 0.28).fillRect(sx + 7, sy + 5, TILE - 14, 2);
+        if (!west) this.worldOverlay.fillStyle(palette.edge, 0.2).fillRect(sx + 3, sy + 10, 3, TILE - 16);
+        if (!east) this.worldOverlay.fillStyle(palette.edge, 0.2).fillRect(sx + TILE - 6, sy + 10, 3, TILE - 16);
+        if (!south) this.worldOverlay.fillStyle(palette.edge, 0.28).fillRect(sx + 7, sy + TILE - 8, TILE - 14, 3);
+        if (roll > 0.42) {
+          this.worldOverlay.fillStyle(palette.highlight, 0.22).fillRect(sx + 10 + Math.floor(roll * 4), sy + 15, 8, 3);
+        }
+      }
+    }
+  }
+
+  private mountainFootprintPalette(biome: number, islandId?: string): { base: number; accent: number; highlight: number; edge: number; shadow: number } {
+    if (biome === SEMANTIC_BIOME.ICE || islandId === "frostmere") {
+      return { base: 0xa8bfca, accent: 0xd9edf3, highlight: 0xf6ffff, edge: 0x6f8795, shadow: 0x405866 };
+    }
+    if (islandId === "highspire") {
+      return { base: 0x5b5149, accent: 0x7b6c60, highlight: 0x998b7d, edge: 0x312b28, shadow: 0x1c1918 };
+    }
+    if (islandId === "coralreach") {
+      return { base: 0x8b7a55, accent: 0xb6a36d, highlight: 0xd6c68b, edge: 0x4f4735, shadow: 0x2f2a21 };
+    }
+    return { base: 0x68724d, accent: 0x92a260, highlight: 0xb7c47c, edge: 0x384126, shadow: 0x202817 };
   }
 
   private drawWorldPoiAprons(startX: number, endX: number, startY: number, endY: number, tileCam: Vec) {
