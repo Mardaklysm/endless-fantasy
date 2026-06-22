@@ -79,6 +79,11 @@ interface MountainCandidate extends SemanticVec {
   ridgeSupport: number;
 }
 
+interface RoadConnection {
+  from: SemanticPoi;
+  to: SemanticPoi;
+}
+
 interface MountainMassifPlan {
   maxRegions: number;
   minSize: number;
@@ -1496,27 +1501,93 @@ function buildRoadGraph(
   const roadBlocked = semanticPoiFootprintKeySet(poiList);
   for (const island of islands) {
     if (!island.allowRoads) continue;
-    const pois = poiList.filter((poi) => poi.islandId === island.id);
-    if (pois.length < 2) continue;
-    const roots = pois.filter((poi) => poi.role === "settlement");
-    const root = roots[0] ?? pois[0];
-    const targets = uniqueBy(
-      [...harbors.filter((poi) => poi.islandId === island.id), ...pois.filter((poi) => poi !== root && poi.role !== "landmark").slice(0, 4)],
-      (poi) => poi.id
-    );
-    for (const target of targets) {
-      const start = chooseRoadApproachCell(width, height, landMask, islandId, island.order + 1, waterClass, lakeMap, riverMap, mountainMap, root, target, roadBlocked) ?? root;
-      const goal = chooseRoadApproachCell(width, height, landMask, islandId, island.order + 1, waterClass, lakeMap, riverMap, mountainMap, target, root, roadBlocked) ?? target;
-      const path = findRoadPath(width, height, seed, landMask, islandId, island.order + 1, biome, waterClass, lakeMap, riverMap, distanceToWater, mountainMap, start, goal, roadBlocked);
+    const islandPois = poiList.filter((poi) => poi.islandId === island.id && shouldRoadConnectPoi(poi));
+    if (islandPois.length < 2) continue;
+    const connections = buildSparseRoadConnections(island, islandPois, harbors.filter((poi) => poi.islandId === island.id));
+    for (const connection of connections) {
+      const start = chooseRoadApproachCell(width, height, landMask, islandId, island.order + 1, waterClass, lakeMap, riverMap, mountainMap, connection.from, connection.to, roadBlocked) ?? connection.from;
+      const goal = chooseRoadApproachCell(width, height, landMask, islandId, island.order + 1, waterClass, lakeMap, riverMap, mountainMap, connection.to, connection.from, roadBlocked) ?? connection.to;
+      const path = findRoadPath(width, height, seed, landMask, islandId, island.order + 1, biome, waterClass, lakeMap, riverMap, distanceToWater, mountainMap, roadMap, start, goal, roadBlocked);
       if (!path.length) {
-        edges.push({ from: root.id, to: target.id, connected: false, length: 0, path: [] });
+        edges.push({ from: connection.from.id, to: connection.to.id, connected: false, length: 0, path: [] });
         continue;
       }
       for (const cell of path) roadMap[index(width, cell.x, cell.y)] = 1;
-      edges.push({ from: root.id, to: target.id, connected: true, length: path.length, path });
+      edges.push({ from: connection.from.id, to: connection.to.id, connected: true, length: path.length, path });
     }
   }
   return { edges };
+}
+
+function shouldRoadConnectPoi(poi: SemanticPoi): boolean {
+  if (poi.role === "settlement" || poi.role === "port" || poi.role === "dungeon" || poi.role === "gate" || poi.role === "final") return true;
+  return poi.type === "cave" || poi.type === "ruins" || poi.type === "shrine" || poi.type === "tower";
+}
+
+function buildSparseRoadConnections(island: SemanticIslandRecord, pois: SemanticPoi[], harbors: SemanticPoi[]): RoadConnection[] {
+  const connections = new Map<string, RoadConnection>();
+  const settlements = pois.filter((poi) => poi.role === "settlement");
+  const ports = uniqueBy([...harbors, ...pois.filter((poi) => poi.role === "port")], (poi) => poi.id);
+  const important = pois
+    .filter((poi) => poi.role !== "settlement" && poi.role !== "port")
+    .sort((a, b) => roadPoiPriority(b) - roadPoiPriority(a) || distanceToIslandCenter(a, island) - distanceToIslandCenter(b, island));
+  const islandSpan = Math.hypot(island.bounds.maxX - island.bounds.minX + 1, island.bounds.maxY - island.bounds.minY + 1);
+  const localRange = Math.max(18, islandSpan * 0.52);
+
+  for (const settlement of settlements) {
+    const nearestPort = nearestPoi(settlement, ports);
+    if (nearestPort) addRoadConnection(connections, settlement, nearestPort);
+    for (const target of nearestPois(settlement, important, 2).filter((poi) => Math.hypot(poi.x - settlement.x, poi.y - settlement.y) <= localRange)) {
+      addRoadConnection(connections, settlement, target);
+    }
+    const nearestSettlement = nearestPoi(
+      settlement,
+      settlements.filter((poi) => poi !== settlement && Math.hypot(poi.x - settlement.x, poi.y - settlement.y) <= localRange * 0.85)
+    );
+    if (nearestSettlement) addRoadConnection(connections, settlement, nearestSettlement);
+  }
+
+  if (!settlements.length) {
+    const root = [...ports, ...important].sort((a, b) => roadPoiPriority(b) - roadPoiPriority(a))[0];
+    if (root) for (const target of nearestPois(root, pois.filter((poi) => poi !== root), 2)) addRoadConnection(connections, root, target);
+  }
+
+  const primary = settlements[0] ?? ports[0];
+  if (primary && connections.size <= 1) {
+    for (const target of nearestPois(primary, pois.filter((poi) => poi !== primary), 2)) addRoadConnection(connections, primary, target);
+  }
+
+  return [...connections.values()].slice(0, Math.max(2, Math.min(6, Math.ceil(pois.length * 0.9))));
+}
+
+function addRoadConnection(connections: Map<string, RoadConnection>, from: SemanticPoi, to: SemanticPoi) {
+  if (from.id === to.id) return;
+  const key = [from.id, to.id].sort().join("->");
+  if (!connections.has(key)) connections.set(key, { from, to });
+}
+
+function roadPoiPriority(poi: SemanticPoi): number {
+  if (poi.role === "settlement") return 7;
+  if (poi.role === "port") return 6;
+  if (poi.role === "final" || poi.role === "gate") return 5;
+  if (poi.role === "dungeon" || poi.type === "cave" || poi.type === "ruins" || poi.type === "tower") return 4;
+  if (poi.type === "shrine") return 3;
+  return 1;
+}
+
+function nearestPoi(from: SemanticPoi, candidates: SemanticPoi[]): SemanticPoi | undefined {
+  return nearestPois(from, candidates, 1)[0];
+}
+
+function nearestPois(from: SemanticPoi, candidates: SemanticPoi[], count: number): SemanticPoi[] {
+  return candidates
+    .filter((candidate) => candidate.id !== from.id)
+    .sort((a, b) => squaredDistance(from, a) - squaredDistance(from, b))
+    .slice(0, count);
+}
+
+function distanceToIslandCenter(poi: SemanticPoi, island: SemanticIslandRecord): number {
+  return Math.hypot(poi.x - island.center.x, poi.y - island.center.y);
 }
 
 function clearPoiFootprintRoadCells(width: number, height: number, roadMap: Uint8Array, poiList: SemanticPoi[]) {
@@ -1577,6 +1648,7 @@ function findRoadPath(
   riverMap: Uint8Array,
   distanceToWater: Int16Array,
   mountainMap: Uint8Array,
+  roadMap: Uint8Array,
   start: SemanticVec,
   goal: SemanticVec,
   blocked?: Set<string>
@@ -1590,21 +1662,21 @@ function findRoadPath(
     open.sort((a, b) => a.f - b.f);
     const current = open.shift()!;
     const key = `${current.x},${current.y}`;
-    if (key === goalKey) return reconstructPath(cameFrom, current);
-    for (const next of cardinalNeighbors(current.x, current.y)) {
+    if (key === goalKey) return smoothRoadPath(width, height, landMask, islandId, targetIslandNumber, waterClass, lakeMap, riverMap, distanceToWater, mountainMap, reconstructPath(cameFrom, current), blocked);
+    for (const next of roadNeighbors(current.x, current.y, seed, start, goal)) {
       if (!inBounds(width, height, next.x, next.y)) continue;
       const ni = index(width, next.x, next.y);
       if (islandId[ni] !== targetIslandNumber) continue;
       const nextKey = posKey(next);
       if (blocked?.has(nextKey) && nextKey !== goalKey) continue;
-      if (!isRoadStepAllowed(width, height, landMask, islandId, targetIslandNumber, waterClass, lakeMap, riverMap, distanceToWater, mountainMap, current, next)) continue;
-      const cost = roadCost(width, seed, biome[ni], mountainMap[ni], current, next, cameFrom.get(key), riverMap[ni]);
+      if (!isRoadStepAllowed(width, height, landMask, islandId, targetIslandNumber, waterClass, lakeMap, riverMap, distanceToWater, mountainMap, current, next, blocked, goalKey)) continue;
+      const cost = roadCost(width, seed, biome[ni], distanceToWater[ni], mountainMap[ni], roadMap, current, next, cameFrom.get(key), riverMap[ni]);
       if (!Number.isFinite(cost)) continue;
       const nextG = current.g + cost;
       if (best.has(nextKey) && best.get(nextKey)! <= nextG) continue;
       best.set(nextKey, nextG);
       cameFrom.set(nextKey, { x: current.x, y: current.y });
-      open.push({ x: next.x, y: next.y, g: nextG, f: nextG + Math.abs(goal.x - next.x) + Math.abs(goal.y - next.y) });
+      open.push({ x: next.x, y: next.y, g: nextG, f: nextG + roadHeuristic(next, goal) });
     }
   }
   return [];
@@ -2084,13 +2156,25 @@ function isRoadStepAllowed(
   distanceToWater: Int16Array,
   mountainMap: Uint8Array,
   current: SemanticVec,
-  next: SemanticVec
+  next: SemanticVec,
+  blocked?: Set<string>,
+  goalKey?: string
 ): boolean {
   const ni = index(width, next.x, next.y);
   const ci = index(width, current.x, current.y);
-  if (!landMask[ni] || waterClass[ni] !== SEMANTIC_WATER.NONE || lakeMap[ni] || mountainMap[ni]) return false;
-  if (!riverMap[ni] && !riverMap[ci]) return true;
   const direction = { x: next.x - current.x, y: next.y - current.y };
+  const diagonal = Math.abs(direction.x) === 1 && Math.abs(direction.y) === 1;
+  if (!isRoadCellOpen(width, height, landMask, islandId, targetIslandNumber, waterClass, lakeMap, mountainMap, next.x, next.y)) return false;
+  if (diagonal) {
+    if (riverMap[ni] || riverMap[ci]) return false;
+    const sideA = { x: current.x + direction.x, y: current.y };
+    const sideB = { x: current.x, y: current.y + direction.y };
+    if (!isRoadCellOpen(width, height, landMask, islandId, targetIslandNumber, waterClass, lakeMap, mountainMap, sideA.x, sideA.y)) return false;
+    if (!isRoadCellOpen(width, height, landMask, islandId, targetIslandNumber, waterClass, lakeMap, mountainMap, sideB.x, sideB.y)) return false;
+    if (isBlockedRoadCell(sideA, blocked, goalKey) || isBlockedRoadCell(sideB, blocked, goalKey)) return false;
+    return true;
+  }
+  if (!riverMap[ni] && !riverMap[ci]) return true;
   const crossingCell = riverMap[ni] ? next : current;
   const crossingIndex = index(width, crossingCell.x, crossingCell.y);
   if (islandId[crossingIndex] !== targetIslandNumber) return false;
@@ -2098,6 +2182,28 @@ function isRoadStepAllowed(
   if (!orientation) return false;
   if (!isPotentialRiverCrossing(width, height, landMask, islandId, targetIslandNumber, waterClass, lakeMap, riverMap, distanceToWater, mountainMap, crossingCell.x, crossingCell.y, orientation)) return false;
   return crossingMoveMatchesOrientation(direction, orientation);
+}
+
+function isRoadCellOpen(
+  width: number,
+  height: number,
+  landMask: Uint8Array,
+  islandId: Int16Array,
+  targetIslandNumber: number,
+  waterClass: Uint8Array,
+  lakeMap: Uint8Array,
+  mountainMap: Uint8Array,
+  x: number,
+  y: number
+): boolean {
+  if (!inBounds(width, height, x, y)) return false;
+  const i = index(width, x, y);
+  return islandId[i] === targetIslandNumber && landMask[i] === 1 && waterClass[i] === SEMANTIC_WATER.NONE && lakeMap[i] === 0 && mountainMap[i] === 0;
+}
+
+function isBlockedRoadCell(cell: SemanticVec, blocked: Set<string> | undefined, goalKey: string | undefined): boolean {
+  const key = posKey(cell);
+  return Boolean(blocked?.has(key) && key !== goalKey);
 }
 
 function riverCrossingOrientationAt(width: number, height: number, riverMap: Uint8Array, x: number, y: number): "horizontal" | "vertical" | undefined {
@@ -2173,22 +2279,102 @@ function hasDiagonalRiverNeighbor(width: number, height: number, riverMap: Uint8
   return false;
 }
 
-function roadCost(width: number, seed: string, biome: number, mountain: number, current: SemanticVec, next: SemanticVec, previous: SemanticVec | undefined, river: number): number {
+function roadNeighbors(x: number, y: number, seed: string, start: SemanticVec, goal: SemanticVec): SemanticVec[] {
+  const neighbors = [
+    { x, y: y - 1 },
+    { x: x + 1, y: y - 1 },
+    { x: x + 1, y },
+    { x: x + 1, y: y + 1 },
+    { x, y: y + 1 },
+    { x: x - 1, y: y + 1 },
+    { x: x - 1, y },
+    { x: x - 1, y: y - 1 }
+  ];
+  const routeSalt = `${start.x},${start.y}:${goal.x},${goal.y}`;
+  return neighbors.sort((a, b) => hashNoise(`${seed}:semantic-road-neighbor:${routeSalt}`, a.x, a.y) - hashNoise(`${seed}:semantic-road-neighbor:${routeSalt}`, b.x, b.y));
+}
+
+function roadHeuristic(from: SemanticVec, to: SemanticVec): number {
+  const dx = Math.abs(from.x - to.x);
+  const dy = Math.abs(from.y - to.y);
+  const diagonal = Math.min(dx, dy);
+  const straight = Math.max(dx, dy) - diagonal;
+  return diagonal * Math.SQRT2 + straight;
+}
+
+function smoothRoadPath(
+  width: number,
+  height: number,
+  landMask: Uint8Array,
+  islandId: Int16Array,
+  targetIslandNumber: number,
+  waterClass: Uint8Array,
+  lakeMap: Uint8Array,
+  riverMap: Uint8Array,
+  distanceToWater: Int16Array,
+  mountainMap: Uint8Array,
+  path: SemanticVec[],
+  blocked?: Set<string>
+): SemanticVec[] {
+  let current = path;
+  for (let pass = 0; pass < 2; pass += 1) {
+    if (current.length < 3) return current;
+    const nextPath: SemanticVec[] = [current[0]];
+    for (let i = 1; i < current.length - 1; i += 1) {
+      const prev = nextPath[nextPath.length - 1];
+      const cell = current[i];
+      const next = current[i + 1];
+      const cellIndex = index(width, cell.x, cell.y);
+      const prevToNext = { x: next.x - prev.x, y: next.y - prev.y };
+      const canCollapseCorner =
+        Math.abs(prevToNext.x) === 1 &&
+        Math.abs(prevToNext.y) === 1 &&
+        !riverMap[cellIndex] &&
+        isRoadStepAllowed(width, height, landMask, islandId, targetIslandNumber, waterClass, lakeMap, riverMap, distanceToWater, mountainMap, prev, next, blocked, posKey(next));
+      if (!canCollapseCorner) nextPath.push(cell);
+    }
+    nextPath.push(current[current.length - 1]);
+    current = nextPath;
+  }
+  return current;
+}
+
+function nearbyRoadCount(width: number, height: number, roadMap: Uint8Array, x: number, y: number): number {
+  let count = 0;
+  for (const next of roadNeighbors(x, y, "nearby", { x, y }, { x, y })) {
+    if (!inBounds(width, height, next.x, next.y)) continue;
+    if (roadMap[index(width, next.x, next.y)]) count += 1;
+  }
+  return count;
+}
+
+function roadCost(width: number, seed: string, biome: number, distanceToWaterValue: number, mountain: number, roadMap: Uint8Array, current: SemanticVec, next: SemanticVec, previous: SemanticVec | undefined, river: number): number {
   if (mountain) return Infinity;
   let base = Infinity;
   if (biome === SEMANTIC_BIOME.GRASS) base = 1;
-  else if (biome === SEMANTIC_BIOME.BEACH) base = 1.35;
-  else if (biome === SEMANTIC_BIOME.SAND) base = 1.55;
-  else if (biome === SEMANTIC_BIOME.ICE) base = 2.0;
+  else if (biome === SEMANTIC_BIOME.BEACH) base = 1.42;
+  else if (biome === SEMANTIC_BIOME.SAND) base = 1.6;
+  else if (biome === SEMANTIC_BIOME.ICE) base = 2.05;
   if (!Number.isFinite(base)) return Infinity;
-  const noise = hashNoise(`${seed}:semantic-road-cost`, next.x, next.y) * 0.34;
-  const lowFrequencyNoise = fbm(`${seed}:semantic-road-meander`, next.x / 7, next.y / 7, 2) * 0.22;
+  const diagonalStep = current.x !== next.x && current.y !== next.y;
+  const noise = hashNoise(`${seed}:semantic-road-cost`, next.x, next.y) * 0.5;
+  const lowFrequencyNoise = fbm(`${seed}:semantic-road-meander`, next.x / 6.5, next.y / 6.5, 3) * 0.38;
   const direction = { x: next.x - current.x, y: next.y - current.y };
   const previousDirection = previous ? { x: current.x - previous.x, y: current.y - previous.y } : undefined;
-  const turnPenalty = previousDirection && (previousDirection.x !== direction.x || previousDirection.y !== direction.y) ? 0.08 : 0;
+  let turnPenalty = 0;
+  if (previousDirection && (previousDirection.x !== direction.x || previousDirection.y !== direction.y)) {
+    const dot = previousDirection.x * direction.x + previousDirection.y * direction.y;
+    const previousDiagonal = previousDirection.x !== 0 && previousDirection.y !== 0;
+    turnPenalty = dot <= 0 ? 0.9 : previousDiagonal !== diagonalStep ? 0.26 : 0.16;
+  }
+  const axisPenalty = !diagonalStep ? 0.08 : 0;
   const riverPenalty = river ? 5.5 : 0;
-  const islandColumnBias = Math.abs(((next.x * 17 + next.y * 7) % Math.max(5, Math.floor(width / 4))) - width / 8) * 0.002;
-  return base + noise + lowFrequencyNoise + turnPenalty + islandColumnBias + riverPenalty;
+  const coastPenalty = distanceToWaterValue <= 1 ? 0.85 : distanceToWaterValue <= 2 ? 0.22 : 0;
+  const nextIndex = index(width, next.x, next.y);
+  const existingRoadBonus = roadMap[nextIndex] ? -0.45 : 0;
+  const parallelRoadPenalty = !roadMap[nextIndex] && nearbyRoadCount(width, roadMap.length / width, roadMap, next.x, next.y) > 0 ? 0.48 : 0;
+  const islandColumnBias = Math.abs(((next.x * 17 + next.y * 7) % Math.max(5, Math.floor(width / 4))) - width / 8) * 0.001;
+  return base * (diagonalStep ? Math.SQRT2 : 1) + noise + lowFrequencyNoise + turnPenalty + axisPenalty + riverPenalty + coastPenalty + existingRoadBonus + parallelRoadPenalty + islandColumnBias;
 }
 
 function reconstructPath(cameFrom: Map<string, SemanticVec>, current: SemanticVec) {

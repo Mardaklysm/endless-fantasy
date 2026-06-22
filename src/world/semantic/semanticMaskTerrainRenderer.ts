@@ -68,8 +68,10 @@ const COLORS = {
   wetSand: [178, 146, 86] as Rgb,
   beachEdge: [202, 158, 87] as Rgb,
   grassEdge: [70, 138, 58] as Rgb,
-  roadEdge: [126, 84, 43] as Rgb,
-  roadDust: [226, 180, 103] as Rgb,
+  roadEdge: [159, 120, 67] as Rgb,
+  roadDust: [214, 169, 103] as Rgb,
+  roadPebble: [119, 103, 84] as Rgb,
+  roadGrassFleck: [92, 139, 64] as Rgb,
   sandEdge: [167, 129, 66] as Rgb,
   iceEdge: [134, 190, 207] as Rgb,
   frost: [231, 251, 252] as Rgb
@@ -190,7 +192,8 @@ function classifySample(world: SemanticWorld, sampleX: number, sampleY: number):
   const noiseY = Math.floor(sampleY * 8);
   const boundaryNoise = hashNoise(`${world.seed}:mask-terrain-boundary`, noiseX, noiseY, 0) - 0.5;
 
-  const roadHit = routeMaskSample(world, world.layers.roadMap, sampleX, sampleY, 0.11);
+  const roadWidthNoise = hashNoise(`${world.seed}:mask-road-edge`, noiseX, noiseY, 1);
+  const roadHit = routeMaskSample(world, world.layers.roadMap, sampleX, sampleY, 0.072 + roadWidthNoise * 0.035);
   const riverHit = routeMaskSample(world, world.layers.riverMap, sampleX, sampleY, 0.27);
   const crossingHit = routeMaskSample(world, world.layers.riverCrossingMap, sampleX, sampleY, 0.18);
   if (roadHit && (!riverHit || crossingHit)) return TERRAIN_CLASS_IDS.road;
@@ -232,14 +235,34 @@ function routeMaskSample(world: SemanticWorld, values: ArrayLike<number>, sample
   const east = routeCellAt(world, values, x + 1, y);
   const south = routeCellAt(world, values, x, y + 1);
   const west = routeCellAt(world, values, x - 1, y);
-  const hasNeighbor = north || east || south || west;
+  const northEast = routeCellAt(world, values, x + 1, y - 1);
+  const southEast = routeCellAt(world, values, x + 1, y + 1);
+  const southWest = routeCellAt(world, values, x - 1, y + 1);
+  const northWest = routeCellAt(world, values, x - 1, y - 1);
+  const hasNeighbor = north || east || south || west || northEast || southEast || southWest || northWest;
   if (!hasNeighbor) return Math.hypot(centeredX, centeredY) <= halfWidth * 1.45;
   if (Math.hypot(centeredX, centeredY) <= halfWidth * 1.2) return true;
   if (north && centeredX <= halfWidth && localY <= 0.5) return true;
   if (south && centeredX <= halfWidth && localY >= 0.5) return true;
   if (west && centeredY <= halfWidth && localX <= 0.5) return true;
   if (east && centeredY <= halfWidth && localX >= 0.5) return true;
+  if (northEast && diagonalRouteHit(localX, localY, 1, -1, halfWidth)) return true;
+  if (southEast && diagonalRouteHit(localX, localY, 1, 1, halfWidth)) return true;
+  if (southWest && diagonalRouteHit(localX, localY, -1, 1, halfWidth)) return true;
+  if (northWest && diagonalRouteHit(localX, localY, -1, -1, halfWidth)) return true;
   return false;
+}
+
+function diagonalRouteHit(localX: number, localY: number, dx: -1 | 1, dy: -1 | 1, halfWidth: number): boolean {
+  const ax = 0.5;
+  const ay = 0.5;
+  const vx = dx;
+  const vy = dy;
+  const projection = ((localX - ax) * vx + (localY - ay) * vy) / 2;
+  if (projection < 0 || projection > 0.5) return false;
+  const closestX = ax + vx * projection;
+  const closestY = ay + vy * projection;
+  return Math.hypot(localX - closestX, localY - closestY) <= halfWidth;
 }
 
 function routeCellAt(world: SemanticWorld, values: ArrayLike<number>, x: number, y: number): boolean {
@@ -255,7 +278,7 @@ function createTerrainFillStyles(
     deepOcean: createTerrainPattern(ctx, terrainSources?.deepOcean, tileSize, COLORS.deepOcean),
     shallowWater: createTerrainPattern(ctx, terrainSources?.shallowWater, tileSize, COLORS.shallowWater),
     freshWater: createTerrainPattern(ctx, terrainSources?.freshWater, tileSize, COLORS.freshWater),
-    road: createTerrainPattern(ctx, terrainSources?.road, tileSize, COLORS.roadDust),
+    road: createRoadTrailPattern(ctx, tileSize),
     beach: createTerrainPattern(ctx, terrainSources?.beach, tileSize, COLORS.beachEdge),
     grassland: createTerrainPattern(ctx, terrainSources?.grassland, tileSize, COLORS.grassEdge),
     sand: createTerrainPattern(ctx, terrainSources?.sand, tileSize, COLORS.sandEdge),
@@ -278,6 +301,29 @@ function createTerrainPattern(
   patternCtx.imageSmoothingEnabled = false;
   patternCtx.drawImage(source, 0, 0, source.width, source.height, 0, 0, tileSize, tileSize);
   return ctx.createPattern(patternCanvas, "repeat") ?? rgbCss(fallbackColor);
+}
+
+function createRoadTrailPattern(ctx: CanvasRenderingContext2D, tileSize: number): CanvasPattern | string {
+  const patternCanvas = document.createElement("canvas");
+  patternCanvas.width = tileSize;
+  patternCanvas.height = tileSize;
+  const patternCtx = patternCanvas.getContext("2d");
+  if (!patternCtx) return rgbCss(COLORS.roadDust);
+  patternCtx.imageSmoothingEnabled = false;
+  patternCtx.fillStyle = rgbCss(COLORS.roadDust);
+  patternCtx.fillRect(0, 0, tileSize, tileSize);
+  const block = Math.max(1, Math.floor(tileSize / 16));
+  for (let y = 0; y < tileSize; y += block) {
+    for (let x = 0; x < tileSize; x += block) {
+      const noise = hashNoise("semantic-road-trail-pattern", x, y);
+      if (noise < 0.06) patternCtx.fillStyle = rgbaCss(COLORS.roadPebble, 0.5);
+      else if (noise < 0.15) patternCtx.fillStyle = rgbaCss(COLORS.roadGrassFleck, 0.35);
+      else if (noise > 0.86) patternCtx.fillStyle = "rgba(246, 205, 132, 0.35)";
+      else continue;
+      patternCtx.fillRect(x, y, block, block);
+    }
+  }
+  return ctx.createPattern(patternCanvas, "repeat") ?? rgbCss(COLORS.roadDust);
 }
 
 function terrainTextureSourceLabels(options: SemanticMaskTerrainRenderOptions): Record<SemanticMaskTerrainClass, string> {
@@ -400,8 +446,8 @@ function drawBoundaryPair(
     return;
   }
   if (boundary === "roadBoundary") {
-    drawBoundaryStrip(ctx, x, y, side, length, lineWidth, COLORS.roadEdge, 0.18);
-    drawBoundaryStrip(ctx, x, y, side, length, lineWidth, COLORS.roadDust, 0.2);
+    drawBoundaryStrip(ctx, x, y, side, length, lineWidth, COLORS.roadEdge, 0.1);
+    drawBoundaryStrip(ctx, x, y, side, length, lineWidth, COLORS.roadDust, 0.12);
     return;
   }
   if (boundary === "sandGrass") {
