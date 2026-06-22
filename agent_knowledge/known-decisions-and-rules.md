@@ -67,13 +67,6 @@
 - Battle sides should face each other: party battlers face left from the right side, and enemy battlers on the left face right toward the party.
 - Fallen party members still receive victory XP and level-up stat gains, but level-up must not revive them or raise HP above 0.
 
-## Legal Originality Rules
-
-- Do not copy Final Fantasy names, sprites, logos, music, spell visuals, maps, story text, enemy designs, UI art, or exact mechanics tables.
-- Do not add copyrighted assets.
-- Do not use external asset packs unless explicitly approved and legally safe.
-- Genre inspiration from classic turn-based top-down JRPGs is allowed.
-- Character/place/enemy/spell/item names should remain original to Asterra/Crystal Oath.
 
 ## Style And Readability Rules
 
@@ -100,7 +93,6 @@ The current generated art fallback is still required for missing textures and fo
 - Do not expand gameplay when the task is documentation/art planning.
 - Do not add dependencies without a clear need and user approval.
 - Do not reintroduce instant visual tile snapping or all-party queued battle rounds.
-- Do not re-enable weak first-pass world terrain/marker PNGs as the primary overworld renderer. Keep the v2 pass or a future visually verified replacement.
 - Do not run terrain tiles, opaque battle backgrounds, source sheets, or full collages through rembg.
 - For current overworld materials, use approved individual PNGs and manifest metadata. Do not use JPEG for production terrain fills, and do not bake roads/rivers/coasts/mountains/forests/POIs into base materials. Rembg remains okay for ordinary single-object cutouts when needed.
 - For the `dungeon_atlas` sheet, do not use rembg, chroma-keying, or transparency removal. It is an opaque terrain/interior atlas and runtime handles source-grid seams with `DUNGEON_ATLAS_SOURCE_INSET = 3`.
