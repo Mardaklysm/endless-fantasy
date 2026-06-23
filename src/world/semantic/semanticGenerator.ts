@@ -1537,8 +1537,12 @@ function buildSparseRoadConnections(island: SemanticIslandRecord, pois: Semantic
   for (const settlement of settlements) {
     const nearestPort = nearestPoi(settlement, ports);
     if (nearestPort) addRoadConnection(connections, settlement, nearestPort);
-    for (const target of nearestPois(settlement, important, 2).filter((poi) => Math.hypot(poi.x - settlement.x, poi.y - settlement.y) <= localRange)) {
+    for (const target of nearestPois(settlement, important, 1).filter((poi) => Math.hypot(poi.x - settlement.x, poi.y - settlement.y) <= localRange)) {
       addRoadConnection(connections, settlement, target);
+    }
+    const closeSecondBranch = nearestPois(settlement, important, 2)[1];
+    if (closeSecondBranch && roadPoiPriority(closeSecondBranch) >= 5 && Math.hypot(closeSecondBranch.x - settlement.x, closeSecondBranch.y - settlement.y) <= localRange * 0.45) {
+      addRoadConnection(connections, settlement, closeSecondBranch);
     }
     const nearestSettlement = nearestPoi(
       settlement,
@@ -1557,7 +1561,7 @@ function buildSparseRoadConnections(island: SemanticIslandRecord, pois: Semantic
     for (const target of nearestPois(primary, pois.filter((poi) => poi !== primary), 2)) addRoadConnection(connections, primary, target);
   }
 
-  return [...connections.values()].slice(0, Math.max(2, Math.min(6, Math.ceil(pois.length * 0.9))));
+  return [...connections.values()].slice(0, Math.max(2, Math.min(5, Math.ceil(pois.length * 0.72))));
 }
 
 function addRoadConnection(connections: Map<string, RoadConnection>, from: SemanticPoi, to: SemanticPoi) {
@@ -1676,7 +1680,7 @@ function findRoadPath(
       if (best.has(nextKey) && best.get(nextKey)! <= nextG) continue;
       best.set(nextKey, nextG);
       cameFrom.set(nextKey, { x: current.x, y: current.y });
-      open.push({ x: next.x, y: next.y, g: nextG, f: nextG + roadHeuristic(next, goal) });
+      open.push({ x: next.x, y: next.y, g: nextG, f: nextG + roadHeuristic(next, goal) * 0.82 });
     }
   }
   return [];
@@ -2336,7 +2340,104 @@ function smoothRoadPath(
     nextPath.push(current[current.length - 1]);
     current = nextPath;
   }
-  return current;
+  return softenLongStraightRoadRuns(width, height, landMask, islandId, targetIslandNumber, waterClass, lakeMap, riverMap, distanceToWater, mountainMap, current, blocked);
+}
+
+function softenLongStraightRoadRuns(
+  width: number,
+  height: number,
+  landMask: Uint8Array,
+  islandId: Int16Array,
+  targetIslandNumber: number,
+  waterClass: Uint8Array,
+  lakeMap: Uint8Array,
+  riverMap: Uint8Array,
+  distanceToWater: Int16Array,
+  mountainMap: Uint8Array,
+  path: SemanticVec[],
+  blocked?: Set<string>
+): SemanticVec[] {
+  if (path.length < 8) return path;
+  const result: SemanticVec[] = [];
+  let i = 0;
+  while (i < path.length) {
+    const runEnd = straightRunEnd(path, i);
+    const runLength = runEnd - i;
+    if (runLength >= 6) {
+      const softened = curvedRoadRun(width, height, landMask, islandId, targetIslandNumber, waterClass, lakeMap, riverMap, distanceToWater, mountainMap, path.slice(i, runEnd + 1), blocked);
+      if (softened) {
+        result.push(...softened);
+        i = runEnd + 1;
+        continue;
+      }
+    }
+    result.push(path[i]);
+    i += 1;
+  }
+  return result;
+}
+
+function straightRunEnd(path: SemanticVec[], startIndex: number): number {
+  if (startIndex >= path.length - 1) return startIndex;
+  const dx = Math.sign(path[startIndex + 1].x - path[startIndex].x);
+  const dy = Math.sign(path[startIndex + 1].y - path[startIndex].y);
+  if (dx !== 0 && dy !== 0) return startIndex;
+  let end = startIndex + 1;
+  while (end < path.length - 1 && Math.sign(path[end + 1].x - path[end].x) === dx && Math.sign(path[end + 1].y - path[end].y) === dy) end += 1;
+  return end;
+}
+
+function curvedRoadRun(
+  width: number,
+  height: number,
+  landMask: Uint8Array,
+  islandId: Int16Array,
+  targetIslandNumber: number,
+  waterClass: Uint8Array,
+  lakeMap: Uint8Array,
+  riverMap: Uint8Array,
+  distanceToWater: Int16Array,
+  mountainMap: Uint8Array,
+  run: SemanticVec[],
+  blocked?: Set<string>
+): SemanticVec[] | undefined {
+  const first = run[0];
+  const last = run[run.length - 1];
+  const dx = Math.sign(last.x - first.x);
+  const dy = Math.sign(last.y - first.y);
+  if ((dx !== 0 && dy !== 0) || (dx === 0 && dy === 0)) return undefined;
+  if (run.some((cell) => riverMap[index(width, cell.x, cell.y)])) return undefined;
+  const offsets = dx !== 0 ? [{ x: 0, y: 1 }, { x: 0, y: -1 }] : [{ x: 1, y: 0 }, { x: -1, y: 0 }];
+  offsets.sort((a, b) => hashNoise("semantic-road-curve-offset", first.x + a.x, first.y + a.y) - hashNoise("semantic-road-curve-offset", first.x + b.x, first.y + b.y));
+  for (const offset of offsets) {
+    const candidate = [first];
+    for (let i = 1; i < run.length - 1; i += 1) candidate.push({ x: run[i].x + offset.x, y: run[i].y + offset.y });
+    candidate.push(last);
+    if (isSafeRoadCurve(width, height, landMask, islandId, targetIslandNumber, waterClass, lakeMap, riverMap, distanceToWater, mountainMap, candidate, blocked)) return candidate;
+  }
+  return undefined;
+}
+
+function isSafeRoadCurve(
+  width: number,
+  height: number,
+  landMask: Uint8Array,
+  islandId: Int16Array,
+  targetIslandNumber: number,
+  waterClass: Uint8Array,
+  lakeMap: Uint8Array,
+  riverMap: Uint8Array,
+  distanceToWater: Int16Array,
+  mountainMap: Uint8Array,
+  path: SemanticVec[],
+  blocked?: Set<string>
+): boolean {
+  for (let i = 0; i < path.length; i += 1) {
+    if (isBlockedRoadCell(path[i], blocked, i === path.length - 1 ? posKey(path[i]) : undefined)) return false;
+    if (!isRoadCellOpen(width, height, landMask, islandId, targetIslandNumber, waterClass, lakeMap, mountainMap, path[i].x, path[i].y)) return false;
+    if (i > 0 && !isRoadStepAllowed(width, height, landMask, islandId, targetIslandNumber, waterClass, lakeMap, riverMap, distanceToWater, mountainMap, path[i - 1], path[i], blocked, posKey(path[path.length - 1]))) return false;
+  }
+  return true;
 }
 
 function nearbyRoadCount(width: number, height: number, roadMap: Uint8Array, x: number, y: number): number {
@@ -2362,19 +2463,22 @@ function roadCost(width: number, seed: string, biome: number, distanceToWaterVal
   const direction = { x: next.x - current.x, y: next.y - current.y };
   const previousDirection = previous ? { x: current.x - previous.x, y: current.y - previous.y } : undefined;
   let turnPenalty = 0;
+  let straightRunPenalty = 0;
   if (previousDirection && (previousDirection.x !== direction.x || previousDirection.y !== direction.y)) {
     const dot = previousDirection.x * direction.x + previousDirection.y * direction.y;
     const previousDiagonal = previousDirection.x !== 0 && previousDirection.y !== 0;
     turnPenalty = dot <= 0 ? 0.9 : previousDiagonal !== diagonalStep ? 0.26 : 0.16;
+  } else if (previousDirection && !diagonalStep) {
+    straightRunPenalty = 0.16;
   }
-  const axisPenalty = !diagonalStep ? 0.08 : 0;
+  const axisPenalty = !diagonalStep ? 0.16 : 0;
   const riverPenalty = river ? 5.5 : 0;
   const coastPenalty = distanceToWaterValue <= 1 ? 0.85 : distanceToWaterValue <= 2 ? 0.22 : 0;
   const nextIndex = index(width, next.x, next.y);
   const existingRoadBonus = roadMap[nextIndex] ? -0.45 : 0;
   const parallelRoadPenalty = !roadMap[nextIndex] && nearbyRoadCount(width, roadMap.length / width, roadMap, next.x, next.y) > 0 ? 0.48 : 0;
   const islandColumnBias = Math.abs(((next.x * 17 + next.y * 7) % Math.max(5, Math.floor(width / 4))) - width / 8) * 0.001;
-  return base * (diagonalStep ? Math.SQRT2 : 1) + noise + lowFrequencyNoise + turnPenalty + axisPenalty + riverPenalty + coastPenalty + existingRoadBonus + parallelRoadPenalty + islandColumnBias;
+  return base * (diagonalStep ? Math.SQRT2 : 1) + noise + lowFrequencyNoise + turnPenalty + straightRunPenalty + axisPenalty + riverPenalty + coastPenalty + existingRoadBonus + parallelRoadPenalty + islandColumnBias;
 }
 
 function reconstructPath(cameFrom: Map<string, SemanticVec>, current: SemanticVec) {

@@ -192,8 +192,10 @@ function classifySample(world: SemanticWorld, sampleX: number, sampleY: number):
   const noiseY = Math.floor(sampleY * 8);
   const boundaryNoise = hashNoise(`${world.seed}:mask-terrain-boundary`, noiseX, noiseY, 0) - 0.5;
 
-  const roadWidthNoise = hashNoise(`${world.seed}:mask-road-edge`, noiseX, noiseY, 1);
-  const roadHit = routeMaskSample(world, world.layers.roadMap, sampleX, sampleY, 0.072 + roadWidthNoise * 0.035);
+  const roadEdgeNoise = hashNoise(`${world.seed}:mask-road-edge`, noiseX, noiseY, 1);
+  const roadCoreHit = routeMaskSample(world, world.layers.roadMap, sampleX, sampleY, 0.105);
+  const roadEdgeHit = !roadCoreHit && roadEdgeNoise > 0.34 && routeMaskSample(world, world.layers.roadMap, sampleX, sampleY, 0.152);
+  const roadHit = roadCoreHit || roadEdgeHit;
   const riverHit = routeMaskSample(world, world.layers.riverMap, sampleX, sampleY, 0.27);
   const crossingHit = routeMaskSample(world, world.layers.riverCrossingMap, sampleX, sampleY, 0.18);
   if (roadHit && (!riverHit || crossingHit)) return TERRAIN_CLASS_IDS.road;
@@ -316,9 +318,8 @@ function createRoadTrailPattern(ctx: CanvasRenderingContext2D, tileSize: number)
   for (let y = 0; y < tileSize; y += block) {
     for (let x = 0; x < tileSize; x += block) {
       const noise = hashNoise("semantic-road-trail-pattern", x, y);
-      if (noise < 0.06) patternCtx.fillStyle = rgbaCss(COLORS.roadPebble, 0.5);
-      else if (noise < 0.15) patternCtx.fillStyle = rgbaCss(COLORS.roadGrassFleck, 0.35);
-      else if (noise > 0.86) patternCtx.fillStyle = "rgba(246, 205, 132, 0.35)";
+      if (noise < 0.035) patternCtx.fillStyle = rgbaCss(COLORS.roadPebble, 0.36);
+      else if (noise > 0.9) patternCtx.fillStyle = "rgba(246, 205, 132, 0.22)";
       else continue;
       patternCtx.fillRect(x, y, block, block);
     }
@@ -448,6 +449,7 @@ function drawBoundaryPair(
   if (boundary === "roadBoundary") {
     drawBoundaryStrip(ctx, x, y, side, length, lineWidth, COLORS.roadEdge, 0.1);
     drawBoundaryStrip(ctx, x, y, side, length, lineWidth, COLORS.roadDust, 0.12);
+    drawBoundaryStrip(ctx, x, y, side, length, accentWidth, COLORS.roadGrassFleck, 0.08);
     return;
   }
   if (boundary === "sandGrass") {
