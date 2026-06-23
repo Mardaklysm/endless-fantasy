@@ -159,6 +159,9 @@ export interface SemanticPoi extends SemanticVec {
   role: "settlement" | "port" | "dungeon" | "gate" | "final" | "landmark";
   islandId: SemanticIslandId;
   difficultyTier: number;
+  footprint: { minX: number; minY: number; maxX: number; maxY: number; width: number; height: number };
+  entranceTile: SemanticVec;
+  approachTile: SemanticVec;
 }
 
 export interface SemanticRoadEdge {

@@ -50,6 +50,9 @@ export interface WorldPoi {
   x: number;
   y: number;
   footprint: number;
+  footprintRect: { minX: number; minY: number; maxX: number; maxY: number; width: number; height: number };
+  entranceTile: WorldVec;
+  approachTile: WorldVec;
   landmarkKind?: WorldLandmarkKind;
   objectId?: WorldObjectId;
   difficultyTier: number;
@@ -368,6 +371,9 @@ function adaptPoi(poi: SemanticPoi): WorldPoi {
     x: poi.x,
     y: poi.y,
     footprint: poiFootprint(poi),
+    footprintRect: poi.footprint,
+    entranceTile: poi.entranceTile,
+    approachTile: poi.approachTile,
     landmarkKind: landmarkKind(poi),
     objectId: objectIdForPoi(poi),
     difficultyTier: poi.difficultyTier
@@ -476,11 +482,11 @@ function roadMaskAt(semantic: SemanticWorld, x: number, y: number): number {
 function endpointMaskAt(semantic: SemanticWorld, x: number, y: number): number {
   let mask = 0;
   for (const poi of semantic.poiList) {
-    if (Math.abs(poi.x - x) + Math.abs(poi.y - y) !== 1) continue;
-    if (poi.y === y - 1) mask |= ROAD_N;
-    if (poi.x === x + 1) mask |= ROAD_E;
-    if (poi.y === y + 1) mask |= ROAD_S;
-    if (poi.x === x - 1) mask |= ROAD_W;
+    if (poi.approachTile.x !== x || poi.approachTile.y !== y) continue;
+    if (poi.entranceTile.y === y - 1 && poi.entranceTile.x === x) mask |= ROAD_N;
+    if (poi.entranceTile.x === x + 1 && poi.entranceTile.y === y) mask |= ROAD_E;
+    if (poi.entranceTile.y === y + 1 && poi.entranceTile.x === x) mask |= ROAD_S;
+    if (poi.entranceTile.x === x - 1 && poi.entranceTile.y === y) mask |= ROAD_W;
   }
   return mask;
 }
@@ -771,8 +777,8 @@ function pointInPoiFootprint(poi: WorldPoi, x: number, y: number): boolean {
   return x >= bounds.minX && x <= bounds.maxX && y >= bounds.minY && y <= bounds.maxY;
 }
 
-function poiFootprintCells(poi: Pick<WorldPoi, "x" | "y" | "footprint">): WorldVec[] {
-  const bounds = poiFootprintBounds(poi);
+function poiFootprintCells(poi: Pick<WorldPoi, "x" | "y" | "footprint"> & Partial<Pick<WorldPoi, "footprintRect">>): WorldVec[] {
+  const bounds = poi.footprintRect ?? poiFootprintBounds(poi);
   const cells: WorldVec[] = [];
   for (let y = bounds.minY; y <= bounds.maxY; y += 1) {
     for (let x = bounds.minX; x <= bounds.maxX; x += 1) cells.push({ x, y });

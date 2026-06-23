@@ -73,6 +73,7 @@ function validatePoi(world: SemanticWorld, poi: SemanticPoi, errors: string[]) {
   }
   if (!world.layers.landMask[i] && poi.type !== "port") errors.push(`POI ${poi.id} is not on land.`);
   if (world.layers.waterClass[i] !== SEMANTIC_WATER.NONE) errors.push(`POI ${poi.id} is on blocked water.`);
+  validatePoiRoadAnchor(world, poi, errors);
   validatePoiFootprint(world, poi, errors);
   if (!hasAdjacentWalkableToPoiFootprint(world, poi)) errors.push(`POI ${poi.id} has no adjacent walkable approach cell.`);
   if (poi.type === "port" && countPoiFootprintShallowWater(world, poi) < PORT_MIN_SHALLOW_WATER_TILES) {
@@ -97,10 +98,23 @@ function validatePoiFootprint(world: SemanticWorld, poi: SemanticPoi, errors: st
       errors.push(`POI ${poi.id} footprint touches invalid water terrain at ${cell.x},${cell.y}.`);
     }
     if (world.layers.mountainMap[i]) errors.push(`POI ${poi.id} footprint overlaps mountain terrain at ${cell.x},${cell.y}.`);
-    if (world.layers.roadMap[i]) errors.push(`POI ${poi.id} footprint contains road terrain at ${cell.x},${cell.y}.`);
+    if (world.layers.roadMap[i] && !isPoiEntranceTile(poi, cell.x, cell.y)) errors.push(`POI ${poi.id} footprint contains non-entrance road terrain at ${cell.x},${cell.y}.`);
     if (world.layers.forestMap[i]) errors.push(`POI ${poi.id} footprint overlaps forest terrain at ${cell.x},${cell.y}.`);
     if (world.layers.overlayCollisionPolicy[i] !== "poiBlock") errors.push(`POI ${poi.id} footprint cell ${cell.x},${cell.y} is not tagged poiBlock.`);
     if (world.layers.walkability[i]) errors.push(`POI ${poi.id} footprint cell ${cell.x},${cell.y} is walkable.`);
+  }
+}
+
+function validatePoiRoadAnchor(world: SemanticWorld, poi: SemanticPoi, errors: string[]) {
+  if (!isInsidePoiFootprint(poi, poi.entranceTile.x, poi.entranceTile.y)) errors.push(`POI ${poi.id} entrance tile is outside its footprint.`);
+  if (isInsidePoiFootprint(poi, poi.approachTile.x, poi.approachTile.y)) errors.push(`POI ${poi.id} approach tile is inside its footprint.`);
+  if (Math.abs(poi.entranceTile.x - poi.approachTile.x) + Math.abs(poi.entranceTile.y - poi.approachTile.y) !== 1) {
+    errors.push(`POI ${poi.id} approach tile is not adjacent to its entrance tile.`);
+  }
+  if (!inBounds(world, poi.entranceTile.x, poi.entranceTile.y)) errors.push(`POI ${poi.id} entrance tile is out of bounds.`);
+  if (!inBounds(world, poi.approachTile.x, poi.approachTile.y)) errors.push(`POI ${poi.id} approach tile is out of bounds.`);
+  if (inBounds(world, poi.approachTile.x, poi.approachTile.y) && !isWalkable(world, poi.approachTile.x, poi.approachTile.y)) {
+    errors.push(`POI ${poi.id} approach tile is not walkable.`);
   }
 }
 
@@ -285,7 +299,7 @@ function validateOverlaySpacingAndWalkability(world: SemanticWorld, errors: stri
     if (world.layers.forestMap[i] && !world.layers.walkability[i]) errors.push(`Forest soft-terrain cell blocks walking at ${x},${y}.`);
     if (world.layers.forestMap[i] && nearbyWaterFeature(world, x, y, 1)) errors.push(`Forest cell crowds water at ${x},${y}.`);
     if (world.layers.forestMap[i] && nearbyCount(world, world.layers.roadMap, x, y, 1) > 0) errors.push(`Forest overlaps or crowds a road corridor at ${x},${y}.`);
-    if (world.layers.roadMap[i] && !world.layers.walkability[i]) errors.push(`Road cell is blocked by terrain or overlay at ${x},${y}.`);
+    if (world.layers.roadMap[i] && !world.layers.walkability[i] && !isPoiEntranceRoadCell(world, x, y)) errors.push(`Road cell is blocked by terrain or overlay at ${x},${y}.`);
     if (world.layers.roadMap[i] && world.layers.mountainMap[i]) errors.push(`Mountain overlaps road at ${x},${y}.`);
     if (world.layers.riverMap[i]) {
       const isBridge = bridgeKeys.has(`${x},${y}`);
@@ -410,15 +424,23 @@ function hasAdjacentWalkableToPoiFootprint(world: SemanticWorld, poi: SemanticPo
 }
 
 function poiFootprintCells(poi: SemanticPoi): { x: number; y: number }[] {
-  const size = poi.role === "settlement" || poi.role === "final" || poi.role === "port" ? 3 : 2;
-  const offset = Math.floor((size - 1) / 2);
-  const minX = poi.x - offset;
-  const minY = poi.y - offset;
   const cells: { x: number; y: number }[] = [];
-  for (let y = minY; y < minY + size; y += 1) {
-    for (let x = minX; x < minX + size; x += 1) cells.push({ x, y });
+  for (let y = poi.footprint.minY; y <= poi.footprint.maxY; y += 1) {
+    for (let x = poi.footprint.minX; x <= poi.footprint.maxX; x += 1) cells.push({ x, y });
   }
   return cells;
+}
+
+function isInsidePoiFootprint(poi: SemanticPoi, x: number, y: number): boolean {
+  return x >= poi.footprint.minX && x <= poi.footprint.maxX && y >= poi.footprint.minY && y <= poi.footprint.maxY;
+}
+
+function isPoiEntranceTile(poi: SemanticPoi, x: number, y: number): boolean {
+  return poi.entranceTile.x === x && poi.entranceTile.y === y;
+}
+
+function isPoiEntranceRoadCell(world: SemanticWorld, x: number, y: number): boolean {
+  return world.poiList.some((poi) => isPoiEntranceTile(poi, x, y));
 }
 
 const PORT_MIN_SHALLOW_WATER_TILES = 3;

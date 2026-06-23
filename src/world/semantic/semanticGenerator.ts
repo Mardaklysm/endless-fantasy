@@ -127,9 +127,11 @@ export function generateSemanticWorld(options: {
   const { boatRoutes, reservedBoatRouteMap } = buildRequiredBoatRoutes(width, height, landMask, waterClass, distanceToLand, lakeMap, riverMap, harbors);
   ({ mountains, mountainRanges, mountainDebug } = placeMountains(width, height, seed, landMask, distanceToWater, islandId, islands, biome, elevation, ridge, coldness, mountainCandidateScore, mountainMap, lakeMap, poiList));
   const rivers = traceRivers(width, height, seed, landMask, waterClass, lakeMap, distanceToWater, islandId, islands, elevation, coldness, ridge, mountainMap, poiList, riverMap);
+  assignDefaultPoiRoadAnchors(width, height, landMask, islandId, islands, waterClass, lakeMap, riverMap, mountainMap, poiList);
   const roadMap = new Uint8Array(width * height);
   const roadGraph = buildRoadGraph(width, height, seed, landMask, islandId, islands, biome, waterClass, lakeMap, riverMap, distanceToWater, mountainMap, poiList, harbors, roadMap);
   clearPoiFootprintRoadCells(width, height, roadMap, poiList);
+  drawRoadEndpointAprons(width, height, roadMap, poiList, roadGraph.edges);
   ({ mountains, mountainRanges, mountainDebug } = placeMountains(width, height, seed, landMask, distanceToWater, islandId, islands, biome, elevation, ridge, coldness, mountainCandidateScore, mountainMap, combineBlockMaps(lakeMap, riverMap, roadMap), poiList));
   const riverCrossingMap = new Uint8Array(width * height);
   const bridgeCandidates = detectBridgeCandidates(width, height, islandId, islands, landMask, waterClass, lakeMap, riverMap, roadMap, distanceToWater, mountainMap, riverCrossingMap);
@@ -1330,7 +1332,10 @@ function placePois(
         islandId: island.id,
         x: candidate.x,
         y: candidate.y,
-        difficultyTier: island.major ? island.order + 1 : 1
+        difficultyTier: island.major ? island.order + 1 : 1,
+        footprint: semanticPoiFootprintBoundsForSpec(spec, candidate.x, candidate.y),
+        entranceTile: { x: candidate.x, y: candidate.y },
+        approachTile: { x: candidate.x, y: candidate.y }
       };
       reservePoiFootprint(occupied, spec, poi.x, poi.y, poiReservePadding(spec));
       poiList.push(poi);
@@ -1504,9 +1509,10 @@ function buildRoadGraph(
     const islandPois = poiList.filter((poi) => poi.islandId === island.id && shouldRoadConnectPoi(poi));
     if (islandPois.length < 2) continue;
     const connections = buildSparseRoadConnections(island, islandPois, harbors.filter((poi) => poi.islandId === island.id));
+    assignRoadAnchorsForConnections(width, height, landMask, islandId, island.order + 1, waterClass, lakeMap, riverMap, mountainMap, islandPois, connections);
     for (const connection of connections) {
-      const start = chooseRoadApproachCell(width, height, landMask, islandId, island.order + 1, waterClass, lakeMap, riverMap, mountainMap, connection.from, connection.to, roadBlocked) ?? connection.from;
-      const goal = chooseRoadApproachCell(width, height, landMask, islandId, island.order + 1, waterClass, lakeMap, riverMap, mountainMap, connection.to, connection.from, roadBlocked) ?? connection.to;
+      const start = connection.from.approachTile;
+      const goal = connection.to.approachTile;
       const path = findRoadPath(width, height, seed, landMask, islandId, island.order + 1, biome, waterClass, lakeMap, riverMap, distanceToWater, mountainMap, roadMap, start, goal, roadBlocked);
       if (!path.length) {
         edges.push({ from: connection.from.id, to: connection.to.id, connected: false, length: 0, path: [] });
@@ -1603,7 +1609,63 @@ function clearPoiFootprintRoadCells(width: number, height: number, roadMap: Uint
   }
 }
 
-function chooseRoadApproachCell(
+function assignDefaultPoiRoadAnchors(
+  width: number,
+  height: number,
+  landMask: Uint8Array,
+  islandId: Int16Array,
+  islands: SemanticIslandRecord[],
+  waterClass: Uint8Array,
+  lakeMap: Uint8Array,
+  riverMap: Uint8Array,
+  mountainMap: Uint8Array,
+  poiList: SemanticPoi[]
+) {
+  const islandNumberById = new Map(islands.map((island) => [island.id, island.order + 1]));
+  for (const poi of poiList) {
+    const targetIslandNumber = islandNumberById.get(poi.islandId);
+    if (!targetIslandNumber) continue;
+    const anchor = inferPoiRoadAnchor(width, height, landMask, islandId, targetIslandNumber, waterClass, lakeMap, riverMap, mountainMap, poi);
+    poi.entranceTile = anchor.entranceTile;
+    poi.approachTile = anchor.approachTile;
+  }
+}
+
+function assignRoadAnchorsForConnections(
+  width: number,
+  height: number,
+  landMask: Uint8Array,
+  islandId: Int16Array,
+  targetIslandNumber: number,
+  waterClass: Uint8Array,
+  lakeMap: Uint8Array,
+  riverMap: Uint8Array,
+  mountainMap: Uint8Array,
+  pois: SemanticPoi[],
+  connections: RoadConnection[]
+) {
+  const references = new Map<string, SemanticPoi[]>();
+  for (const connection of connections) {
+    if (!references.has(connection.from.id)) references.set(connection.from.id, []);
+    if (!references.has(connection.to.id)) references.set(connection.to.id, []);
+    references.get(connection.from.id)!.push(connection.to);
+    references.get(connection.to.id)!.push(connection.from);
+  }
+  for (const poi of pois) {
+    const reference = chooseRoadAnchorReference(poi, references.get(poi.id) ?? []);
+    const anchor = inferPoiRoadAnchor(width, height, landMask, islandId, targetIslandNumber, waterClass, lakeMap, riverMap, mountainMap, poi, reference);
+    poi.entranceTile = anchor.entranceTile;
+    poi.approachTile = anchor.approachTile;
+  }
+}
+
+function chooseRoadAnchorReference(poi: SemanticPoi, references: SemanticPoi[]): SemanticPoi | undefined {
+  if (poi.role === "settlement") return references.find((reference) => reference.role === "port") ?? references.find((reference) => reference.role === "settlement") ?? references[0];
+  if (poi.role === "port") return references.find((reference) => reference.role === "settlement") ?? references[0];
+  return references.find((reference) => reference.role === "settlement") ?? references[0];
+}
+
+function inferPoiRoadAnchor(
   width: number,
   height: number,
   landMask: Uint8Array,
@@ -1614,29 +1676,118 @@ function chooseRoadApproachCell(
   riverMap: Uint8Array,
   mountainMap: Uint8Array,
   poi: SemanticPoi,
-  other: SemanticVec,
-  blocked: Set<string>
-): SemanticVec | undefined {
-  const footprintKeys = new Set(semanticPoiFootprintCells(poi).map(posKey));
-  const candidates = new Map<string, SemanticVec>();
-  for (const cell of semanticPoiFootprintCells(poi)) {
-    for (const next of cardinalNeighbors(cell.x, cell.y)) {
-      const key = posKey(next);
-      if (footprintKeys.has(key) || candidates.has(key) || blocked.has(key)) continue;
-      if (!inBounds(width, height, next.x, next.y)) continue;
-      const ni = index(width, next.x, next.y);
-      if (islandId[ni] !== targetIslandNumber) continue;
-      if (!landMask[ni] || waterClass[ni] !== SEMANTIC_WATER.NONE || lakeMap[ni] || riverMap[ni] || mountainMap[ni]) continue;
-      candidates.set(key, next);
-    }
-  }
-  return [...candidates.values()].sort((a, b) => roadApproachScore(a, poi, other) - roadApproachScore(b, poi, other))[0];
+  reference?: SemanticVec
+): { entranceTile: SemanticVec; approachTile: SemanticVec } {
+  const preferredSide = preferredEntranceSide(poi, reference);
+  const candidates = roadAnchorCandidatesForPoi(poi)
+    .filter((candidate) => isValidRoadEntrance(width, height, landMask, waterClass, lakeMap, riverMap, mountainMap, poi, candidate.entranceTile))
+    .filter((candidate) => isValidRoadApproach(width, height, landMask, islandId, targetIslandNumber, waterClass, lakeMap, riverMap, mountainMap, candidate.approachTile))
+    .sort((a, b) => roadAnchorScore(a, poi, preferredSide, reference) - roadAnchorScore(b, poi, preferredSide, reference));
+  return candidates[0] ?? { entranceTile: { x: poi.x, y: poi.y }, approachTile: { x: poi.x, y: poi.y } };
 }
 
-function roadApproachScore(candidate: SemanticVec, poi: SemanticPoi, other: SemanticVec): number {
-  const towardOther = Math.abs(candidate.x - other.x) + Math.abs(candidate.y - other.y);
-  const centerDistance = Math.abs(candidate.x - poi.x) + Math.abs(candidate.y - poi.y);
-  return towardOther + centerDistance * 0.08;
+function preferredEntranceSide(poi: SemanticPoi, reference?: SemanticVec): RoadEntranceSide {
+  if (poi.role === "settlement" && reference) return sideFacingReference(poi, reference);
+  if (poi.role === "port" && reference) return sideFacingReference(poi, reference);
+  return "bottom";
+}
+
+type RoadEntranceSide = "top" | "right" | "bottom" | "left";
+
+interface RoadAnchorCandidate {
+  side: RoadEntranceSide;
+  entranceTile: SemanticVec;
+  approachTile: SemanticVec;
+}
+
+function sideFacingReference(poi: SemanticPoi, reference: SemanticVec): RoadEntranceSide {
+  const dx = reference.x - poi.x;
+  const dy = reference.y - poi.y;
+  if (Math.abs(dx) > Math.abs(dy)) return dx < 0 ? "left" : "right";
+  return dy < 0 ? "top" : "bottom";
+}
+
+function roadAnchorCandidatesForPoi(poi: SemanticPoi): RoadAnchorCandidate[] {
+  const bounds = poi.footprint;
+  const centerX = Math.round((bounds.minX + bounds.maxX) / 2);
+  const centerY = Math.round((bounds.minY + bounds.maxY) / 2);
+  const candidates: RoadAnchorCandidate[] = [];
+  const add = (side: RoadEntranceSide, entranceTile: SemanticVec, approachTile: SemanticVec) => candidates.push({ side, entranceTile, approachTile });
+  for (const x of sortedRangeByCenter(bounds.minX, bounds.maxX, centerX)) {
+    add("top", { x, y: bounds.minY }, { x, y: bounds.minY - 1 });
+    add("bottom", { x, y: bounds.maxY }, { x, y: bounds.maxY + 1 });
+  }
+  for (const y of sortedRangeByCenter(bounds.minY, bounds.maxY, centerY)) {
+    add("left", { x: bounds.minX, y }, { x: bounds.minX - 1, y });
+    add("right", { x: bounds.maxX, y }, { x: bounds.maxX + 1, y });
+  }
+  return candidates;
+}
+
+function sortedRangeByCenter(min: number, max: number, center: number): number[] {
+  const values: number[] = [];
+  for (let value = min; value <= max; value += 1) values.push(value);
+  return values.sort((a, b) => Math.abs(a - center) - Math.abs(b - center) || a - b);
+}
+
+function isValidRoadEntrance(
+  width: number,
+  height: number,
+  landMask: Uint8Array,
+  waterClass: Uint8Array,
+  lakeMap: Uint8Array,
+  riverMap: Uint8Array,
+  mountainMap: Uint8Array,
+  poi: SemanticPoi,
+  entrance: SemanticVec
+): boolean {
+  if (!inBounds(width, height, entrance.x, entrance.y)) return false;
+  const i = index(width, entrance.x, entrance.y);
+  if (!landMask[i] || waterClass[i] !== SEMANTIC_WATER.NONE || lakeMap[i] || riverMap[i] || mountainMap[i]) return false;
+  if (poi.role === "port") return semanticPoiFootprintCells(poi).some((cell) => posKey(cell) === posKey(entrance));
+  return true;
+}
+
+function isValidRoadApproach(
+  width: number,
+  height: number,
+  landMask: Uint8Array,
+  islandId: Int16Array,
+  targetIslandNumber: number,
+  waterClass: Uint8Array,
+  lakeMap: Uint8Array,
+  riverMap: Uint8Array,
+  mountainMap: Uint8Array,
+  approach: SemanticVec
+): boolean {
+  if (!inBounds(width, height, approach.x, approach.y)) return false;
+  const i = index(width, approach.x, approach.y);
+  return islandId[i] === targetIslandNumber && Boolean(landMask[i]) && waterClass[i] === SEMANTIC_WATER.NONE && !lakeMap[i] && !riverMap[i] && !mountainMap[i];
+}
+
+function roadAnchorScore(candidate: RoadAnchorCandidate, poi: SemanticPoi, preferredSide: RoadEntranceSide, reference?: SemanticVec): number {
+  const sidePenalty = candidate.side === preferredSide ? 0 : 5;
+  const referenceDistance = reference ? Math.abs(candidate.approachTile.x - reference.x) + Math.abs(candidate.approachTile.y - reference.y) : 0;
+  const centerDistance = Math.abs(candidate.entranceTile.x - poi.x) + Math.abs(candidate.entranceTile.y - poi.y);
+  const bottomFallback = !reference && candidate.side !== "bottom" ? 1.5 : 0;
+  return sidePenalty + referenceDistance * 0.08 + centerDistance * 0.18 + bottomFallback;
+}
+
+function drawRoadEndpointAprons(width: number, height: number, roadMap: Uint8Array, poiList: SemanticPoi[], edges: SemanticRoadEdge[]) {
+  const poiById = new Map(poiList.map((poi) => [poi.id, poi]));
+  for (const edge of edges) {
+    if (!edge.connected || edge.path.length < 2) continue;
+    drawRoadEndpointApron(width, height, roadMap, poiById.get(edge.from), edge.path[0]);
+    drawRoadEndpointApron(width, height, roadMap, poiById.get(edge.to), edge.path[edge.path.length - 1]);
+  }
+}
+
+function drawRoadEndpointApron(width: number, height: number, roadMap: Uint8Array, poi: SemanticPoi | undefined, endpoint: SemanticVec | undefined) {
+  if (!poi || !endpoint) return;
+  if (posKey(endpoint) !== posKey(poi.approachTile)) return;
+  if (Math.abs(poi.entranceTile.x - poi.approachTile.x) + Math.abs(poi.entranceTile.y - poi.approachTile.y) !== 1) return;
+  if (!inBounds(width, height, poi.entranceTile.x, poi.entranceTile.y)) return;
+  roadMap[index(width, poi.entranceTile.x, poi.entranceTile.y)] = 1;
 }
 
 function findRoadPath(
@@ -2074,7 +2225,11 @@ function poiFootprintCells(spec: RequiredPoiSpec, x: number, y: number): Semanti
 }
 
 function semanticPoiFootprintCells(poi: SemanticPoi): SemanticVec[] {
-  return footprintCells(poi.x, poi.y, poiFootprintSizeForPoi(poi));
+  const cells: SemanticVec[] = [];
+  for (let y = poi.footprint.minY; y <= poi.footprint.maxY; y += 1) {
+    for (let x = poi.footprint.minX; x <= poi.footprint.maxX; x += 1) cells.push({ x, y });
+  }
+  return cells;
 }
 
 function semanticPoiFootprintKeySet(pois: SemanticPoi[]): Set<string> {
@@ -2089,9 +2244,7 @@ const PORT_FOOTPRINT_SIZE = 3;
 const PORT_MIN_SHALLOW_WATER_TILES = 3;
 
 function footprintCells(x: number, y: number, size: number): SemanticVec[] {
-  const offset = Math.floor((size - 1) / 2);
-  const minX = x - offset;
-  const minY = y - offset;
+  const { minX, minY } = footprintBounds(x, y, size);
   const cells: SemanticVec[] = [];
   for (let yy = minY; yy < minY + size; yy += 1) {
     for (let xx = minX; xx < minX + size; xx += 1) cells.push({ x: xx, y: yy });
@@ -2099,15 +2252,22 @@ function footprintCells(x: number, y: number, size: number): SemanticVec[] {
   return cells;
 }
 
+function semanticPoiFootprintBoundsForSpec(spec: RequiredPoiSpec, x: number, y: number): SemanticPoi["footprint"] {
+  const size = poiFootprintSizeForSpec(spec);
+  const bounds = footprintBounds(x, y, size);
+  return { ...bounds, width: size, height: size };
+}
+
+function footprintBounds(x: number, y: number, size: number): { minX: number; minY: number; maxX: number; maxY: number } {
+  const offset = Math.floor((size - 1) / 2);
+  const minX = x - offset;
+  const minY = y - offset;
+  return { minX, minY, maxX: minX + size - 1, maxY: minY + size - 1 };
+}
+
 function poiFootprintSizeForSpec(spec: RequiredPoiSpec): number {
   if (spec.role === "port") return PORT_FOOTPRINT_SIZE;
   if (spec.role === "settlement" || spec.role === "final") return 3;
-  return 2;
-}
-
-function poiFootprintSizeForPoi(poi: SemanticPoi): number {
-  if (poi.role === "port") return PORT_FOOTPRINT_SIZE;
-  if (poi.role === "settlement" || poi.role === "final") return 3;
   return 2;
 }
 

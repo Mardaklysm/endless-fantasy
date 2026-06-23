@@ -548,7 +548,7 @@ function validatePois(world) {
       }
       assert(!world.semantic.layers.mountainMap[i], `POI ${poi.id} footprint overlaps mountain at ${cell.x},${cell.y}.`);
       assert(!world.semantic.layers.riverMap[i], `POI ${poi.id} footprint overlaps river at ${cell.x},${cell.y}.`);
-      assert(!world.semantic.layers.roadMap[i], `POI ${poi.id} footprint contains road at ${cell.x},${cell.y}.`);
+      assert(!world.semantic.layers.roadMap[i] || isPoiEntranceTile(poi, cell.x, cell.y), `POI ${poi.id} footprint contains non-entrance road at ${cell.x},${cell.y}.`);
       assert(!world.semantic.layers.forestMap[i], `POI ${poi.id} footprint overlaps forest at ${cell.x},${cell.y}.`);
       assert(world.semantic.layers.overlayCollisionPolicy[i] === "poiBlock", `POI ${poi.id} footprint is not tagged poiBlock at ${cell.x},${cell.y}.`);
       assert(!isWorldPositionWalkable(world, cell.x, cell.y), `POI ${poi.id} body cell ${cell.x},${cell.y} should block walking.`);
@@ -593,7 +593,7 @@ function validateRoadAndForestPolicies(world) {
     for (let x = 0; x < world.width; x += 1) {
       const i = y * world.width + x;
       if (world.semantic.layers.roadMap[i]) {
-        assert(isWorldPositionWalkable(world, x, y), `Road at ${x},${y} is blocked.`);
+        assert(isWorldPositionWalkable(world, x, y) || isPoiEntranceRoadCell(world, x, y), `Road at ${x},${y} is blocked.`);
         assert(!world.semantic.layers.mountainMap[i], `Mountain overlaps road at ${x},${y}.`);
         assert(!world.semantic.layers.forestMap[i], `Forest overlaps road at ${x},${y}.`);
       }
@@ -781,11 +781,18 @@ function hasAdjacentWalkablePoiApproach(world, poi) {
 }
 
 function roadEdgeTouchesPoiApproach(world, edge, poi) {
-  const footprintKeys = new Set(poiFootprintCells(poi).map((cell) => `${cell.x},${cell.y}`));
-  return edge.path.some((cell) => {
-    if (footprintKeys.has(`${cell.x},${cell.y}`)) return false;
-    return neighbors4(cell.x, cell.y).some((next) => footprintKeys.has(`${next.x},${next.y}`));
-  });
+  const semanticPoi = world.semantic.poiList.find((candidate) => candidate.id === poi.id);
+  assert(semanticPoi, `POI ${poi.id} is missing semantic anchor data.`);
+  return edge.path.some((cell) => cell.x === semanticPoi.approachTile.x && cell.y === semanticPoi.approachTile.y);
+}
+
+function isPoiEntranceTile(poi, x, y) {
+  const semanticPoi = "entranceTile" in poi ? poi : undefined;
+  return semanticPoi ? semanticPoi.entranceTile.x === x && semanticPoi.entranceTile.y === y : false;
+}
+
+function isPoiEntranceRoadCell(world, x, y) {
+  return world.semantic.poiList.some((poi) => poi.entranceTile.x === x && poi.entranceTile.y === y);
 }
 
 function poiFootprintCells(poi) {
