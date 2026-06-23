@@ -1,0 +1,396 @@
+{
+  "id": "starting_grassland_village",
+  "displayName": "Grassland Village",
+  "type": "village",
+  "sourceLocationId": "dawnford",
+  "serviceTownId": "dawnford",
+  "background": {
+    "key": "poi_starting_grassland_village",
+    "path": "assets/poi/starting_grassland_village.jpeg",
+    "width": 2752,
+    "height": 1536
+  },
+  "spawn": {
+    "x": 1545,
+    "y": 1115,
+    "facing": "down"
+  },
+  "movement": {
+    "stepSize": 24
+  },
+  "walkableZones": [
+    {
+      "id": "central-village-field",
+      "shape": {
+        "type": "rect",
+        "x": 470,
+        "y": 600,
+        "width": 1545,
+        "height": 775
+      }
+    },
+    {
+      "id": "north-service-field",
+      "shape": {
+        "type": "rect",
+        "x": 690,
+        "y": 250,
+        "width": 1725,
+        "height": 555
+      }
+    },
+    {
+      "id": "west-service-field",
+      "shape": {
+        "type": "rect",
+        "x": 175,
+        "y": 520,
+        "width": 960,
+        "height": 735
+      }
+    },
+    {
+      "id": "south-path-field",
+      "shape": {
+        "type": "rect",
+        "x": 210,
+        "y": 1075,
+        "width": 2300,
+        "height": 370
+      }
+    },
+    {
+      "id": "east-service-field",
+      "shape": {
+        "type": "rect",
+        "x": 1620,
+        "y": 610,
+        "width": 950,
+        "height": 730
+      }
+    },
+    {
+      "id": "items-front-field",
+      "shape": {
+        "type": "rect",
+        "x": 1800,
+        "y": 1010,
+        "width": 710,
+        "height": 390
+      }
+    },
+    {
+      "id": "south-path-exit",
+      "shape": {
+        "type": "rect",
+        "x": 1320,
+        "y": 1325,
+        "width": 520,
+        "height": 125
+      }
+    },
+    {
+      "id": "east-path-exit",
+      "shape": {
+        "type": "rect",
+        "x": 2440,
+        "y": 950,
+        "width": 165,
+        "height": 330
+      }
+    }
+  ],
+  "blockedZones": [
+    {
+      "id": "inn-main",
+      "shape": {
+        "type": "rect",
+        "x": 1070,
+        "y": 35,
+        "width": 645,
+        "height": 725
+      },
+      "note": "Large inn body and roof."
+    },
+    {
+      "id": "inn-annex",
+      "shape": {
+        "type": "rect",
+        "x": 1555,
+        "y": 320,
+        "width": 315,
+        "height": 360
+      }
+    },
+    {
+      "id": "weapons-smithy",
+      "shape": {
+        "type": "rect",
+        "x": 330,
+        "y": 345,
+        "width": 525,
+        "height": 365
+      }
+    },
+    {
+      "id": "church",
+      "shape": {
+        "type": "rect",
+        "x": 330,
+        "y": 910,
+        "width": 500,
+        "height": 385
+      }
+    },
+    {
+      "id": "armor-shop",
+      "shape": {
+        "type": "rect",
+        "x": 1930,
+        "y": 420,
+        "width": 455,
+        "height": 445
+      }
+    },
+    {
+      "id": "item-stall",
+      "shape": {
+        "type": "rect",
+        "x": 2050,
+        "y": 1060,
+        "width": 470,
+        "height": 310
+      }
+    },
+    {
+      "id": "central-well",
+      "shape": {
+        "type": "rect",
+        "x": 1265,
+        "y": 920,
+        "width": 280,
+        "height": 315
+      }
+    },
+    {
+      "id": "left-upper-trees",
+      "shape": {
+        "type": "rect",
+        "x": 120,
+        "y": 250,
+        "width": 290,
+        "height": 390
+      }
+    },
+    {
+      "id": "left-lower-trees",
+      "shape": {
+        "type": "rect",
+        "x": 120,
+        "y": 790,
+        "width": 280,
+        "height": 430
+      }
+    },
+    {
+      "id": "top-center-tree",
+      "shape": {
+        "type": "rect",
+        "x": 720,
+        "y": 95,
+        "width": 300,
+        "height": 335
+      }
+    },
+    {
+      "id": "top-right-tree-line",
+      "shape": {
+        "type": "rect",
+        "x": 1900,
+        "y": 95,
+        "width": 500,
+        "height": 300
+      }
+    },
+    {
+      "id": "right-upper-trees",
+      "shape": {
+        "type": "rect",
+        "x": 2320,
+        "y": 220,
+        "width": 280,
+        "height": 410
+      }
+    },
+    {
+      "id": "right-lower-trees",
+      "shape": {
+        "type": "rect",
+        "x": 2260,
+        "y": 830,
+        "width": 300,
+        "height": 330
+      }
+    },
+    {
+      "id": "barrel-crates-east",
+      "shape": {
+        "type": "rect",
+        "x": 2400,
+        "y": 690,
+        "width": 150,
+        "height": 185
+      }
+    },
+    {
+      "id": "crates-south-east",
+      "shape": {
+        "type": "rect",
+        "x": 2225,
+        "y": 1240,
+        "width": 300,
+        "height": 170
+      }
+    }
+  ],
+  "eventZones": [
+    {
+      "id": "church",
+      "type": "service",
+      "label": "Church",
+      "prompt": "Visit Church?",
+      "shape": {
+        "type": "rect",
+        "x": 760,
+        "y": 1195,
+        "width": 300,
+        "height": 220
+      },
+      "activation": "interact",
+      "action": {
+        "kind": "openChurch",
+        "townId": "dawnford"
+      }
+    },
+    {
+      "id": "weapons",
+      "type": "shop",
+      "label": "Weapons",
+      "prompt": "Enter Weapons?",
+      "shape": {
+        "type": "rect",
+        "x": 775,
+        "y": 690,
+        "width": 360,
+        "height": 250
+      },
+      "activation": "interact",
+      "action": {
+        "kind": "openShop",
+        "shopId": "weapons",
+        "townId": "dawnford"
+      }
+    },
+    {
+      "id": "armor",
+      "type": "shop",
+      "label": "Armor",
+      "prompt": "Enter Armor?",
+      "shape": {
+        "type": "rect",
+        "x": 1800,
+        "y": 710,
+        "width": 320,
+        "height": 255
+      },
+      "activation": "interact",
+      "action": {
+        "kind": "openShop",
+        "shopId": "armor",
+        "townId": "dawnford"
+      }
+    },
+    {
+      "id": "items",
+      "type": "shop",
+      "label": "Items",
+      "prompt": "Browse Items?",
+      "shape": {
+        "type": "rect",
+        "x": 1905,
+        "y": 1085,
+        "width": 505,
+        "height": 330
+      },
+      "activation": "interact",
+      "action": {
+        "kind": "openShop",
+        "shopId": "items",
+        "townId": "dawnford"
+      }
+    },
+    {
+      "id": "inn",
+      "type": "service",
+      "label": "Inn",
+      "prompt": "Enter Inn?",
+      "shape": {
+        "type": "rect",
+        "x": 1185,
+        "y": 640,
+        "width": 320,
+        "height": 205
+      },
+      "activation": "interact",
+      "action": {
+        "kind": "openInn",
+        "townId": "dawnford"
+      }
+    },
+    {
+      "id": "south_path",
+      "type": "exit",
+      "label": "South Path",
+      "prompt": "Leave this area?",
+      "shape": {
+        "type": "rect",
+        "x": 1350,
+        "y": 1360,
+        "width": 440,
+        "height": 95
+      },
+      "activation": "confirm",
+      "action": {
+        "kind": "exitPoi",
+        "destination": {
+          "kind": "returnToOverworld"
+        }
+      }
+    },
+    {
+      "id": "east_path",
+      "type": "exit",
+      "label": "East Path",
+      "prompt": "Leave this area?",
+      "shape": {
+        "type": "rect",
+        "x": 2480,
+        "y": 990,
+        "width": 120,
+        "height": 280
+      },
+      "activation": "confirm",
+      "action": {
+        "kind": "exitPoi",
+        "destination": {
+          "kind": "returnToOverworld"
+        }
+      }
+    }
+  ],
+  "npcs": [],
+  "debugNotes": [
+    "NPC markers are intentionally data-ready but not rendered yet.",
+    "Collision is authored in image pixels over the handcrafted POI image."
+  ]
+}

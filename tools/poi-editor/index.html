@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Endless Fantasy POI Editor</title>
+    <link rel="stylesheet" href="/poi-editor.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <strong>POI Editor</strong>
+      <select id="poiSelect" aria-label="POI"></select>
+      <button id="reloadBtn">Reload</button>
+      <button id="saveBtn">Save</button>
+      <button id="resetViewBtn">Reset View</button>
+      <label><input id="walkableToggle" type="checkbox" checked /> Walkable</label>
+      <label><input id="blockedToggle" type="checkbox" checked /> Blockers</label>
+      <label><input id="eventsToggle" type="checkbox" checked /> Events</label>
+      <label>Draw <select id="drawLayer"><option value="walkable">Walkable</option><option value="blocked">Blocker</option></select></label>
+      <span id="dirtyState">clean</span>
+      <span id="coords">x -, y -</span>
+    </header>
+    <main>
+      <aside>
+        <div id="poiTitle">No POI loaded</div>
+        <p>Left click adds polygon points. Click near the first point or press Enter to close. Escape cancels.</p>
+        <p>Shift + left click deletes the top zone under the cursor. Choose Walkable or Blocker from the Draw menu.</p>
+        <p>Right drag creates an event rectangle. Right click edits an event. Shift + right click deletes an event.</p>
+        <p>Mouse wheel zooms. Middle drag or Space + drag pans.</p>
+        <div id="status"></div>
+      </aside>
+      <section id="canvasWrap">
+        <canvas id="editorCanvas"></canvas>
+      </section>
+    </main>
+
+    <dialog id="eventDialog">
+      <form method="dialog" id="eventForm">
+        <h2>Event Zone</h2>
+        <div class="presets">
+          <button type="button" data-preset="church">Church</button>
+          <button type="button" data-preset="weapons">Weapons</button>
+          <button type="button" data-preset="armor">Armor</button>
+          <button type="button" data-preset="items">Items</button>
+          <button type="button" data-preset="inn">Inn</button>
+          <button type="button" data-preset="exit">Exit</button>
+        </div>
+        <label>ID <input id="eventId" required /></label>
+        <label>Label <input id="eventLabel" required /></label>
+        <label>Prompt <input id="eventPrompt" required /></label>
+        <label>Activation
+          <select id="eventActivation">
+            <option value="interact">interact</option>
+            <option value="confirm">confirm</option>
+            <option value="auto">auto</option>
+          </select>
+        </label>
+        <label>Action kind
+          <select id="eventActionKind">
+            <option value="openShop">openShop</option>
+            <option value="openInn">openInn</option>
+            <option value="openChurch">openChurch</option>
+            <option value="openDialog">openDialog</option>
+            <option value="inspect">inspect</option>
+            <option value="exitPoi">exitPoi</option>
+            <option value="triggerEvent">triggerEvent</option>
+          </select>
+        </label>
+        <label>Action ID / shop ID / dialog ID <input id="eventActionId" /></label>
+        <label>Town ID <input id="eventTownId" placeholder="dawnford" /></label>
+        <menu>
+          <button type="button" id="eventCancelBtn">Cancel</button>
+          <button id="eventSaveBtn" value="default">Apply</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <script type="module" src="/poi-editor.js"></script>
+  </body>
+</html>

@@ -1,5 +1,14 @@
 import { FAST_MOVE_TILES_PER_MS, HEIGHT, MOVE_TILES_PER_MS, TILE, WIDTH } from "../../app/config";
-import { getPoiMetadata, poiIdForWorldLocation as poiIdForLocation, type PoiAction, type PoiExitZone, type PoiInteraction, type PoiMetadata, type PoiRectZone, type PoiTriggerShape } from "../../data/poiMetadata";
+import {
+  getPoiMetadata,
+  poiIdForWorldLocation as poiIdForLocation,
+  type PoiAction,
+  type PoiEventZone,
+  type PoiExitDestination,
+  type PoiMetadata,
+  type PoiRectShape,
+  type PoiShape
+} from "../../data/poiMetadata";
 import type { TownDef } from "../../data/gameDataTypes";
 import type { ExploreMode, Vec } from "../../scene/sceneTypes";
 import type { CrystalOathSceneContext } from "../../scene/sceneContext";
@@ -84,22 +93,24 @@ export function canOccupyPoiPoint(this: CrystalOathSceneContext, x: number, y: n
   const poi = this.currentPoi();
   if (!poi) return false;
   if (x < 0 || y < 0 || x > poi.background.width || y > poi.background.height) return false;
-  if (!poi.collision.walkableZones.some((zone) => pointInRect({ x, y }, zone))) return false;
-  return !poi.collision.solidZones.some((zone) => pointInRect({ x, y }, zone));
+  const point = { x, y };
+  if (!poi.walkableZones.some((zone) => pointInShape(point, zone.shape))) return false;
+  return !poi.blockedZones.some((zone) => pointInShape(point, zone.shape));
 }
 
-export function activePoiInteraction(this: CrystalOathSceneContext): PoiInteraction | undefined {
+export function activePoiInteraction(this: CrystalOathSceneContext): PoiEventZone | undefined {
   const poi = this.currentPoi();
   if (!poi) return undefined;
-  return poi.interactions
-    .map((interaction, index) => ({
-      interaction,
+  return poi.eventZones
+    .filter((event) => event.activation === "interact")
+    .map((event, index) => ({
+      event,
       index,
-      distance: distanceToShape(this.poiPos, interaction.shape),
-      active: pointInShape(this.poiPos, interaction.shape)
+      distance: distanceToShape(this.poiPos, event.shape),
+      active: pointInShape(this.poiPos, event.shape)
     }))
     .filter((candidate) => candidate.active)
-    .sort((a, b) => (b.interaction.priority ?? 0) - (a.interaction.priority ?? 0) || a.distance - b.distance || a.index - b.index)[0]?.interaction;
+    .sort((a, b) => (b.event.priority ?? 0) - (a.event.priority ?? 0) || a.distance - b.distance || a.index - b.index)[0]?.event;
 }
 
 export function interactPoi(this: CrystalOathSceneContext) {
@@ -150,6 +161,10 @@ export function activatePoiAction(this: CrystalOathSceneContext, action: PoiActi
     return;
   }
   if (action.kind === "returnToOverworld") {
+    this.leavePoiVisit();
+    return;
+  }
+  if (action.kind === "exitPoi") {
     this.leavePoiVisit();
     return;
   }
@@ -225,23 +240,28 @@ export function handlePoiStepComplete(this: CrystalOathSceneContext, tile: Vec) 
   this.rearmSuppressedPoiExits(tile);
   const exit = this.poiExitAt(tile);
   if (!exit || this.suppressedPoiExitIds.has(exit.id)) return;
-  this.openPoiExitConfirmation(exit);
+  if (exit.activation === "confirm") {
+    this.openPoiExitConfirmation(exit);
+    return;
+  }
+  this.suppressedPoiExitIds.add(exit.id);
+  this.activatePoiAction(exit.action, exit.label);
 }
 
-export function poiExitAt(this: CrystalOathSceneContext, point: Vec): PoiExitZone | undefined {
-  return this.currentPoi()?.exits.find((exit) => pointInRect(point, exit));
+export function poiExitAt(this: CrystalOathSceneContext, point: Vec): PoiEventZone | undefined {
+  return this.currentPoi()?.eventZones.find((event) => (event.activation === "confirm" || event.activation === "auto") && pointInShape(point, event.shape));
 }
 
 export function rearmSuppressedPoiExits(this: CrystalOathSceneContext, point: Vec) {
   const poi = this.currentPoi();
   if (!poi || this.suppressedPoiExitIds.size === 0) return;
-  for (const exit of poi.exits) {
+  for (const exit of poi.eventZones.filter((event) => event.activation === "confirm" || event.activation === "auto")) {
     if (!this.suppressedPoiExitIds.has(exit.id)) continue;
-    if (!pointInInflatedRect(point, exit, POI_EXIT_REARM_MARGIN)) this.suppressedPoiExitIds.delete(exit.id);
+    if (!pointInInflatedShape(point, exit.shape, POI_EXIT_REARM_MARGIN)) this.suppressedPoiExitIds.delete(exit.id);
   }
 }
 
-export function openPoiExitConfirmation(this: CrystalOathSceneContext, exit: PoiExitZone) {
+export function openPoiExitConfirmation(this: CrystalOathSceneContext, exit: PoiEventZone) {
   this.clearHeldMovement();
   this.openMenu(
     exit.prompt,
@@ -259,9 +279,10 @@ export function suppressPoiExit(this: CrystalOathSceneContext, exitId: string) {
   this.closeMenuTo("poi");
 }
 
-export function followPoiExit(this: CrystalOathSceneContext, exit: PoiExitZone) {
-  if (exit.destination.kind === "transitionToPoi") {
-    this.enterPoiVisit(exit.destination.poiId, { mode: "poi", locationId: this.poiReturn?.locationId, position: this.poiPos });
+export function followPoiExit(this: CrystalOathSceneContext, exit: PoiEventZone) {
+  const destination = poiExitDestination(exit);
+  if (destination.kind === "transitionToPoi") {
+    this.enterPoiVisit(destination.poiId, { mode: "poi", locationId: this.poiReturn?.locationId, position: this.poiPos });
     return;
   }
   this.leavePoiVisit();
@@ -297,24 +318,56 @@ function facingToVector(facing: "up" | "down" | "left" | "right" | undefined): V
   return { x: 0, y: 1 };
 }
 
-function pointInShape(point: Vec, shape: PoiTriggerShape): boolean {
-  if (shape.kind === "circle") return distanceSq(point, shape) <= shape.radius * shape.radius;
-  return pointInRect(point, { id: "shape", x: shape.x, y: shape.y, width: shape.width, height: shape.height });
+function poiExitDestination(exit: PoiEventZone): PoiExitDestination {
+  return exit.action.kind === "exitPoi" && exit.action.destination ? exit.action.destination : { kind: "returnToOverworld" };
 }
 
-function distanceToShape(point: Vec, shape: PoiTriggerShape): number {
-  if (shape.kind === "circle") return distanceSq(point, shape);
+function pointInShape(point: Vec, shape: PoiShape): boolean {
+  if (shape.type === "circle") return distanceSq(point, shape) <= shape.radius * shape.radius;
+  if (shape.type === "polygon") return pointInPolygon(point, shape.points);
+  return pointInRect(point, shape);
+}
+
+function distanceToShape(point: Vec, shape: PoiShape): number {
+  if (shape.type === "circle") return distanceSq(point, shape);
+  if (shape.type === "polygon") return pointInPolygon(point, shape.points) ? 0 : Math.min(...shape.points.map((candidate) => distanceSq(point, candidate)));
   const closestX = Math.max(shape.x, Math.min(point.x, shape.x + shape.width));
   const closestY = Math.max(shape.y, Math.min(point.y, shape.y + shape.height));
   return distanceSq(point, { x: closestX, y: closestY });
 }
 
-function pointInRect(point: Vec, rect: PoiRectZone): boolean {
+function pointInRect(point: Vec, rect: PoiRectShape): boolean {
   return point.x >= rect.x && point.x <= rect.x + rect.width && point.y >= rect.y && point.y <= rect.y + rect.height;
 }
 
-function pointInInflatedRect(point: Vec, rect: PoiRectZone, inflate: number): boolean {
+function pointInInflatedShape(point: Vec, shape: PoiShape, inflate: number): boolean {
+  if (shape.type === "rect") return pointInInflatedRect(point, shape, inflate);
+  if (shape.type === "circle") return distanceSq(point, shape) <= (shape.radius + inflate) ** 2;
+  const bounds = polygonBounds(shape.points);
+  return pointInInflatedRect(point, bounds, inflate);
+}
+
+function pointInInflatedRect(point: Vec, rect: PoiRectShape, inflate: number): boolean {
   return point.x >= rect.x - inflate && point.x <= rect.x + rect.width + inflate && point.y >= rect.y - inflate && point.y <= rect.y + rect.height + inflate;
+}
+
+function pointInPolygon(point: Vec, points: Vec[]): boolean {
+  let inside = false;
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    const a = points[i];
+    const b = points[j];
+    const intersects = a.y > point.y !== b.y > point.y && point.x < ((b.x - a.x) * (point.y - a.y)) / (b.y - a.y) + a.x;
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
+function polygonBounds(points: Vec[]): PoiRectShape {
+  const xs = points.map((point) => point.x);
+  const ys = points.map((point) => point.y);
+  const x = Math.min(...xs);
+  const y = Math.min(...ys);
+  return { type: "rect", x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y };
 }
 
 function distanceSq(a: Vec, b: Vec): number {

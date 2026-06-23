@@ -1,5 +1,5 @@
 import { HEIGHT, LAYER_WORLD_IMAGE, WIDTH } from "../../app/config";
-import type { PoiMetadata, PoiRectZone } from "../../data/poiMetadata";
+import type { PoiMetadata, PoiRectShape, PoiShape } from "../../data/poiMetadata";
 import type { Vec } from "../../scene/sceneTypes";
 import type { CrystalOathSceneContext } from "../../scene/sceneContext";
 
@@ -40,43 +40,14 @@ export function drawPoiHud(this: CrystalOathSceneContext, poi: PoiMetadata) {
 
 export function drawPoiDebugOverlay(this: CrystalOathSceneContext, poi: PoiMetadata) {
   const layout = this.poiRenderLayout(poi);
-  const drawRect = (zone: PoiRectZone, color: number, alpha: number) => {
-    this.worldOverlay.fillStyle(color, alpha).fillRect(
-      layout.x + zone.x * layout.scale,
-      layout.y + zone.y * layout.scale,
-      zone.width * layout.scale,
-      zone.height * layout.scale
-    );
-    this.worldOverlay.lineStyle(1, color, Math.min(1, alpha + 0.32)).strokeRect(
-      layout.x + zone.x * layout.scale,
-      layout.y + zone.y * layout.scale,
-      zone.width * layout.scale,
-      zone.height * layout.scale
-    );
-  };
-
-  for (const zone of poi.collision.walkableZones) drawRect(zone, 0x67e78c, 0.14);
-  for (const zone of poi.collision.solidZones) drawRect(zone, 0xff405c, 0.24);
-  for (const exit of poi.exits) drawRect(exit, 0xffd166, 0.3);
-  for (const interaction of poi.interactions) {
-    if (interaction.shape.kind === "circle") {
-      const point = poiLocalToScreen(layout, interaction.shape);
-      this.worldOverlay.lineStyle(2, 0x66d9ff, 0.78).strokeCircle(point.x, point.y, interaction.shape.radius * layout.scale);
-      this.worldOverlay.fillStyle(0x66d9ff, 0.85).fillCircle(point.x, point.y, 3);
-      this.text(point.x, point.y - 18, interaction.id, 8, "#d8f7ff", "center", { strokeThickness: 1 });
-    } else {
-      drawRect(
-        {
-          id: interaction.id,
-          x: interaction.shape.x,
-          y: interaction.shape.y,
-          width: interaction.shape.width,
-          height: interaction.shape.height
-        },
-        0x66d9ff,
-        0.24
-      );
-    }
+  for (const zone of poi.walkableZones) drawShape.call(this, layout, zone.shape, 0x67e78c, 0.14);
+  for (const zone of poi.blockedZones) drawShape.call(this, layout, zone.shape, 0xff405c, 0.24);
+  for (const event of poi.eventZones) {
+    const color = event.activation === "confirm" ? 0xffd166 : 0x66d9ff;
+    drawShape.call(this, layout, event.shape, color, event.activation === "confirm" ? 0.3 : 0.24);
+    const labelPos = shapeLabelPoint(event.shape);
+    const point = poiLocalToScreen(layout, labelPos);
+    this.text(point.x, point.y - 8, event.id, 8, event.activation === "confirm" ? "#fff0a6" : "#d8f7ff", "center", { strokeThickness: 1 });
   }
   const pos = this.visualExplorePos("poi");
   const screen = this.poiToScreen(pos);
@@ -85,6 +56,48 @@ export function drawPoiDebugOverlay(this: CrystalOathSceneContext, poi: PoiMetad
     wordWrapWidth: 360,
     strokeThickness: 1
   });
+}
+
+function drawShape(this: CrystalOathSceneContext, layout: { x: number; y: number; scale: number }, shape: PoiShape, color: number, alpha: number) {
+  if (shape.type === "rect") {
+    this.worldOverlay.fillStyle(color, alpha).fillRect(
+      layout.x + shape.x * layout.scale,
+      layout.y + shape.y * layout.scale,
+      shape.width * layout.scale,
+      shape.height * layout.scale
+    );
+    this.worldOverlay.lineStyle(1, color, Math.min(1, alpha + 0.32)).strokeRect(
+      layout.x + shape.x * layout.scale,
+      layout.y + shape.y * layout.scale,
+      shape.width * layout.scale,
+      shape.height * layout.scale
+    );
+    return;
+  }
+  if (shape.type === "circle") {
+    const point = poiLocalToScreen(layout, shape);
+    this.worldOverlay.lineStyle(2, color, Math.min(1, alpha + 0.46)).strokeCircle(point.x, point.y, shape.radius * layout.scale);
+    this.worldOverlay.fillStyle(color, Math.min(0.4, alpha)).fillCircle(point.x, point.y, shape.radius * layout.scale);
+    return;
+  }
+  if (shape.points.length === 0) return;
+  const first = poiLocalToScreen(layout, shape.points[0]);
+  this.worldOverlay.fillStyle(color, alpha);
+  this.worldOverlay.beginPath();
+  this.worldOverlay.moveTo(first.x, first.y);
+  for (const point of shape.points.slice(1)) {
+    const screenPoint = poiLocalToScreen(layout, point);
+    this.worldOverlay.lineTo(screenPoint.x, screenPoint.y);
+  }
+  this.worldOverlay.closePath().fillPath();
+  this.worldOverlay.lineStyle(1, color, Math.min(1, alpha + 0.32)).strokePath();
+}
+
+function shapeLabelPoint(shape: PoiShape): Vec {
+  if (shape.type === "circle") return { x: shape.x, y: shape.y };
+  if (shape.type === "rect") return { x: shape.x + shape.width / 2, y: shape.y + shape.height / 2 };
+  const total = shape.points.reduce((sum, point) => ({ x: sum.x + point.x, y: sum.y + point.y }), { x: 0, y: 0 });
+  return { x: total.x / shape.points.length, y: total.y / shape.points.length };
 }
 
 function poiLocalToScreen(layout: { x: number; y: number; scale: number }, point: Vec): Vec {
