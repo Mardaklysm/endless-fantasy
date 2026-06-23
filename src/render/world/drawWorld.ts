@@ -517,7 +517,12 @@ export function drawCachedWorldTerrain(this: CrystalOathSceneContext, tileCam: V
     for (let chunkX = firstChunkX; chunkX <= lastChunkX; chunkX += 1) {
       const chunk = this.getOrCreateWorldTerrainChunk(chunkX, chunkY);
       if (!chunk) continue;
-      const image = this.add.image(chunk.chunkX * TILE - tileCam.x, chunk.chunkY * TILE - tileCam.y, chunk.textureKey, chunk.frameKey);
+      const image = this.add.image(
+        (chunk.chunkX * TILE - tileCam.x) * PIXEL_ART_SCALE,
+        (chunk.chunkY * TILE - tileCam.y) * PIXEL_ART_SCALE,
+        chunk.textureKey,
+        chunk.frameKey
+      );
       image.setOrigin(0, 0);
       image.setDisplaySize(chunk.chunkWidth * TILE * PIXEL_ART_SCALE, chunk.chunkHeight * TILE * PIXEL_ART_SCALE);
       image.setDepth(LAYER_WORLD_IMAGE);

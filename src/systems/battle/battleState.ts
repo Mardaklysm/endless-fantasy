@@ -146,11 +146,16 @@ export function finishBattle(this: CrystalOathSceneContext, won: boolean) {
   const wasBoss = this.battle.kind === "boss";
   const dungeonId = this.battle.dungeonId;
   const bossId = this.battle.bossId;
+  const refreshPostBattleLayers = () => {
+    this.updateCloudOverlay(0);
+    this.markDirty();
+  };
   this.battle = undefined;
   if (!won) {
     this.mode = dungeonId ? "dungeon" : "world";
     this.syncAllVisualPositions();
     this.audio.setMode(this.mode === "dungeon" ? "dungeon" : "world");
+    refreshPostBattleLayers();
     return;
   }
   if (wasBoss && dungeonId && bossId) {
@@ -182,17 +187,21 @@ export function finishBattle(this: CrystalOathSceneContext, won: boolean) {
       this.mode = "ending";
       this.audio.setMode("ending");
       this.saveGame();
+      refreshPostBattleLayers();
       return;
     }
     this.saveGame();
+    refreshPostBattleLayers();
     this.say([...dungeon.rewardText, ...extra], () => {
       this.mode = "dungeon";
       this.audio.setMode("dungeon");
+      refreshPostBattleLayers();
     });
   } else {
     this.mode = dungeonId ? "dungeon" : "world";
     this.syncAllVisualPositions();
     this.audio.setMode(this.mode === "dungeon" ? "dungeon" : "world");
+    refreshPostBattleLayers();
   }
 }
 
