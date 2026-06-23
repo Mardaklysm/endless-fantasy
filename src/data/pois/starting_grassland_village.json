@@ -447,5 +447,40 @@
   "debugNotes": [
     "NPC markers are intentionally data-ready but not rendered yet.",
     "Collision is authored in image pixels over the handcrafted POI image."
+  ],
+  "blockedZones": [
+    {
+      "id": "central_well",
+      "shape": {
+        "type": "polygon",
+        "points": [
+          {
+            "x": 1265,
+            "y": 930
+          },
+          {
+            "x": 1450,
+            "y": 910
+          },
+          {
+            "x": 1540,
+            "y": 1015
+          },
+          {
+            "x": 1510,
+            "y": 1165
+          },
+          {
+            "x": 1330,
+            "y": 1210
+          },
+          {
+            "x": 1245,
+            "y": 1105
+          }
+        ]
+      },
+      "note": "Well footprint cut out of the central walkable path."
+    }
   ]
 }

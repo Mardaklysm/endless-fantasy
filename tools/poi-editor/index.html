@@ -14,16 +14,18 @@
       <button id="saveBtn">Save</button>
       <button id="resetViewBtn">Reset View</button>
       <label><input id="walkableToggle" type="checkbox" checked /> Walkable</label>
+      <label><input id="blockedToggle" type="checkbox" checked /> Blockers</label>
       <label><input id="eventsToggle" type="checkbox" checked /> Events</label>
+      <label>Draw <select id="drawLayer"><option value="walkable">Walkable</option><option value="blocked">Blocker</option></select></label>
       <span id="dirtyState">clean</span>
       <span id="coords">x -, y -</span>
     </header>
     <main>
       <aside>
         <div id="poiTitle">No POI loaded</div>
-        <p>The whole image is blocked by default. Use walkable polygons to paint playable paths and floors.</p>
-        <p>Left click adds walkable polygon points. Click near the first point or press Enter to close. Escape cancels.</p>
-        <p>Shift + left click deletes the top walkable zone under the cursor.</p>
+        <p>The whole image is blocked by default. Walkable polygons paint playable paths and floors; blocker polygons cut objects out of them.</p>
+        <p>Choose Walkable or Blocker from the Draw menu. Left click adds polygon points. Click near the first point or press Enter to close. Escape cancels.</p>
+        <p>Shift + left click deletes the top zone under the cursor, preferring the selected draw layer.</p>
         <p>Right drag creates an event rectangle. Right click edits an event. Shift + right click deletes an event.</p>
         <p>Mouse wheel zooms. Middle drag or Space + drag pans.</p>
         <div id="status"></div>

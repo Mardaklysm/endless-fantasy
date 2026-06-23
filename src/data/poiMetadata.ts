@@ -86,6 +86,7 @@ export interface PoiMetadata {
     stepSize: number;
   };
   walkableZones: PoiZone[];
+  blockedZones: PoiZone[];
   eventZones: PoiEventZone[];
   npcs: PoiNpcMarker[];
   debugNotes?: string[];

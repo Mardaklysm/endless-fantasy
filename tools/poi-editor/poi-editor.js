@@ -8,8 +8,10 @@ const dirtyState = document.querySelector("#dirtyState");
 const coords = document.querySelector("#coords");
 const statusEl = document.querySelector("#status");
 const poiTitle = document.querySelector("#poiTitle");
+const drawLayer = document.querySelector("#drawLayer");
 const toggles = {
   walkable: document.querySelector("#walkableToggle"),
+  blocked: document.querySelector("#blockedToggle"),
   events: document.querySelector("#eventsToggle")
 };
 const eventDialog = document.querySelector("#eventDialog");
@@ -85,6 +87,7 @@ async function loadPoiList() {
 async function loadPoi(id) {
   if (!id) return;
   poi = await fetchJson(`/api/pois/${encodeURIComponent(id)}`);
+  normalizePoi(poi);
   poiSelect.value = poi.id;
   poiTitle.textContent = `${poi.displayName} - ${poi.id}`;
   image = await loadImage(`/api/asset?path=${encodeURIComponent(poi.background.path)}`);
@@ -106,7 +109,7 @@ async function savePoi() {
     setDirty(false);
     showStatus(`Saved.\nBackup: ${payload.backup}`);
   } catch (error) {
-    showStatus(error.message, true);
+    showStatus(saveErrorMessage(error), true);
   }
 }
 
@@ -227,9 +230,9 @@ function addPolygonPoint(point) {
 
 function closePolygon() {
   if (drawing.length < 3) return;
-  const collection = poi.walkableZones;
+  const collection = drawLayer.value === "blocked" ? poi.blockedZones : poi.walkableZones;
   collection.push({
-    id: uniqueId("walkable", collection),
+    id: uniqueId(drawLayer.value === "blocked" ? "blocked" : "walkable", collection),
     shape: { type: "polygon", points: drawing.map((point) => ({ ...point })) }
   });
   drawing = [];
@@ -237,11 +240,15 @@ function closePolygon() {
 }
 
 function deleteZoneAt(point) {
-  const index = findZoneIndex(poi.walkableZones, point);
-  if (index >= 0) {
-    poi.walkableZones.splice(index, 1);
-    setDirty(true);
-    showStatus("Walkable zone deleted.");
+  const collections = drawLayer.value === "blocked" ? [poi.blockedZones, poi.walkableZones] : [poi.walkableZones, poi.blockedZones];
+  for (const collection of collections) {
+    const index = findZoneIndex(collection, point);
+    if (index >= 0) {
+      collection.splice(index, 1);
+      setDirty(true);
+      showStatus("Zone deleted.");
+      return;
+    }
   }
 }
 
@@ -331,6 +338,7 @@ function draw() {
     ctx.drawImage(image, 0, 0);
     if (poi) {
       if (toggles.walkable.checked) poi.walkableZones.forEach((zone) => drawShape(zone.shape, "rgba(73, 220, 108, 0.28)", "#49dc6c"));
+      if (toggles.blocked.checked) poi.blockedZones.forEach((zone) => drawShape(zone.shape, "rgba(255, 64, 92, 0.32)", "#ff405c"));
       if (toggles.events.checked) {
         poi.eventZones.forEach((event) => {
           drawShape(event.shape, event.activation === "confirm" ? "rgba(255, 209, 102, 0.34)" : "rgba(74, 183, 255, 0.32)", event.activation === "confirm" ? "#ffd166" : "#4ab7ff");
@@ -366,7 +374,7 @@ function drawShape(shape, fill, stroke) {
 }
 
 function drawDraftPolygon() {
-  ctx.strokeStyle = "#b9ffc7";
+  ctx.strokeStyle = drawLayer.value === "blocked" ? "#ff8b9a" : "#b9ffc7";
   ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
   ctx.lineWidth = 2 / scale;
   ctx.beginPath();
@@ -468,6 +476,12 @@ function setDirty(value) {
 
 function markCleanDrawOnly() {}
 
+function normalizePoi(poi) {
+  poi.walkableZones ??= [];
+  poi.blockedZones ??= [];
+  poi.eventZones ??= [];
+}
+
 function showStatus(message, isError = false) {
   statusEl.textContent = message;
   statusEl.classList.toggle("error", isError);
@@ -491,8 +505,23 @@ function loadImage(src) {
 }
 
 async function fetchJson(url) {
-  const response = await fetch(url);
-  const payload = await response.json();
-  if (!response.ok) throw new Error(payload.error ?? `Request failed: ${url}`);
-  return payload;
+  try {
+    const response = await fetch(url);
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error ?? `Request failed: ${url}`);
+    return payload;
+  } catch (error) {
+    throw new Error(serverConnectionMessage(error));
+  }
+}
+
+function saveErrorMessage(error) {
+  return serverConnectionMessage(error);
+}
+
+function serverConnectionMessage(error) {
+  if (error instanceof TypeError && error.message === "Failed to fetch") {
+    return "Could not reach the POI editor server. Keep this tab open, run POI_EDITOR.bat again, then press Save.";
+  }
+  return error instanceof Error ? error.message : String(error);
 }

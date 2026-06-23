@@ -41,6 +41,7 @@ export function drawPoiHud(this: CrystalOathSceneContext, poi: PoiMetadata) {
 export function drawPoiDebugOverlay(this: CrystalOathSceneContext, poi: PoiMetadata) {
   const layout = this.poiRenderLayout(poi);
   for (const zone of poi.walkableZones) drawShape.call(this, layout, zone.shape, 0x67e78c, 0.18);
+  for (const zone of poi.blockedZones) drawShape.call(this, layout, zone.shape, 0xff405c, 0.24);
   for (const event of poi.eventZones) {
     const color = event.activation === "confirm" ? 0xffd166 : 0x66d9ff;
     drawShape.call(this, layout, event.shape, color, event.activation === "confirm" ? 0.3 : 0.24);

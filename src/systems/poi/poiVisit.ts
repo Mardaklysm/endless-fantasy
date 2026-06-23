@@ -94,7 +94,7 @@ export function canOccupyPoiPoint(this: CrystalOathSceneContext, x: number, y: n
   if (!poi) return false;
   if (x < 0 || y < 0 || x > poi.background.width || y > poi.background.height) return false;
   const point = { x, y };
-  return poi.walkableZones.some((zone) => pointInShape(point, zone.shape));
+  return poi.walkableZones.some((zone) => pointInShape(point, zone.shape)) && !poi.blockedZones.some((zone) => pointInShape(point, zone.shape));
 }
 
 export function activePoiInteraction(this: CrystalOathSceneContext): PoiEventZone | undefined {

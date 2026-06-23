@@ -76,6 +76,7 @@ async function readPoi(id) {
 async function savePoi(req, res, id) {
   const body = await readRequestBody(req);
   const poi = JSON.parse(body);
+  normalizePoi(poi);
   validatePoi(id, poi);
   const file = poiFileForId(id);
   const backup = `${file}.bak`;
@@ -93,15 +94,21 @@ function validatePoi(id, poi) {
   if (poi.id !== id) throw new Error("POI id must match the URL id.");
   if (!poi.displayName || !poi.type) throw new Error("POI metadata needs displayName and type.");
   if (!poi.background?.path || !poi.background?.key) throw new Error("POI metadata needs a background key/path.");
-  for (const key of ["walkableZones", "eventZones"]) {
+  for (const key of ["walkableZones", "blockedZones", "eventZones"]) {
     if (!Array.isArray(poi[key])) throw new Error(`${key} must be an array.`);
   }
-  for (const zone of poi.walkableZones) validateZone(zone);
+  for (const zone of [...poi.walkableZones, ...poi.blockedZones]) validateZone(zone);
   for (const event of poi.eventZones) {
     validateZone(event);
     if (!event.label || !event.prompt || !event.activation) throw new Error(`Event ${event.id ?? "(missing id)"} needs label, prompt, and activation.`);
     if (!event.action?.kind) throw new Error(`Event ${event.id} needs an action kind.`);
   }
+}
+
+function normalizePoi(poi) {
+  poi.walkableZones ??= [];
+  poi.blockedZones ??= [];
+  poi.eventZones ??= [];
 }
 
 function validateZone(zone) {
