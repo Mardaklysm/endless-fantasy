@@ -189,7 +189,7 @@ export interface TravelDestination {
   destinationIslandId: IslandId;
   displayName: string;
   costGold: number;
-  requiredUnlockFlag?: "unlockedIsland2" | "unlockedIsland3" | "unlockedFrostmere" | "unlockedHighspire";
+  requiredUnlockFlag?: "unlockedIsland2" | "unlockedIsland3" | "unlockedFrostmere" | "unlockedHighspire" | "unlockedAshfall";
 }
 
 export type ServiceKind = "inn" | "item" | "arms" | "magic" | "clinic";

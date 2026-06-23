@@ -25,7 +25,7 @@ import { REQUIRED_MAJOR_HARBOR_ROUTE_PAIRS, isBoatNavigableTile, validateBoatPat
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PROJECT_ROOT = path.resolve(__dirname, "..", "..");
-const MAJOR_ISLAND_IDS = ["greenhaven", "coralreach", "frostmere", "highspire"];
+const MAJOR_ISLAND_IDS = ["greenhaven", "coralreach", "frostmere", "highspire", "ashfall"];
 
 validateRuntimeAssets();
 validateSemanticWorldgen();
@@ -287,7 +287,7 @@ function validateSemanticWorldgen() {
   assert(stableSummary(worldA) !== stableSummary(worldC), "Different seeds produced the same semantic world summary.");
 
   const majorIslands = worldA.islands.filter((island) => island.major);
-  assert(majorIslands.length === 4, `Expected exactly 4 major islands, got ${majorIslands.length}.`);
+  assert(majorIslands.length === MAJOR_ISLAND_IDS.length, `Expected exactly ${MAJOR_ISLAND_IDS.length} major islands, got ${majorIslands.length}.`);
   for (const id of MAJOR_ISLAND_IDS) {
     assert(majorIslands.some((island) => island.id === id), `Missing major island ${id}.`);
   }
@@ -478,6 +478,7 @@ function validateCanonicalTerrainPalette(world) {
     beach: new Set(),
     grassland: new Set(),
     sand: new Set(),
+    ash: new Set(),
     ice: new Set(),
     mountain: new Set()
   };
@@ -500,6 +501,7 @@ function validateCanonicalTerrainPalette(world) {
       }
       const biome = world.semantic.layers.biome[i];
       if (biome === SEMANTIC_BIOME.BEACH) tilesBySemantic.beach.add(tile);
+      else if (biome === SEMANTIC_BIOME.SAND && world.semantic.islandIndexToId.get(world.semantic.layers.islandId[i]) === "ashfall") tilesBySemantic.ash.add(tile);
       else if (biome === SEMANTIC_BIOME.SAND) tilesBySemantic.sand.add(tile);
       else if (biome === SEMANTIC_BIOME.ICE) tilesBySemantic.ice.add(tile);
       else if (biome === SEMANTIC_BIOME.GRASS) tilesBySemantic.grassland.add(tile);
@@ -510,6 +512,7 @@ function validateCanonicalTerrainPalette(world) {
   assertSingleTileSet(tilesBySemantic.beach, SEMANTIC_BASE_TILE_PALETTE.beach, "beach");
   assertSingleTileSet(tilesBySemantic.grassland, SEMANTIC_BASE_TILE_PALETTE.grassland, "grassland");
   assertSingleTileSet(tilesBySemantic.sand, SEMANTIC_BASE_TILE_PALETTE.sand, "sand/desert");
+  assertSingleTileSet(tilesBySemantic.ash, WORLD_TILE_IDS.volcanicAshGround, "ashfall ash");
   assertSingleTileSet(tilesBySemantic.ice, SEMANTIC_BASE_TILE_PALETTE.ice, "ice/snow");
   assert(tilesBySemantic.mountain.has(SEMANTIC_BASE_TILE_PALETTE.mountain), "Mountain cells should include the canonical rocky mountain tile.");
   for (const tile of tilesBySemantic.mountain) {
@@ -693,7 +696,7 @@ function validateBoatRoutesAndIslandSeparation(world) {
   }
 
   const components = majorIslandComponents(world);
-  assert(components.length === 4, `Expected 4 major island components, got ${components.length}.`);
+  assert(components.length === MAJOR_ISLAND_IDS.length, `Expected ${MAJOR_ISLAND_IDS.length} major island components, got ${components.length}.`);
   for (let a = 0; a < components.length; a += 1) {
     for (let b = a + 1; b < components.length; b += 1) {
       const gap = minimumChebyshevGap(components[a], components[b]);

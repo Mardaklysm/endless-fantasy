@@ -51,7 +51,8 @@ export const CAMPAIGN_WORLD_PROFILE: WorldProfile = {
         { id: "dawnford", name: "Greenhaven", type: "town", role: "settlement", preferredBiome: "grass" },
         { id: "greenhavenHarbor", name: "Greenhaven Harbor", type: "port", role: "port", preferredBiome: "beach" },
         { id: "mossCave", name: "Mossy Cave", type: "cave", role: "dungeon", nearMountains: true },
-        { id: "greenhavenShrine", name: "Rootspring Shrine", type: "shrine", role: "landmark", nearForest: true }
+        { id: "greenhavenShrine", name: "Rootspring Shrine", type: "shrine", role: "dungeon", nearForest: true },
+        { id: "oldwoodRuins", name: "Oldwood Ruins", type: "ruins", role: "dungeon", nearForest: true }
       ]
     },
     {
@@ -97,6 +98,8 @@ export const CAMPAIGN_WORLD_PROFILE: WorldProfile = {
         { id: "brinewick", name: "Coralreach", type: "town", role: "settlement", preferredBiome: "sand" },
         { id: "coralreachHarbor", name: "Coralreach Harbor", type: "port", role: "port", preferredBiome: "beach" },
         { id: "tideShrine", name: "Coralreach Ruins", type: "shrine", role: "dungeon", preferredBiome: "sand" },
+        { id: "sunkenTemple", name: "Sunken Temple", type: "ruins", role: "dungeon", preferredBiome: "sand" },
+        { id: "saltboneCave", name: "Saltbone Cave", type: "cave", role: "dungeon", preferredBiome: "sand", nearMountains: true },
         { id: "coralreachWreck", name: "Moonreef Wreck", type: "treasure", role: "landmark" }
       ]
     },
@@ -143,6 +146,8 @@ export const CAMPAIGN_WORLD_PROFILE: WorldProfile = {
         { id: "elderleaf", name: "Frostmere Haven", type: "village", role: "settlement", preferredBiome: "ice" },
         { id: "frostmereHarbor", name: "Frostmere Harbor", type: "port", role: "port", preferredBiome: "beach" },
         { id: "skyglassTower", name: "Skyglass Tower", type: "tower", role: "dungeon", nearMountains: true },
+        { id: "frostbiteCave", name: "Frostbite Cave", type: "cave", role: "dungeon", preferredBiome: "ice", nearMountains: true },
+        { id: "frozenReliquary", name: "Frozen Reliquary", type: "ruins", role: "dungeon", preferredBiome: "ice" },
         { id: "frostmereShrine", name: "Icebound Shrine", type: "shrine", role: "landmark", preferredBiome: "ice" }
       ]
     },
@@ -189,8 +194,58 @@ export const CAMPAIGN_WORLD_PROFILE: WorldProfile = {
         { id: "sunbarrow", name: "Highspire Camp", type: "town", role: "settlement", preferredBiome: "grass" },
         { id: "highspireHarbor", name: "Highspire Harbor", type: "port", role: "port", preferredBiome: "beach" },
         { id: "ashenKeep", name: "Stonefall Keep", type: "ruins", role: "dungeon", nearMountains: true },
+        { id: "highspireMine", name: "Highspire Mine", type: "cave", role: "dungeon", nearMountains: true },
+        { id: "windscarTower", name: "Windscar Tower", type: "tower", role: "dungeon", nearMountains: true },
         { id: "starfallGate", name: "Starfall Gate", type: "gate", role: "gate", nearMountains: true },
         { id: "eclipseSpire", name: "Eclipse Spire", type: "final", role: "final", nearMountains: true }
+      ]
+    },
+    {
+      id: "ashfall",
+      name: "Ashfall",
+      role: "mountain_ruins",
+      theme: "ashfall",
+      identity: {
+        summary: "Dead volcanic ash island with black gravel, scorched ground, basalt ridges, lava-lit ruins, and hostile fortress POIs.",
+        biomeTargets: {
+          primary: ["ash", "basalt", "volcanic rock"],
+          secondary: ["dead coast", "lava-lit ruins", "black gravel"],
+          avoid: ["normal grass", "snow", "friendly meadow"]
+        },
+        contentTargets: {
+          settlementCount: 1,
+          harborCount: 1,
+          majorDungeonCount: 3,
+          minorLandmarkRange: { min: 1, max: 3 }
+        },
+        preferredAssetTags: ["deadland-village", "volcanic-fortress", "dark-castle", "demon-altar", "lava-gate"]
+      },
+      zone: { x: 0.70, y: 0.66, width: 0.22, height: 0.27 },
+      radius: { x: 22, y: 18 },
+      sizeBias: 1,
+      dryBias: 0.62,
+      coldBias: -0.3,
+      mountainBias: 0.34,
+      forestBias: -0.3,
+      overlayRules: {
+        mountainCap: 120,
+        allowSnowMountains: false,
+        mountainSpacing: 5,
+        forestDensity: 0.04,
+        forestPoiClearance: 2,
+        forestRoadClearance: 1
+      },
+      road: ROAD_PROFILES.highspireAsh,
+      requiredHarbors: 1,
+      allowRoads: true,
+      allowRivers: false,
+      requiredPois: [
+        { id: "ashfallOutpost", name: "Ashfall Outpost", type: "town", role: "settlement", preferredBiome: "sand" },
+        { id: "ashfallHarbor", name: "Ashfall Harbor", type: "port", role: "port", preferredBiome: "beach" },
+        { id: "cinderVault", name: "Cinder Vault", type: "ruins", role: "dungeon", preferredBiome: "sand", nearMountains: true },
+        { id: "obsidianMine", name: "Obsidian Mine", type: "cave", role: "dungeon", preferredBiome: "sand", nearMountains: true },
+        { id: "demonAltar", name: "Demon Altar", type: "shrine", role: "dungeon", preferredBiome: "sand" },
+        { id: "emberGate", name: "Ember Gate", type: "gate", role: "gate", nearMountains: true }
       ]
     }
   ]

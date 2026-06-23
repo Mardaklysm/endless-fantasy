@@ -138,6 +138,7 @@ export function completeBoatTravel(this: CrystalOathSceneContext) {
     this.flags.travel.visitedIsland3 = true;
     this.flags.travel.visitedHighspire = true;
   }
+  if (travel.destinationIslandId === "ashfall") this.flags.travel.visitedAshfall = true;
   this.currentIslandId = travel.destinationIslandId;
   this.worldPos = { ...travel.arrivalTile };
   this.markLocationVisited(this.locations().find((loc) => loc.kind === "harbor" && loc.islandId === travel.destinationIslandId)?.id);

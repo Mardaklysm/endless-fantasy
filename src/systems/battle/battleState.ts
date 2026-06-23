@@ -171,7 +171,8 @@ export function finishBattle(this: CrystalOathSceneContext, won: boolean) {
       this.flags.travel.unlockedIsland3 = true;
       this.flags.travel.unlockedFrostmere = true;
       this.flags.travel.unlockedHighspire = true;
-      extra.push("The boss drops a Chartered Compass. Frostmere and Highspire routes are now charted.");
+      this.flags.travel.unlockedAshfall = true;
+      extra.push("The boss drops a Chartered Compass. Frostmere, Highspire, and Ashfall routes are now charted.");
     }
     if (dungeon.relic === "gale") {
       this.flags.skyship = true;

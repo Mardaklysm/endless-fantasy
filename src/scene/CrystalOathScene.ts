@@ -167,10 +167,12 @@ export class CrystalOathScene extends Phaser.Scene {
       visitedIsland3: false,
       visitedFrostmere: false,
       visitedHighspire: false,
+      visitedAshfall: false,
       unlockedIsland2: true,
       unlockedIsland3: false,
       unlockedFrostmere: false,
-      unlockedHighspire: false
+      unlockedHighspire: false,
+      unlockedAshfall: false
     }
   };
   openedChests = new Set<string>();

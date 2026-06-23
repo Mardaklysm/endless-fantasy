@@ -597,6 +597,10 @@ function classifyBiomes(
       return;
     }
     const island = islandByOrder.get(islandId[i]);
+    if (island?.theme === "ashfall") {
+      biome[i] = SEMANTIC_BIOME.SAND;
+      return;
+    }
     const dryness = clamp01(1 - moisture[i] + (island?.dryBias ?? 0) * 0.72);
     const coldScore = coldness[i] + elevation[i] * 0.28;
     const iceThreshold = island?.theme === "ice" ? 0.44 : 0.62;

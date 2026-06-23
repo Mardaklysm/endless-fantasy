@@ -28,8 +28,8 @@ export interface WorldVec {
   y: number;
 }
 
-export type IslandId = "greenhaven" | "coralreach" | "frostmere" | "highspire" | `minor_${number}`;
-export type IslandTheme = "grassland" | "sand_coast" | "ice" | "mixed_highland" | "minor";
+export type IslandId = "greenhaven" | "coralreach" | "frostmere" | "highspire" | "ashfall" | `minor_${number}`;
+export type IslandTheme = "grassland" | "sand_coast" | "ice" | "mixed_highland" | "ashfall" | "minor";
 export type WorldPoiKind = "town" | "harbor" | "dungeon" | "gate" | "final" | "landmark";
 export type WorldLandmarkKind =
   | "shipwreck"
@@ -156,6 +156,7 @@ export const SEMANTIC_BASE_TILE_PALETTE = {
   beach: WORLD_TILE_IDS.beachSand,
   grassland: WORLD_TILE_IDS.mediumGrass,
   sand: WORLD_TILE_IDS.brightSand,
+  ash: WORLD_TILE_IDS.volcanicAshGround,
   ice: WORLD_TILE_IDS.cleanSnow,
   mountain: WORLD_TILE_IDS.rockyMountainGround
 } as const satisfies Record<string, WorldTileId>;
@@ -306,6 +307,8 @@ function tileForSemanticCell(semantic: SemanticWorld, x: number, y: number): Wor
     return semantic.layers.waterClass[i] === SEMANTIC_WATER.SHALLOW ? SEMANTIC_BASE_TILE_PALETTE.shallowWater : SEMANTIC_BASE_TILE_PALETTE.deepOcean;
   }
   if (semantic.layers.mountainMap[i]) return mountainTileForSemanticCell(semantic, i);
+  const islandId = semantic.islandIndexToId.get(semantic.layers.islandId[i]);
+  if (islandId === "ashfall" && semantic.layers.biome[i] !== SEMANTIC_BIOME.BEACH) return WORLD_TILE_IDS.volcanicAshGround;
   if (TERRAIN_VARIANT_MODE === "off") return canonicalTileForBiome(semantic.layers.biome[i]);
   return variantTileForSemanticCell(semantic, x, y, i);
 }
@@ -313,6 +316,7 @@ function tileForSemanticCell(semantic: SemanticWorld, x: number, y: number): Wor
 function mountainTileForSemanticCell(semantic: SemanticWorld, i: number): WorldTileId {
   if (semantic.layers.biome[i] === SEMANTIC_BIOME.ICE) return WORLD_TILE_IDS.snowyMountainGround;
   const islandId = semantic.islandIndexToId.get(semantic.layers.islandId[i]);
+  if (islandId === "ashfall") return WORLD_TILE_IDS.ashBlackGround;
   if (islandId === "highspire") return WORLD_TILE_IDS.rockyMountainGround;
   return SEMANTIC_BASE_TILE_PALETTE.mountain;
 }

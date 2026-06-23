@@ -20,6 +20,8 @@ const COLORS = {
   grassAlt: [109, 186, 84, 255],
   sand: [196, 166, 96, 255],
   sandAlt: [215, 186, 118, 255],
+  ash: [64, 60, 57, 255],
+  ashAlt: [82, 76, 70, 255],
   ice: [213, 239, 239, 255],
   iceAlt: [182, 222, 232, 255],
   river: [31, 139, 196, 255],
@@ -31,6 +33,8 @@ const COLORS = {
   mountainLight: [172, 128, 86, 255],
   mountainSand: [164, 132, 82, 255],
   mountainSandLight: [206, 176, 116, 255],
+  mountainAsh: [49, 48, 50, 255],
+  mountainAshLight: [90, 82, 76, 255],
   mountainSnow: [238, 251, 255, 255],
   mountainSnowShade: [147, 178, 194, 255],
   forest: [32, 102, 55, 255],
@@ -74,7 +78,7 @@ export function renderSemanticMap(world, scale = 6) {
     if (world.layers.landMask[i]) {
       if (world.layers.biome[i] === BIOME.BEACH) color = COLORS.beach;
       else if (world.layers.biome[i] === BIOME.GRASS) color = COLORS.grass;
-      else if (world.layers.biome[i] === BIOME.SAND) color = COLORS.sand;
+      else if (world.layers.biome[i] === BIOME.SAND) color = isAshfallCell(world, i) ? COLORS.ash : COLORS.sand;
       else if (world.layers.biome[i] === BIOME.ICE) color = COLORS.ice;
     }
     if (world.layers.mountainMap[i]) color = mountainCellColor(world, x, y, i);
@@ -167,7 +171,8 @@ export function renderMountainCollisionDebug(world, scale = 6) {
       return;
     }
     let color = [52, 78, 55, 255];
-    if (world.layers.biome[i] === BIOME.BEACH || world.layers.biome[i] === BIOME.SAND) color = [91, 77, 52, 255];
+    if (isAshfallCell(world, i) && world.layers.biome[i] === BIOME.SAND) color = [55, 51, 50, 255];
+    else if (world.layers.biome[i] === BIOME.BEACH || world.layers.biome[i] === BIOME.SAND) color = [91, 77, 52, 255];
     else if (world.layers.biome[i] === BIOME.ICE) color = [71, 92, 103, 255];
     if (world.layers.lakeMap[i] || world.layers.riverMap[i]) color = [23, 91, 128, 255];
     fillCell(image, x, y, scale, color);
@@ -357,7 +362,7 @@ function renderLand(image, world, scale) {
     let color = COLORS.grass;
     if (world.layers.biome[i] === BIOME.BEACH) color = n > 0.5 ? COLORS.beachLight : COLORS.beach;
     else if (world.layers.biome[i] === BIOME.GRASS) color = n > 0.5 ? COLORS.grassAlt : COLORS.grass;
-    else if (world.layers.biome[i] === BIOME.SAND) color = n > 0.5 ? COLORS.sandAlt : COLORS.sand;
+    else if (world.layers.biome[i] === BIOME.SAND) color = isAshfallCell(world, i) ? (n > 0.5 ? COLORS.ashAlt : COLORS.ash) : (n > 0.5 ? COLORS.sandAlt : COLORS.sand);
     else if (world.layers.biome[i] === BIOME.ICE) color = n > 0.5 ? COLORS.iceAlt : COLORS.ice;
     fillCell(image, x, y, scale, color);
     if (world.layers.biome[i] !== BIOME.BEACH && (x * 7 + y * 13 + Math.floor(n * 17)) % 31 === 0) {
@@ -425,8 +430,16 @@ function fallbackMountainVisuals(world) {
 function mountainCellColor(world, x, y, i = y * world.width + x) {
   const n = noise(`${world.seed}:mountain-cell`, x, y);
   if (world.layers.biome[i] === BIOME.ICE) return n > 0.56 ? COLORS.mountainSnow : COLORS.mountainSnowShade;
+  if (isAshfallCell(world, i) && world.layers.biome[i] === BIOME.SAND) return n > 0.54 ? COLORS.mountainAshLight : COLORS.mountainAsh;
   if (world.layers.biome[i] === BIOME.BEACH || world.layers.biome[i] === BIOME.SAND) return n > 0.54 ? COLORS.mountainSandLight : COLORS.mountainSand;
   return n > 0.56 ? COLORS.mountainLight : COLORS.mountain;
+}
+
+function isAshfallCell(world, i) {
+  const islandIndex = world.layers.islandId[i];
+  const islandId = world.islandIndexToId?.get?.(islandIndex);
+  if (islandId === "ashfall") return true;
+  return world.islandRecords?.some?.((island) => island.id === islandId && island.theme === "ashfall") ?? false;
 }
 
 function renderRoads(image, world, scale) {

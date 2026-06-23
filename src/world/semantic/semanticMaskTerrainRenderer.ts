@@ -3,7 +3,7 @@ import { hashNoise } from "../seededRng.ts";
 import { DEFAULT_ROAD_PROFILE } from "./semanticRoadProfiles.ts";
 import { SEMANTIC_BIOME, SEMANTIC_WATER, type IslandRoadProfile, type IslandRoadVisualConfig, type SemanticWorld } from "./semanticTypes.ts";
 
-export type SemanticMaskTerrainClass = "deepOcean" | "shallowWater" | "freshWater" | "road" | "beach" | "grassland" | "sand" | "ice";
+export type SemanticMaskTerrainClass = "deepOcean" | "shallowWater" | "freshWater" | "road" | "beach" | "grassland" | "sand" | "ash" | "ice";
 export type SemanticMaskTerrainSources = Partial<Record<SemanticMaskTerrainClass, CanvasImageSource & { width: number; height: number }>>;
 
 export interface SemanticMaskTerrainRenderOptions {
@@ -36,7 +36,7 @@ export interface SemanticMaskTerrainRenderPlan {
   textureSourceLabels: Record<SemanticMaskTerrainClass, string>;
 }
 
-type TerrainClassId = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+type TerrainClassId = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 type Rgb = [number, number, number];
 type BoundaryKind =
   | "deepShallow"
@@ -56,10 +56,11 @@ const TERRAIN_CLASS_IDS = {
   beach: 4,
   grassland: 5,
   sand: 6,
-  ice: 7
+  ash: 7,
+  ice: 8
 } as const satisfies Record<SemanticMaskTerrainClass, TerrainClassId>;
 
-const TERRAIN_CLASSES = ["deepOcean", "shallowWater", "freshWater", "road", "beach", "grassland", "sand", "ice"] as const satisfies readonly SemanticMaskTerrainClass[];
+const TERRAIN_CLASSES = ["deepOcean", "shallowWater", "freshWater", "road", "beach", "grassland", "sand", "ash", "ice"] as const satisfies readonly SemanticMaskTerrainClass[];
 
 export const SEMANTIC_MASK_TERRAIN_CLASSES = TERRAIN_CLASSES;
 
@@ -77,6 +78,7 @@ const COLORS = {
   roadPebble: [119, 103, 84] as Rgb,
   roadGrassFleck: [92, 139, 64] as Rgb,
   sandEdge: [167, 129, 66] as Rgb,
+  ashEdge: [68, 62, 56] as Rgb,
   iceEdge: [134, 190, 207] as Rgb,
   frost: [231, 251, 252] as Rgb
 };
@@ -240,6 +242,7 @@ function classifySample(world: SemanticWorld, sampleX: number, sampleY: number):
   const beachValue = beachScore + coastBoost + boundaryNoise * 0.08;
   const inlandMax = Math.max(grassScore, sandScore, iceScore);
   if (beachValue > 0.28 && beachValue >= inlandMax - 0.14) return TERRAIN_CLASS_IDS.beach;
+  if (islandAtSample(world, sampleX, sampleY)?.theme === "ashfall" && sandScore >= grassScore && sandScore >= iceScore) return TERRAIN_CLASS_IDS.ash;
   if (iceScore >= grassScore && iceScore >= sandScore) return TERRAIN_CLASS_IDS.ice;
   if (sandScore >= grassScore && sandScore >= iceScore) return TERRAIN_CLASS_IDS.sand;
   return TERRAIN_CLASS_IDS.grassland;
@@ -365,6 +368,13 @@ function roadProfileAt(world: SemanticWorld, sampleX: number, sampleY: number): 
   return island?.road ?? DEFAULT_ROAD_PROFILE;
 }
 
+function islandAtSample(world: SemanticWorld, sampleX: number, sampleY: number): SemanticWorld["islands"][number] | undefined {
+  const x = clampInt(Math.floor(sampleX), 0, world.width - 1);
+  const y = clampInt(Math.floor(sampleY), 0, world.height - 1);
+  const islandNumber = world.layers.islandId[y * world.width + x];
+  return world.islands.find((candidate) => candidate.order + 1 === islandNumber);
+}
+
 function createTerrainFillStyles(
   ctx: CanvasRenderingContext2D,
   terrainSources: SemanticMaskTerrainSources | undefined,
@@ -378,6 +388,7 @@ function createTerrainFillStyles(
     beach: createTerrainPattern(ctx, terrainSources?.beach, tileSize, COLORS.beachEdge),
     grassland: createTerrainPattern(ctx, terrainSources?.grassland, tileSize, COLORS.grassEdge),
     sand: createTerrainPattern(ctx, terrainSources?.sand, tileSize, COLORS.sandEdge),
+    ash: createTerrainPattern(ctx, terrainSources?.ash, tileSize, COLORS.ashEdge),
     ice: createTerrainPattern(ctx, terrainSources?.ice, tileSize, COLORS.frost)
   };
 }
@@ -430,6 +441,7 @@ function terrainTextureSourceLabels(options: SemanticMaskTerrainRenderOptions): 
     beach: terrainTextureSourceLabel(options, "beach"),
     grassland: terrainTextureSourceLabel(options, "grassland"),
     sand: terrainTextureSourceLabel(options, "sand"),
+    ash: terrainTextureSourceLabel(options, "ash"),
     ice: terrainTextureSourceLabel(options, "ice")
   };
 }
@@ -621,7 +633,7 @@ function isWater(value: TerrainClassId): boolean {
 }
 
 function isSandLike(value: TerrainClassId): boolean {
-  return value === TERRAIN_CLASS_IDS.beach || value === TERRAIN_CLASS_IDS.sand;
+  return value === TERRAIN_CLASS_IDS.beach || value === TERRAIN_CLASS_IDS.sand || value === TERRAIN_CLASS_IDS.ash;
 }
 
 function classNameForId(value: number): SemanticMaskTerrainClass {
@@ -638,6 +650,8 @@ function classNameForId(value: number): SemanticMaskTerrainClass {
       return "grassland";
     case TERRAIN_CLASS_IDS.sand:
       return "sand";
+    case TERRAIN_CLASS_IDS.ash:
+      return "ash";
     case TERRAIN_CLASS_IDS.ice:
       return "ice";
     case TERRAIN_CLASS_IDS.deepOcean:
@@ -691,6 +705,7 @@ function emptyClassSamples(): Record<SemanticMaskTerrainClass, number> {
     beach: 0,
     grassland: 0,
     sand: 0,
+    ash: 0,
     ice: 0
   };
 }
