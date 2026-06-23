@@ -24,6 +24,7 @@ export interface OverworldCloudOverlayContext {
   pixelScale: number;
   depth: number;
   enabled: boolean;
+  cameraScrollX: number;
 }
 
 export interface OverworldCloudDebugState {
@@ -68,6 +69,7 @@ export class OverworldCloudOverlay {
   private targetAlpha = CLOUD_OVERLAY_OPACITY;
   private currentSpeedMultiplier = 1;
   private targetSpeedMultiplier = 1;
+  private lastCameraScrollX?: number;
 
   constructor(private readonly scene: Phaser.Scene) {}
 
@@ -87,6 +89,7 @@ export class OverworldCloudOverlay {
     if (!active) {
       this.destroyClouds();
       this.layer?.setVisible(false);
+      this.lastCameraScrollX = undefined;
       return;
     }
 
@@ -101,6 +104,7 @@ export class OverworldCloudOverlay {
 
     this.advanceThemeTransition(deltaMs);
     if (deltaMs > 0) {
+      this.compensateCameraScroll(context.cameraScrollX);
       this.advanceCloudSimulation(deltaMs);
       this.removeExitedClouds(context.viewportWidth);
       if (this.clouds.length === 0) this.spawnCloud(context);
@@ -132,25 +136,10 @@ export class OverworldCloudOverlay {
   private ensureLayer(context: OverworldCloudOverlayContext): Phaser.GameObjects.Container {
     if (!this.layer) {
       this.layer = this.scene.add.container(0, 0);
-      this.layer.setScrollFactor(0, 0, true);
+      this.layer.setScrollFactor(0, 0);
     }
     this.layer.setDepth(context.depth);
-    this.applyFixedScreenLayerTransform(this.layer);
     return this.layer;
-  }
-
-  private applyFixedScreenLayerTransform(layer: Phaser.GameObjects.Container): void {
-    const camera = this.scene.cameras.main;
-    const zoomX = Math.max(camera.zoomX || camera.zoom || 1, 0.001);
-    const zoomY = Math.max(camera.zoomY || camera.zoom || 1, 0.001);
-    const originX = camera.width * camera.originX;
-    const originY = camera.height * camera.originY;
-
-    // Clouds are screen-space weather, not map-space parallax. Compensate for
-    // camera zoom/viewport changes so child screenX/screenY remain final pixels.
-    layer.setScale(1 / zoomX, 1 / zoomY);
-    layer.setPosition(originX - originX / zoomX, originY - originY / zoomY);
-    layer.setScrollFactor(0, 0, true);
   }
 
   private updateTargetTheme(config: WorldCloudTintConfig): void {
@@ -164,6 +153,16 @@ export class OverworldCloudOverlay {
     this.currentTint = lerpRgb(this.currentTint, this.targetTint, amount);
     this.currentAlpha = lerp(this.currentAlpha, this.targetAlpha, amount);
     this.currentSpeedMultiplier = lerp(this.currentSpeedMultiplier, this.targetSpeedMultiplier, amount);
+  }
+
+  private compensateCameraScroll(cameraScrollX: number): void {
+    if (this.lastCameraScrollX !== undefined) {
+      const cameraDeltaX = cameraScrollX - this.lastCameraScrollX;
+      for (const cloud of this.clouds) {
+        cloud.screenX -= cameraDeltaX;
+      }
+    }
+    this.lastCameraScrollX = cameraScrollX;
   }
 
   private advanceCloudSimulation(deltaMs: number): void {
@@ -200,7 +199,6 @@ export class OverworldCloudOverlay {
     const alphaOffset = this.rng.float(-0.06, 0.06);
     const image = this.scene.add.image(screenX * context.pixelScale, screenY * context.pixelScale, asset.textureKey);
     image.setOrigin(0, 0);
-    image.setScrollFactor(0, 0);
     this.layer?.add(image);
     const cloud: RuntimeCloud = { image, asset, screenX, screenY, displayWidth, displayHeight, baseSpeed, alphaOffset };
     this.applyCloudVisuals(cloud);
@@ -209,12 +207,10 @@ export class OverworldCloudOverlay {
 
   private refreshCloudVisuals(context: OverworldCloudOverlayContext): void {
     if (!this.layer) return;
-    this.applyFixedScreenLayerTransform(this.layer);
     this.layer.setDepth(context.depth);
     for (const cloud of this.clouds) {
       cloud.image.setPosition(cloud.screenX * context.pixelScale, cloud.screenY * context.pixelScale);
       cloud.image.setDisplaySize(cloud.displayWidth * context.pixelScale, cloud.displayHeight * context.pixelScale);
-      cloud.image.setScrollFactor(0, 0);
       this.applyCloudVisuals(cloud);
       cloud.image.setVisible(true);
     }

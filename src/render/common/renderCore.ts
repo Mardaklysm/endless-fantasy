@@ -8,7 +8,9 @@ import {
   LAYER_WORLD_IMAGE,
   PIXEL_ART_SCALE,
   TILE,
-  WIDTH
+  WIDTH,
+  WORLD_H,
+  WORLD_W
 } from "../../app/config";
 import { ASSET_PATHS, CHARTER_BOAT_8DIR_TEXTURE_KEY } from "../../assets/assetPaths";
 import type { AssetKey } from "../../assets/assetTypes";
@@ -104,8 +106,13 @@ export function configureTextureFiltering(this: CrystalOathSceneContext) {
 }
 
 export function updateCloudOverlay(this: CrystalOathSceneContext, deltaMs: number) {
+  const active = this.shouldWorldCloudOverlayBeActive();
+  const focusPos = active ? this.boatTravel?.boatPos ?? this.visualExplorePos("world") : undefined;
+  const worldWidth = this.generatedWorld?.width ?? this.world[0]?.length ?? WORLD_W;
+  const worldHeight = this.generatedWorld?.height ?? this.world.length ?? WORLD_H;
+  const cameraScrollX = focusPos ? this.cameraFor(focusPos, worldWidth, worldHeight).x : 0;
   this.cloudOverlay?.update(deltaMs, {
-    active: this.shouldWorldCloudOverlayBeActive(),
+    active,
     enabled: this.cloudOverlayEnabled,
     worldSeed: this.worldSeed,
     islandId: this.currentIslandId,
@@ -114,7 +121,8 @@ export function updateCloudOverlay(this: CrystalOathSceneContext, deltaMs: numbe
     viewportWidth: WIDTH,
     viewportHeight: HEIGHT,
     pixelScale: PIXEL_ART_SCALE,
-    depth: LAYER_UI_GRAPHICS - 1
+    depth: LAYER_UI_GRAPHICS - 1,
+    cameraScrollX
   });
 }
 
