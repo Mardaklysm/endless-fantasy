@@ -236,7 +236,7 @@ function classifySample(world: SemanticWorld, sampleX: number, sampleY: number):
 
   const roadEdgeNoise = hashNoise(`${world.seed}:mask-road-edge`, noiseX, noiseY, 1);
   const roadHit = routeCellAt(world, world.layers.roadMap, Math.floor(sampleX), Math.floor(sampleY)) && roadMaskSample(world, sampleX, sampleY, roadEdgeNoise, roadProfileAt(world, sampleX, sampleY));
-  const riverHit = routeMaskSample(world, world.layers.riverMap, sampleX, sampleY, 0.27);
+  const riverHit = riverMaskSample(world, sampleX, sampleY);
   const crossingHit = routeMaskSample(world, world.layers.riverCrossingMap, sampleX, sampleY, 0.18);
   if (roadHit && (!riverHit || crossingHit)) return TERRAIN_CLASS_IDS.road;
 
@@ -336,6 +336,34 @@ function routeMaskSample(world: SemanticWorld, values: ArrayLike<number>, sample
   const x = clampInt(Math.floor(sampleX), 0, world.width - 1);
   const y = clampInt(Math.floor(sampleY), 0, world.height - 1);
   if (values[y * world.width + x] <= 0) return false;
+  return routeMaskSampleFromCell(world, values, x, y, sampleX, sampleY, halfWidth);
+}
+
+function riverMaskSample(world: SemanticWorld, sampleX: number, sampleY: number): boolean {
+  const sampleCellX = clampInt(Math.floor(sampleX), 0, world.width - 1);
+  const sampleCellY = clampInt(Math.floor(sampleY), 0, world.height - 1);
+  const noiseX = Math.floor(sampleX * 8);
+  const noiseY = Math.floor(sampleY * 8);
+  const edgeNoise = hashNoise(`${world.seed}:mask-river-edge`, noiseX, noiseY, 0) - 0.5;
+  for (let y = sampleCellY - 2; y <= sampleCellY + 2; y += 1) {
+    for (let x = sampleCellX - 2; x <= sampleCellX + 2; x += 1) {
+      if (x < 0 || y < 0 || x >= world.width || y >= world.height) continue;
+      const riverValue = world.layers.riverMap[y * world.width + x];
+      if (riverValue <= 0) continue;
+      const halfWidth = riverHalfWidth(riverValue) + edgeNoise * 0.045;
+      if (routeMaskSampleFromCell(world, world.layers.riverMap, x, y, sampleX, sampleY, halfWidth)) return true;
+    }
+  }
+  return false;
+}
+
+function riverHalfWidth(value: number): number {
+  if (value >= 3) return 1.35;
+  if (value >= 2) return 0.84;
+  return 0.46;
+}
+
+function routeMaskSampleFromCell(world: SemanticWorld, values: ArrayLike<number>, x: number, y: number, sampleX: number, sampleY: number, halfWidth: number): boolean {
   const localX = sampleX - x;
   const localY = sampleY - y;
   const centeredX = Math.abs(localX - 0.5);
@@ -351,10 +379,10 @@ function routeMaskSample(world: SemanticWorld, values: ArrayLike<number>, sample
   const hasNeighbor = north || east || south || west || northEast || southEast || southWest || northWest;
   if (!hasNeighbor) return Math.hypot(centeredX, centeredY) <= halfWidth * 1.45;
   if (Math.hypot(centeredX, centeredY) <= halfWidth * 1.2) return true;
-  if (north && centeredX <= halfWidth && localY <= 0.5) return true;
-  if (south && centeredX <= halfWidth && localY >= 0.5) return true;
-  if (west && centeredY <= halfWidth && localX <= 0.5) return true;
-  if (east && centeredY <= halfWidth && localX >= 0.5) return true;
+  if (north && centeredX <= halfWidth && localY <= 0.5 && localY >= -halfWidth) return true;
+  if (south && centeredX <= halfWidth && localY >= 0.5 && localY <= 1 + halfWidth) return true;
+  if (west && centeredY <= halfWidth && localX <= 0.5 && localX >= -halfWidth) return true;
+  if (east && centeredY <= halfWidth && localX >= 0.5 && localX <= 1 + halfWidth) return true;
   if (northEast && diagonalRouteHit(localX, localY, 1, -1, halfWidth)) return true;
   if (southEast && diagonalRouteHit(localX, localY, 1, 1, halfWidth)) return true;
   if (southWest && diagonalRouteHit(localX, localY, -1, 1, halfWidth)) return true;

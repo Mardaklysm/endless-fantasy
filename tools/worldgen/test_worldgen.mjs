@@ -347,14 +347,14 @@ function validateSemanticWorldgen() {
   const blockedRiverIndex = worldA.semantic.layers.riverMap.findIndex((value, index) => {
     const x = index % worldA.width;
     const y = Math.floor(index / worldA.width);
-    return value === 1 && !bridgeKeys.has(`${x},${y}`);
+    return value > 0 && !bridgeKeys.has(`${x},${y}`);
   });
   assert(blockedRiverIndex >= 0, "No non-bridge river cells were available for collision validation.");
   assert(!isWorldPositionWalkable(worldA, blockedRiverIndex % worldA.width, Math.floor(blockedRiverIndex / worldA.width)), "Non-bridge river cells should block walking.");
   assert(worldA.semantic.layers.overlayCollisionPolicy[blockedRiverIndex] === "hardBlock", "Non-bridge river cells should be tagged hardBlock.");
   for (const bridge of worldA.semantic.bridgeCandidates) {
     const i = bridge.y * worldA.width + bridge.x;
-    assert(worldA.semantic.layers.riverMap[i] === 1 && worldA.semantic.layers.roadMap[i] === 1, `Bridge ${bridge.id} should sit at a road-river crossing.`);
+    assert(worldA.semantic.layers.riverMap[i] > 0 && worldA.semantic.layers.roadMap[i] === 1, `Bridge ${bridge.id} should sit at a road-river crossing.`);
     assert(isWorldPositionWalkable(worldA, bridge.x, bridge.y), `Bridge ${bridge.id} should keep the road crossing walkable.`);
     assert(
       worldA.semantic.layers.overlayCollisionPolicy[i] === "visualOnly" || worldA.semantic.layers.overlayCollisionPolicy[i] === "poiBlock",
@@ -366,7 +366,7 @@ function validateSemanticWorldgen() {
   for (const bridge of worldA.bridges) {
     const i = bridge.y * worldA.width + bridge.x;
     assert(bridge.kind === "roadRiverCrossing", `Visible bridge at ${bridge.x},${bridge.y} should be a road-river crossing, not decoration.`);
-    assert(worldA.semantic.layers.roadMap[i] === 1 && worldA.semantic.layers.riverMap[i] === 1, `Visible bridge at ${bridge.x},${bridge.y} should sit on road and river masks.`);
+    assert(worldA.semantic.layers.roadMap[i] === 1 && worldA.semantic.layers.riverMap[i] > 0, `Visible bridge at ${bridge.x},${bridge.y} should sit on road and river masks.`);
     assert(worldA.semantic.layers.riverCrossingMap[i] === 1, `Visible bridge at ${bridge.x},${bridge.y} should be marked in riverCrossingMap.`);
   }
   const poiPolicyIndex = worldA.pois[0].y * worldA.width + worldA.pois[0].x;

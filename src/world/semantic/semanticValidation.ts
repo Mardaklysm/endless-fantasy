@@ -403,7 +403,7 @@ function hasCrossingRoadContinuation(world: SemanticWorld, x: number, y: number,
 }
 
 function isRiverTile(world: SemanticWorld, x: number, y: number): boolean {
-  return inBounds(world, x, y) && world.layers.riverMap[index(world.width, x, y)] === 1;
+  return inBounds(world, x, y) && world.layers.riverMap[index(world.width, x, y)] > 0;
 }
 
 function maskNeighborCount(world: SemanticWorld, map: Uint8Array, x: number, y: number): number {

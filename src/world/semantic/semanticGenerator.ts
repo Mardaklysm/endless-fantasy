@@ -39,6 +39,7 @@ const LAND_THRESHOLD = 0.08;
 const SHALLOW_BAND = 5;
 const BEACH_BAND = 1;
 const INF = 30_000;
+const MAX_RIVERS = 12;
 
 export const ENABLE_RIVER_CROSSINGS = true;
 export const ENABLE_RANDOM_BRIDGE_DECORATION = false;
@@ -1209,24 +1210,44 @@ function traceRivers(
     const island = islandByOrder.get(islandId[i]);
     if (!landMask[i] || !island?.allowRivers || distanceToWater[i] < 6 || lakeMap[i] || mountainMap[i] || poiBlocked.has(posKey({ x, y }))) return;
     const score = elevation[i] * 0.54 + ridge[i] * 0.24 + coldness[i] * 0.12 + fbm(`${seed}:semantic-river-source`, x / 7, y / 7, 2) * 0.16;
-    if (score > 0.72) candidates.push({ x, y, i, score });
+    if (score > riverSourceThreshold(island)) candidates.push({ x, y, i, score });
   });
   candidates.sort((a, b) => b.score - a.score);
   const rivers: SemanticRiver[] = [];
+  const riverCountByIsland = new Map<SemanticIslandId, number>();
   for (const source of candidates) {
-    if (rivers.length >= 8) break;
+    if (rivers.length >= MAX_RIVERS) break;
     if (rivers.some((river) => river.path.some((cell) => squaredDistance(cell, source) < 7 * 7))) continue;
     const sourceIsland = islandByOrder.get(islandId[source.i]);
     if (!sourceIsland) continue;
+    if ((riverCountByIsland.get(sourceIsland.id) ?? 0) >= maxRiversForIsland(sourceIsland)) continue;
     const path = traceRiverPath(width, height, seed, source, landMask, waterClass, lakeMap, distanceToWater, islandId, islandId[source.i], elevation, mountainMap, poiBlocked, riverMap, rivers.length);
-    if (path.length < 6) continue;
+    if (path.length < minimumRiverLength(sourceIsland)) continue;
     const end = path[path.length - 1];
     const endIndex = index(width, end.x, end.y);
     if (waterClass[endIndex] === SEMANTIC_WATER.NONE && !lakeMap[endIndex] && distanceToWater[endIndex] > 1) continue;
     writeRiverCenterline(width, path, riverMap);
     rivers.push({ id: `river_${rivers.length + 1}`, islandId: sourceIsland.id, source: { x: source.x, y: source.y }, mouth: end, path });
+    riverCountByIsland.set(sourceIsland.id, (riverCountByIsland.get(sourceIsland.id) ?? 0) + 1);
   }
   return rivers;
+}
+
+function riverSourceThreshold(island: SemanticIslandRecord): number {
+  if (island.id === "greenhaven") return 0.52;
+  if (island.theme === "grassland" || island.theme === "mixed_highland") return 0.64;
+  return 0.7;
+}
+
+function maxRiversForIsland(island: SemanticIslandRecord): number {
+  if (!island.major) return 1;
+  if (island.id === "greenhaven") return 3;
+  return 4;
+}
+
+function minimumRiverLength(island: SemanticIslandRecord): number {
+  if (island.id === "greenhaven") return 6;
+  return 6;
 }
 
 function writeRiverCenterline(
@@ -1234,7 +1255,14 @@ function writeRiverCenterline(
   path: SemanticVec[],
   riverMap: Uint8Array
 ) {
-  for (const cell of path) riverMap[index(width, cell.x, cell.y)] = 1;
+  const finalStep = Math.max(1, path.length - 1);
+  for (let step = 0; step < path.length; step += 1) {
+    const cell = path[step];
+    const downstream = step / finalStep;
+    const widthClass = downstream > 0.72 ? 3 : downstream > 0.38 ? 2 : 1;
+    const i = index(width, cell.x, cell.y);
+    riverMap[i] = Math.max(riverMap[i], widthClass);
+  }
 }
 
 function traceRiverPath(
@@ -2130,7 +2158,7 @@ function summarizeWorld(landMask: Uint8Array, waterClass: Uint8Array, biome: Uin
     mountainCells: countValues(mountainMap, 1),
     forestCells: countValues(forestMap, 1),
     roadCells: countValues(roadMap, 1),
-    riverCells: countValues(riverMap, 1)
+    riverCells: countNonZero(riverMap)
   };
 }
 
@@ -2489,7 +2517,7 @@ function crossingMoveMatchesOrientation(direction: SemanticVec, orientation: "ho
 }
 
 function isRiverCell(width: number, height: number, riverMap: Uint8Array, x: number, y: number): boolean {
-  return inBounds(width, height, x, y) && riverMap[index(width, x, y)] === 1;
+  return inBounds(width, height, x, y) && riverMap[index(width, x, y)] > 0;
 }
 
 function hasDiagonalRiverNeighbor(width: number, height: number, riverMap: Uint8Array, x: number, y: number): boolean {
@@ -2759,6 +2787,12 @@ function uniqueBy<T>(values: T[], keyFn: (value: T) => string): T[] {
 function countValues(array: Uint8Array, value: number): number {
   let count = 0;
   for (const item of array) if (item === value) count += 1;
+  return count;
+}
+
+function countNonZero(array: Uint8Array): number {
+  let count = 0;
+  for (const item of array) if (item > 0) count += 1;
   return count;
 }
 

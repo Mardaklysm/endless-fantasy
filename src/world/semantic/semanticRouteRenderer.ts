@@ -76,7 +76,7 @@ export function describeSemanticRouteRenderPlan(world: SemanticWorld, options: S
     styledRoadPathCount: routeOverlayMode === "styled" ? world.roadGraph.edges.filter((edge) => edge.connected && edge.path.length > 1).length : 0,
     styledRiverPathCount: 0,
     roadCellCount: countValues(world.layers.roadMap, 1),
-    riverCellCount: countValues(world.layers.riverMap, 1),
+    riverCellCount: countNonZero(world.layers.riverMap),
     bridgeCandidateCount: world.bridgeCandidates.length,
     debugMarkersVisible: routeOverlayMode === "debug" || riverOverlayMode === "debug"
   };
@@ -224,5 +224,11 @@ function cellCenter(cell: SemanticVec, tileSize: number): SemanticVec {
 function countValues(array: Uint8Array, value: number): number {
   let count = 0;
   for (const item of array) if (item === value) count += 1;
+  return count;
+}
+
+function countNonZero(array: Uint8Array): number {
+  let count = 0;
+  for (const item of array) if (item > 0) count += 1;
   return count;
 }
