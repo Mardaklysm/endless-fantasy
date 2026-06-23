@@ -13,6 +13,7 @@ const CLOUD_TINT_TRANSITION_MS = 3500;
 const CLOUD_MIN_SPAWN_DELAY_MS = 11000;
 const CLOUD_MAX_SPAWN_DELAY_MS = 21000;
 const CLOUD_MAX_ACTIVE = 3;
+const CLOUD_HORIZONTAL_DESPAWN_MARGIN_VIEWPORTS = 2.5;
 const WHITE_RGB: Rgb = { r: 255, g: 255, b: 255 };
 
 export interface OverworldCloudOverlayContext {
@@ -49,8 +50,8 @@ interface Rgb {
 interface RuntimeCloud {
   image: Phaser.GameObjects.Image;
   asset: WorldCloudAsset;
-  screenX: number;
-  screenY: number;
+  layerX: number;
+  layerY: number;
   displayWidth: number;
   displayHeight: number;
   baseSpeed: number;
@@ -72,8 +73,6 @@ export class OverworldCloudOverlay {
   private targetAlpha = CLOUD_OVERLAY_OPACITY;
   private currentSpeedMultiplier = 1;
   private targetSpeedMultiplier = 1;
-  private lastCameraScrollX?: number;
-  private lastCameraScrollY?: number;
   private spawnDelayMs = 0;
 
   constructor(private readonly scene: Phaser.Scene) {}
@@ -94,7 +93,6 @@ export class OverworldCloudOverlay {
     if (!active) {
       this.destroyClouds();
       this.layer?.setVisible(false);
-      this.resetCameraScroll();
       this.spawnDelayMs = 0;
       return;
     }
@@ -111,9 +109,8 @@ export class OverworldCloudOverlay {
 
     this.advanceThemeTransition(deltaMs);
     if (deltaMs > 0) {
-      this.compensateCameraScroll(context.cameraScrollX, context.cameraScrollY);
       this.advanceCloudSimulation(deltaMs);
-      this.removeExitedClouds(context.viewportWidth, context.viewportHeight);
+      this.removeDistantClouds(context);
       this.advanceCloudSpawning(deltaMs, context);
     }
     this.refreshCloudVisuals(context);
@@ -159,23 +156,10 @@ export class OverworldCloudOverlay {
     this.currentSpeedMultiplier = lerp(this.currentSpeedMultiplier, this.targetSpeedMultiplier, amount);
   }
 
-  private compensateCameraScroll(cameraScrollX: number, cameraScrollY: number): void {
-    if (this.lastCameraScrollX !== undefined) {
-      const cameraDeltaX = cameraScrollX - this.lastCameraScrollX;
-      const cameraDeltaY = cameraScrollY - (this.lastCameraScrollY ?? cameraScrollY);
-      for (const cloud of this.clouds) {
-        cloud.screenX -= cameraDeltaX;
-        cloud.screenY -= cameraDeltaY;
-      }
-    }
-    this.lastCameraScrollX = cameraScrollX;
-    this.lastCameraScrollY = cameraScrollY;
-  }
-
   private advanceCloudSimulation(deltaMs: number): void {
     const seconds = deltaMs / 1000;
     for (const cloud of this.clouds) {
-      cloud.screenX += cloud.baseSpeed * this.currentSpeedMultiplier * seconds;
+      cloud.layerX += cloud.baseSpeed * this.currentSpeedMultiplier * seconds;
     }
   }
 
@@ -187,12 +171,14 @@ export class OverworldCloudOverlay {
     this.spawnDelayMs = this.rng.float(CLOUD_MIN_SPAWN_DELAY_MS, CLOUD_MAX_SPAWN_DELAY_MS);
   }
 
-  private removeExitedClouds(viewportWidth: number, viewportHeight: number): void {
+  private removeDistantClouds(context: OverworldCloudOverlayContext): void {
+    const marginX = context.viewportWidth * CLOUD_HORIZONTAL_DESPAWN_MARGIN_VIEWPORTS;
+    const minLayerX = context.cameraScrollX - marginX;
+    const maxLayerX = context.cameraScrollX + context.viewportWidth + marginX;
     const remaining: RuntimeCloud[] = [];
     for (const cloud of this.clouds) {
-      const cloudExitedX = cloud.screenX > viewportWidth + 32;
-      const cloudExitedY = cloud.screenY > viewportHeight + 32 || cloud.screenY + cloud.displayHeight < -32;
-      if (cloudExitedX || cloudExitedY) {
+      const cloudTooFarX = cloud.layerX > maxLayerX || cloud.layerX + cloud.displayWidth < minLayerX;
+      if (cloudTooFarX) {
         cloud.image.destroy();
         continue;
       }
@@ -211,14 +197,15 @@ export class OverworldCloudOverlay {
     const displayHeight = displayWidth / aspect;
     const minY = -displayHeight * 0.45;
     const maxY = Math.max(minY, context.viewportHeight - displayHeight * 0.55);
-    const screenY = this.rng.float(minY, maxY);
-    const screenX = -displayWidth - this.rng.float(24, 80);
+    const screenSpawnY = this.rng.float(minY, maxY);
+    const layerX = context.cameraScrollX - displayWidth - this.rng.float(24, 80);
+    const layerY = context.cameraScrollY + screenSpawnY;
     const baseSpeed = this.rng.float(CLOUD_MIN_SPEED, CLOUD_MAX_SPEED) * this.rng.float(0.85, 1.15);
     const alphaOffset = this.rng.float(-0.06, 0.06);
-    const image = this.scene.add.image(screenX * context.pixelScale, screenY * context.pixelScale, asset.textureKey);
+    const image = this.scene.add.image((layerX - context.cameraScrollX) * context.pixelScale, screenSpawnY * context.pixelScale, asset.textureKey);
     image.setOrigin(0, 0);
     this.layer?.add(image);
-    const cloud: RuntimeCloud = { image, asset, screenX, screenY, displayWidth, displayHeight, baseSpeed, alphaOffset };
+    const cloud: RuntimeCloud = { image, asset, layerX, layerY, displayWidth, displayHeight, baseSpeed, alphaOffset };
     this.applyCloudVisuals(cloud);
     this.clouds.push(cloud);
   }
@@ -227,7 +214,9 @@ export class OverworldCloudOverlay {
     if (!this.layer) return;
     this.layer.setDepth(context.depth);
     for (const cloud of this.clouds) {
-      cloud.image.setPosition(cloud.screenX * context.pixelScale, cloud.screenY * context.pixelScale);
+      const screenX = cloud.layerX - context.cameraScrollX;
+      const screenY = cloud.layerY - context.cameraScrollY;
+      cloud.image.setPosition(screenX * context.pixelScale, screenY * context.pixelScale);
       cloud.image.setDisplaySize(cloud.displayWidth * context.pixelScale, cloud.displayHeight * context.pixelScale);
       this.applyCloudVisuals(cloud);
       cloud.image.setVisible(true);
@@ -242,11 +231,6 @@ export class OverworldCloudOverlay {
   private destroyClouds(): void {
     for (const cloud of this.clouds) cloud.image.destroy();
     this.clouds = [];
-  }
-
-  private resetCameraScroll(): void {
-    this.lastCameraScrollX = undefined;
-    this.lastCameraScrollY = undefined;
   }
 }
 
