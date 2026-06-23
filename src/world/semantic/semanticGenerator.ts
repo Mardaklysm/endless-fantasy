@@ -116,7 +116,7 @@ export function generateSemanticWorld(options: {
   const { landMask, islandId, islandIndexToId, islands } = createLandAndIslands(width, height, seed, islandSpecs);
   const distanceToLand = computeDistanceToMask(landMask, width, height, true);
   const distanceToWater = computeDistanceToMask(landMask, width, height, false);
-  const waterClass = classifyWater(landMask, distanceToLand, width, height);
+  const waterClass = classifyWater(landMask, distanceToLand, width, height, seed);
   const { moisture, temperature, coldness } = createClimateFields(width, height, seed, landMask, distanceToWater, islandId, islands);
   const ridge = createRidgeField(width, height, seed, landMask, distanceToWater, islandId, islands);
   const elevation = finalizeElevation(width, height, seed, landMask, distanceToWater, ridge);
@@ -504,12 +504,48 @@ function computeDistanceToMask(mask: Uint8Array, width: number, height: number, 
   return distances;
 }
 
-function classifyWater(landMask: Uint8Array, distanceToLand: Int16Array, width: number, height: number): Uint8Array {
+function classifyWater(landMask: Uint8Array, distanceToLand: Int16Array, width: number, height: number, seed: string): Uint8Array {
   const waterClass = new Uint8Array(width * height);
-  forEachCell(width, height, (_x, _y, i) => {
-    waterClass[i] = landMask[i] ? SEMANTIC_WATER.NONE : distanceToLand[i] <= SHALLOW_BAND ? SEMANTIC_WATER.SHALLOW : SEMANTIC_WATER.DEEP;
+  forEachCell(width, height, (x, y, i) => {
+    if (landMask[i]) {
+      waterClass[i] = SEMANTIC_WATER.NONE;
+      return;
+    }
+    waterClass[i] = distanceToLand[i] <= seaShelfWidth(seed, x, y) ? SEMANTIC_WATER.SHALLOW : SEMANTIC_WATER.DEEP;
   });
+  smoothWaterClassPatches(waterClass, landMask, width, height);
   return waterClass;
+}
+
+function seaShelfWidth(seed: string, x: number, y: number): number {
+  const shelfNoise = fbm(`${seed}:semantic-sea-shelf`, x / 18, y / 18, 4) - 0.5;
+  const basinNoise = fbm(`${seed}:semantic-sea-basin`, x / 42, y / 42, 3) - 0.5;
+  return Math.round(clamp(SHALLOW_BAND + shelfNoise * 6.5 + basinNoise * 4.5, 3, 10));
+}
+
+function smoothWaterClassPatches(waterClass: Uint8Array, landMask: Uint8Array, width: number, height: number): void {
+  for (let pass = 0; pass < 2; pass += 1) {
+    const next = new Uint8Array(waterClass);
+    forEachCell(width, height, (x, y, i) => {
+      if (landMask[i]) return;
+      let shallowNeighbors = 0;
+      let deepNeighbors = 0;
+      for (let dy = -1; dy <= 1; dy += 1) {
+        for (let dx = -1; dx <= 1; dx += 1) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = x + dx;
+          const ny = y + dy;
+          if (!inBounds(width, height, nx, ny)) continue;
+          const value = waterClass[index(width, nx, ny)];
+          if (value === SEMANTIC_WATER.SHALLOW) shallowNeighbors += 1;
+          else if (value === SEMANTIC_WATER.DEEP) deepNeighbors += 1;
+        }
+      }
+      if (waterClass[i] === SEMANTIC_WATER.SHALLOW && deepNeighbors >= 6) next[i] = SEMANTIC_WATER.DEEP;
+      else if (waterClass[i] === SEMANTIC_WATER.DEEP && shallowNeighbors >= 6) next[i] = SEMANTIC_WATER.SHALLOW;
+    });
+    waterClass.set(next);
+  }
 }
 
 function createClimateFields(
