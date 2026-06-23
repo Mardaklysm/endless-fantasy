@@ -112,6 +112,7 @@ export function update(this: CrystalOathSceneContext, _time: number, delta: numb
   this.updateBoatTravel(dt);
   this.updateMovement(dt);
   this.updateBattleFlow(dt);
+  this.ensureActiveSceneFrame();
   if (this.dirty) this.draw();
   this.updateCloudOverlay(dt);
   perfEndFrame(this, delta, this.worldTerrainChunkCache.size);

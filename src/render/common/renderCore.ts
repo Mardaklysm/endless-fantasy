@@ -25,6 +25,13 @@ import { WORLD_CLOUD_ASSETS } from "../../data/worldCloudAssets";
 import { WORLD_CURRENT_ASSETS } from "../../data/worldCurrentAssets";
 import type { RoadRotation } from "../../world/worldGenerator";
 import type { CrystalOathSceneContext } from "../../scene/sceneContext";
+import type { Mode } from "../../scene/sceneTypes";
+
+type TextureBackedGameObject = Phaser.GameObjects.GameObject & {
+  active?: boolean;
+  texture?: { key?: string };
+  visible?: boolean;
+};
 
 export function draw(this: CrystalOathSceneContext) {
   this.dirty = false;
@@ -34,17 +41,33 @@ export function draw(this: CrystalOathSceneContext) {
   this.ui.clear();
   this.clearText();
   this.syncWorldLightingLayer();
-  if (this.mode === "title") this.drawTitle();
-  else if (this.mode === "world") this.drawWorld();
-  else if (this.mode === "town") this.drawTown();
-  else if (this.mode === "poi") this.drawPoiVisit();
-  else if (this.mode === "dungeon") this.drawDungeon();
-  else if (this.mode === "dialogue") this.drawDialogue();
+  if (this.mode === "dialogue") this.drawDialogue();
   else if (this.mode === "menu") this.drawMenuScreen();
-  else if (this.mode === "battle") this.drawBattle();
-  else if (this.mode === "gameOver") this.drawGameOver();
-  else if (this.mode === "ending") this.drawEnding();
+  else this.drawBaseSceneForMode(this.mode);
   this.updateCloudOverlay(0);
+}
+
+export function drawBaseSceneForMode(this: CrystalOathSceneContext, mode: Mode) {
+  if (mode === "title") this.drawTitle();
+  else if (mode === "world") this.drawWorld();
+  else if (mode === "town") this.drawTown();
+  else if (mode === "poi") this.drawPoiVisit();
+  else if (mode === "dungeon") this.drawDungeon();
+  else if (mode === "battle") this.drawBattle();
+  else if (mode === "gameOver") this.drawGameOver();
+  else if (mode === "ending") this.drawEnding();
+  else this.g.fillStyle(0x050812, 1).fillRect(0, 0, WIDTH, HEIGHT);
+}
+
+export function ensureActiveSceneFrame(this: CrystalOathSceneContext) {
+  if (this.mode !== "poi" || this.dirty) return;
+  const poi = this.currentPoi();
+  if (!poi) return;
+  const hasPoiBackground = this.images.some((gameObject) => {
+    const candidate = gameObject as TextureBackedGameObject;
+    return candidate.active !== false && candidate.visible !== false && candidate.texture?.key === poi.background.key;
+  });
+  if (!hasPoiBackground) this.markDirty();
 }
 
 export function clearText(this: CrystalOathSceneContext) {

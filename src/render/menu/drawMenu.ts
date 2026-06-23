@@ -2,11 +2,7 @@ import { HEIGHT, LAYER_UI_IMAGE, WIDTH } from "../../app/config";
 import type { CrystalOathSceneContext } from "../../scene/sceneContext";
 
 export function drawMenuScreen(this: CrystalOathSceneContext) {
-  if (this.previousMode === "world") this.drawWorld();
-  else if (this.previousMode === "town") this.drawTown();
-  else if (this.previousMode === "poi") this.drawPoiVisit();
-  else if (this.previousMode === "dungeon") this.drawDungeon();
-  else this.g.fillStyle(0x050812, 1).fillRect(0, 0, WIDTH, HEIGHT);
+  this.drawBaseSceneForMode(this.previousMode);
   if (!this.menu) return;
   this.clearOverlayChrome();
   this.ui.fillStyle(0x02040a, 0.72).fillRect(0, 0, WIDTH, HEIGHT);
@@ -28,11 +24,7 @@ export function drawMenuScreen(this: CrystalOathSceneContext) {
 }
 
 export function drawDialogue(this: CrystalOathSceneContext) {
-  if (this.previousMode === "dungeon") this.drawDungeon();
-  else if (this.previousMode === "poi") this.drawPoiVisit();
-  else if (this.previousMode === "town") this.drawTown();
-  else if (this.previousMode === "title") this.drawTitle();
-  else this.drawWorld();
+  this.drawBaseSceneForMode(this.previousMode);
   if (!this.dialogue) return;
   this.clearOverlayChrome();
   this.ui.fillStyle(0x02040a, 0.38).fillRect(0, 0, WIDTH, HEIGHT);
