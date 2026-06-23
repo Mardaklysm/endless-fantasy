@@ -27,27 +27,38 @@ export function getAvailableDestinations(this: CrystalOathSceneContext, currentI
   if (currentIslandId === "greenhaven") {
     return [
       { destinationIslandId: "coralreach", displayName: "Coralreach", costGold: 10, requiredUnlockFlag: "unlockedIsland2" },
-      { destinationIslandId: "highspire", displayName: "Highspire", costGold: 18, requiredUnlockFlag: "unlockedHighspire" }
+      { destinationIslandId: "highspire", displayName: "Highspire", costGold: 18, requiredUnlockFlag: "unlockedHighspire" },
+      { destinationIslandId: "ashfall", displayName: "Ashfall", costGold: 24, requiredUnlockFlag: "unlockedHighspire" }
     ];
   }
   if (currentIslandId === "coralreach") {
     return [
       { destinationIslandId: "greenhaven", displayName: "Greenhaven", costGold: 10 },
       { destinationIslandId: "frostmere", displayName: "Frostmere", costGold: 14, requiredUnlockFlag: "unlockedFrostmere" },
-      { destinationIslandId: "highspire", displayName: "Highspire", costGold: 18, requiredUnlockFlag: "unlockedHighspire" }
+      { destinationIslandId: "highspire", displayName: "Highspire", costGold: 18, requiredUnlockFlag: "unlockedHighspire" },
+      { destinationIslandId: "ashfall", displayName: "Ashfall", costGold: 24, requiredUnlockFlag: "unlockedHighspire" }
     ];
   }
   if (currentIslandId === "frostmere") {
     return [
       { destinationIslandId: "coralreach", displayName: "Coralreach", costGold: 14 },
       { destinationIslandId: "highspire", displayName: "Highspire", costGold: 18, requiredUnlockFlag: "unlockedHighspire" },
-      { destinationIslandId: "greenhaven", displayName: "Greenhaven", costGold: 14 }
+      { destinationIslandId: "greenhaven", displayName: "Greenhaven", costGold: 14 },
+      { destinationIslandId: "ashfall", displayName: "Ashfall", costGold: 24, requiredUnlockFlag: "unlockedHighspire" }
+    ];
+  }
+  if (currentIslandId === "ashfall") {
+    return [
+      { destinationIslandId: "highspire", displayName: "Highspire", costGold: 24 },
+      { destinationIslandId: "coralreach", displayName: "Coralreach", costGold: 24 },
+      { destinationIslandId: "greenhaven", displayName: "Greenhaven", costGold: 24 }
     ];
   }
   return [
     { destinationIslandId: "frostmere", displayName: "Frostmere", costGold: 18 },
     { destinationIslandId: "coralreach", displayName: "Coralreach", costGold: 18 },
-    { destinationIslandId: "greenhaven", displayName: "Greenhaven", costGold: 18 }
+    { destinationIslandId: "greenhaven", displayName: "Greenhaven", costGold: 18 },
+    { destinationIslandId: "ashfall", displayName: "Ashfall", costGold: 24 }
   ];
 }
 

@@ -4,9 +4,13 @@ export const REQUIRED_MAJOR_HARBOR_ROUTE_PAIRS: readonly (readonly [MajorIslandI
   ["greenhaven", "coralreach"],
   ["greenhaven", "frostmere"],
   ["greenhaven", "highspire"],
+  ["greenhaven", "ashfall"],
   ["coralreach", "frostmere"],
   ["coralreach", "highspire"],
-  ["frostmere", "highspire"]
+  ["coralreach", "ashfall"],
+  ["frostmere", "highspire"],
+  ["frostmere", "ashfall"],
+  ["highspire", "ashfall"]
 ];
 
 export const BOAT_NAV_DIRECTIONS: readonly SemanticVec[] = [

@@ -29,6 +29,7 @@ import type { GeneratedWorld, WorldRoadVisual } from "../../world/worldGenerator
 import type { CrystalOathSceneContext } from "../../scene/sceneContext";
 
 const HORIZONTAL_BRIDGE_Y_OFFSET = -2;
+const MAX_SAFE_WORLD_CACHE_TEXTURE_SIZE = 16384;
 
 export function drawWorld(this: CrystalOathSceneContext) {
   this.g.fillStyle(0x050812, 1).fillRect(0, 0, WIDTH, HEIGHT);
@@ -438,6 +439,15 @@ export function drawRiverCrossingTile(this: CrystalOathSceneContext, bridge: { o
 export function rebuildWorldTerrainCache(this: CrystalOathSceneContext) {
   this.worldTerrainCacheSeed = "";
   if (!this.generatedWorld || !this.world.length) return;
+  const mapWidth = (this.world[0]?.length ?? 0) * TILE;
+  const mapHeight = this.world.length * TILE;
+  if (mapWidth > MAX_SAFE_WORLD_CACHE_TEXTURE_SIZE || mapHeight > MAX_SAFE_WORLD_CACHE_TEXTURE_SIZE) {
+    if (this.textures.exists(this.worldTerrainCacheKey)) this.textures.remove(this.worldTerrainCacheKey);
+    if (import.meta.env.DEV) {
+      console.info(`[world-terrain-cache] skipped ${mapWidth}x${mapHeight} texture; visible-tile renderer is active for this larger world.`);
+    }
+    return;
+  }
   this.assertCurrentWorldAssetTextures();
   createSemanticMaskTerrainTexture(this, this.generatedWorld.semantic, {
     tileSize: TILE,
@@ -480,6 +490,15 @@ export function rebuildWorldRouteOverlayCache(this: CrystalOathSceneContext) {
   this.worldRouteOverlayCacheSeed = "";
   if (!this.generatedWorld || !this.world.length) return;
   if (this.routeOverlayMode === "hidden" && this.riverOverlayMode === "hidden") return;
+  const mapWidth = (this.world[0]?.length ?? 0) * TILE;
+  const mapHeight = this.world.length * TILE;
+  if (mapWidth > MAX_SAFE_WORLD_CACHE_TEXTURE_SIZE || mapHeight > MAX_SAFE_WORLD_CACHE_TEXTURE_SIZE) {
+    if (this.textures.exists(this.worldRouteOverlayCacheKey)) this.textures.remove(this.worldRouteOverlayCacheKey);
+    if (import.meta.env.DEV) {
+      console.info(`[world-route-cache] skipped ${mapWidth}x${mapHeight} texture; tile debug overlays remain available.`);
+    }
+    return;
+  }
   createSemanticRouteOverlayTexture(this, this.generatedWorld.semantic, {
     tileSize: TILE,
     textureKey: this.worldRouteOverlayCacheKey,

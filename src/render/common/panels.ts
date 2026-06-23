@@ -212,8 +212,8 @@ export function cameraFor(this: CrystalOathSceneContext, pos: Vec, mapW: number,
 
 function worldMinimapLayout(this: CrystalOathSceneContext): WorldMinimapLayout {
   const mapWidth = WORLD_MINIMAP_MAP_WIDTH;
-  const worldWidth = this.generatedWorld?.width ?? 288;
-  const worldHeight = this.generatedWorld?.height ?? 192;
+  const worldWidth = this.generatedWorld?.width ?? 576;
+  const worldHeight = this.generatedWorld?.height ?? 384;
   const mapHeight = Math.max(60, Math.min(78, Math.round(mapWidth * (worldHeight / Math.max(1, worldWidth)))));
   const frameWidth = WORLD_MINIMAP_FRAME_WIDTH;
   const frameHeight = mapHeight + 8;
@@ -238,6 +238,12 @@ function minimapColorForSemanticCell(world: SemanticWorld, x: number, y: number)
   if (!world.layers.landMask[i]) {
     if (water === SEMANTIC_WATER.SHALLOW) return "rgba(39, 169, 192, 0.44)";
     return undefined;
+  }
+  const island = world.islands.find((candidate) => candidate.order + 1 === world.layers.islandId[i]);
+  if (island?.theme === "ashfall") {
+    if (world.layers.roadMap[i]) return "#6b6258";
+    if (world.layers.mountainMap[i]) return "#383833";
+    return "#4a423a";
   }
   if (world.layers.roadMap[i]) return "#9b7743";
   if (world.layers.mountainMap[i]) return world.layers.biome[i] === SEMANTIC_BIOME.ICE ? "#d6edf5" : "#696c62";

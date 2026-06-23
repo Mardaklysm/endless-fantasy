@@ -4,7 +4,7 @@ export const DEFAULT_ROAD_PROFILE: IslandRoadProfile = {
   profileId: "classic-dirt",
   generation: {
     mainRoutePriority: "harbor-to-settlement",
-    optionalPoiBranchLimit: 1,
+    optionalPoiBranchLimit: 2,
     loopChance: 0.12,
     branchChance: 0.82,
     routeWander: 1,
@@ -34,7 +34,7 @@ export const ROAD_PROFILES = {
     profileId: "sun-bleached-sandy-trail",
     generation: {
       mainRoutePriority: "harbor-to-settlement",
-      optionalPoiBranchLimit: 1,
+      optionalPoiBranchLimit: 2,
       loopChance: 0.08,
       branchChance: 0.74,
       routeWander: 0.92,
@@ -61,7 +61,7 @@ export const ROAD_PROFILES = {
     profileId: "trampled-snow-slush",
     generation: {
       mainRoutePriority: "harbor-to-settlement",
-      optionalPoiBranchLimit: 1,
+      optionalPoiBranchLimit: 2,
       loopChance: 0.04,
       branchChance: 0.58,
       routeWander: 0.82,
@@ -84,11 +84,38 @@ export const ROAD_PROFILES = {
       bridgeApproachStyle: "snow-taper"
     }
   },
-  highspireAsh: {
+  highspireAlpine: {
+    profileId: "alpine-stone-track",
+    generation: {
+      mainRoutePriority: "harbor-to-settlement",
+      optionalPoiBranchLimit: 2,
+      loopChance: 0.08,
+      branchChance: 0.66,
+      routeWander: 0.86,
+      straightRunSoftening: 0.86,
+      junctionPatchScale: 0.86,
+      endpointApronScale: 0.9
+    },
+    visual: {
+      centerColor: "#b9a978",
+      edgeColor: "#786c54",
+      lightNoiseColor: "#d6c79a",
+      darkNoiseColor: "#5b564c",
+      terrainFleckColor: "#71895b",
+      alpha: 0.9,
+      widthScale: 0.92,
+      edgeBreakup: 0.68,
+      centerContinuity: 0.98,
+      pebbleNoise: 0.052,
+      endpointPatchStyle: "gravel",
+      bridgeApproachStyle: "gravel-taper"
+    }
+  },
+  ashfallAsh: {
     profileId: "volcanic-ash-gravel",
     generation: {
       mainRoutePriority: "harbor-to-settlement",
-      optionalPoiBranchLimit: 1,
+      optionalPoiBranchLimit: 2,
       loopChance: 0.05,
       branchChance: 0.6,
       routeWander: 0.76,

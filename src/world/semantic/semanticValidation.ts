@@ -13,7 +13,7 @@ import {
   validateBoatPath
 } from "./boatNavigation.ts";
 
-const MAJOR_ISLAND_IDS: MajorIslandId[] = ["greenhaven", "coralreach", "frostmere", "highspire"];
+const MAJOR_ISLAND_IDS: MajorIslandId[] = ["greenhaven", "coralreach", "frostmere", "highspire", "ashfall"];
 
 export function validateSemanticWorld(world: SemanticWorld) {
   const errors: string[] = [];
@@ -24,7 +24,7 @@ export function validateSemanticWorld(world: SemanticWorld) {
   const majorIslands = world.islands.filter((island) => island.major);
 
   if (landCount === 0) errors.push("No land was generated.");
-  if (majorIslands.length !== 4) errors.push(`Expected exactly 4 major islands, got ${majorIslands.length}.`);
+  if (majorIslands.length !== MAJOR_ISLAND_IDS.length) errors.push(`Expected exactly ${MAJOR_ISLAND_IDS.length} major islands, got ${majorIslands.length}.`);
   for (const id of MAJOR_ISLAND_IDS) {
     const island = world.islands.find((candidate) => candidate.id === id);
     if (!island) errors.push(`Major island ${id} is missing.`);
@@ -147,6 +147,7 @@ function validateMountainRules(world: SemanticWorld, errors: string[], warnings:
 
 function minimumMountainComponentSize(islandId: string): number {
   if (islandId === "highspire") return 24;
+  if (islandId === "ashfall") return 22;
   if (islandId === "frostmere") return 18;
   if (islandId === "greenhaven" || islandId === "coralreach") return 8;
   return 8;
@@ -219,7 +220,7 @@ function validateBoatRoutes(world: SemanticWorld, errors: string[]) {
 
 function validateMajorIslandSeparation(world: SemanticWorld, errors: string[]) {
   const components = majorIslandComponents(world);
-  if (components.length !== 4) errors.push(`Expected exactly 4 separated major island land components, got ${components.length}.`);
+  if (components.length !== MAJOR_ISLAND_IDS.length) errors.push(`Expected exactly ${MAJOR_ISLAND_IDS.length} separated major island land components, got ${components.length}.`);
   for (let a = 0; a < components.length; a += 1) {
     for (let b = a + 1; b < components.length; b += 1) {
       const gap = minimumChebyshevGap(components[a].cells, components[b].cells);

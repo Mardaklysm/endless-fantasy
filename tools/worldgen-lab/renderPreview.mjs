@@ -20,6 +20,10 @@ const COLORS = {
   grassAlt: [109, 186, 84, 255],
   sand: [196, 166, 96, 255],
   sandAlt: [215, 186, 118, 255],
+  ash: [69, 61, 53, 255],
+  ashAlt: [88, 78, 65, 255],
+  ashMountain: [58, 56, 52, 255],
+  ashMountainLight: [96, 84, 70, 255],
   ice: [213, 239, 239, 255],
   iceAlt: [182, 222, 232, 255],
   river: [31, 139, 196, 255],
@@ -72,7 +76,8 @@ export function renderSemanticMap(world, scale = 6) {
     let color = COLORS.deepOcean;
     if (world.layers.waterClass[i] === WATER.SHALLOW) color = COLORS.shallow;
     if (world.layers.landMask[i]) {
-      if (world.layers.biome[i] === BIOME.BEACH) color = COLORS.beach;
+      if (isAshfallCell(world, i)) color = COLORS.ash;
+      else if (world.layers.biome[i] === BIOME.BEACH) color = COLORS.beach;
       else if (world.layers.biome[i] === BIOME.GRASS) color = COLORS.grass;
       else if (world.layers.biome[i] === BIOME.SAND) color = COLORS.sand;
       else if (world.layers.biome[i] === BIOME.ICE) color = COLORS.ice;
@@ -355,13 +360,14 @@ function renderLand(image, world, scale) {
       return;
     }
     let color = COLORS.grass;
-    if (world.layers.biome[i] === BIOME.BEACH) color = n > 0.5 ? COLORS.beachLight : COLORS.beach;
+    if (isAshfallCell(world, i)) color = n > 0.5 ? COLORS.ashAlt : COLORS.ash;
+    else if (world.layers.biome[i] === BIOME.BEACH) color = n > 0.5 ? COLORS.beachLight : COLORS.beach;
     else if (world.layers.biome[i] === BIOME.GRASS) color = n > 0.5 ? COLORS.grassAlt : COLORS.grass;
     else if (world.layers.biome[i] === BIOME.SAND) color = n > 0.5 ? COLORS.sandAlt : COLORS.sand;
     else if (world.layers.biome[i] === BIOME.ICE) color = n > 0.5 ? COLORS.iceAlt : COLORS.ice;
     fillCell(image, x, y, scale, color);
     if (world.layers.biome[i] !== BIOME.BEACH && (x * 7 + y * 13 + Math.floor(n * 17)) % 31 === 0) {
-      const dot = world.layers.biome[i] === BIOME.ICE ? [235, 255, 255, 95] : [66, 116, 50, 75];
+      const dot = isAshfallCell(world, i) ? [35, 31, 28, 90] : world.layers.biome[i] === BIOME.ICE ? [235, 255, 255, 95] : [66, 116, 50, 75];
       fillRect(image, x * scale + Math.floor(scale / 2), y * scale + Math.floor(scale / 2), 1, 1, dot);
     }
   });
@@ -424,9 +430,16 @@ function fallbackMountainVisuals(world) {
 
 function mountainCellColor(world, x, y, i = y * world.width + x) {
   const n = noise(`${world.seed}:mountain-cell`, x, y);
+  if (isAshfallCell(world, i)) return n > 0.54 ? COLORS.ashMountainLight : COLORS.ashMountain;
   if (world.layers.biome[i] === BIOME.ICE) return n > 0.56 ? COLORS.mountainSnow : COLORS.mountainSnowShade;
   if (world.layers.biome[i] === BIOME.BEACH || world.layers.biome[i] === BIOME.SAND) return n > 0.54 ? COLORS.mountainSandLight : COLORS.mountainSand;
   return n > 0.56 ? COLORS.mountainLight : COLORS.mountain;
+}
+
+function isAshfallCell(world, i) {
+  const islandNumber = world.layers.islandId[i];
+  const island = world.islands?.find((candidate) => candidate.order + 1 === islandNumber);
+  return island?.theme === "ashfall";
 }
 
 function renderRoads(image, world, scale) {

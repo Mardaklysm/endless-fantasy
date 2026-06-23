@@ -22,10 +22,10 @@ export const SEMANTIC_WATER = {
 export type SemanticBiomeValue = (typeof SEMANTIC_BIOME)[keyof typeof SEMANTIC_BIOME];
 export type SemanticWaterValue = (typeof SEMANTIC_WATER)[keyof typeof SEMANTIC_WATER];
 
-export type MajorIslandId = "greenhaven" | "coralreach" | "frostmere" | "highspire";
+export type MajorIslandId = "greenhaven" | "coralreach" | "frostmere" | "highspire" | "ashfall";
 export type SemanticIslandId = MajorIslandId | `minor_${number}`;
-export type IslandTheme = "grassland" | "sand_coast" | "ice" | "mixed_highland" | "minor";
-export type IslandRole = "starter" | "coastal_trade" | "snow_shrine" | "mountain_ruins" | "harbor" | "treasure" | "shrine" | "cave" | "resource";
+export type IslandTheme = "grassland" | "sand_coast" | "ice" | "mixed_highland" | "ashfall" | "minor";
+export type IslandRole = "starter" | "coastal_trade" | "snow_shrine" | "mountain_ruins" | "volcanic_ash" | "harbor" | "treasure" | "shrine" | "cave" | "resource";
 export type OverlayCollisionPolicy = "visualOnly" | "softTerrain" | "hardBlock" | "poiBlock";
 export type RoadMainRoutePriority = "harbor-to-settlement" | "settlement-network" | "poi-network";
 export type RoadEndpointPatchStyle = "dirt-apron" | "sandy-landing" | "snow-pack" | "ash-worn" | "muddy-track" | "gravel";

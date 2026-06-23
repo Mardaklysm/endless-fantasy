@@ -19,8 +19,8 @@ import {
   type SemanticWorld
 } from "./semantic/semanticTypes.ts";
 
-export const DEFAULT_WORLD_WIDTH = 288;
-export const DEFAULT_WORLD_HEIGHT = 192;
+export const DEFAULT_WORLD_WIDTH = 576;
+export const DEFAULT_WORLD_HEIGHT = 384;
 export const ACTIVE_WORLDGEN_MODE = "semantic_campaign_archipelago_world" as const;
 
 export interface WorldVec {
@@ -28,8 +28,8 @@ export interface WorldVec {
   y: number;
 }
 
-export type IslandId = "greenhaven" | "coralreach" | "frostmere" | "highspire" | `minor_${number}`;
-export type IslandTheme = "grassland" | "sand_coast" | "ice" | "mixed_highland" | "minor";
+export type IslandId = "greenhaven" | "coralreach" | "frostmere" | "highspire" | "ashfall" | `minor_${number}`;
+export type IslandTheme = "grassland" | "sand_coast" | "ice" | "mixed_highland" | "ashfall" | "minor";
 export type WorldPoiKind = "town" | "harbor" | "dungeon" | "gate" | "final" | "landmark";
 export type WorldLandmarkKind =
   | "shipwreck"
@@ -157,7 +157,8 @@ export const SEMANTIC_BASE_TILE_PALETTE = {
   grassland: WORLD_TILE_IDS.mediumGrass,
   sand: WORLD_TILE_IDS.brightSand,
   ice: WORLD_TILE_IDS.cleanSnow,
-  mountain: WORLD_TILE_IDS.rockyMountainGround
+  mountain: WORLD_TILE_IDS.rockyMountainGround,
+  ash: WORLD_TILE_IDS.ashBlackGround
 } as const satisfies Record<string, WorldTileId>;
 
 export function createWorldSeed(): string {
@@ -306,15 +307,33 @@ function tileForSemanticCell(semantic: SemanticWorld, x: number, y: number): Wor
     return semantic.layers.waterClass[i] === SEMANTIC_WATER.SHALLOW ? SEMANTIC_BASE_TILE_PALETTE.shallowWater : SEMANTIC_BASE_TILE_PALETTE.deepOcean;
   }
   if (semantic.layers.mountainMap[i]) return mountainTileForSemanticCell(semantic, i);
+  if (semanticIslandAt(semantic, i)?.theme === "ashfall") return ashTileForSemanticCell(semantic, x, y);
   if (TERRAIN_VARIANT_MODE === "off") return canonicalTileForBiome(semantic.layers.biome[i]);
   return variantTileForSemanticCell(semantic, x, y, i);
 }
 
 function mountainTileForSemanticCell(semantic: SemanticWorld, i: number): WorldTileId {
+  if (semanticIslandAt(semantic, i)?.theme === "ashfall") return WORLD_TILE_IDS.volcanicAshGround;
   if (semantic.layers.biome[i] === SEMANTIC_BIOME.ICE) return WORLD_TILE_IDS.snowyMountainGround;
   const islandId = semantic.islandIndexToId.get(semantic.layers.islandId[i]);
   if (islandId === "highspire") return WORLD_TILE_IDS.rockyMountainGround;
   return SEMANTIC_BASE_TILE_PALETTE.mountain;
+}
+
+function semanticIslandAt(semantic: SemanticWorld, i: number) {
+  const islandNumber = semantic.layers.islandId[i];
+  return semantic.islands.find((candidate) => candidate.order + 1 === islandNumber);
+}
+
+function ashTileForSemanticCell(semantic: SemanticWorld, x: number, y: number): WorldTileId {
+  return pickByNoise(
+    [WORLD_TILE_IDS.ashBlackGround, WORLD_TILE_IDS.volcanicAshGround, WORLD_TILE_IDS.deadCrackedEarth, WORLD_TILE_IDS.cooledLavaRock],
+    semantic.seed,
+    "ashfall",
+    x,
+    y,
+    [0.52, 0.24, 0.18, 0.06]
+  );
 }
 
 function canonicalTileForBiome(biome: number): WorldTileId {
@@ -337,9 +356,11 @@ function buildBiomes(semantic: SemanticWorld): WorldBiome[][] {
     const row: WorldBiome[] = [];
     for (let x = 0; x < semantic.width; x += 1) {
       const i = y * semantic.width + x;
+      const island = semanticIslandAt(semantic, i);
       if (!semantic.layers.landMask[i] || semantic.layers.waterClass[i] !== SEMANTIC_WATER.NONE || semantic.layers.lakeMap[i]) row.push("water");
       else if (semantic.layers.mountainMap[i]) row.push("mountain");
       else if (semantic.layers.forestMap[i]) row.push("forest");
+      else if (island?.theme === "ashfall") row.push("darkland");
       else if (semantic.layers.biome[i] === SEMANTIC_BIOME.SAND || semantic.layers.biome[i] === SEMANTIC_BIOME.BEACH) row.push("desert");
       else if (semantic.layers.biome[i] === SEMANTIC_BIOME.ICE) row.push("snow");
       else row.push("grassland");
@@ -407,8 +428,18 @@ function landmarkKind(poi: SemanticPoi): WorldLandmarkKind | undefined {
 function objectIdForPoi(poi: SemanticPoi): WorldObjectId | undefined {
   if (poi.type === "port") return WORLD_OBJECT_IDS.harborSignpost;
   if (poi.id === "mossCave") return WORLD_OBJECT_IDS.mossyCaveEntrance;
+  if (poi.id === "oldwoodRuins") return WORLD_OBJECT_IDS.ruinedArchway;
+  if (poi.id === "sunkenArchCave") return WORLD_OBJECT_IDS.pirateGrottoEntrance;
+  if (poi.id === "mirageTower") return WORLD_OBJECT_IDS.jungleIdolShrine;
+  if (poi.id === "frostCave") return WORLD_OBJECT_IDS.ancientStandingStones;
   if (poi.id === "tideShrine") return WORLD_OBJECT_IDS.jungleRuinsStairs;
+  if (poi.id === "stonefallKeep") return WORLD_OBJECT_IDS.ruinedArchway;
+  if (poi.id === "cloudbreakMine") return WORLD_OBJECT_IDS.oreNode;
+  if (poi.id === "skyreachTower") return WORLD_OBJECT_IDS.glowingMagicShrine;
   if (poi.id === "ashenKeep") return WORLD_OBJECT_IDS.cursedFortressGate;
+  if (poi.id === "emberVault") return WORLD_OBJECT_IDS.volcanicTempleEntrance;
+  if (poi.id === "volcanicFortress") return WORLD_OBJECT_IDS.cursedFortressGate;
+  if (poi.id === "obsidianGate") return WORLD_OBJECT_IDS.ancientSealedDoor;
   if (poi.id === "skyglassTower") return WORLD_OBJECT_IDS.glowingMagicShrine;
   if (poi.id === "starfallGate") return WORLD_OBJECT_IDS.ancientSealedDoor;
   if (poi.id === "eclipseSpire") return WORLD_OBJECT_IDS.darkBossPortal;
