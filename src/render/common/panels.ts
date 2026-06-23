@@ -77,10 +77,9 @@ export function drawBar(this: CrystalOathSceneContext, x: number, y: number, w: 
 }
 
 export function drawHud(this: CrystalOathSceneContext, place: string) {
-  const travel = this.flags.skyship ? "Skyship" : this.flags.boat ? "Boat" : "On Foot";
   this.drawPanel(12, 10, 286, 56);
   this.text(28, 18, place, 17, "#fff2a8", "left", { wordWrapWidth: 250 });
-  this.text(28, 42, `Gold ${this.gold}  Relics ${this.relicCount()}/4  ${travel}`, 12, "#e7efff", "left", { wordWrapWidth: 250 });
+  this.text(28, 42, `Gold ${this.gold}  Relics ${this.relicCount()}/4`, 12, "#e7efff", "left", { wordWrapWidth: 250 });
 
   const rightW = 318;
   const rightX = WIDTH - rightW - 12;
@@ -108,7 +107,6 @@ export function drawWorldClock(this: CrystalOathSceneContext) {
 }
 
 export function drawOverworldHud(this: CrystalOathSceneContext) {
-  const travel = this.flags.skyship ? "Skyship" : this.flags.boat ? "Boat" : "On Foot";
   const x = 10;
   const y = 8;
   const w = 174;
@@ -116,7 +114,7 @@ export function drawOverworldHud(this: CrystalOathSceneContext) {
   this.drawCompactHudPanel(x, y, w, h, 0.68);
   this.text(x + 7, y + 4, this.currentIslandName(), 9, "#fff0a6", "left", { wordWrapWidth: 112, strokeThickness: 1 });
   this.text(x + w - 43, y + 4, this.worldClockText(), 8, "#d7ecff", "left", { wordWrapWidth: 38, strokeThickness: 1 });
-  this.text(x + 7, y + 17, `Gold ${this.gold} | Relics ${this.relicCount()}/4 | ${travel}`, 7, "#dfe9ff", "left", {
+  this.text(x + 7, y + 17, `Gold ${this.gold} | Relics ${this.relicCount()}/4`, 7, "#dfe9ff", "left", {
     wordWrapWidth: w - 14,
     strokeThickness: 1
   });
@@ -276,13 +274,19 @@ function drawMinimapPlayerMarker(this: CrystalOathSceneContext, layout: WorldMin
 
 function drawFaintOverworldDebug(this: CrystalOathSceneContext) {
   const alpha = this.semanticDebugOverlay !== "off" ? 0.85 : 0.32;
-  const debugText = this.text(WIDTH - 10, HEIGHT - 31, `Enc ${this.settings.encounters ? "ON" : "OFF"}  XP ${this.settings.xpMultiplier}x\nSeed ${this.worldSeed}`, 7, "#9eabc6", "left", {
+  const debugText = this.text(WIDTH - 10, HEIGHT - 40, `Mode ${currentTravelModeLabel.call(this)}  Enc ${this.settings.encounters ? "ON" : "OFF"}  XP ${this.settings.xpMultiplier}x\nSeed ${this.worldSeed}`, 7, "#9eabc6", "left", {
     wordWrapWidth: 230,
     stroke: "#020714",
     strokeThickness: 1
   });
   debugText.setOrigin(1, 0);
   debugText.setAlpha(alpha);
+}
+
+function currentTravelModeLabel(this: CrystalOathSceneContext): "On Foot" | "Boat" | "Airship" {
+  if ((this as CrystalOathSceneContext & { airshipTravel?: unknown }).airshipTravel) return "Airship";
+  if (this.boatTravel) return "Boat";
+  return "On Foot";
 }
 
 function minimapPointForWorldPos(layout: WorldMinimapLayout, worldWidth: number, worldHeight: number, pos: Vec): Vec {
