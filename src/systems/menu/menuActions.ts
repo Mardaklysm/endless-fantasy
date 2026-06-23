@@ -28,7 +28,7 @@ export function openMainMenu(this: CrystalOathSceneContext) {
           this.saveGame();
           this.flashMessage("Game saved.");
         },
-        disabled: () => this.previousMode === "dungeon"
+        disabled: () => this.previousMode === "dungeon" || this.previousMode === "poi"
       },
       { label: "Settings", action: () => this.openSettingsMenu() },
       { label: "Controls", action: () => this.showControls("menu") },
@@ -304,6 +304,7 @@ export function openDebugMenu(this: CrystalOathSceneContext) {
 }
 
 export function openInn(this: CrystalOathSceneContext, town: TownDef) {
+  const returnMode = this.serviceReturnMode();
   this.openMenu(
     `${town.name} Inn`,
     [
@@ -318,17 +319,18 @@ export function openInn(this: CrystalOathSceneContext, town: TownDef) {
           this.restoreParty(true);
           this.saveGame();
           this.say(["The party rests. HP and spell charges restored. Game saved."], () => {
-            this.closeMenuTo("town");
+            this.closeMenuTo(returnMode);
           });
         }
       },
-      { label: "Leave", action: () => this.closeMenuTo("town") }
+      { label: "Leave", action: () => this.closeMenuTo(returnMode) }
     ],
-    () => this.closeMenuTo("town")
+    () => this.closeMenuTo(returnMode)
   );
 }
 
 export function openClinic(this: CrystalOathSceneContext, town: TownDef) {
+  const returnMode = this.serviceReturnMode();
   this.openMenu(
     `${town.name} Clinic`,
     this.party.map((c) => ({
@@ -347,12 +349,13 @@ export function openClinic(this: CrystalOathSceneContext, town: TownDef) {
         c.statuses = {};
         this.openClinic(town);
       }
-    })).concat([{ label: "Leave", action: () => this.closeMenuTo("town") }]),
-    () => this.closeMenuTo("town")
+    })).concat([{ label: "Leave", action: () => this.closeMenuTo(returnMode) }]),
+    () => this.closeMenuTo(returnMode)
   );
 }
 
 export function openShop(this: CrystalOathSceneContext, title: string, stock: { id: string; type: "item" | "gear" }[]) {
+  const returnMode = this.serviceReturnMode();
   this.openMenu(
     title,
     (stock.map((entry) => ({
@@ -371,13 +374,14 @@ export function openShop(this: CrystalOathSceneContext, title: string, stock: { 
         else this.gearBag[entry.id] = (this.gearBag[entry.id] ?? 0) + 1;
         this.openShop(title, stock);
       }
-    })) as MenuOption[]).concat([{ label: "Leave", action: () => this.closeMenuTo("town") }]),
-    () => this.closeMenuTo("town"),
+    })) as MenuOption[]).concat([{ label: "Leave", action: () => this.closeMenuTo(returnMode) }]),
+    () => this.closeMenuTo(returnMode),
     () => `Gold ${this.gold}`
   );
 }
 
 export function openMagicShop(this: CrystalOathSceneContext, town: TownDef) {
+  const returnMode = this.serviceReturnMode();
   this.openMenu(
     `${town.name} Magic`,
     (town.spellStock.map((id) => ({
@@ -398,8 +402,8 @@ export function openMagicShop(this: CrystalOathSceneContext, town: TownDef) {
         learner.spells.push(id);
         this.openMagicShop(town);
       }
-    })) as MenuOption[]).concat([{ label: "Leave", action: () => this.closeMenuTo("town") }]),
-    () => this.closeMenuTo("town"),
+    })) as MenuOption[]).concat([{ label: "Leave", action: () => this.closeMenuTo(returnMode) }]),
+    () => this.closeMenuTo(returnMode),
     () => `Gold ${this.gold}`
   );
 }
@@ -477,6 +481,11 @@ export function menuReturnMode(this: CrystalOathSceneContext): Mode {
     return this.generatedWorld ? "world" : "title";
   }
   return this.previousMode;
+}
+
+export function serviceReturnMode(this: CrystalOathSceneContext): Mode {
+  if (this.mode === "menu" || this.mode === "dialogue") return this.menuReturnMode();
+  return this.mode;
 }
 
 export function adjustMenu(this: CrystalOathSceneContext, delta: number) {

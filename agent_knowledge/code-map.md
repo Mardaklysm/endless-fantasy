@@ -47,6 +47,7 @@ Use this map to jump to the right source before reading broad code.
 - Tile-step movement, visual/logical position syncing, and collision checks: `src/systems/movement/exploreMovement.ts`
 - Dungeon movement helpers, floor markers, stairs, and chests: `src/systems/movement/dungeonMovement.ts`
 - Town/world/dungeon entry and location footprint helpers: `src/systems/movement/locationEntry.ts`
+- Image-driven handcrafted POI metadata, action dispatch, collision, exits, and rendering: `src/data/poiMetadata.ts`, `src/systems/poi/poiVisit.ts`, `src/render/poi/drawPoi.ts`
 - World location interactions, terrain encounter keys, and island naming/theme helpers: `src/systems/world/locations.ts`
 - Harbor destination menu and island travel: `src/systems/world/harborTravel.ts`
 - Smooth charter boat cutscene state, sprites, route movement, and boat-time ticks: `src/systems/world/boatTravel.ts`

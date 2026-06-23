@@ -36,6 +36,10 @@ export function interact(this: CrystalOathSceneContext) {
     this.interactTown();
     return;
   }
+  if (this.mode === "poi") {
+    this.interactPoi();
+    return;
+  }
   if (this.mode === "dungeon") {
     this.interactDungeon();
   }
@@ -110,6 +114,13 @@ export function enterLocation(this: CrystalOathSceneContext, loc: LocationDef) {
   if (loc.requires && !loc.requires()) {
     if (newlyVisited) this.saveGame();
     this.say([loc.lockedText ?? "A strange force blocks the way."]);
+    return;
+  }
+  const poiId = this.poiIdForWorldLocation(loc.id);
+  if (poiId) {
+    if (loc.kind === "town" || loc.kind === "gate") this.currentTown = loc.id;
+    this.enterPoiVisit(poiId, { mode: "world", locationId: loc.id });
+    if (newlyVisited) this.saveGame();
     return;
   }
   if (loc.kind === "gate") {

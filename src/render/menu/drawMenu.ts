@@ -1,13 +1,14 @@
-import { HEIGHT, WIDTH } from "../../app/config";
+import { HEIGHT, LAYER_UI_IMAGE, WIDTH } from "../../app/config";
 import type { CrystalOathSceneContext } from "../../scene/sceneContext";
 
 export function drawMenuScreen(this: CrystalOathSceneContext) {
   if (this.previousMode === "world") this.drawWorld();
   else if (this.previousMode === "town") this.drawTown();
+  else if (this.previousMode === "poi") this.drawPoiVisit();
   else if (this.previousMode === "dungeon") this.drawDungeon();
   else this.g.fillStyle(0x050812, 1).fillRect(0, 0, WIDTH, HEIGHT);
   if (!this.menu) return;
-  this.clearText();
+  this.clearOverlayChrome();
   this.ui.fillStyle(0x02040a, 0.72).fillRect(0, 0, WIDTH, HEIGHT);
   this.drawPanel(155, 58, 650, 430);
   this.text(184, 96, this.menu.title, 24, "#fff2a8");
@@ -28,11 +29,12 @@ export function drawMenuScreen(this: CrystalOathSceneContext) {
 
 export function drawDialogue(this: CrystalOathSceneContext) {
   if (this.previousMode === "dungeon") this.drawDungeon();
+  else if (this.previousMode === "poi") this.drawPoiVisit();
   else if (this.previousMode === "town") this.drawTown();
   else if (this.previousMode === "title") this.drawTitle();
   else this.drawWorld();
   if (!this.dialogue) return;
-  this.clearText();
+  this.clearOverlayChrome();
   this.ui.fillStyle(0x02040a, 0.38).fillRect(0, 0, WIDTH, HEIGHT);
   this.drawPanel(56, 324, WIDTH - 112, 184);
   this.text(84, 356, this.dialogue.lines[this.dialogue.index], 20, "#ffffff");
@@ -55,4 +57,16 @@ export function drawEnding(this: CrystalOathSceneContext) {
   this.text(WIDTH / 2, 240, "The Root drinks, the Flame warms, the Tide sings, and the Gale carries dawn.", 20, "#ffffff", "center");
   this.text(WIDTH / 2, 310, "Arlen, Mira, and Kael return their oath to the road, where new stories wait.", 20, "#dce9ff", "center");
   this.text(WIDTH / 2, 430, "Enter returns to title.", 16, "#aab3c8", "center");
+}
+
+export function clearOverlayChrome(this: CrystalOathSceneContext) {
+  this.clearText();
+  this.ui.clear();
+  const keptImages: typeof this.images = [];
+  for (const image of this.images) {
+    const depth = "depth" in image ? Number((image as { depth?: number }).depth ?? 0) : 0;
+    if (depth >= LAYER_UI_IMAGE) image.destroy();
+    else keptImages.push(image);
+  }
+  this.images = keptImages;
 }

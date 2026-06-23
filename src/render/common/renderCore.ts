@@ -37,6 +37,7 @@ export function draw(this: CrystalOathSceneContext) {
   if (this.mode === "title") this.drawTitle();
   else if (this.mode === "world") this.drawWorld();
   else if (this.mode === "town") this.drawTown();
+  else if (this.mode === "poi") this.drawPoiVisit();
   else if (this.mode === "dungeon") this.drawDungeon();
   else if (this.mode === "dialogue") this.drawDialogue();
   else if (this.mode === "menu") this.drawMenuScreen();

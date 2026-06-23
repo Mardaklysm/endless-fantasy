@@ -75,7 +75,8 @@ export function beginExploreStep(this: CrystalOathSceneContext, mode: ExploreMod
     this.exitTownToWorld();
     return true;
   }
-  const to = { x: from.x + dir.x, y: from.y + dir.y };
+  const stepSize = this.exploreStepSize(mode);
+  const to = { x: from.x + dir.x * stepSize, y: from.y + dir.y * stepSize };
   if (!this.canOccupyExploreTile(mode, to.x, to.y)) {
     if (mode === "world") {
       const loc = this.locationAt(to.x, to.y);
@@ -97,7 +98,7 @@ export function advanceExploreStep(this: CrystalOathSceneContext, delta: number)
     this.activeStep = undefined;
     return;
   }
-  const speed = (this.shiftHeld ? FAST_MOVE_TILES_PER_MS : MOVE_TILES_PER_MS) * delta;
+  const speed = this.exploreUnitsPerMs(step.mode, this.shiftHeld) * delta;
   if (speed <= 0) return;
   const pos = this.visualExplorePos(step.mode);
   const remaining = Math.abs(step.to.x - pos.x) + Math.abs(step.to.y - pos.y);
@@ -112,6 +113,7 @@ export function advanceExploreStep(this: CrystalOathSceneContext, delta: number)
 export function currentExploreTile(this: CrystalOathSceneContext, mode: ExploreMode): Vec {
   if (mode === "world") return { ...this.worldPos };
   if (mode === "town") return { ...this.townPos };
+  if (mode === "poi") return { ...this.poiPos };
   return { ...this.dungeonPos };
 }
 
@@ -119,6 +121,7 @@ export function setCurrentExploreTile(this: CrystalOathSceneContext, mode: Explo
   const next = { ...tile };
   if (mode === "world") this.worldPos = next;
   else if (mode === "town") this.townPos = next;
+  else if (mode === "poi") this.poiPos = next;
   else this.dungeonPos = next;
 }
 
@@ -131,6 +134,7 @@ export function canOccupyExploreTile(this: CrystalOathSceneContext, mode: Explor
     return this.canEnterTerrain(this.world[y][x]) || !!this.locationAt(x, y);
   }
   if (mode === "town") return x >= 1 && x <= 19 && y >= 1 && y <= 13;
+  if (mode === "poi") return this.canOccupyPoiPoint(x, y);
   const floor = this.dungeonFloorRows(this.currentDungeon, this.dungeonFloor);
   const tile = floor[y]?.[x] ?? "#";
   return this.isDungeonTileWalkable(this.currentDungeon, tile);
@@ -160,6 +164,10 @@ export function handleCompletedExploreTile(this: CrystalOathSceneContext, mode: 
   }
   if (mode === "town") {
     if (dir.y > 0 && this.isTownExitTile(tile)) this.exitTownToWorld();
+    return;
+  }
+  if (mode === "poi") {
+    this.handlePoiStepComplete(tile);
     return;
   }
   const dungeon = this.dungeons()[this.currentDungeon];
@@ -195,6 +203,7 @@ export function setVisualExplorePos(this: CrystalOathSceneContext, mode: Explore
   const next = { ...pos };
   if (mode === "world") this.visualWorldPos = next;
   else if (mode === "town") this.visualTownPos = next;
+  else if (mode === "poi") this.visualPoiPos = next;
   else this.visualDungeonPos = next;
 }
 
@@ -202,11 +211,23 @@ export function syncAllVisualPositions(this: CrystalOathSceneContext) {
   this.activeStep = undefined;
   this.visualWorldPos = { ...this.worldPos };
   this.visualTownPos = { ...this.townPos };
+  this.visualPoiPos = { ...this.poiPos };
   this.visualDungeonPos = { ...this.dungeonPos };
 }
 
 export function visualExplorePos(this: CrystalOathSceneContext, mode: ExploreMode): Vec {
   if (mode === "world") return { ...this.visualWorldPos };
   if (mode === "town") return { ...this.visualTownPos };
+  if (mode === "poi") return { ...this.visualPoiPos };
   return { ...this.visualDungeonPos };
+}
+
+export function exploreStepSize(this: CrystalOathSceneContext, mode: ExploreMode): number {
+  if (mode === "poi") return this.poiStepSize();
+  return 1;
+}
+
+export function exploreUnitsPerMs(this: CrystalOathSceneContext, mode: ExploreMode, fast: boolean): number {
+  if (mode === "poi") return this.poiUnitsPerMs(fast);
+  return fast ? FAST_MOVE_TILES_PER_MS : MOVE_TILES_PER_MS;
 }

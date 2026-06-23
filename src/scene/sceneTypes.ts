@@ -5,6 +5,7 @@ export type Mode =
   | "title"
   | "world"
   | "town"
+  | "poi"
   | "dungeon"
   | "dialogue"
   | "menu"
@@ -12,12 +13,12 @@ export type Mode =
   | "gameOver"
   | "ending";
 
-export type ExploreMode = "world" | "town" | "dungeon";
+export type ExploreMode = "world" | "town" | "poi" | "dungeon";
 export type DirectionName = "up" | "down" | "left" | "right";
 export type Terrain = WorldTileId;
 
 export function isExploreModeValue(mode: Mode): mode is ExploreMode {
-  return mode === "world" || mode === "town" || mode === "dungeon";
+  return mode === "world" || mode === "town" || mode === "poi" || mode === "dungeon";
 }
 
 export interface Vec {

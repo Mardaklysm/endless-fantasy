@@ -54,10 +54,9 @@ export function newGame(this: CrystalOathSceneContext) {
   this.settings.xpMultiplier = 1;
   this.settings.fastText = false;
   this.clearHeldMovement();
-  this.mode = "town";
   this.currentTown = "dawnford";
   this.markLocationVisited(this.currentTown);
-  this.syncAllVisualPositions();
+  this.enterPoiVisit("starting_grassland_village", { mode: "world", locationId: this.currentTown });
   this.audio.setMode("world");
   this.dialogue = {
     lines: [
@@ -68,11 +67,11 @@ export function newGame(this: CrystalOathSceneContext) {
     ],
     index: 0,
     done: () => {
-      this.mode = "town";
+      this.mode = "poi";
       this.saveGame();
     }
   };
-  this.previousMode = "town";
+  this.previousMode = "poi";
   this.mode = "dialogue";
   this.markDirty();
 }

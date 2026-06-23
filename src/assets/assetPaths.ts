@@ -132,7 +132,8 @@ export const ASSET_PATHS = [
   ["fx_relic_restore", "effects/relic_restore.png"],
   ["title_screen", "title/title_screen.png"],
   ["title_logo", "title/title_logo.png"],
-  ["title_four_crystals", "title/four_star_relics.png"]
+  ["title_four_crystals", "title/four_star_relics.png"],
+  ["poi_starting_grassland_village", "poi/starting_grassland_village.jpeg"]
 ] as const;
 
 export const ASSET_MODULES = import.meta.glob(["../../assets/**/*.{png,jpeg,jpg}", "!../../assets/characters/arlen_map.png"], {
