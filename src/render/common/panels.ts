@@ -212,8 +212,8 @@ export function cameraFor(this: CrystalOathSceneContext, pos: Vec, mapW: number,
 
 function worldMinimapLayout(this: CrystalOathSceneContext): WorldMinimapLayout {
   const mapWidth = WORLD_MINIMAP_MAP_WIDTH;
-  const worldWidth = this.generatedWorld?.width ?? 288;
-  const worldHeight = this.generatedWorld?.height ?? 192;
+  const worldWidth = this.generatedWorld?.width ?? 576;
+  const worldHeight = this.generatedWorld?.height ?? 384;
   const mapHeight = Math.max(60, Math.min(78, Math.round(mapWidth * (worldHeight / Math.max(1, worldWidth)))));
   const frameWidth = WORLD_MINIMAP_FRAME_WIDTH;
   const frameHeight = mapHeight + 8;

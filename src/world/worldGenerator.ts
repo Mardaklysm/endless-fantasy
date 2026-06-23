@@ -19,8 +19,8 @@ import {
   type SemanticWorld
 } from "./semantic/semanticTypes.ts";
 
-export const DEFAULT_WORLD_WIDTH = 288;
-export const DEFAULT_WORLD_HEIGHT = 192;
+export const DEFAULT_WORLD_WIDTH = 576;
+export const DEFAULT_WORLD_HEIGHT = 384;
 export const ACTIVE_WORLDGEN_MODE = "semantic_campaign_archipelago_world" as const;
 
 export interface WorldVec {

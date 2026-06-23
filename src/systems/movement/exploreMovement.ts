@@ -124,7 +124,9 @@ export function setCurrentExploreTile(this: CrystalOathSceneContext, mode: Explo
 
 export function canOccupyExploreTile(this: CrystalOathSceneContext, mode: ExploreMode, x: number, y: number): boolean {
   if (mode === "world") {
-    if (x < 0 || y < 0 || x >= WORLD_W || y >= WORLD_H) return false;
+    const worldWidth = this.generatedWorld?.width ?? WORLD_W;
+    const worldHeight = this.generatedWorld?.height ?? WORLD_H;
+    if (x < 0 || y < 0 || x >= worldWidth || y >= worldHeight) return false;
     if (this.generatedWorld) return isWorldPositionWalkable(this.generatedWorld, x, y);
     return this.canEnterTerrain(this.world[y][x]) || !!this.locationAt(x, y);
   }
