@@ -111,6 +111,19 @@ export class CrystalOathScene extends Phaser.Scene {
   world: Terrain[][] = [];
   worldTerrainCacheKey = "world_terrain_cache";
   worldTerrainCacheSeed = "";
+  worldTerrainChunkCache = new Map<
+    string,
+    {
+      textureKey: string;
+      frameKey: string;
+      chunkX: number;
+      chunkY: number;
+      chunkWidth: number;
+      chunkHeight: number;
+      lastUsed: number;
+    }
+  >();
+  worldTerrainChunkCacheTick = 0;
   worldRouteOverlayCacheKey = "world_route_overlay_cache";
   worldRouteOverlayCacheSeed = "";
   worldMinimapCacheKey = "world_minimap_cache";

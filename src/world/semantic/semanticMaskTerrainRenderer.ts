@@ -12,9 +12,12 @@ export interface SemanticMaskTerrainRenderOptions {
   terrainSources?: SemanticMaskTerrainSources;
   terrainSourceLabels?: Partial<Record<SemanticMaskTerrainClass, string>>;
   maskPixelsPerCell?: number;
+  renderArea?: { x: number; y: number; width: number; height: number };
 }
 
 export interface SemanticMaskTerrainRenderPlan {
+  originX: number;
+  originY: number;
   width: number;
   height: number;
   tileSize: number;
@@ -113,10 +116,13 @@ export function createSemanticMaskTerrainCanvas(world: SemanticWorld, options: S
 export function describeSemanticMaskTerrainRenderPlan(world: SemanticWorld, options: SemanticMaskTerrainRenderOptions): SemanticMaskTerrainRenderPlan {
   const tileSize = Math.max(1, Math.floor(options.tileSize));
   const maskPixelsPerCell = chooseMaskPixelsPerCell(tileSize, options.maskPixelsPerCell ?? 16);
+  const renderArea = normalizedRenderArea(world, options.renderArea);
   const pixelBlock = tileSize / maskPixelsPerCell;
-  const maskWidth = world.width * maskPixelsPerCell;
-  const maskHeight = world.height * maskPixelsPerCell;
+  const maskWidth = renderArea.width * maskPixelsPerCell;
+  const maskHeight = renderArea.height * maskPixelsPerCell;
   const classGrid = buildMaskClassGrid(world, {
+    originX: renderArea.x,
+    originY: renderArea.y,
     maskPixelsPerCell,
     maskWidth,
     maskHeight
@@ -160,8 +166,10 @@ export function describeSemanticMaskTerrainRenderPlan(world: SemanticWorld, opti
   }
 
   return {
-    width: world.width * tileSize,
-    height: world.height * tileSize,
+    originX: renderArea.x,
+    originY: renderArea.y,
+    width: renderArea.width * tileSize,
+    height: renderArea.height * tileSize,
     tileSize,
     maskPixelsPerCell,
     pixelBlock,
@@ -179,12 +187,22 @@ export function describeSemanticMaskTerrainRenderPlan(world: SemanticWorld, opti
   };
 }
 
-function buildMaskClassGrid(world: SemanticWorld, plan: Pick<SemanticMaskTerrainRenderPlan, "maskWidth" | "maskHeight" | "maskPixelsPerCell">): Uint8Array {
+function normalizedRenderArea(world: SemanticWorld, area: SemanticMaskTerrainRenderOptions["renderArea"]): { x: number; y: number; width: number; height: number } {
+  const x = clampInt(Math.floor(area?.x ?? 0), 0, Math.max(0, world.width - 1));
+  const y = clampInt(Math.floor(area?.y ?? 0), 0, Math.max(0, world.height - 1));
+  const maxWidth = Math.max(1, world.width - x);
+  const maxHeight = Math.max(1, world.height - y);
+  const width = clampInt(Math.floor(area?.width ?? world.width), 1, maxWidth);
+  const height = clampInt(Math.floor(area?.height ?? world.height), 1, maxHeight);
+  return { x, y, width, height };
+}
+
+function buildMaskClassGrid(world: SemanticWorld, plan: Pick<SemanticMaskTerrainRenderPlan, "originX" | "originY" | "maskWidth" | "maskHeight" | "maskPixelsPerCell">): Uint8Array {
   const classGrid = new Uint8Array(plan.maskWidth * plan.maskHeight);
   for (let my = 0; my < plan.maskHeight; my += 1) {
     for (let mx = 0; mx < plan.maskWidth; mx += 1) {
-      const sampleX = (mx + 0.5) / plan.maskPixelsPerCell;
-      const sampleY = (my + 0.5) / plan.maskPixelsPerCell;
+      const sampleX = plan.originX + (mx + 0.5) / plan.maskPixelsPerCell;
+      const sampleY = plan.originY + (my + 0.5) / plan.maskPixelsPerCell;
       classGrid[my * plan.maskWidth + mx] = classifySample(world, sampleX, sampleY);
     }
   }
@@ -466,14 +484,16 @@ function drawRoadMaskedTerrainClass(ctx: CanvasRenderingContext2D, world: Semant
   for (let my = 0; my < plan.maskHeight; my += 1) {
     for (let mx = 0; mx < plan.maskWidth; mx += 1) {
       if (terrainClassAt(classGrid, my * plan.maskWidth + mx) !== TERRAIN_CLASS_IDS.road) continue;
-      const sampleX = (mx + 0.5) / plan.maskPixelsPerCell;
-      const sampleY = (my + 0.5) / plan.maskPixelsPerCell;
+      const sampleX = plan.originX + (mx + 0.5) / plan.maskPixelsPerCell;
+      const sampleY = plan.originY + (my + 0.5) / plan.maskPixelsPerCell;
       const profile = roadProfileAt(world, sampleX, sampleY);
       const visual = profile.visual;
       const coreWidth = 0.108 * visual.widthScale * visual.centerContinuity;
       const coreHit = routeMaskSample(world, world.layers.roadMap, sampleX, sampleY, coreWidth);
-      const textureNoise = hashNoise(`${world.seed}:mask-road-texture:${profile.profileId}`, mx, my);
-      const edgeNoise = hashNoise(`${world.seed}:mask-road-edge-texture:${profile.profileId}`, mx, my);
+      const globalMx = Math.floor(plan.originX * plan.maskPixelsPerCell) + mx;
+      const globalMy = Math.floor(plan.originY * plan.maskPixelsPerCell) + my;
+      const textureNoise = hashNoise(`${world.seed}:mask-road-texture:${profile.profileId}`, globalMx, globalMy);
+      const edgeNoise = hashNoise(`${world.seed}:mask-road-edge-texture:${profile.profileId}`, globalMx, globalMy);
       const color = roadSampleColor(visual, coreHit, textureNoise, edgeNoise);
       const alpha = visual.alpha * (coreHit ? 1 : 0.86);
       ctx.fillStyle = rgbaCss(color, alpha);
@@ -524,7 +544,9 @@ function drawBoundaryPair(
   const x = side === "e" ? (mx + 1) * plan.pixelBlock : mx * plan.pixelBlock;
   const y = side === "s" ? (my + 1) * plan.pixelBlock : my * plan.pixelBlock;
   const length = plan.pixelBlock;
-  const noise = hashNoise(`${world.seed}:mask-boundary-accent`, mx, my, side === "e" ? 1 : 2);
+  const globalMx = Math.floor(plan.originX * plan.maskPixelsPerCell) + mx;
+  const globalMy = Math.floor(plan.originY * plan.maskPixelsPerCell) + my;
+  const noise = hashNoise(`${world.seed}:mask-boundary-accent`, globalMx, globalMy, side === "e" ? 1 : 2);
   if (noise < 0.08 && boundary !== "waterBeach" && boundary !== "waterGrass" && boundary !== "waterIce") return;
 
   if (boundary === "deepShallow") {
@@ -550,7 +572,7 @@ function drawBoundaryPair(
     return;
   }
   if (boundary === "roadBoundary") {
-    const roadVisual = roadProfileAt(world, (mx + 0.5) / plan.maskPixelsPerCell, (my + 0.5) / plan.maskPixelsPerCell).visual;
+    const roadVisual = roadProfileAt(world, plan.originX + (mx + 0.5) / plan.maskPixelsPerCell, plan.originY + (my + 0.5) / plan.maskPixelsPerCell).visual;
     drawBoundaryStrip(ctx, x, y, side, length, lineWidth, hexRgb(roadVisual.edgeColor, COLORS.roadEdge), 0.1 * roadVisual.alpha);
     drawBoundaryStrip(ctx, x, y, side, length, lineWidth, hexRgb(roadVisual.centerColor, COLORS.roadDust), 0.12 * roadVisual.alpha);
     if (roadVisual.terrainFleckColor) drawBoundaryStrip(ctx, x, y, side, length, accentWidth, hexRgb(roadVisual.terrainFleckColor, COLORS.roadGrassFleck), 0.08 * roadVisual.alpha);
