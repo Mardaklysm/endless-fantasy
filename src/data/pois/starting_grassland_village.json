@@ -20,236 +20,291 @@
   },
   "walkableZones": [
     {
-      "id": "central-village-field",
+      "id": "inn_front_ground",
       "shape": {
-        "type": "rect",
-        "x": 470,
-        "y": 600,
-        "width": 1545,
-        "height": 775
+        "type": "polygon",
+        "points": [
+          {
+            "x": 980,
+            "y": 500
+          },
+          {
+            "x": 1185,
+            "y": 520
+          },
+          {
+            "x": 1195,
+            "y": 710
+          },
+          {
+            "x": 940,
+            "y": 720
+          },
+          {
+            "x": 890,
+            "y": 590
+          }
+        ]
       }
     },
     {
-      "id": "north-service-field",
+      "id": "weapons_front_ground",
       "shape": {
-        "type": "rect",
-        "x": 690,
-        "y": 250,
-        "width": 1725,
-        "height": 555
+        "type": "polygon",
+        "points": [
+          {
+            "x": 760,
+            "y": 680
+          },
+          {
+            "x": 1165,
+            "y": 665
+          },
+          {
+            "x": 1210,
+            "y": 820
+          },
+          {
+            "x": 1050,
+            "y": 985
+          },
+          {
+            "x": 760,
+            "y": 940
+          },
+          {
+            "x": 610,
+            "y": 805
+          }
+        ]
       }
     },
     {
-      "id": "west-service-field",
+      "id": "central_upper_path",
       "shape": {
-        "type": "rect",
-        "x": 175,
-        "y": 520,
-        "width": 960,
-        "height": 735
+        "type": "polygon",
+        "points": [
+          {
+            "x": 1120,
+            "y": 660
+          },
+          {
+            "x": 1510,
+            "y": 675
+          },
+          {
+            "x": 1815,
+            "y": 735
+          },
+          {
+            "x": 1855,
+            "y": 910
+          },
+          {
+            "x": 1545,
+            "y": 965
+          },
+          {
+            "x": 1280,
+            "y": 895
+          },
+          {
+            "x": 1160,
+            "y": 800
+          }
+        ]
       }
     },
     {
-      "id": "south-path-field",
+      "id": "central_west_path",
       "shape": {
-        "type": "rect",
-        "x": 210,
-        "y": 1075,
-        "width": 2300,
-        "height": 370
+        "type": "polygon",
+        "points": [
+          {
+            "x": 775,
+            "y": 875
+          },
+          {
+            "x": 1190,
+            "y": 840
+          },
+          {
+            "x": 1315,
+            "y": 930
+          },
+          {
+            "x": 1240,
+            "y": 1125
+          },
+          {
+            "x": 965,
+            "y": 1165
+          },
+          {
+            "x": 760,
+            "y": 1030
+          }
+        ]
       }
     },
     {
-      "id": "east-service-field",
+      "id": "central_east_path",
       "shape": {
-        "type": "rect",
-        "x": 1620,
-        "y": 610,
-        "width": 950,
-        "height": 730
+        "type": "polygon",
+        "points": [
+          {
+            "x": 1535,
+            "y": 930
+          },
+          {
+            "x": 1845,
+            "y": 915
+          },
+          {
+            "x": 2005,
+            "y": 1065
+          },
+          {
+            "x": 1880,
+            "y": 1255
+          },
+          {
+            "x": 1545,
+            "y": 1200
+          },
+          {
+            "x": 1450,
+            "y": 1090
+          }
+        ]
       }
     },
     {
-      "id": "items-front-field",
+      "id": "south_main_path",
       "shape": {
-        "type": "rect",
-        "x": 1800,
-        "y": 1010,
-        "width": 710,
-        "height": 390
+        "type": "polygon",
+        "points": [
+          {
+            "x": 650,
+            "y": 1190
+          },
+          {
+            "x": 1030,
+            "y": 1160
+          },
+          {
+            "x": 1260,
+            "y": 1135
+          },
+          {
+            "x": 1510,
+            "y": 1215
+          },
+          {
+            "x": 1880,
+            "y": 1190
+          },
+          {
+            "x": 2285,
+            "y": 1305
+          },
+          {
+            "x": 2260,
+            "y": 1435
+          },
+          {
+            "x": 565,
+            "y": 1430
+          },
+          {
+            "x": 525,
+            "y": 1345
+          }
+        ]
       }
     },
     {
-      "id": "south-path-exit",
+      "id": "church_front_ground",
       "shape": {
-        "type": "rect",
-        "x": 1320,
-        "y": 1325,
-        "width": 520,
-        "height": 125
+        "type": "polygon",
+        "points": [
+          {
+            "x": 705,
+            "y": 1085
+          },
+          {
+            "x": 1045,
+            "y": 1095
+          },
+          {
+            "x": 1090,
+            "y": 1305
+          },
+          {
+            "x": 760,
+            "y": 1395
+          },
+          {
+            "x": 600,
+            "y": 1285
+          }
+        ]
       }
     },
     {
-      "id": "east-path-exit",
+      "id": "armor_front_ground",
       "shape": {
-        "type": "rect",
-        "x": 2440,
-        "y": 950,
-        "width": 165,
-        "height": 330
-      }
-    }
-  ],
-  "blockedZones": [
-    {
-      "id": "inn-main",
-      "shape": {
-        "type": "rect",
-        "x": 1070,
-        "y": 35,
-        "width": 645,
-        "height": 725
-      },
-      "note": "Large inn body and roof."
-    },
-    {
-      "id": "inn-annex",
-      "shape": {
-        "type": "rect",
-        "x": 1555,
-        "y": 320,
-        "width": 315,
-        "height": 360
+        "type": "polygon",
+        "points": [
+          {
+            "x": 1775,
+            "y": 700
+          },
+          {
+            "x": 2125,
+            "y": 715
+          },
+          {
+            "x": 2145,
+            "y": 970
+          },
+          {
+            "x": 1855,
+            "y": 1050
+          },
+          {
+            "x": 1740,
+            "y": 900
+          }
+        ]
       }
     },
     {
-      "id": "weapons-smithy",
+      "id": "items_front_ground",
       "shape": {
-        "type": "rect",
-        "x": 330,
-        "y": 345,
-        "width": 525,
-        "height": 365
-      }
-    },
-    {
-      "id": "church",
-      "shape": {
-        "type": "rect",
-        "x": 330,
-        "y": 910,
-        "width": 500,
-        "height": 385
-      }
-    },
-    {
-      "id": "armor-shop",
-      "shape": {
-        "type": "rect",
-        "x": 1930,
-        "y": 420,
-        "width": 455,
-        "height": 445
-      }
-    },
-    {
-      "id": "item-stall",
-      "shape": {
-        "type": "rect",
-        "x": 2050,
-        "y": 1060,
-        "width": 470,
-        "height": 310
-      }
-    },
-    {
-      "id": "central-well",
-      "shape": {
-        "type": "rect",
-        "x": 1265,
-        "y": 920,
-        "width": 280,
-        "height": 315
-      }
-    },
-    {
-      "id": "left-upper-trees",
-      "shape": {
-        "type": "rect",
-        "x": 120,
-        "y": 250,
-        "width": 290,
-        "height": 390
-      }
-    },
-    {
-      "id": "left-lower-trees",
-      "shape": {
-        "type": "rect",
-        "x": 120,
-        "y": 790,
-        "width": 280,
-        "height": 430
-      }
-    },
-    {
-      "id": "top-center-tree",
-      "shape": {
-        "type": "rect",
-        "x": 720,
-        "y": 95,
-        "width": 300,
-        "height": 335
-      }
-    },
-    {
-      "id": "top-right-tree-line",
-      "shape": {
-        "type": "rect",
-        "x": 1900,
-        "y": 95,
-        "width": 500,
-        "height": 300
-      }
-    },
-    {
-      "id": "right-upper-trees",
-      "shape": {
-        "type": "rect",
-        "x": 2320,
-        "y": 220,
-        "width": 280,
-        "height": 410
-      }
-    },
-    {
-      "id": "right-lower-trees",
-      "shape": {
-        "type": "rect",
-        "x": 2260,
-        "y": 830,
-        "width": 300,
-        "height": 330
-      }
-    },
-    {
-      "id": "barrel-crates-east",
-      "shape": {
-        "type": "rect",
-        "x": 2400,
-        "y": 690,
-        "width": 150,
-        "height": 185
-      }
-    },
-    {
-      "id": "crates-south-east",
-      "shape": {
-        "type": "rect",
-        "x": 2225,
-        "y": 1240,
-        "width": 300,
-        "height": 170
+        "type": "polygon",
+        "points": [
+          {
+            "x": 1875,
+            "y": 1035
+          },
+          {
+            "x": 2430,
+            "y": 1065
+          },
+          {
+            "x": 2500,
+            "y": 1365
+          },
+          {
+            "x": 2245,
+            "y": 1435
+          },
+          {
+            "x": 1885,
+            "y": 1290
+          }
+        ]
       }
     }
   ],

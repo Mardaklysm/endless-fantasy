@@ -24,6 +24,9 @@ pnpm-debug.log*
 tmp/
 temp/
 
+# Local POI editor save backups.
+src/data/pois/*.json.bak
+
 # Generated QA/debug artifacts should stay disposable.
 assets_v2/previews/rembg_candidates/
 assets_v2/previews/rembg_compare_*.png

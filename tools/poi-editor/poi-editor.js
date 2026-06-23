@@ -8,10 +8,8 @@ const dirtyState = document.querySelector("#dirtyState");
 const coords = document.querySelector("#coords");
 const statusEl = document.querySelector("#status");
 const poiTitle = document.querySelector("#poiTitle");
-const drawLayer = document.querySelector("#drawLayer");
 const toggles = {
   walkable: document.querySelector("#walkableToggle"),
-  blocked: document.querySelector("#blockedToggle"),
   events: document.querySelector("#eventsToggle")
 };
 const eventDialog = document.querySelector("#eventDialog");
@@ -229,9 +227,9 @@ function addPolygonPoint(point) {
 
 function closePolygon() {
   if (drawing.length < 3) return;
-  const collection = drawLayer.value === "blocked" ? poi.blockedZones : poi.walkableZones;
+  const collection = poi.walkableZones;
   collection.push({
-    id: uniqueId(drawLayer.value === "blocked" ? "blocked" : "walkable", collection),
+    id: uniqueId("walkable", collection),
     shape: { type: "polygon", points: drawing.map((point) => ({ ...point })) }
   });
   drawing = [];
@@ -239,15 +237,11 @@ function closePolygon() {
 }
 
 function deleteZoneAt(point) {
-  const collections = drawLayer.value === "blocked" ? [poi.blockedZones, poi.walkableZones] : [poi.walkableZones, poi.blockedZones];
-  for (const collection of collections) {
-    const index = findZoneIndex(collection, point);
-    if (index >= 0) {
-      collection.splice(index, 1);
-      setDirty(true);
-      showStatus("Zone deleted.");
-      return;
-    }
+  const index = findZoneIndex(poi.walkableZones, point);
+  if (index >= 0) {
+    poi.walkableZones.splice(index, 1);
+    setDirty(true);
+    showStatus("Walkable zone deleted.");
   }
 }
 
@@ -337,7 +331,6 @@ function draw() {
     ctx.drawImage(image, 0, 0);
     if (poi) {
       if (toggles.walkable.checked) poi.walkableZones.forEach((zone) => drawShape(zone.shape, "rgba(73, 220, 108, 0.28)", "#49dc6c"));
-      if (toggles.blocked.checked) poi.blockedZones.forEach((zone) => drawShape(zone.shape, "rgba(255, 64, 92, 0.32)", "#ff405c"));
       if (toggles.events.checked) {
         poi.eventZones.forEach((event) => {
           drawShape(event.shape, event.activation === "confirm" ? "rgba(255, 209, 102, 0.34)" : "rgba(74, 183, 255, 0.32)", event.activation === "confirm" ? "#ffd166" : "#4ab7ff");
@@ -373,7 +366,7 @@ function drawShape(shape, fill, stroke) {
 }
 
 function drawDraftPolygon() {
-  ctx.strokeStyle = drawLayer.value === "blocked" ? "#ff8b9a" : "#b9ffc7";
+  ctx.strokeStyle = "#b9ffc7";
   ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
   ctx.lineWidth = 2 / scale;
   ctx.beginPath();
