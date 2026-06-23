@@ -316,20 +316,33 @@ function validateSemanticWorldgen() {
   assert(worldA.semantic.rivers.length > 0, "Semantic river data is missing.");
   assert(worldA.objectOverlays.some((overlay) => overlay.objectId === "small_mountain_peak" || overlay.objectId === "snowy_mountain_peak"), "No mountain overlays were generated.");
   const mountainVisualOverlays = worldA.objectOverlays.filter((overlay) => overlay.id.startsWith("mountain-"));
-  assert(mountainVisualOverlays.length === worldA.semantic.mountains.length, "Every semantic mountain cell should get exactly one mountain sprite.");
+  assert(mountainVisualOverlays.length <= worldA.semantic.mountains.length, "Scaled mountain patches should not create more sprites than semantic mountain cells.");
   assert(mountainVisualOverlays.every((overlay) => overlay.collisionPolicy === "visualOnly"), "Mountain sprites must be visual-only; semantic mountainMap owns collision.");
-  assert(mountainVisualOverlays.every((overlay) => overlay.scale === 1), "Mountain sprites should render at normal unscaled size.");
-  assert(mountainVisualOverlays.every((overlay) => (overlay.offsetX ?? 0) === 0 && (overlay.offsetY ?? 0) === 0), "Mountain sprites should stay centered on their semantic cell.");
-  const mountainVisualKeys = new Set(mountainVisualOverlays.map((overlay) => `${overlay.x},${overlay.y}`));
-  assert(mountainVisualKeys.size === mountainVisualOverlays.length, "Mountain sprites should not duplicate the same semantic cell.");
-  for (const mountain of worldA.semantic.mountains) {
-    assert(mountainVisualKeys.has(`${mountain.x},${mountain.y}`), `Mountain cell ${mountain.x},${mountain.y} is missing a visible mountain sprite.`);
+  assert(mountainVisualOverlays.every((overlay) => Number.isInteger(overlay.scale) && overlay.scale >= 1 && overlay.scale <= 5), "Mountain sprites should render as integer-scaled patch overlays.");
+  assert(mountainVisualOverlays.every((overlay) => overlay.objectId === "small_mountain_peak" || overlay.objectId === "snowy_mountain_peak"), "Mountain patch overlays should only use real mountain peak sprites.");
+  assert(mountainVisualOverlays.some((overlay) => overlay.scale > 1), "Expected at least one mountain range to collapse into a scaled multi-cell peak.");
+  const mountainVisualCoverage = new Map();
+  for (const overlay of mountainVisualOverlays) {
+    const minX = overlay.x - (overlay.scale - 1) / 2;
+    const minY = overlay.y - (overlay.scale - 1) / 2;
+    assert(Number.isInteger(minX) && Number.isInteger(minY), `Mountain patch ${overlay.id} is not aligned to semantic cells.`);
+    for (let y = minY; y < minY + overlay.scale; y += 1) {
+      for (let x = minX; x < minX + overlay.scale; x += 1) {
+        const key = `${x},${y}`;
+        assert(!mountainVisualCoverage.has(key), `Mountain visual patches overlap at ${key}.`);
+        mountainVisualCoverage.set(key, overlay.id);
+      }
+    }
   }
+  for (const mountain of worldA.semantic.mountains) {
+    assert(mountainVisualCoverage.has(`${mountain.x},${mountain.y}`), `Mountain cell ${mountain.x},${mountain.y} is missing visible mountain patch coverage.`);
+  }
+  assert(mountainVisualCoverage.size === worldA.semantic.mountains.length, "Mountain visual patches should cover exactly the semantic mountain cells.");
   for (const range of worldA.semantic.mountainRanges) {
-    const tileVisuals = mountainVisualOverlays.filter((overlay) => overlay.id.startsWith(`mountain-${range.id}-tile-`));
-    assert(tileVisuals.length === range.cells.length, `${range.id} should get one visible mountain sprite per mask cell.`);
+    const tileVisuals = mountainVisualOverlays.filter((overlay) => overlay.id.startsWith(`mountain-${range.id}-patch-`));
+    assert(tileVisuals.length > 0, `${range.id} should get at least one visible mountain patch.`);
     for (const cell of range.cells) {
-      assert(tileVisuals.some((overlay) => overlay.x === cell.x && overlay.y === cell.y), `${range.id} is missing a mountain sprite at ${cell.x},${cell.y}.`);
+      assert(mountainVisualCoverage.has(`${cell.x},${cell.y}`), `${range.id} is missing mountain patch coverage at ${cell.x},${cell.y}.`);
     }
   }
   assert(worldA.objectOverlays.some((overlay) => overlay.objectId === "broadleaf_tree" || overlay.objectId === "dark_pine_tree" || overlay.objectId === "palm_tree"), "No forest overlays were generated.");

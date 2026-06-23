@@ -22,6 +22,7 @@ import {
 export const DEFAULT_WORLD_WIDTH = 576;
 export const DEFAULT_WORLD_HEIGHT = 384;
 export const ACTIVE_WORLDGEN_MODE = "semantic_campaign_archipelago_world" as const;
+const MAX_MOUNTAIN_OVERLAY_SCALE = 5;
 
 export interface WorldVec {
   x: number;
@@ -570,16 +571,78 @@ function buildObjectOverlays(semantic: SemanticWorld, reefs: WorldVec[]): WorldO
 }
 
 function buildMountainPatchOverlays(semantic: SemanticWorld, range: SemanticWorld["mountainRanges"][number]): WorldObjectOverlay[] {
-  const cells = [...range.cells].sort((a, b) => a.y - b.y || a.x - b.x);
-  return cells.map((cell, cellIndex) => ({
-    id: `mountain-${range.id}-tile-${cellIndex}-${cell.x}-${cell.y}`,
-    x: cell.x,
-    y: cell.y,
-    objectId: mountainObjectIdForCell(semantic, range, cell),
-    scale: 1,
-    alpha: 0.96,
-    collisionPolicy: "visualOnly"
-  }));
+  const rangeKeys = new Set(range.cells.map((cell) => posKey(cell)));
+  const claimed = new Set<string>();
+  const overlays: WorldObjectOverlay[] = [];
+  const center = mountainRangeVisualCenter(range.cells);
+  const cells = [...range.cells].sort((a, b) => squaredDistance(a, center) - squaredDistance(b, center) || a.y - b.y || a.x - b.x);
+  for (const cell of cells) {
+    if (claimed.has(posKey(cell))) continue;
+    const patch = largestMountainVisualPatch(rangeKeys, claimed, cell, center);
+    for (let y = patch.y; y < patch.y + patch.size; y += 1) {
+      for (let x = patch.x; x < patch.x + patch.size; x += 1) claimed.add(`${x},${y}`);
+    }
+    overlays.push({
+      id: `mountain-${range.id}-patch-${overlays.length}-${patch.x}-${patch.y}-${patch.size}`,
+      x: patch.x + (patch.size - 1) / 2,
+      y: patch.y + (patch.size - 1) / 2,
+      objectId: mountainObjectIdForPatch(semantic, range, patch),
+      scale: patch.size,
+      alpha: 0.96,
+      collisionPolicy: "visualOnly"
+    });
+  }
+  return overlays;
+}
+
+function mountainRangeVisualCenter(cells: WorldVec[]): WorldVec {
+  const sum = cells.reduce((total, cell) => ({ x: total.x + cell.x, y: total.y + cell.y }), { x: 0, y: 0 });
+  return { x: sum.x / Math.max(1, cells.length), y: sum.y / Math.max(1, cells.length) };
+}
+
+function largestMountainVisualPatch(rangeKeys: Set<string>, claimed: Set<string>, cell: WorldVec, rangeCenter: WorldVec): { x: number; y: number; size: number } {
+  for (let size = MAX_MOUNTAIN_OVERLAY_SCALE; size >= 2; size -= 1) {
+    const patches = candidateMountainPatches(rangeKeys, claimed, cell, size);
+    if (patches.length) return patches.sort((a, b) => patchDistanceToCenter(a, rangeCenter) - patchDistanceToCenter(b, rangeCenter) || a.y - b.y || a.x - b.x)[0];
+  }
+  return { x: cell.x, y: cell.y, size: 1 };
+}
+
+function candidateMountainPatches(rangeKeys: Set<string>, claimed: Set<string>, cell: WorldVec, size: number): { x: number; y: number; size: number }[] {
+  const patches: { x: number; y: number; size: number }[] = [];
+  for (let y = cell.y - size + 1; y <= cell.y; y += 1) {
+    for (let x = cell.x - size + 1; x <= cell.x; x += 1) {
+      if (mountainPatchIsOpen(rangeKeys, claimed, x, y, size)) patches.push({ x, y, size });
+    }
+  }
+  return patches;
+}
+
+function mountainPatchIsOpen(rangeKeys: Set<string>, claimed: Set<string>, x: number, y: number, size: number): boolean {
+  for (let yy = y; yy < y + size; yy += 1) {
+    for (let xx = x; xx < x + size; xx += 1) {
+      const key = `${xx},${yy}`;
+      if (!rangeKeys.has(key) || claimed.has(key)) return false;
+    }
+  }
+  return true;
+}
+
+function patchDistanceToCenter(patch: { x: number; y: number; size: number }, center: WorldVec): number {
+  return squaredDistance({ x: patch.x + (patch.size - 1) / 2, y: patch.y + (patch.size - 1) / 2 }, center);
+}
+
+function mountainObjectIdForPatch(semantic: SemanticWorld, range: SemanticWorld["mountainRanges"][number], patch: { x: number; y: number; size: number }): WorldObjectId {
+  if (range.kind === "snow_mountain") return WORLD_OBJECT_IDS.snowyMountainPeak;
+  let snowCells = 0;
+  let totalCells = 0;
+  for (let y = patch.y; y < patch.y + patch.size; y += 1) {
+    for (let x = patch.x; x < patch.x + patch.size; x += 1) {
+      totalCells += 1;
+      if (semantic.layers.biome[y * semantic.width + x] === SEMANTIC_BIOME.ICE) snowCells += 1;
+    }
+  }
+  return snowCells >= totalCells / 2 ? WORLD_OBJECT_IDS.snowyMountainPeak : WORLD_OBJECT_IDS.smallMountainPeak;
 }
 
 function buildForestPatchOverlays(semantic: SemanticWorld): WorldObjectOverlay[] {
@@ -642,20 +705,6 @@ function connectedMaskComponents(semantic: SemanticWorld, mask: Uint8Array): Wor
     components.push(component);
   }
   return components;
-}
-
-function mountainObjectIdForCell(
-  semantic: SemanticWorld,
-  range: SemanticWorld["mountainRanges"][number],
-  cell: WorldVec
-): WorldObjectId {
-  const i = cell.y * semantic.width + cell.x;
-  if (range.kind === "snow_mountain" || semantic.layers.biome[i] === SEMANTIC_BIOME.ICE) return WORLD_OBJECT_IDS.snowyMountainPeak;
-  const neighbors = neighbors4(cell.x, cell.y).filter((next) => inBounds(semantic.width, semantic.height, next.x, next.y) && semantic.layers.mountainMap[next.y * semantic.width + next.x]).length;
-  const roll = hashNoise(`${semantic.seed}:mountain-object:${range.id}`, cell.x, cell.y);
-  if (neighbors <= 2 && roll > 0.42) return WORLD_OBJECT_IDS.grayBoulderPile;
-  if (neighbors <= 3 && roll > 0.68) return WORLD_OBJECT_IDS.rockyHillObject;
-  return WORLD_OBJECT_IDS.smallMountainPeak;
 }
 
 function buildDockTiles(semantic: SemanticWorld, pois: WorldPoi[], tiles: WorldTileId[][]): WorldBridge[] {
@@ -833,4 +882,12 @@ function neighbors4(x: number, y: number): WorldVec[] {
 
 function inBounds(width: number, height: number, x: number, y: number): boolean {
   return x >= 0 && y >= 0 && x < width && y < height;
+}
+
+function posKey(pos: WorldVec): string {
+  return `${pos.x},${pos.y}`;
+}
+
+function squaredDistance(a: WorldVec, b: WorldVec): number {
+  return (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
 }

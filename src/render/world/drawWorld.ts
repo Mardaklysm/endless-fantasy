@@ -144,7 +144,7 @@ export function drawWorldOverlays(this: CrystalOathSceneContext, startX: number,
   const overlayGraphics = this.worldOverlay;
   const inView = (pos: Vec, margin = 0) => pos.x >= startX - margin && pos.x <= endX + margin && pos.y >= startY - margin && pos.y <= endY + margin;
   const visibleObjectOverlays = this.generatedWorld.objectOverlays
-    .filter((overlay) => inView(overlay, 2))
+    .filter((overlay) => inView(overlay, Math.max(2, Math.ceil(overlay.scale / 2) + 1)))
     .sort(
       (a, b) =>
         this.worldOverlayDrawRank(a) - this.worldOverlayDrawRank(b) ||
