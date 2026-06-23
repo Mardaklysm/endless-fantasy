@@ -110,7 +110,7 @@ export function updateCloudOverlay(this: CrystalOathSceneContext, deltaMs: numbe
   const focusPos = active ? this.boatTravel?.boatPos ?? this.visualExplorePos("world") : undefined;
   const worldWidth = this.generatedWorld?.width ?? this.world[0]?.length ?? WORLD_W;
   const worldHeight = this.generatedWorld?.height ?? this.world.length ?? WORLD_H;
-  const cameraScrollX = focusPos ? this.cameraFor(focusPos, worldWidth, worldHeight).x : 0;
+  const cameraScroll = focusPos ? this.cameraFor(focusPos, worldWidth, worldHeight) : { x: 0, y: 0 };
   this.cloudOverlay?.update(deltaMs, {
     active,
     enabled: this.cloudOverlayEnabled,
@@ -122,7 +122,8 @@ export function updateCloudOverlay(this: CrystalOathSceneContext, deltaMs: numbe
     viewportHeight: HEIGHT,
     pixelScale: PIXEL_ART_SCALE,
     depth: LAYER_UI_GRAPHICS - 1,
-    cameraScrollX
+    cameraScrollX: cameraScroll.x,
+    cameraScrollY: cameraScroll.y
   });
 }
 
