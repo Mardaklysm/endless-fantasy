@@ -1,4 +1,5 @@
 import type { WorldProfile } from "./semanticTypes.ts";
+import { ROAD_PROFILES } from "./semanticRoadProfiles.ts";
 
 export const CAMPAIGN_WORLD_PROFILE: WorldProfile = {
   id: "crystal_oath_campaign_v1",
@@ -27,6 +28,7 @@ export const CAMPAIGN_WORLD_PROFILE: WorldProfile = {
         forestPoiClearance: 3,
         forestRoadClearance: 1
       },
+      road: ROAD_PROFILES.greenhavenDirt,
       requiredHarbors: 1,
       allowRoads: true,
       allowRivers: true,
@@ -57,6 +59,7 @@ export const CAMPAIGN_WORLD_PROFILE: WorldProfile = {
         forestPoiClearance: 2,
         forestRoadClearance: 1
       },
+      road: ROAD_PROFILES.coralreachSand,
       requiredHarbors: 1,
       allowRoads: true,
       allowRivers: true,
@@ -87,6 +90,7 @@ export const CAMPAIGN_WORLD_PROFILE: WorldProfile = {
         forestPoiClearance: 2,
         forestRoadClearance: 1
       },
+      road: ROAD_PROFILES.frostmereSnow,
       requiredHarbors: 1,
       allowRoads: true,
       allowRivers: true,
@@ -117,6 +121,7 @@ export const CAMPAIGN_WORLD_PROFILE: WorldProfile = {
         forestPoiClearance: 2,
         forestRoadClearance: 1
       },
+      road: ROAD_PROFILES.highspireAsh,
       requiredHarbors: 1,
       allowRoads: true,
       allowRivers: true,

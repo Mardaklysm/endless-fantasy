@@ -1,5 +1,6 @@
 import { createSeededRng, fbm, hashNoise, type SeededRng } from "../seededRng.ts";
 import { CAMPAIGN_WORLD_PROFILE } from "./semanticProfiles.ts";
+import { DEFAULT_ROAD_PROFILE, roadProfileForMinorIsland } from "./semanticRoadProfiles.ts";
 import {
   REQUIRED_MAJOR_HARBOR_ROUTE_PAIRS,
   findBoatWaterPath,
@@ -12,6 +13,7 @@ import {
   SEMANTIC_WATER,
   type IslandOverlayRules,
   type IslandProfile,
+  type IslandRoadProfile,
   type IslandRole,
   type IslandTheme,
   type OverlayCollisionPolicy,
@@ -57,6 +59,7 @@ interface IslandSpec {
   mountainBias: number;
   forestBias: number;
   overlayRules: IslandOverlayRules;
+  road: IslandRoadProfile;
   requiredPois: RequiredPoiSpec[];
   requiredHarbors: number;
   allowRoads: boolean;
@@ -207,6 +210,7 @@ function createIslandSpecs(width: number, height: number, profile: WorldProfile,
       mountainBias: island.mountainBias,
       forestBias: island.forestBias,
       overlayRules: island.overlayRules,
+      road: island.road,
       requiredPois: island.requiredPois,
       requiredHarbors: island.requiredHarbors,
       allowRoads: island.allowRoads,
@@ -247,6 +251,7 @@ function createIslandSpecs(width: number, height: number, profile: WorldProfile,
       mountainBias: role === "cave" ? 0.22 : 0.02,
       forestBias: role === "resource" ? 0.14 : 0.02,
       overlayRules: minorOverlayRules(role),
+      road: roadProfileForMinorIsland(role, "minor"),
       requiredPois: minorPoisForRole(role, minorIndex),
       requiredHarbors: role === "harbor" ? 1 : 0,
       allowRoads: false,
@@ -464,6 +469,7 @@ function buildIslandRecords(width: number, islandId: Int16Array, specs: IslandSp
         mountainBias: spec.mountainBias,
         forestBias: spec.forestBias,
         overlayRules: spec.overlayRules,
+        road: spec.road,
         requiredPois: spec.requiredPois,
         requiredHarbors: spec.requiredHarbors,
         allowRoads: spec.allowRoads,
@@ -674,7 +680,7 @@ function placeMountains(
       fbm(`${seed}:semantic-mountain`, x / 5, y / 5, 2) * 0.1;
     mountainCandidateScore[i] = Math.max(0, score);
     if (blockedMap?.[i]) return;
-    if (poiList?.some((poi) => squaredDistance({ x, y }, poi) < mountainPoiClearanceRadius(poi) ** 2)) return;
+    if (poiList?.some((poi) => isPoiOverlayReservedCell(poi, x, y) || squaredDistance({ x, y }, poi) < mountainPoiClearanceRadius(poi) ** 2)) return;
     if (biome[i] === SEMANTIC_BIOME.BEACH) return;
     const plan = mountainMassifPlan(island);
     if (score < plan.growThreshold) return;
@@ -1513,7 +1519,7 @@ function buildRoadGraph(
     for (const connection of connections) {
       const start = connection.from.approachTile;
       const goal = connection.to.approachTile;
-      const path = findRoadPath(width, height, seed, landMask, islandId, island.order + 1, biome, waterClass, lakeMap, riverMap, distanceToWater, mountainMap, roadMap, start, goal, roadBlocked);
+      const path = findRoadPath(width, height, seed, island.road, landMask, islandId, island.order + 1, biome, waterClass, lakeMap, riverMap, distanceToWater, mountainMap, roadMap, start, goal, roadBlocked);
       if (!path.length) {
         edges.push({ from: connection.from.id, to: connection.to.id, connected: false, length: 0, path: [] });
         continue;
@@ -1531,6 +1537,8 @@ function shouldRoadConnectPoi(poi: SemanticPoi): boolean {
 }
 
 function buildSparseRoadConnections(island: SemanticIslandRecord, pois: SemanticPoi[], harbors: SemanticPoi[]): RoadConnection[] {
+  const road = island.road ?? DEFAULT_ROAD_PROFILE;
+  const generation = road.generation;
   const connections = new Map<string, RoadConnection>();
   const settlements = pois.filter((poi) => poi.role === "settlement");
   const ports = uniqueBy([...harbors, ...pois.filter((poi) => poi.role === "port")], (poi) => poi.id);
@@ -1539,14 +1547,17 @@ function buildSparseRoadConnections(island: SemanticIslandRecord, pois: Semantic
     .sort((a, b) => roadPoiPriority(b) - roadPoiPriority(a) || distanceToIslandCenter(a, island) - distanceToIslandCenter(b, island));
   const islandSpan = Math.hypot(island.bounds.maxX - island.bounds.minX + 1, island.bounds.maxY - island.bounds.minY + 1);
   const localRange = Math.max(18, islandSpan * 0.52);
+  const branchLimit = Math.max(0, Math.min(3, Math.floor(generation.optionalPoiBranchLimit)));
+  const branchChance = clamp01(generation.branchChance);
 
   for (const settlement of settlements) {
     const nearestPort = nearestPoi(settlement, ports);
     if (nearestPort) addRoadConnection(connections, settlement, nearestPort);
-    for (const target of nearestPois(settlement, important, 1).filter((poi) => Math.hypot(poi.x - settlement.x, poi.y - settlement.y) <= localRange)) {
+    for (const [targetIndex, target] of nearestPois(settlement, important, branchLimit).filter((poi) => Math.hypot(poi.x - settlement.x, poi.y - settlement.y) <= localRange).entries()) {
+      if (targetIndex > 0 && hashNoise(`${island.id}:semantic-road-branch`, settlement.x + target.x, settlement.y + target.y) > branchChance) continue;
       addRoadConnection(connections, settlement, target);
     }
-    const closeSecondBranch = nearestPois(settlement, important, 2)[1];
+    const closeSecondBranch = branchLimit < 2 ? undefined : nearestPois(settlement, important, 2)[1];
     if (closeSecondBranch && roadPoiPriority(closeSecondBranch) >= 5 && Math.hypot(closeSecondBranch.x - settlement.x, closeSecondBranch.y - settlement.y) <= localRange * 0.45) {
       addRoadConnection(connections, settlement, closeSecondBranch);
     }
@@ -1554,20 +1565,23 @@ function buildSparseRoadConnections(island: SemanticIslandRecord, pois: Semantic
       settlement,
       settlements.filter((poi) => poi !== settlement && Math.hypot(poi.x - settlement.x, poi.y - settlement.y) <= localRange * 0.85)
     );
-    if (nearestSettlement) addRoadConnection(connections, settlement, nearestSettlement);
+    const settlementLoopChance = generation.mainRoutePriority === "settlement-network" ? Math.max(0.65, generation.loopChance) : generation.loopChance;
+    if (nearestSettlement && hashNoise(`${island.id}:semantic-road-loop`, settlement.x + nearestSettlement.x, settlement.y + nearestSettlement.y) <= settlementLoopChance) addRoadConnection(connections, settlement, nearestSettlement);
   }
 
   if (!settlements.length) {
-    const root = [...ports, ...important].sort((a, b) => roadPoiPriority(b) - roadPoiPriority(a))[0];
+    const rootPool = generation.mainRoutePriority === "poi-network" ? [...important, ...ports] : [...ports, ...important];
+    const root = rootPool.sort((a, b) => roadPoiPriority(b) - roadPoiPriority(a))[0];
     if (root) for (const target of nearestPois(root, pois.filter((poi) => poi !== root), 2)) addRoadConnection(connections, root, target);
   }
 
-  const primary = settlements[0] ?? ports[0];
+  const primary = generation.mainRoutePriority === "poi-network" ? important[0] ?? settlements[0] ?? ports[0] : settlements[0] ?? ports[0];
   if (primary && connections.size <= 1) {
     for (const target of nearestPois(primary, pois.filter((poi) => poi !== primary), 2)) addRoadConnection(connections, primary, target);
   }
 
-  return [...connections.values()].slice(0, Math.max(2, Math.min(5, Math.ceil(pois.length * 0.72))));
+  const maxConnections = Math.max(2, Math.min(5, Math.ceil(pois.length * 0.72) + Math.max(0, branchLimit - 1)));
+  return [...connections.values()].slice(0, maxConnections);
 }
 
 function addRoadConnection(connections: Map<string, RoadConnection>, from: SemanticPoi, to: SemanticPoi) {
@@ -1794,6 +1808,7 @@ function findRoadPath(
   width: number,
   height: number,
   seed: string,
+  road: IslandRoadProfile,
   landMask: Uint8Array,
   islandId: Int16Array,
   targetIslandNumber: number,
@@ -1817,7 +1832,7 @@ function findRoadPath(
     open.sort((a, b) => a.f - b.f);
     const current = open.shift()!;
     const key = `${current.x},${current.y}`;
-    if (key === goalKey) return smoothRoadPath(width, height, landMask, islandId, targetIslandNumber, waterClass, lakeMap, riverMap, distanceToWater, mountainMap, reconstructPath(cameFrom, current), blocked);
+    if (key === goalKey) return smoothRoadPath(width, height, road, landMask, islandId, targetIslandNumber, waterClass, lakeMap, riverMap, distanceToWater, mountainMap, reconstructPath(cameFrom, current), blocked);
     for (const next of roadNeighbors(current.x, current.y, seed, start, goal)) {
       if (!inBounds(width, height, next.x, next.y)) continue;
       const ni = index(width, next.x, next.y);
@@ -1825,7 +1840,7 @@ function findRoadPath(
       const nextKey = posKey(next);
       if (blocked?.has(nextKey) && nextKey !== goalKey) continue;
       if (!isRoadStepAllowed(width, height, landMask, islandId, targetIslandNumber, waterClass, lakeMap, riverMap, distanceToWater, mountainMap, current, next, blocked, goalKey)) continue;
-      const cost = roadCost(width, seed, biome[ni], distanceToWater[ni], mountainMap[ni], roadMap, current, next, cameFrom.get(key), riverMap[ni]);
+      const cost = roadCost(width, seed, road, biome[ni], distanceToWater[ni], mountainMap[ni], roadMap, current, next, cameFrom.get(key), riverMap[ni]);
       if (!Number.isFinite(cost)) continue;
       const nextG = current.g + cost;
       if (best.has(nextKey) && best.get(nextKey)! <= nextG) continue;
@@ -2240,6 +2255,11 @@ function semanticPoiFootprintKeySet(pois: SemanticPoi[]): Set<string> {
   return keys;
 }
 
+function isPoiOverlayReservedCell(poi: SemanticPoi, x: number, y: number): boolean {
+  const key = `${x},${y}`;
+  return key === posKey(poi.entranceTile) || key === posKey(poi.approachTile);
+}
+
 const PORT_FOOTPRINT_SIZE = 3;
 const PORT_MIN_SHALLOW_WATER_TILES = 3;
 
@@ -2295,6 +2315,8 @@ function reserveSemanticPoiFootprint(occupied: Set<string>, poi: SemanticPoi, pa
       for (let xx = cell.x - padding; xx <= cell.x + padding; xx += 1) occupied.add(`${xx},${yy}`);
     }
   }
+  reservePoi(occupied, poi.entranceTile, 0);
+  reservePoi(occupied, poi.approachTile, 0);
 }
 
 function poiReservePadding(spec: RequiredPoiSpec): number {
@@ -2469,6 +2491,7 @@ function roadHeuristic(from: SemanticVec, to: SemanticVec): number {
 function smoothRoadPath(
   width: number,
   height: number,
+  road: IslandRoadProfile,
   landMask: Uint8Array,
   islandId: Int16Array,
   targetIslandNumber: number,
@@ -2500,12 +2523,13 @@ function smoothRoadPath(
     nextPath.push(current[current.length - 1]);
     current = nextPath;
   }
-  return softenLongStraightRoadRuns(width, height, landMask, islandId, targetIslandNumber, waterClass, lakeMap, riverMap, distanceToWater, mountainMap, current, blocked);
+  return softenLongStraightRoadRuns(width, height, road, landMask, islandId, targetIslandNumber, waterClass, lakeMap, riverMap, distanceToWater, mountainMap, current, blocked);
 }
 
 function softenLongStraightRoadRuns(
   width: number,
   height: number,
+  road: IslandRoadProfile,
   landMask: Uint8Array,
   islandId: Int16Array,
   targetIslandNumber: number,
@@ -2519,11 +2543,12 @@ function softenLongStraightRoadRuns(
 ): SemanticVec[] {
   if (path.length < 8) return path;
   const result: SemanticVec[] = [];
+  const minStraightRun = Math.max(4, Math.round(8 - clamp(road.generation.straightRunSoftening, 0, 2) * 2));
   let i = 0;
   while (i < path.length) {
     const runEnd = straightRunEnd(path, i);
     const runLength = runEnd - i;
-    if (runLength >= 6) {
+    if (runLength >= minStraightRun) {
       const softened = curvedRoadRun(width, height, landMask, islandId, targetIslandNumber, waterClass, lakeMap, riverMap, distanceToWater, mountainMap, path.slice(i, runEnd + 1), blocked);
       if (softened) {
         result.push(...softened);
@@ -2609,7 +2634,7 @@ function nearbyRoadCount(width: number, height: number, roadMap: Uint8Array, x: 
   return count;
 }
 
-function roadCost(width: number, seed: string, biome: number, distanceToWaterValue: number, mountain: number, roadMap: Uint8Array, current: SemanticVec, next: SemanticVec, previous: SemanticVec | undefined, river: number): number {
+function roadCost(width: number, seed: string, road: IslandRoadProfile, biome: number, distanceToWaterValue: number, mountain: number, roadMap: Uint8Array, current: SemanticVec, next: SemanticVec, previous: SemanticVec | undefined, river: number): number {
   if (mountain) return Infinity;
   let base = Infinity;
   if (biome === SEMANTIC_BIOME.GRASS) base = 1;
@@ -2618,8 +2643,9 @@ function roadCost(width: number, seed: string, biome: number, distanceToWaterVal
   else if (biome === SEMANTIC_BIOME.ICE) base = 2.05;
   if (!Number.isFinite(base)) return Infinity;
   const diagonalStep = current.x !== next.x && current.y !== next.y;
-  const noise = hashNoise(`${seed}:semantic-road-cost`, next.x, next.y) * 0.5;
-  const lowFrequencyNoise = fbm(`${seed}:semantic-road-meander`, next.x / 6.5, next.y / 6.5, 3) * 0.38;
+  const wander = clamp(road.generation.routeWander, 0, 2);
+  const noise = hashNoise(`${seed}:semantic-road-cost:${road.profileId}`, next.x, next.y) * 0.5 * wander;
+  const lowFrequencyNoise = fbm(`${seed}:semantic-road-meander:${road.profileId}`, next.x / 6.5, next.y / 6.5, 3) * 0.38 * wander;
   const direction = { x: next.x - current.x, y: next.y - current.y };
   const previousDirection = previous ? { x: current.x - previous.x, y: current.y - previous.y } : undefined;
   let turnPenalty = 0;
@@ -2629,9 +2655,9 @@ function roadCost(width: number, seed: string, biome: number, distanceToWaterVal
     const previousDiagonal = previousDirection.x !== 0 && previousDirection.y !== 0;
     turnPenalty = dot <= 0 ? 0.9 : previousDiagonal !== diagonalStep ? 0.26 : 0.16;
   } else if (previousDirection && !diagonalStep) {
-    straightRunPenalty = 0.16;
+    straightRunPenalty = 0.16 * road.generation.straightRunSoftening;
   }
-  const axisPenalty = !diagonalStep ? 0.16 : 0;
+  const axisPenalty = !diagonalStep ? 0.16 * road.generation.straightRunSoftening : 0;
   const riverPenalty = river ? 5.5 : 0;
   const coastPenalty = distanceToWaterValue <= 1 ? 0.85 : distanceToWaterValue <= 2 ? 0.22 : 0;
   const nextIndex = index(width, next.x, next.y);

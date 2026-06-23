@@ -27,6 +27,9 @@ export type SemanticIslandId = MajorIslandId | `minor_${number}`;
 export type IslandTheme = "grassland" | "sand_coast" | "ice" | "mixed_highland" | "minor";
 export type IslandRole = "starter" | "coastal_trade" | "snow_shrine" | "mountain_ruins" | "harbor" | "treasure" | "shrine" | "cave" | "resource";
 export type OverlayCollisionPolicy = "visualOnly" | "softTerrain" | "hardBlock" | "poiBlock";
+export type RoadMainRoutePriority = "harbor-to-settlement" | "settlement-network" | "poi-network";
+export type RoadEndpointPatchStyle = "dirt-apron" | "sandy-landing" | "snow-pack" | "ash-worn" | "muddy-track" | "gravel";
+export type RoadBridgeApproachStyle = "dirt-taper" | "sand-taper" | "snow-taper" | "ash-taper" | "mud-taper" | "gravel-taper";
 
 export type SemanticPoiType =
   | "town"
@@ -59,6 +62,38 @@ export interface IslandOverlayRules {
   forestRoadClearance: number;
 }
 
+export interface IslandRoadGenerationConfig {
+  mainRoutePriority: RoadMainRoutePriority;
+  optionalPoiBranchLimit: number;
+  loopChance: number;
+  branchChance: number;
+  routeWander: number;
+  straightRunSoftening: number;
+  junctionPatchScale: number;
+  endpointApronScale: number;
+}
+
+export interface IslandRoadVisualConfig {
+  centerColor: string;
+  edgeColor: string;
+  lightNoiseColor: string;
+  darkNoiseColor: string;
+  terrainFleckColor?: string;
+  alpha: number;
+  widthScale: number;
+  edgeBreakup: number;
+  centerContinuity: number;
+  pebbleNoise: number;
+  endpointPatchStyle: RoadEndpointPatchStyle;
+  bridgeApproachStyle: RoadBridgeApproachStyle;
+}
+
+export interface IslandRoadProfile {
+  profileId: string;
+  generation: IslandRoadGenerationConfig;
+  visual: IslandRoadVisualConfig;
+}
+
 export interface IslandProfile {
   id: MajorIslandId;
   name: string;
@@ -72,6 +107,7 @@ export interface IslandProfile {
   mountainBias: number;
   forestBias: number;
   overlayRules: IslandOverlayRules;
+  road: IslandRoadProfile;
   requiredPois: RequiredPoiSpec[];
   requiredHarbors: number;
   allowRoads: boolean;
@@ -104,6 +140,7 @@ export interface SemanticIslandRecord {
   mountainBias: number;
   forestBias: number;
   overlayRules: IslandOverlayRules;
+  road: IslandRoadProfile;
   requiredPois: RequiredPoiSpec[];
   requiredHarbors: number;
   allowRoads: boolean;

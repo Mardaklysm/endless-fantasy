@@ -1,6 +1,7 @@
 import type Phaser from "phaser";
 import { hashNoise } from "../seededRng.ts";
-import { SEMANTIC_BIOME, SEMANTIC_WATER, type SemanticWorld } from "./semanticTypes.ts";
+import { DEFAULT_ROAD_PROFILE } from "./semanticRoadProfiles.ts";
+import { SEMANTIC_BIOME, SEMANTIC_WATER, type IslandRoadProfile, type IslandRoadVisualConfig, type SemanticWorld } from "./semanticTypes.ts";
 
 export type SemanticMaskTerrainClass = "deepOcean" | "shallowWater" | "freshWater" | "road" | "beach" | "grassland" | "sand" | "ice";
 export type SemanticMaskTerrainSources = Partial<Record<SemanticMaskTerrainClass, CanvasImageSource & { width: number; height: number }>>;
@@ -77,6 +78,8 @@ const COLORS = {
   frost: [231, 251, 252] as Rgb
 };
 
+const HEX_COLOR_CACHE = new Map<string, Rgb>();
+
 export function createSemanticMaskTerrainTexture(scene: Phaser.Scene, world: SemanticWorld, options: SemanticMaskTerrainRenderOptions): string {
   const textureKey = options.textureKey ?? `semantic-mask-terrain-${world.seed}`;
   const canvas = createSemanticMaskTerrainCanvas(world, options);
@@ -99,7 +102,8 @@ export function createSemanticMaskTerrainCanvas(world: SemanticWorld, options: S
   fillFullTerrain(ctx, fillStyles.deepOcean, plan.width, plan.height);
   for (const terrainClass of TERRAIN_CLASSES) {
     if (terrainClass === "deepOcean") continue;
-    drawMaskedTerrainClass(ctx, plan, classGrid, TERRAIN_CLASS_IDS[terrainClass], fillStyles[terrainClass]);
+    if (terrainClass === "road") drawRoadMaskedTerrainClass(ctx, world, plan, classGrid);
+    else drawMaskedTerrainClass(ctx, plan, classGrid, TERRAIN_CLASS_IDS[terrainClass], fillStyles[terrainClass]);
   }
   drawMaskBoundaryAccents(ctx, world, plan, classGrid);
 
@@ -193,7 +197,7 @@ function classifySample(world: SemanticWorld, sampleX: number, sampleY: number):
   const boundaryNoise = hashNoise(`${world.seed}:mask-terrain-boundary`, noiseX, noiseY, 0) - 0.5;
 
   const roadEdgeNoise = hashNoise(`${world.seed}:mask-road-edge`, noiseX, noiseY, 1);
-  const roadHit = roadMaskSample(world, sampleX, sampleY, roadEdgeNoise);
+  const roadHit = routeCellAt(world, world.layers.roadMap, Math.floor(sampleX), Math.floor(sampleY)) && roadMaskSample(world, sampleX, sampleY, roadEdgeNoise, roadProfileAt(world, sampleX, sampleY));
   const riverHit = routeMaskSample(world, world.layers.riverMap, sampleX, sampleY, 0.27);
   const crossingHit = routeMaskSample(world, world.layers.riverCrossingMap, sampleX, sampleY, 0.18);
   if (roadHit && (!riverHit || crossingHit)) return TERRAIN_CLASS_IDS.road;
@@ -223,15 +227,17 @@ function classifySample(world: SemanticWorld, sampleX: number, sampleY: number):
   return TERRAIN_CLASS_IDS.grassland;
 }
 
-function roadMaskSample(world: SemanticWorld, sampleX: number, sampleY: number, edgeNoise: number): boolean {
-  const coreHit = routeMaskSample(world, world.layers.roadMap, sampleX, sampleY, 0.108);
+function roadMaskSample(world: SemanticWorld, sampleX: number, sampleY: number, edgeNoise: number, profile: IslandRoadProfile): boolean {
+  const coreWidth = 0.108 * profile.visual.widthScale * profile.visual.centerContinuity;
+  const edgeWidth = 0.148 * profile.visual.widthScale;
+  const coreHit = routeMaskSample(world, world.layers.roadMap, sampleX, sampleY, coreWidth);
   if (coreHit) return true;
-  const polishHit = roadPolishPatchHit(world, sampleX, sampleY, edgeNoise);
+  const polishHit = roadPolishPatchHit(world, sampleX, sampleY, edgeNoise, profile);
   if (polishHit) return true;
-  return edgeNoise > 0.38 && routeMaskSample(world, world.layers.roadMap, sampleX, sampleY, 0.148);
+  return edgeNoise > 1 - profile.visual.edgeBreakup && routeMaskSample(world, world.layers.roadMap, sampleX, sampleY, edgeWidth);
 }
 
-function roadPolishPatchHit(world: SemanticWorld, sampleX: number, sampleY: number, edgeNoise: number): boolean {
+function roadPolishPatchHit(world: SemanticWorld, sampleX: number, sampleY: number, edgeNoise: number, profile: IslandRoadProfile): boolean {
   const x = clampInt(Math.floor(sampleX), 0, world.width - 1);
   const y = clampInt(Math.floor(sampleY), 0, world.height - 1);
   if (!routeCellAt(world, world.layers.roadMap, x, y)) return false;
@@ -251,15 +257,17 @@ function roadPolishPatchHit(world: SemanticWorld, sampleX: number, sampleY: numb
   const neighborCount = [north, east, south, west, northEast, southEast, southWest, northWest].filter(Boolean).length;
   const cardinalCount = [north, east, south, west].filter(Boolean).length;
   const raggedEdge = edgeNoise > 0.18 ? 0.018 : -0.006;
+  const endpointScale = profile.generation.endpointApronScale;
+  const junctionScale = profile.generation.junctionPatchScale;
 
-  if (neighborCount <= 1 && centerDistance <= 0.235 + raggedEdge) return true;
-  if (cardinalCount >= 3 && centerDistance <= 0.255 + raggedEdge) return true;
-  if (isAdjacentToBridgeCrossing(world, x, y) && centerDistance <= 0.23 + raggedEdge) return true;
+  if (neighborCount <= 1 && centerDistance <= 0.235 * endpointScale + raggedEdge) return true;
+  if (cardinalCount >= 3 && centerDistance <= 0.255 * junctionScale + raggedEdge) return true;
+  if (isAdjacentToBridgeCrossing(world, x, y) && centerDistance <= 0.23 * endpointScale + raggedEdge) return true;
 
-  if (north && east && !south && !west && roundedRoadCornerHit(localX, localY, 1, -1, 0.225 + raggedEdge)) return true;
-  if (east && south && !west && !north && roundedRoadCornerHit(localX, localY, 1, 1, 0.225 + raggedEdge)) return true;
-  if (south && west && !north && !east && roundedRoadCornerHit(localX, localY, -1, 1, 0.225 + raggedEdge)) return true;
-  if (west && north && !east && !south && roundedRoadCornerHit(localX, localY, -1, -1, 0.225 + raggedEdge)) return true;
+  if (north && east && !south && !west && roundedRoadCornerHit(localX, localY, 1, -1, 0.225 * junctionScale + raggedEdge)) return true;
+  if (east && south && !west && !north && roundedRoadCornerHit(localX, localY, 1, 1, 0.225 * junctionScale + raggedEdge)) return true;
+  if (south && west && !north && !east && roundedRoadCornerHit(localX, localY, -1, 1, 0.225 * junctionScale + raggedEdge)) return true;
+  if (west && north && !east && !south && roundedRoadCornerHit(localX, localY, -1, -1, 0.225 * junctionScale + raggedEdge)) return true;
 
   return false;
 }
@@ -329,6 +337,14 @@ function diagonalRouteHit(localX: number, localY: number, dx: -1 | 1, dy: -1 | 1
 
 function routeCellAt(world: SemanticWorld, values: ArrayLike<number>, x: number, y: number): boolean {
   return x >= 0 && y >= 0 && x < world.width && y < world.height && values[y * world.width + x] > 0;
+}
+
+function roadProfileAt(world: SemanticWorld, sampleX: number, sampleY: number): IslandRoadProfile {
+  const x = clampInt(Math.floor(sampleX), 0, world.width - 1);
+  const y = clampInt(Math.floor(sampleY), 0, world.height - 1);
+  const islandNumber = world.layers.islandId[y * world.width + x];
+  const island = world.islands.find((candidate) => candidate.order + 1 === islandNumber);
+  return island?.road ?? DEFAULT_ROAD_PROFILE;
 }
 
 function createTerrainFillStyles(
@@ -446,6 +462,33 @@ function drawMaskedTerrainClass(
   ctx.drawImage(layerCanvas, 0, 0);
 }
 
+function drawRoadMaskedTerrainClass(ctx: CanvasRenderingContext2D, world: SemanticWorld, plan: SemanticMaskTerrainRenderPlan, classGrid: Uint8Array) {
+  for (let my = 0; my < plan.maskHeight; my += 1) {
+    for (let mx = 0; mx < plan.maskWidth; mx += 1) {
+      if (terrainClassAt(classGrid, my * plan.maskWidth + mx) !== TERRAIN_CLASS_IDS.road) continue;
+      const sampleX = (mx + 0.5) / plan.maskPixelsPerCell;
+      const sampleY = (my + 0.5) / plan.maskPixelsPerCell;
+      const profile = roadProfileAt(world, sampleX, sampleY);
+      const visual = profile.visual;
+      const coreWidth = 0.108 * visual.widthScale * visual.centerContinuity;
+      const coreHit = routeMaskSample(world, world.layers.roadMap, sampleX, sampleY, coreWidth);
+      const textureNoise = hashNoise(`${world.seed}:mask-road-texture:${profile.profileId}`, mx, my);
+      const edgeNoise = hashNoise(`${world.seed}:mask-road-edge-texture:${profile.profileId}`, mx, my);
+      const color = roadSampleColor(visual, coreHit, textureNoise, edgeNoise);
+      const alpha = visual.alpha * (coreHit ? 1 : 0.86);
+      ctx.fillStyle = rgbaCss(color, alpha);
+      ctx.fillRect(mx * plan.pixelBlock, my * plan.pixelBlock, plan.pixelBlock, plan.pixelBlock);
+    }
+  }
+}
+
+function roadSampleColor(visual: IslandRoadVisualConfig, coreHit: boolean, textureNoise: number, edgeNoise: number): Rgb {
+  if (!coreHit && visual.terrainFleckColor && edgeNoise < visual.edgeBreakup * 0.16) return hexRgb(visual.terrainFleckColor, COLORS.roadGrassFleck);
+  if (textureNoise < visual.pebbleNoise) return hexRgb(visual.darkNoiseColor, COLORS.roadPebble);
+  if (textureNoise > 1 - visual.pebbleNoise * 1.8) return hexRgb(visual.lightNoiseColor, COLORS.roadDust);
+  return hexRgb(coreHit ? visual.centerColor : visual.edgeColor, coreHit ? COLORS.roadDust : COLORS.roadEdge);
+}
+
 function drawMaskBoundaryAccents(ctx: CanvasRenderingContext2D, world: SemanticWorld, plan: SemanticMaskTerrainRenderPlan, classGrid: Uint8Array) {
   const lineWidth = Math.max(1, Math.floor(plan.pixelBlock));
   const accentWidth = Math.max(1, Math.floor(plan.pixelBlock * 2));
@@ -507,9 +550,10 @@ function drawBoundaryPair(
     return;
   }
   if (boundary === "roadBoundary") {
-    drawBoundaryStrip(ctx, x, y, side, length, lineWidth, COLORS.roadEdge, 0.1);
-    drawBoundaryStrip(ctx, x, y, side, length, lineWidth, COLORS.roadDust, 0.12);
-    drawBoundaryStrip(ctx, x, y, side, length, accentWidth, COLORS.roadGrassFleck, 0.08);
+    const roadVisual = roadProfileAt(world, (mx + 0.5) / plan.maskPixelsPerCell, (my + 0.5) / plan.maskPixelsPerCell).visual;
+    drawBoundaryStrip(ctx, x, y, side, length, lineWidth, hexRgb(roadVisual.edgeColor, COLORS.roadEdge), 0.1 * roadVisual.alpha);
+    drawBoundaryStrip(ctx, x, y, side, length, lineWidth, hexRgb(roadVisual.centerColor, COLORS.roadDust), 0.12 * roadVisual.alpha);
+    if (roadVisual.terrainFleckColor) drawBoundaryStrip(ctx, x, y, side, length, accentWidth, hexRgb(roadVisual.terrainFleckColor, COLORS.roadGrassFleck), 0.08 * roadVisual.alpha);
     return;
   }
   if (boundary === "sandGrass") {
@@ -635,6 +679,20 @@ function clampInt(value: number, min: number, max: number): number {
 
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
+}
+
+function hexRgb(value: string, fallback: Rgb): Rgb {
+  const normalized = value.trim().replace(/^#/, "");
+  const cached = HEX_COLOR_CACHE.get(normalized);
+  if (cached) return cached;
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return fallback;
+  const color: Rgb = [
+    Number.parseInt(normalized.slice(0, 2), 16),
+    Number.parseInt(normalized.slice(2, 4), 16),
+    Number.parseInt(normalized.slice(4, 6), 16)
+  ];
+  HEX_COLOR_CACHE.set(normalized, color);
+  return color;
 }
 
 function rgbCss(color: Rgb): string {
