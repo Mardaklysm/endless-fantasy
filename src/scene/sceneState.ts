@@ -6,6 +6,8 @@ import { generateDungeonFloors } from "../world/dungeonGenerator";
 import { createWorldSeed, generateWorld } from "../world/worldGenerator";
 import type { CrystalOathSceneContext } from "./sceneContext";
 
+const STARTING_POI_ID = "starting_grassland_village";
+
 export function buildWorldFromSeed(this: CrystalOathSceneContext, seed: string) {
   const worldgenStartMs = perfNow();
   this.generatedWorld = generateWorld({ seed, width: WORLD_W, height: WORLD_H });
@@ -56,7 +58,7 @@ export function newGame(this: CrystalOathSceneContext) {
   this.clearHeldMovement();
   this.currentTown = "dawnford";
   this.markLocationVisited(this.currentTown);
-  this.enterPoiVisit("starting_grassland_village", { mode: "world", locationId: this.currentTown });
+  this.enterPoiVisit(STARTING_POI_ID, { mode: "world", locationId: this.currentTown });
   this.audio.setMode("world");
   this.dialogue = {
     lines: [
@@ -67,7 +69,7 @@ export function newGame(this: CrystalOathSceneContext) {
     ],
     index: 0,
     done: () => {
-      this.mode = "poi";
+      this.enterPoiVisit(STARTING_POI_ID, { mode: "world", locationId: this.currentTown });
       this.saveGame();
     }
   };

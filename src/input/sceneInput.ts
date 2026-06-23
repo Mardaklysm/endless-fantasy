@@ -180,7 +180,12 @@ export function handleDialogue(this: CrystalOathSceneContext, event: KeyboardEve
   } else {
     const done = this.dialogue.done;
     this.dialogue = undefined;
-    done();
+    try {
+      done();
+    } finally {
+      this.markDirty();
+    }
+    return;
   }
   this.markDirty();
 }
