@@ -13,6 +13,21 @@ export const CAMPAIGN_WORLD_PROFILE: WorldProfile = {
       name: "Greenhaven",
       role: "starter",
       theme: "grassland",
+      identity: {
+        summary: "Classic lush starter grassland with friendly roads, forest pockets, rivers, and gentle adventure POIs.",
+        biomeTargets: {
+          primary: ["grassland", "forest", "river"],
+          secondary: ["beach", "hills", "small mountains"],
+          avoid: ["ash", "volcanic", "heavy snow"]
+        },
+        contentTargets: {
+          settlementCount: 1,
+          harborCount: 1,
+          majorDungeonCount: 3,
+          minorLandmarkRange: { min: 2, max: 4 }
+        },
+        preferredAssetTags: ["starter-village", "harbor", "grass-cave", "forest-shrine", "old-ruin"]
+      },
       zone: { x: 0.12, y: 0.24, width: 0.28, height: 0.44 },
       radius: { x: 13, y: 11 },
       sizeBias: 1,
@@ -44,6 +59,21 @@ export const CAMPAIGN_WORLD_PROFILE: WorldProfile = {
       name: "Coralreach",
       role: "coastal_trade",
       theme: "sand_coast",
+      identity: {
+        summary: "Sun-bleached tropical coast with sandy trails, ruins, wrecks, docks, palms, and lagoon-adventure POIs.",
+        biomeTargets: {
+          primary: ["sand", "beach", "coastal shallows"],
+          secondary: ["tropical grass", "palms", "ruins"],
+          avoid: ["snow", "dense starter grass dominance", "volcanic ash"]
+        },
+        contentTargets: {
+          settlementCount: 1,
+          harborCount: 1,
+          majorDungeonCount: 3,
+          minorLandmarkRange: { min: 2, max: 5 }
+        },
+        preferredAssetTags: ["coastal-town", "harbor", "sandy-ruin", "temple", "shipwreck"]
+      },
       zone: { x: 0.44, y: 0.48, width: 0.26, height: 0.34 },
       radius: { x: 14, y: 10 },
       sizeBias: 0.94,
@@ -75,6 +105,21 @@ export const CAMPAIGN_WORLD_PROFILE: WorldProfile = {
       name: "Frostmere",
       role: "snow_shrine",
       theme: "ice",
+      identity: {
+        summary: "Frostveil identity: a mostly snow and ice island with rocky snow mountains, sparse pines, and frozen ruins.",
+        biomeTargets: {
+          primary: ["snow", "ice", "rocky snow"],
+          secondary: ["pine pockets", "frozen water", "coastal thaw"],
+          avoid: ["large grass interiors", "sand interiors", "volcanic ash"]
+        },
+        contentTargets: {
+          settlementCount: 1,
+          harborCount: 1,
+          majorDungeonCount: 3,
+          minorLandmarkRange: { min: 1, max: 4 }
+        },
+        preferredAssetTags: ["snow-village", "snow-harbor", "ice-cave", "frozen-ruin", "snow-tower"]
+      },
       zone: { x: 0.10, y: 0.06, width: 0.34, height: 0.24 },
       radius: { x: 13, y: 9 },
       sizeBias: 0.88,
@@ -106,6 +151,21 @@ export const CAMPAIGN_WORLD_PROFILE: WorldProfile = {
       name: "Highspire",
       role: "mountain_ruins",
       theme: "mixed_highland",
+      identity: {
+        summary: "Rugged alpine highland with grass, rock, mountain ridges, snow at elevation, and ancient peak landmarks.",
+        biomeTargets: {
+          primary: ["highland grass", "rock", "mountains"],
+          secondary: ["snowcaps", "alpine forest", "ruins"],
+          avoid: ["pure snow island identity", "friendly lowland dominance", "dead volcanic ash"]
+        },
+        contentTargets: {
+          settlementCount: 1,
+          harborCount: 1,
+          majorDungeonCount: 3,
+          minorLandmarkRange: { min: 2, max: 4 }
+        },
+        preferredAssetTags: ["alpine-camp", "mountain-harbor", "keep", "mine", "tower", "sealed-gate"]
+      },
       zone: { x: 0.64, y: 0.14, width: 0.26, height: 0.48 },
       radius: { x: 14, y: 13 },
       sizeBias: 1.06,

@@ -99,6 +99,7 @@ export interface IslandProfile {
   name: string;
   role: IslandRole;
   theme: IslandTheme;
+  identity: IslandIdentityMetadata;
   zone: { x: number; y: number; width: number; height: number };
   radius: { x: number; y: number };
   sizeBias: number;
@@ -112,6 +113,22 @@ export interface IslandProfile {
   requiredHarbors: number;
   allowRoads: boolean;
   allowRivers: boolean;
+}
+
+export interface IslandIdentityMetadata {
+  summary: string;
+  biomeTargets: {
+    primary: string[];
+    secondary: string[];
+    avoid: string[];
+  };
+  contentTargets: {
+    settlementCount: number;
+    harborCount: number;
+    majorDungeonCount: number;
+    minorLandmarkRange: { min: number; max: number };
+  };
+  preferredAssetTags: string[];
 }
 
 export interface RequiredPoiSpec {
