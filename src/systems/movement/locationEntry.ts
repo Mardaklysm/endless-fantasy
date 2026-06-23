@@ -116,6 +116,10 @@ export function enterLocation(this: CrystalOathSceneContext, loc: LocationDef) {
     this.say([loc.lockedText ?? "A strange force blocks the way."]);
     return;
   }
+  if (loc.kind === "dungeon" || loc.kind === "final") {
+    this.enterDungeonLocation(loc, newlyVisited);
+    return;
+  }
   const poiId = this.poiIdForWorldLocation(loc.id);
   if (poiId) {
     if (loc.kind === "town" || loc.kind === "gate") this.currentTown = loc.id;
@@ -143,14 +147,30 @@ export function enterLocation(this: CrystalOathSceneContext, loc: LocationDef) {
     this.saveGame();
     return;
   }
-  this.currentDungeon = loc.id;
+  this.enterDungeonLocation(loc, newlyVisited);
+}
+
+export function enterDungeonLocation(this: CrystalOathSceneContext, loc: LocationDef, newlyVisited = false) {
+  const dungeon = this.dungeons()[loc.id];
+  if (!dungeon) {
+    console.error(`Missing dungeon definition for world location "${loc.id}" (${loc.name}).`);
+    if (newlyVisited) this.saveGame();
+    this.say([`${loc.name}: The entrance is unstable. Dungeon data is missing.`]);
+    return;
+  }
+  this.clearHeldMovement();
+  this.menu = undefined;
+  this.dialogue = undefined;
+  this.currentDungeon = dungeon.id;
   this.dungeonFloor = 0;
   this.dungeonPos = this.dungeonEntranceSpawn(this.currentDungeon);
   this.mode = "dungeon";
+  this.previousMode = "dungeon";
   this.syncAllVisualPositions();
   this.audio.setMode("dungeon");
   this.encounterCounter = 7;
   this.saveGame();
+  this.markDirty();
 }
 
 export function locationFootprint(this: CrystalOathSceneContext, loc: LocationDef): number {

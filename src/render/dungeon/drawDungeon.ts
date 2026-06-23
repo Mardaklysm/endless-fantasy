@@ -6,8 +6,20 @@ import type { CrystalOathSceneContext } from "../../scene/sceneContext";
 
 export function drawDungeon(this: CrystalOathSceneContext) {
   const dungeon = this.dungeons()[this.currentDungeon];
+  if (!dungeon) {
+    this.g.fillStyle(0x050812, 1).fillRect(0, 0, WIDTH, HEIGHT);
+    this.text(WIDTH / 2, HEIGHT / 2 - 12, `Missing dungeon: ${this.currentDungeon}`, 18, "#fff2a8", "center");
+    this.drawHud("Dungeon unavailable");
+    return;
+  }
   this.g.fillStyle(0x050812, 1).fillRect(0, 0, WIDTH, HEIGHT);
   const floor = dungeon.floors[this.dungeonFloor];
+  if (!floor?.length || !floor[0]?.length) {
+    this.g.fillStyle(0x050812, 1).fillRect(0, 0, WIDTH, HEIGHT);
+    this.text(WIDTH / 2, HEIGHT / 2 - 12, `Missing dungeon floor: ${dungeon.name}`, 18, "#fff2a8", "center");
+    this.drawHud("Dungeon unavailable");
+    return;
+  }
   const leaderPos = this.visualExplorePos("dungeon");
   const cam = this.cameraFor(leaderPos, floor[0].length, floor.length);
   const mapScreenX = -cam.x;
