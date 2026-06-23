@@ -12,11 +12,14 @@ import type { AssetKey } from "../assets/assetTypes";
 import { DUNGEON_ATLAS, DUNGEON_ATLAS_SOURCE_INSET, DUNGEON_TILE_ID_SET } from "../data/dungeonTiles";
 import { WORLD_CLOUD_ASSETS, WORLD_CLOUD_MANIFEST } from "../data/worldCloudAssets";
 import { WORLD_CURRENT_ASSET_MANIFEST, WORLD_CURRENT_ASSETS, WORLD_CURRENT_TERRAIN_TEXTURE_KEYS } from "../data/worldCurrentAssets";
+import { perfAutoMode, perfEndCreate, perfEndFrame, perfEndPreload, perfStartCreate, perfStartFrame, perfStartPreload } from "../debug/perf";
 import { OverworldCloudOverlay } from "../world/cloudOverlay";
 import { ACTIVE_WORLDGEN_MODE } from "../world/worldGenerator";
 import type { CrystalOathSceneContext } from "./sceneContext";
 
 export function preload(this: CrystalOathSceneContext) {
+  perfStartPreload(this);
+  this.load.once(Phaser.Loader.Events.COMPLETE, () => perfEndPreload(this));
   for (const [key, url] of Object.entries(ASSET_URLS) as [AssetKey, string | undefined][]) {
     if (url) this.load.image(key, url);
   }
@@ -42,6 +45,7 @@ export function preload(this: CrystalOathSceneContext) {
 }
 
 export function create(this: CrystalOathSceneContext) {
+  perfStartCreate(this);
   this.g = this.add.graphics();
   this.g.setDepth(0);
   this.worldOverlay = this.add.graphics();
@@ -52,12 +56,13 @@ export function create(this: CrystalOathSceneContext) {
   this.cloudOverlay = new OverworldCloudOverlay(this);
   this.configureRenderResolution();
   this.logActiveWorldTileset();
-  this.buildWorldFromSeed(this.worldSeed);
   this.configureTextureFiltering();
   this.input.keyboard?.on("keydown", (event: KeyboardEvent) => this.handleKey(event));
   this.input.keyboard?.on("keyup", (event: KeyboardEvent) => this.handleKeyUp(event));
   this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => this.handlePointer(pointer));
   this.draw();
+  perfEndCreate(this);
+  schedulePerfAutoRun.call(this);
 }
 
 export function configureRenderResolution(this: CrystalOathSceneContext) {
@@ -102,10 +107,49 @@ export function logActiveWorldTileset(this: CrystalOathSceneContext) {
 }
 
 export function update(this: CrystalOathSceneContext, _time: number, delta: number) {
+  perfStartFrame(this);
   const dt = Math.min(delta, 50);
   this.updateBoatTravel(dt);
   this.updateMovement(dt);
   this.updateBattleFlow(dt);
   if (this.dirty) this.draw();
   this.updateCloudOverlay(dt);
+  perfEndFrame(this, delta, this.worldTerrainChunkCache.size);
+}
+
+function schedulePerfAutoRun(this: CrystalOathSceneContext) {
+  const autoMode = perfAutoMode();
+  if (autoMode !== "townExit" && autoMode !== "chunkSweep") return;
+  this.time.delayedCall(100, () => {
+    this.newGame();
+    if (this.dialogue?.done) {
+      const done = this.dialogue.done;
+      this.dialogue = undefined;
+      done();
+    }
+    this.townPos = { x: 10, y: 13 };
+    this.syncAllVisualPositions();
+    this.exitTownToWorld();
+    if (autoMode === "chunkSweep") runPerfChunkSweep.call(this);
+  });
+}
+
+function runPerfChunkSweep(this: CrystalOathSceneContext) {
+  const start = { ...this.worldPos };
+  let step = 0;
+  this.time.addEvent({
+    delay: 300,
+    repeat: 14,
+    callback: () => {
+      if (!this.generatedWorld || this.mode !== "world") return;
+      const next = {
+        x: Phaser.Math.Clamp(start.x + step * 8, 0, this.generatedWorld.width - 1),
+        y: Phaser.Math.Clamp(start.y + Math.floor(step / 4) * 4, 0, this.generatedWorld.height - 1)
+      };
+      this.worldPos = next;
+      this.visualWorldPos = { ...next };
+      this.markDirty();
+      step += 1;
+    }
+  });
 }

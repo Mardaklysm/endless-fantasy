@@ -12,6 +12,7 @@ export interface SemanticMaskTerrainRenderOptions {
   terrainSources?: SemanticMaskTerrainSources;
   terrainSourceLabels?: Partial<Record<SemanticMaskTerrainClass, string>>;
   maskPixelsPerCell?: number;
+  collectStats?: boolean;
   renderArea?: { x: number; y: number; width: number; height: number };
 }
 
@@ -94,8 +95,7 @@ export function createSemanticMaskTerrainTexture(scene: Phaser.Scene, world: Sem
 }
 
 export function createSemanticMaskTerrainCanvas(world: SemanticWorld, options: SemanticMaskTerrainRenderOptions): HTMLCanvasElement {
-  const plan = describeSemanticMaskTerrainRenderPlan(world, options);
-  const classGrid = buildMaskClassGrid(world, plan);
+  const { plan, classGrid } = prepareSemanticMaskTerrainRender(world, options);
   const canvas = document.createElement("canvas");
   canvas.width = plan.width;
   canvas.height = plan.height;
@@ -107,6 +107,7 @@ export function createSemanticMaskTerrainCanvas(world: SemanticWorld, options: S
   fillFullTerrain(ctx, fillStyles.deepOcean, plan.width, plan.height);
   for (const terrainClass of TERRAIN_CLASSES) {
     if (terrainClass === "deepOcean") continue;
+    if (plan.classSamples[terrainClass] <= 0) continue;
     if (terrainClass === "road") drawRoadMaskedTerrainClass(ctx, world, plan, classGrid);
     else drawMaskedTerrainClass(ctx, plan, classGrid, TERRAIN_CLASS_IDS[terrainClass], fillStyles[terrainClass]);
   }
@@ -116,20 +117,27 @@ export function createSemanticMaskTerrainCanvas(world: SemanticWorld, options: S
 }
 
 export function describeSemanticMaskTerrainRenderPlan(world: SemanticWorld, options: SemanticMaskTerrainRenderOptions): SemanticMaskTerrainRenderPlan {
+  return prepareSemanticMaskTerrainRender(world, options).plan;
+}
+
+function prepareSemanticMaskTerrainRender(
+  world: SemanticWorld,
+  options: SemanticMaskTerrainRenderOptions
+): { plan: SemanticMaskTerrainRenderPlan; classGrid: Uint8Array } {
   const tileSize = Math.max(1, Math.floor(options.tileSize));
   const maskPixelsPerCell = chooseMaskPixelsPerCell(tileSize, options.maskPixelsPerCell ?? 16);
   const renderArea = normalizedRenderArea(world, options.renderArea);
   const pixelBlock = tileSize / maskPixelsPerCell;
   const maskWidth = renderArea.width * maskPixelsPerCell;
   const maskHeight = renderArea.height * maskPixelsPerCell;
+  const classSamples = emptyClassSamples();
   const classGrid = buildMaskClassGrid(world, {
     originX: renderArea.x,
     originY: renderArea.y,
     maskPixelsPerCell,
     maskWidth,
     maskHeight
-  });
-  const classSamples = emptyClassSamples();
+  }, classSamples);
   let waterBeachBoundarySamples = 0;
   let waterGrassBoundarySamples = 0;
   let waterIceBoundarySamples = 0;
@@ -138,54 +146,58 @@ export function describeSemanticMaskTerrainRenderPlan(world: SemanticWorld, opti
   let sandIceBoundarySamples = 0;
   let grassIceBoundarySamples = 0;
 
-  for (let y = 0; y < maskHeight; y += 1) {
-    for (let x = 0; x < maskWidth; x += 1) {
-      const current = terrainClassAt(classGrid, y * maskWidth + x);
-      classSamples[classNameForId(current)] += 1;
-      if (x < maskWidth - 1) {
-        const east = terrainClassAt(classGrid, y * maskWidth + x + 1);
-        const boundary = boundaryKind(current, east);
-        if (boundary === "waterBeach") waterBeachBoundarySamples += 1;
-        if (boundary === "waterGrass") waterGrassBoundarySamples += 1;
-        if (boundary === "waterIce") waterIceBoundarySamples += 1;
-        if (boundary === "roadBoundary") roadBoundarySamples += 1;
-        if (boundary === "sandGrass") sandGrassBoundarySamples += 1;
-        if (boundary === "sandIce") sandIceBoundarySamples += 1;
-        if (boundary === "grassIce") grassIceBoundarySamples += 1;
-      }
-      if (y < maskHeight - 1) {
-        const south = terrainClassAt(classGrid, (y + 1) * maskWidth + x);
-        const boundary = boundaryKind(current, south);
-        if (boundary === "waterBeach") waterBeachBoundarySamples += 1;
-        if (boundary === "waterGrass") waterGrassBoundarySamples += 1;
-        if (boundary === "waterIce") waterIceBoundarySamples += 1;
-        if (boundary === "roadBoundary") roadBoundarySamples += 1;
-        if (boundary === "sandGrass") sandGrassBoundarySamples += 1;
-        if (boundary === "sandIce") sandIceBoundarySamples += 1;
-        if (boundary === "grassIce") grassIceBoundarySamples += 1;
+  if (options.collectStats ?? true) {
+    for (let y = 0; y < maskHeight; y += 1) {
+      for (let x = 0; x < maskWidth; x += 1) {
+        const current = terrainClassAt(classGrid, y * maskWidth + x);
+        if (x < maskWidth - 1) {
+          const east = terrainClassAt(classGrid, y * maskWidth + x + 1);
+          const boundary = boundaryKind(current, east);
+          if (boundary === "waterBeach") waterBeachBoundarySamples += 1;
+          if (boundary === "waterGrass") waterGrassBoundarySamples += 1;
+          if (boundary === "waterIce") waterIceBoundarySamples += 1;
+          if (boundary === "roadBoundary") roadBoundarySamples += 1;
+          if (boundary === "sandGrass") sandGrassBoundarySamples += 1;
+          if (boundary === "sandIce") sandIceBoundarySamples += 1;
+          if (boundary === "grassIce") grassIceBoundarySamples += 1;
+        }
+        if (y < maskHeight - 1) {
+          const south = terrainClassAt(classGrid, (y + 1) * maskWidth + x);
+          const boundary = boundaryKind(current, south);
+          if (boundary === "waterBeach") waterBeachBoundarySamples += 1;
+          if (boundary === "waterGrass") waterGrassBoundarySamples += 1;
+          if (boundary === "waterIce") waterIceBoundarySamples += 1;
+          if (boundary === "roadBoundary") roadBoundarySamples += 1;
+          if (boundary === "sandGrass") sandGrassBoundarySamples += 1;
+          if (boundary === "sandIce") sandIceBoundarySamples += 1;
+          if (boundary === "grassIce") grassIceBoundarySamples += 1;
+        }
       }
     }
   }
 
   return {
-    originX: renderArea.x,
-    originY: renderArea.y,
-    width: renderArea.width * tileSize,
-    height: renderArea.height * tileSize,
-    tileSize,
-    maskPixelsPerCell,
-    pixelBlock,
-    maskWidth,
-    maskHeight,
-    classSamples,
-    waterBeachBoundarySamples,
-    waterGrassBoundarySamples,
-    waterIceBoundarySamples,
-    roadBoundarySamples,
-    sandGrassBoundarySamples,
-    sandIceBoundarySamples,
-    grassIceBoundarySamples,
-    textureSourceLabels: terrainTextureSourceLabels(options)
+    plan: {
+      originX: renderArea.x,
+      originY: renderArea.y,
+      width: renderArea.width * tileSize,
+      height: renderArea.height * tileSize,
+      tileSize,
+      maskPixelsPerCell,
+      pixelBlock,
+      maskWidth,
+      maskHeight,
+      classSamples,
+      waterBeachBoundarySamples,
+      waterGrassBoundarySamples,
+      waterIceBoundarySamples,
+      roadBoundarySamples,
+      sandGrassBoundarySamples,
+      sandIceBoundarySamples,
+      grassIceBoundarySamples,
+      textureSourceLabels: terrainTextureSourceLabels(options)
+    },
+    classGrid
   };
 }
 
@@ -199,13 +211,19 @@ function normalizedRenderArea(world: SemanticWorld, area: SemanticMaskTerrainRen
   return { x, y, width, height };
 }
 
-function buildMaskClassGrid(world: SemanticWorld, plan: Pick<SemanticMaskTerrainRenderPlan, "originX" | "originY" | "maskWidth" | "maskHeight" | "maskPixelsPerCell">): Uint8Array {
+function buildMaskClassGrid(
+  world: SemanticWorld,
+  plan: Pick<SemanticMaskTerrainRenderPlan, "originX" | "originY" | "maskWidth" | "maskHeight" | "maskPixelsPerCell">,
+  classSamples?: Record<SemanticMaskTerrainClass, number>
+): Uint8Array {
   const classGrid = new Uint8Array(plan.maskWidth * plan.maskHeight);
   for (let my = 0; my < plan.maskHeight; my += 1) {
     for (let mx = 0; mx < plan.maskWidth; mx += 1) {
       const sampleX = plan.originX + (mx + 0.5) / plan.maskPixelsPerCell;
       const sampleY = plan.originY + (my + 0.5) / plan.maskPixelsPerCell;
-      classGrid[my * plan.maskWidth + mx] = classifySample(world, sampleX, sampleY);
+      const terrainClass = classifySample(world, sampleX, sampleY);
+      classGrid[my * plan.maskWidth + mx] = terrainClass;
+      if (classSamples) classSamples[classNameForId(terrainClass)] += 1;
     }
   }
   return classGrid;
@@ -364,7 +382,7 @@ function roadProfileAt(world: SemanticWorld, sampleX: number, sampleY: number): 
   const x = clampInt(Math.floor(sampleX), 0, world.width - 1);
   const y = clampInt(Math.floor(sampleY), 0, world.height - 1);
   const islandNumber = world.layers.islandId[y * world.width + x];
-  const island = world.islands.find((candidate) => candidate.order + 1 === islandNumber);
+  const island = islandForLayerId(world, islandNumber);
   return island?.road ?? DEFAULT_ROAD_PROFILE;
 }
 
@@ -372,6 +390,13 @@ function islandAtSample(world: SemanticWorld, sampleX: number, sampleY: number):
   const x = clampInt(Math.floor(sampleX), 0, world.width - 1);
   const y = clampInt(Math.floor(sampleY), 0, world.height - 1);
   const islandNumber = world.layers.islandId[y * world.width + x];
+  return islandForLayerId(world, islandNumber);
+}
+
+function islandForLayerId(world: SemanticWorld, islandNumber: number): SemanticWorld["islands"][number] | undefined {
+  if (islandNumber <= 0) return undefined;
+  const indexed = world.islands[islandNumber - 1];
+  if (indexed?.order + 1 === islandNumber) return indexed;
   return world.islands.find((candidate) => candidate.order + 1 === islandNumber);
 }
 
@@ -465,8 +490,8 @@ function drawMaskedTerrainClass(
   fillStyle: CanvasPattern | string
 ) {
   const maskCanvas = document.createElement("canvas");
-  maskCanvas.width = plan.width;
-  maskCanvas.height = plan.height;
+  maskCanvas.width = plan.maskWidth;
+  maskCanvas.height = plan.maskHeight;
   const maskCtx = maskCanvas.getContext("2d");
   if (!maskCtx) throw new Error("Unable to create semantic terrain mask canvas.");
   maskCtx.imageSmoothingEnabled = false;
@@ -474,7 +499,7 @@ function drawMaskedTerrainClass(
   for (let my = 0; my < plan.maskHeight; my += 1) {
     for (let mx = 0; mx < plan.maskWidth; mx += 1) {
       if (terrainClassAt(classGrid, my * plan.maskWidth + mx) !== terrainClass) continue;
-      maskCtx.fillRect(mx * plan.pixelBlock, my * plan.pixelBlock, plan.pixelBlock, plan.pixelBlock);
+      maskCtx.fillRect(mx, my, 1, 1);
     }
   }
 
@@ -487,7 +512,7 @@ function drawMaskedTerrainClass(
   layerCtx.fillStyle = fillStyle;
   layerCtx.fillRect(0, 0, plan.width, plan.height);
   layerCtx.globalCompositeOperation = "destination-in";
-  layerCtx.drawImage(maskCanvas, 0, 0);
+  layerCtx.drawImage(maskCanvas, 0, 0, plan.width, plan.height);
   layerCtx.globalCompositeOperation = "source-over";
   ctx.drawImage(layerCanvas, 0, 0);
 }

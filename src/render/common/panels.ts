@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { HEIGHT, LAYER_UI_IMAGE, PIXEL_ART_SCALE, TILE, WIDTH } from "../../app/config";
+import { perfNow, perfRecordMinimap } from "../../debug/perf";
 import type { Vec } from "../../scene/sceneTypes";
 import type { CrystalOathSceneContext } from "../../scene/sceneContext";
 import { SEMANTIC_BIOME, SEMANTIC_WATER, type SemanticWorld } from "../../world/semantic/semanticTypes";
@@ -149,6 +150,7 @@ export function drawWorldMinimap(this: CrystalOathSceneContext) {
 }
 
 export function rebuildWorldMinimapCache(this: CrystalOathSceneContext, mapWidth: number, mapHeight: number) {
+  const perfStartMs = perfNow();
   const world = this.generatedWorld;
   if (!world || mapWidth <= 0 || mapHeight <= 0) return;
   const canvas = document.createElement("canvas");
@@ -184,6 +186,7 @@ export function rebuildWorldMinimapCache(this: CrystalOathSceneContext, mapWidth
   this.worldMinimapCacheSeed = this.worldSeed;
   this.worldMinimapCacheWidth = mapWidth;
   this.worldMinimapCacheHeight = mapHeight;
+  perfRecordMinimap(this, perfNow() - perfStartMs);
 }
 
 export function drawPrompt(this: CrystalOathSceneContext, text: string) {

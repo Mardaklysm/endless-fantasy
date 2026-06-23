@@ -1,12 +1,18 @@
 import { SAVE_KEY } from "../../app/config";
+import { perfNow, perfRecordSaveLoad } from "../../debug/perf";
 import { createWorldSeed, getIslandAt } from "../../world/worldGenerator";
 import type { CrystalOathSceneContext } from "../../scene/sceneContext";
 
 export function loadGame(this: CrystalOathSceneContext): boolean {
+  const saveLoadStartMs = perfNow();
   const raw = localStorage.getItem(SAVE_KEY);
-  if (!raw) return false;
+  if (!raw) {
+    perfRecordSaveLoad(this, perfNow() - saveLoadStartMs);
+    return false;
+  }
   try {
     const data = JSON.parse(raw);
+    perfRecordSaveLoad(this, perfNow() - saveLoadStartMs);
     this.buildWorldFromSeed(data.worldSeed ?? createWorldSeed());
     this.party = this.normalizeParty(data.party ?? []);
     this.inventory = { potion: 0, antidote: 0, tent: 0, phoenixAsh: 0, etherleaf: 0, smokeBomb: 0, charteredCompass: 0, ...(data.inventory ?? {}) };
@@ -39,10 +45,12 @@ export function loadGame(this: CrystalOathSceneContext): boolean {
     this.mode = "world";
     this.clearHeldMovement();
     this.syncAllVisualPositions();
+    this.prewarmWorldTerrainChunksForCurrentView(1);
     this.audio.setMode("world");
     this.markDirty();
     return true;
   } catch {
+    perfRecordSaveLoad(this, perfNow() - saveLoadStartMs);
     return false;
   }
 }

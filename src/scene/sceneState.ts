@@ -1,12 +1,15 @@
 import { WORLD_H, WORLD_W } from "../app/config";
 import type { CharacterState, DungeonDef, LocationDef, TownDef } from "../data/gameDataTypes";
+import { perfNow, perfRecordWorldgen } from "../debug/perf";
 import { isExploreModeValue, type ExploreMode, type Mode } from "./sceneTypes";
 import { generateDungeonFloors } from "../world/dungeonGenerator";
 import { createWorldSeed, generateWorld } from "../world/worldGenerator";
 import type { CrystalOathSceneContext } from "./sceneContext";
 
 export function buildWorldFromSeed(this: CrystalOathSceneContext, seed: string) {
+  const worldgenStartMs = perfNow();
   this.generatedWorld = generateWorld({ seed, width: WORLD_W, height: WORLD_H });
+  perfRecordWorldgen(this, perfNow() - worldgenStartMs);
   this.worldSeed = this.generatedWorld.seed;
   this.dungeonCache = undefined;
   this.boatTravel = undefined;

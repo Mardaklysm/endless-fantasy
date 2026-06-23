@@ -17,6 +17,16 @@ import {
   worldCurrentAssetByTextureKey,
   worldCurrentObjectTextureKey
 } from "../../data/worldCurrentAssets";
+import {
+  perfEndWorldRender,
+  perfNow,
+  perfRecordChunkCreate,
+  perfRecordChunkEvictions,
+  perfRecordChunkHit,
+  perfRecordObjectOverlay,
+  perfRecordTextureCache,
+  perfStartWorldRender
+} from "../../debug/perf";
 import type { WorldObjectId } from "../../data/worldObjects";
 import { WORLD_TILES, worldTileHasTag } from "../../data/worldTiles";
 import type { WorldTileId } from "../../data/worldTiles";
@@ -29,11 +39,13 @@ import type { GeneratedWorld, WorldRoadVisual } from "../../world/worldGenerator
 import type { CrystalOathSceneContext } from "../../scene/sceneContext";
 
 const HORIZONTAL_BRIDGE_Y_OFFSET = -2;
-const SEMANTIC_TERRAIN_CHUNK_TILES = 64;
+const SEMANTIC_TERRAIN_CHUNK_TILES = 16;
 const SEMANTIC_TERRAIN_CHUNK_PADDING_TILES = 2;
-const SEMANTIC_TERRAIN_MAX_CACHED_CHUNKS = 36;
+const SEMANTIC_TERRAIN_CHUNK_MASK_PIXELS_PER_CELL = 8;
+const SEMANTIC_TERRAIN_MAX_CACHED_CHUNKS = 96;
 
 export function drawWorld(this: CrystalOathSceneContext) {
+  const perfRenderStartMs = perfStartWorldRender(this);
   this.g.fillStyle(0x050812, 1).fillRect(0, 0, WIDTH, HEIGHT);
   const leaderPos = this.visualExplorePos("world");
   const focusPos = this.boatTravel?.boatPos ?? leaderPos;
@@ -87,6 +99,7 @@ export function drawWorld(this: CrystalOathSceneContext) {
       "left"
     );
   }
+  perfEndWorldRender(this, perfRenderStartMs);
 }
 
 export function drawWorldTile(this: CrystalOathSceneContext, terrain: Terrain, sx: number, sy: number, x: number, y: number) {
@@ -127,6 +140,7 @@ export function roadVisualAt(this: CrystalOathSceneContext, x: number, y: number
 
 export function drawWorldOverlays(this: CrystalOathSceneContext, startX: number, endX: number, startY: number, endY: number, tileCam: Vec) {
   if (!this.generatedWorld) return;
+  const perfStartMs = perfNow();
   const overlayGraphics = this.worldOverlay;
   const inView = (pos: Vec, margin = 0) => pos.x >= startX - margin && pos.x <= endX + margin && pos.y >= startY - margin && pos.y <= endY + margin;
   const visibleObjectOverlays = this.generatedWorld.objectOverlays
@@ -168,6 +182,7 @@ export function drawWorldOverlays(this: CrystalOathSceneContext, startX: number,
     const sy = (overlay.y + (overlay.offsetY ?? 0)) * TILE - tileCam.y + TILE / 2 - displaySize / 2;
     this.drawWorldObjectCell(overlay.objectId, sx, sy, displaySize, displaySize, overlay.alpha ?? 0.92);
   }
+  perfRecordObjectOverlay(this, this.generatedWorld.objectOverlays.length, visibleObjectOverlays.length, perfNow() - perfStartMs);
 }
 
 export function worldOverlayDrawRank(this: CrystalOathSceneContext, overlay: { id: string }): number {
@@ -443,6 +458,7 @@ export function drawRiverCrossingTile(this: CrystalOathSceneContext, bridge: { o
 }
 
 export function rebuildWorldTerrainCache(this: CrystalOathSceneContext) {
+  const perfStartMs = perfNow();
   this.worldTerrainCacheSeed = "";
   if (!this.generatedWorld || !this.world.length) return;
   this.assertCurrentWorldAssetTextures();
@@ -456,6 +472,7 @@ export function rebuildWorldTerrainCache(this: CrystalOathSceneContext) {
   if (import.meta.env.DEV) {
     console.info(`Semantic mask terrain cache will render lazily in ${SEMANTIC_TERRAIN_CHUNK_TILES}x${SEMANTIC_TERRAIN_CHUNK_TILES} tile chunks; raw square tiles remain debug-only.`);
   }
+  perfRecordTextureCache(this, perfNow() - perfStartMs);
 }
 
 export function currentSemanticTerrainSources(this: CrystalOathSceneContext): SemanticMaskTerrainSources {
@@ -501,20 +518,11 @@ export function rebuildWorldRouteOverlayCache(this: CrystalOathSceneContext) {
 
 export function drawCachedWorldTerrain(this: CrystalOathSceneContext, tileCam: Vec): boolean {
   if (!this.generatedWorld || this.worldTerrainCacheSeed !== this.worldSeed) return false;
-  const mapWidth = (this.world[0]?.length ?? 0) * TILE;
-  const mapHeight = this.world.length * TILE;
-  const cropX = Math.round(Phaser.Math.Clamp(tileCam.x, 0, Math.max(0, mapWidth - WIDTH)));
-  const cropY = Math.round(Phaser.Math.Clamp(tileCam.y, 0, Math.max(0, mapHeight - HEIGHT)));
-  const cropWidth = Math.min(WIDTH, mapWidth - cropX);
-  const cropHeight = Math.min(HEIGHT, mapHeight - cropY);
-  if (cropWidth <= 0 || cropHeight <= 0) return false;
+  const bounds = worldTerrainChunkBoundsForCamera.call(this, tileCam, 0);
+  if (!bounds) return false;
 
-  const firstChunkX = Math.floor(cropX / (SEMANTIC_TERRAIN_CHUNK_TILES * TILE));
-  const lastChunkX = Math.floor((cropX + cropWidth - 1) / (SEMANTIC_TERRAIN_CHUNK_TILES * TILE));
-  const firstChunkY = Math.floor(cropY / (SEMANTIC_TERRAIN_CHUNK_TILES * TILE));
-  const lastChunkY = Math.floor((cropY + cropHeight - 1) / (SEMANTIC_TERRAIN_CHUNK_TILES * TILE));
-  for (let chunkY = firstChunkY; chunkY <= lastChunkY; chunkY += 1) {
-    for (let chunkX = firstChunkX; chunkX <= lastChunkX; chunkX += 1) {
+  for (let chunkY = bounds.firstChunkY; chunkY <= bounds.lastChunkY; chunkY += 1) {
+    for (let chunkX = bounds.firstChunkX; chunkX <= bounds.lastChunkX; chunkX += 1) {
       const chunk = this.getOrCreateWorldTerrainChunk(chunkX, chunkY);
       if (!chunk) continue;
       const image = this.add.image(
@@ -530,11 +538,65 @@ export function drawCachedWorldTerrain(this: CrystalOathSceneContext, tileCam: V
       this.images.push(image);
     }
   }
+  this.prewarmWorldTerrainChunksAroundCamera(tileCam, 1, 1);
   this.evictWorldTerrainChunks();
   if (DEBUG_WORLD_LAYOUT) {
-    console.debug(`[world-terrain-cache] chunked crop=${cropX},${cropY} ${cropWidth}x${cropHeight} chunks=${firstChunkX},${firstChunkY}..${lastChunkX},${lastChunkY}`);
+    console.debug(`[world-terrain-cache] chunked chunks=${bounds.firstChunkX},${bounds.firstChunkY}..${bounds.lastChunkX},${bounds.lastChunkY}`);
   }
   return true;
+}
+
+export function prewarmWorldTerrainChunksForCurrentView(this: CrystalOathSceneContext, ring = 1, maxCreated = Number.POSITIVE_INFINITY): number {
+  if (!this.generatedWorld || this.worldTerrainCacheSeed !== this.worldSeed) return 0;
+  const focusPos = this.boatTravel?.boatPos ?? this.visualExplorePos("world");
+  const cam = this.cameraFor(focusPos, this.generatedWorld.width, this.generatedWorld.height);
+  return this.prewarmWorldTerrainChunksAroundCamera({ x: Math.round(cam.x), y: Math.round(cam.y) }, ring, maxCreated);
+}
+
+export function prewarmWorldTerrainChunksAroundCamera(this: CrystalOathSceneContext, tileCam: Vec, ring = 1, maxCreated = Number.POSITIVE_INFINITY): number {
+  if (!this.generatedWorld || this.worldTerrainCacheSeed !== this.worldSeed) return 0;
+  const bounds = worldTerrainChunkBoundsForCamera.call(this, tileCam, ring);
+  if (!bounds) return 0;
+  let created = 0;
+  for (let chunkY = bounds.firstChunkY; chunkY <= bounds.lastChunkY; chunkY += 1) {
+    for (let chunkX = bounds.firstChunkX; chunkX <= bounds.lastChunkX; chunkX += 1) {
+      const cacheKey = `${chunkX},${chunkY}`;
+      const cached = this.worldTerrainChunkCache.get(cacheKey);
+      if (cached && this.textures.exists(cached.textureKey)) continue;
+      if (!this.getOrCreateWorldTerrainChunk(chunkX, chunkY)) continue;
+      created += 1;
+      if (created >= maxCreated) {
+        this.evictWorldTerrainChunks();
+        return created;
+      }
+    }
+  }
+  if (created > 0) this.evictWorldTerrainChunks();
+  return created;
+}
+
+function worldTerrainChunkBoundsForCamera(
+  this: CrystalOathSceneContext,
+  tileCam: Vec,
+  ring: number
+): { firstChunkX: number; lastChunkX: number; firstChunkY: number; lastChunkY: number } | undefined {
+  if (!this.generatedWorld) return undefined;
+  const mapWidth = (this.world[0]?.length ?? 0) * TILE;
+  const mapHeight = this.world.length * TILE;
+  const cropX = Math.round(Phaser.Math.Clamp(tileCam.x, 0, Math.max(0, mapWidth - WIDTH)));
+  const cropY = Math.round(Phaser.Math.Clamp(tileCam.y, 0, Math.max(0, mapHeight - HEIGHT)));
+  const cropWidth = Math.min(WIDTH, mapWidth - cropX);
+  const cropHeight = Math.min(HEIGHT, mapHeight - cropY);
+  if (cropWidth <= 0 || cropHeight <= 0) return undefined;
+  const chunkPixels = SEMANTIC_TERRAIN_CHUNK_TILES * TILE;
+  const maxChunkX = Math.max(0, Math.ceil(this.generatedWorld.width / SEMANTIC_TERRAIN_CHUNK_TILES) - 1);
+  const maxChunkY = Math.max(0, Math.ceil(this.generatedWorld.height / SEMANTIC_TERRAIN_CHUNK_TILES) - 1);
+  return {
+    firstChunkX: Math.max(0, Math.floor(cropX / chunkPixels) - ring),
+    lastChunkX: Math.min(maxChunkX, Math.floor((cropX + cropWidth - 1) / chunkPixels) + ring),
+    firstChunkY: Math.max(0, Math.floor(cropY / chunkPixels) - ring),
+    lastChunkY: Math.min(maxChunkY, Math.floor((cropY + cropHeight - 1) / chunkPixels) + ring)
+  };
 }
 
 export function getOrCreateWorldTerrainChunk(this: CrystalOathSceneContext, chunkColumn: number, chunkRow: number) {
@@ -549,9 +611,11 @@ export function getOrCreateWorldTerrainChunk(this: CrystalOathSceneContext, chun
   const cached = this.worldTerrainChunkCache.get(cacheKey);
   if (cached && this.textures.exists(cached.textureKey)) {
     cached.lastUsed = ++this.worldTerrainChunkCacheTick;
+    perfRecordChunkHit(this);
     return cached;
   }
 
+  const perfStartMs = perfNow();
   const areaX = Math.max(0, chunkX - SEMANTIC_TERRAIN_CHUNK_PADDING_TILES);
   const areaY = Math.max(0, chunkY - SEMANTIC_TERRAIN_CHUNK_PADDING_TILES);
   const areaMaxX = Math.min(world.width, chunkX + chunkWidth + SEMANTIC_TERRAIN_CHUNK_PADDING_TILES);
@@ -560,6 +624,8 @@ export function getOrCreateWorldTerrainChunk(this: CrystalOathSceneContext, chun
   const frameKey = "content";
   createSemanticMaskTerrainTexture(this, world, {
     tileSize: TILE,
+    maskPixelsPerCell: SEMANTIC_TERRAIN_CHUNK_MASK_PIXELS_PER_CELL,
+    collectStats: false,
     textureKey,
     terrainSources: this.currentSemanticTerrainSources(),
     terrainSourceLabels: WORLD_CURRENT_TERRAIN_TEXTURE_KEYS,
@@ -573,16 +639,19 @@ export function getOrCreateWorldTerrainChunk(this: CrystalOathSceneContext, chun
   texture.add(frameKey, 0, frameX, frameY, chunkWidth * TILE, chunkHeight * TILE);
   const chunk = { textureKey, frameKey, chunkX, chunkY, chunkWidth, chunkHeight, lastUsed: ++this.worldTerrainChunkCacheTick };
   this.worldTerrainChunkCache.set(cacheKey, chunk);
+  perfRecordChunkCreate(this, cacheKey, perfNow() - perfStartMs);
   return chunk;
 }
 
 export function evictWorldTerrainChunks(this: CrystalOathSceneContext) {
   if (this.worldTerrainChunkCache.size <= SEMANTIC_TERRAIN_MAX_CACHED_CHUNKS) return;
   const evictable = [...this.worldTerrainChunkCache.entries()].sort((a, b) => a[1].lastUsed - b[1].lastUsed);
-  for (const [key, chunk] of evictable.slice(0, this.worldTerrainChunkCache.size - SEMANTIC_TERRAIN_MAX_CACHED_CHUNKS)) {
+  const chunksToEvict = evictable.slice(0, this.worldTerrainChunkCache.size - SEMANTIC_TERRAIN_MAX_CACHED_CHUNKS);
+  for (const [key, chunk] of chunksToEvict) {
     if (this.textures.exists(chunk.textureKey)) this.textures.remove(chunk.textureKey);
     this.worldTerrainChunkCache.delete(key);
   }
+  perfRecordChunkEvictions(this, chunksToEvict.length);
 }
 
 export function drawCachedWorldRouteOverlay(this: CrystalOathSceneContext, tileCam: Vec): boolean {

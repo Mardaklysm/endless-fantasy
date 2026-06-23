@@ -1,5 +1,6 @@
 import { LANDMARK_FOOTPRINT } from "../../app/config";
 import type { LocationDef } from "../../data/gameDataTypes";
+import { perfStartEnterOverworld } from "../../debug/perf";
 import type { Vec } from "../../scene/sceneTypes";
 import type { CrystalOathSceneContext } from "../../scene/sceneContext";
 
@@ -8,6 +9,7 @@ export function isTownExitTile(this: CrystalOathSceneContext, tile: Vec): boolea
 }
 
 export function exitTownToWorld(this: CrystalOathSceneContext) {
+  perfStartEnterOverworld(this, "townExit");
   this.clearHeldMovement();
   const loc = this.locations().find((candidate) => candidate.id === this.currentTown);
   if (loc) {
@@ -15,6 +17,7 @@ export function exitTownToWorld(this: CrystalOathSceneContext) {
   }
   this.mode = "world";
   this.syncAllVisualPositions();
+  this.prewarmWorldTerrainChunksForCurrentView(1);
   this.audio.setMode("world");
   this.saveGame();
   this.markDirty();
