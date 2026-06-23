@@ -52,7 +52,7 @@ export function validateSemanticWorld(world: SemanticWorld) {
 
   for (const poi of world.poiList) validatePoi(world, poi, errors);
   for (const edge of world.roadGraph.edges) {
-    if (!edge.connected) warnings.push(`Road edge ${edge.from} -> ${edge.to} could not be connected.`);
+    if (!edge.connected) errors.push(`Road edge ${edge.from} -> ${edge.to} could not be connected.`);
   }
   validatePortRoadConnectivity(world, errors);
   validateBeachBuffer(world, errors);

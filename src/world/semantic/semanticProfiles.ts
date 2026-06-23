@@ -29,7 +29,7 @@ export const CAMPAIGN_WORLD_PROFILE: WorldProfile = {
         preferredAssetTags: ["starter-village", "harbor", "grass-cave", "forest-shrine", "old-ruin"]
       },
       zone: { x: 0.12, y: 0.24, width: 0.28, height: 0.44 },
-      radius: { x: 13, y: 11 },
+      radius: { x: 23, y: 19 },
       sizeBias: 1,
       dryBias: -0.14,
       coldBias: -0.08,
@@ -75,7 +75,7 @@ export const CAMPAIGN_WORLD_PROFILE: WorldProfile = {
         preferredAssetTags: ["coastal-town", "harbor", "sandy-ruin", "temple", "shipwreck"]
       },
       zone: { x: 0.44, y: 0.48, width: 0.26, height: 0.34 },
-      radius: { x: 14, y: 10 },
+      radius: { x: 24, y: 17 },
       sizeBias: 0.94,
       dryBias: 0.24,
       coldBias: -0.12,
@@ -121,7 +121,7 @@ export const CAMPAIGN_WORLD_PROFILE: WorldProfile = {
         preferredAssetTags: ["snow-village", "snow-harbor", "ice-cave", "frozen-ruin", "snow-tower"]
       },
       zone: { x: 0.10, y: 0.06, width: 0.34, height: 0.24 },
-      radius: { x: 13, y: 9 },
+      radius: { x: 23, y: 16 },
       sizeBias: 0.88,
       dryBias: -0.04,
       coldBias: 0.46,
@@ -167,7 +167,7 @@ export const CAMPAIGN_WORLD_PROFILE: WorldProfile = {
         preferredAssetTags: ["alpine-camp", "mountain-harbor", "keep", "mine", "tower", "sealed-gate"]
       },
       zone: { x: 0.64, y: 0.14, width: 0.26, height: 0.48 },
-      radius: { x: 14, y: 13 },
+      radius: { x: 24, y: 23 },
       sizeBias: 1.06,
       dryBias: 0.04,
       coldBias: 0.14,

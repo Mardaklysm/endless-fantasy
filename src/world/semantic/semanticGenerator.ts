@@ -1519,7 +1519,10 @@ function buildRoadGraph(
     for (const connection of connections) {
       const start = connection.from.approachTile;
       const goal = connection.to.approachTile;
-      const path = findRoadPath(width, height, seed, island.road, landMask, islandId, island.order + 1, biome, waterClass, lakeMap, riverMap, distanceToWater, mountainMap, roadMap, start, goal, roadBlocked);
+      let path = findRoadPath(width, height, seed, island.road, landMask, islandId, island.order + 1, biome, waterClass, lakeMap, riverMap, distanceToWater, mountainMap, roadMap, start, goal, roadBlocked);
+      if (!path.length) {
+        path = findRoadPathThroughMountainPass(width, height, seed, island.road, landMask, islandId, island.order + 1, biome, waterClass, lakeMap, riverMap, distanceToWater, mountainMap, roadMap, start, goal, roadBlocked);
+      }
       if (!path.length) {
         edges.push({ from: connection.from.id, to: connection.to.id, connected: false, length: 0, path: [] });
         continue;
@@ -1529,6 +1532,38 @@ function buildRoadGraph(
     }
   }
   return { edges };
+}
+
+function findRoadPathThroughMountainPass(
+  width: number,
+  height: number,
+  seed: string,
+  road: IslandRoadProfile,
+  landMask: Uint8Array,
+  islandId: Int16Array,
+  targetIslandNumber: number,
+  biome: Uint8Array,
+  waterClass: Uint8Array,
+  lakeMap: Uint8Array,
+  riverMap: Uint8Array,
+  distanceToWater: Int16Array,
+  mountainMap: Uint8Array,
+  roadMap: Uint8Array,
+  start: SemanticVec,
+  goal: SemanticVec,
+  blocked?: Set<string>
+): SemanticVec[] {
+  const passMountainMap = new Uint8Array(mountainMap);
+  for (let i = 0; i < passMountainMap.length; i += 1) {
+    if (islandId[i] === targetIslandNumber) passMountainMap[i] = 0;
+  }
+  const path = findRoadPath(width, height, seed, road, landMask, islandId, targetIslandNumber, biome, waterClass, lakeMap, riverMap, distanceToWater, passMountainMap, roadMap, start, goal, blocked);
+  if (!path.length) return path;
+  for (const cell of path) {
+    if (!inBounds(width, height, cell.x, cell.y)) continue;
+    mountainMap[index(width, cell.x, cell.y)] = 0;
+  }
+  return path;
 }
 
 function shouldRoadConnectPoi(poi: SemanticPoi): boolean {
