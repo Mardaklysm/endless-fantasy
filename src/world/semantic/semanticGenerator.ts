@@ -505,7 +505,7 @@ function computeDistanceToMask(mask: Uint8Array, width: number, height: number, 
 
 function classifyWater(landMask: Uint8Array, distanceToLand: Int16Array, width: number, height: number): Uint8Array {
   const waterClass = new Uint8Array(width * height);
-  forEachCell(width, height, (x, y, i) => {
+  forEachCell(width, height, (_x, _y, i) => {
     waterClass[i] = landMask[i] ? SEMANTIC_WATER.NONE : distanceToLand[i] <= SHALLOW_BAND ? SEMANTIC_WATER.SHALLOW : SEMANTIC_WATER.DEEP;
   });
   return waterClass;
@@ -587,7 +587,7 @@ function classifyBiomes(
 ) {
   const biome = new Uint8Array(width * height);
   const islandByOrder = new Map(islands.map((island) => [island.order + 1, island]));
-  forEachCell(width, height, (x, y, i) => {
+  forEachCell(width, height, (_x, _y, i) => {
     if (!landMask[i]) {
       biome[i] = SEMANTIC_BIOME.WATER;
       return;
@@ -597,19 +597,10 @@ function classifyBiomes(
       return;
     }
     const island = islandByOrder.get(islandId[i]);
-    if (island?.theme === "ashfall") {
-      biome[i] = SEMANTIC_BIOME.SAND;
-      return;
-    }
-    if (island?.theme === "ice") {
-      const thawPocket = distanceToWater[i] <= BEACH_BAND + 2 && fbm(`${island.id}:semantic-thaw-pocket`, x / 5, y / 5, 2) > 0.74;
-      biome[i] = thawPocket ? SEMANTIC_BIOME.GRASS : SEMANTIC_BIOME.ICE;
-      return;
-    }
     const dryness = clamp01(1 - moisture[i] + (island?.dryBias ?? 0) * 0.72);
     const coldScore = coldness[i] + elevation[i] * 0.28;
-    const iceThreshold = island?.theme === "mixed_highland" ? 0.58 : 0.62;
-    const sandThreshold = island?.theme === "sand_coast" ? 0.46 : 0.78;
+    const iceThreshold = island?.theme === "ice" ? 0.44 : 0.62;
+    const sandThreshold = island?.theme === "sand_coast" ? 0.58 : 0.78;
     if (coldScore > iceThreshold && elevation[i] > 0.18) biome[i] = SEMANTIC_BIOME.ICE;
     else if (dryness > sandThreshold || (dryness > sandThreshold - 0.1 && elevation[i] < 0.48 && moisture[i] < 0.45)) biome[i] = SEMANTIC_BIOME.SAND;
     else biome[i] = SEMANTIC_BIOME.GRASS;
@@ -828,7 +819,6 @@ function mountainMassifCount(island: SemanticIslandRecord, cellBudget: number): 
   const budgetRegions = Math.max(1, Math.floor(cellBudget / minSize));
   if (island.id === "highspire") return Math.min(budgetRegions, Math.max(2, Math.round(Math.sqrt(island.area) / 10)));
   if (island.id === "frostmere") return Math.min(budgetRegions, Math.max(1, Math.round(Math.sqrt(island.area) / 11)));
-  if (island.id === "ashfall") return Math.min(budgetRegions, Math.max(2, Math.round(Math.sqrt(island.area) / 12)));
   if (island.id === "greenhaven" || island.id === "coralreach") return Math.min(1, budgetRegions);
   if (!island.major && (island.role === "cave" || island.role === "resource")) return Math.min(1, budgetRegions);
   return 0;
@@ -837,7 +827,6 @@ function mountainMassifCount(island: SemanticIslandRecord, cellBudget: number): 
 function mountainCoverageRatio(island: SemanticIslandRecord): number {
   if (island.id === "highspire") return 0.32;
   if (island.id === "frostmere") return 0.38;
-  if (island.id === "ashfall") return 0.3;
   if (island.id === "coralreach") return 0.045;
   if (island.id === "greenhaven") return 0.032;
   if (!island.major && island.role === "cave") return 0.2;
@@ -847,7 +836,6 @@ function mountainCoverageRatio(island: SemanticIslandRecord): number {
 
 function mountainMinimumComponentSize(island: SemanticIslandRecord): number {
   if (island.id === "highspire") return 24;
-  if (island.id === "ashfall") return 22;
   if (island.id === "frostmere") return 18;
   if (island.id === "greenhaven" || island.id === "coralreach") return 8;
   return island.major ? 14 : 8;
@@ -855,7 +843,6 @@ function mountainMinimumComponentSize(island: SemanticIslandRecord): number {
 
 function mountainMaximumComponentSize(island: SemanticIslandRecord): number {
   if (island.id === "highspire") return 140;
-  if (island.id === "ashfall") return 125;
   if (island.id === "frostmere") return 110;
   if (island.id === "coralreach") return 30;
   if (island.id === "greenhaven") return 26;
@@ -1593,7 +1580,7 @@ function buildSparseRoadConnections(island: SemanticIslandRecord, pois: Semantic
     for (const target of nearestPois(primary, pois.filter((poi) => poi !== primary), 2)) addRoadConnection(connections, primary, target);
   }
 
-  const maxConnections = Math.max(2, Math.min(7, Math.ceil(pois.length * 0.72) + Math.max(0, branchLimit - 1)));
+  const maxConnections = Math.max(2, Math.min(5, Math.ceil(pois.length * 0.72) + Math.max(0, branchLimit - 1)));
   return [...connections.values()].slice(0, maxConnections);
 }
 
@@ -2202,7 +2189,6 @@ function mountainPoiClearanceRadius(poi: SemanticPoi): number {
 }
 
 function forestBiomeAllowed(island: SemanticIslandRecord, biome: number): boolean {
-  if (island.id === "ashfall") return false;
   if (island.id === "frostmere") return biome === SEMANTIC_BIOME.ICE;
   if (island.id === "coralreach") return biome === SEMANTIC_BIOME.GRASS;
   if (island.id === "highspire") return biome === SEMANTIC_BIOME.GRASS || biome === SEMANTIC_BIOME.ICE;

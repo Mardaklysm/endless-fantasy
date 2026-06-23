@@ -22,8 +22,8 @@ npm run worldgen:lab -- --seed test-greenhaven --out tmp/worldgen-lab/test-green
 
 Optional arguments:
 
-- `--width <cells>` default `576`
-- `--height <cells>` default `384`
+- `--width <cells>` default `288`
+- `--height <cells>` default `192`
 - `--scale <pixels>` default `6`
 
 Outputs:

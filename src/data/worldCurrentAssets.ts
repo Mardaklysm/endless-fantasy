@@ -217,13 +217,11 @@ export function worldCurrentPremiumV2PoiTextureKeyFor(poi: WorldCurrentPoiDescri
   if (poi.kind === "town") {
     if (islandId === "coralreach") return existingTextureKey("world_current_object_premium_v2_desert_town_market");
     if (islandId === "highspire") return existingTextureKey("world_current_object_premium_v2_adventurer_camp");
-    if (islandId === "ashfall") return existingTextureKey("world_current_object_premium_deadland_village");
   }
   if (poi.kind === "dungeon") {
     if (islandId === "frostmere") return existingTextureKey("world_current_object_premium_v2_ice_palace");
     if (islandId === "coralreach") return existingTextureKey("world_current_object_premium_v2_desert_ruins");
-    if (islandId === "highspire") return existingTextureKey("world_current_object_premium_castle_town_keep");
-    if (islandId === "ashfall") return existingTextureKey("world_current_object_premium_v2_volcanic_fortress");
+    if (islandId === "highspire") return existingTextureKey("world_current_object_premium_v2_volcanic_fortress");
     if (islandId === "greenhaven") return existingTextureKey("world_current_object_premium_v2_moss_cave");
   }
   if (poi.kind === "final") return existingTextureKey("world_current_object_premium_v2_dark_fortress");
@@ -257,33 +255,15 @@ function premiumV2ExactTextureKeyFor(poi: WorldCurrentPoiDescriptor): string | u
     dawnford: "world_current_object_premium_v2_greenhaven_village",
     greenhavenHarbor: "world_current_object_premium_v2_harbor_fishing_village",
     mossCave: "world_current_object_premium_v2_moss_cave",
-    greenhavenShrine: "world_current_object_premium_small_temple",
-    oldwoodRuins: "world_current_object_premium_ruin_arch_blocks",
-    meadowwatch: "world_current_object_premium_ruined_watchtower",
     brinewick: "world_current_object_premium_v2_desert_town_market",
     coralreachHarbor: "world_current_object_premium_v2_harbor_fishing_village",
     tideShrine: "world_current_object_premium_v2_desert_ruins",
-    sunkenArchCave: "world_current_object_premium_v2_sandy_cave_arch",
-    mirageTower: "world_current_object_premium_jungle_temple_village",
-    coralreachWreck: "world_current_object_premium_shipwreck_ruin",
     elderleaf: "world_current_object_premium_snow_village",
     frostmereHarbor: "world_current_object_premium_v2_harbor_fishing_village",
     skyglassTower: "world_current_object_premium_v2_ice_palace",
-    frostCave: "world_current_object_premium_snow_cave_entrance",
-    frostmereShrine: "world_current_object_premium_ice_temple",
-    iceboundKeep: "world_current_object_premium_snow_castle",
     sunbarrow: "world_current_object_premium_v2_adventurer_camp",
     highspireHarbor: "world_current_object_premium_v2_harbor_fishing_village",
-    stonefallKeep: "world_current_object_premium_castle_town_keep",
-    cloudbreakMine: "world_current_object_premium_mine_wood_entrance",
-    skyreachTower: "world_current_object_premium_wizard_tower_village",
-    starfallGate: "world_current_object_premium_sealed_gate_chained",
-    cinderhold: "world_current_object_premium_deadland_village",
-    ashfallHarbor: "world_current_object_premium_v2_harbor_fishing_village",
     ashenKeep: "world_current_object_premium_v2_volcanic_fortress",
-    emberVault: "world_current_object_premium_black_mountain_gate",
-    volcanicFortress: "world_current_object_premium_volcano_fortress",
-    obsidianGate: "world_current_object_premium_lava_dark_gate",
     eclipseSpire: "world_current_object_premium_v2_dark_fortress"
   };
   return existingTextureKey(poi.id ? byId[poi.id] : undefined);
@@ -319,16 +299,8 @@ function worldCurrentThemedPoiTextureKeyFor(poi: WorldCurrentPoiDescriptor): str
     frostmereShrine: "world_current_object_premium_ice_temple",
     sunbarrow: "world_current_object_premium_stone_village_gray",
     highspireHarbor: "world_current_object_premium_dock_village_small",
-    stonefallKeep: "world_current_object_premium_castle_town_keep",
-    cloudbreakMine: "world_current_object_premium_mine_wood_entrance",
-    skyreachTower: "world_current_object_premium_wizard_tower_village",
-    starfallGate: "world_current_object_premium_sealed_gate_chained",
-    cinderhold: "world_current_object_premium_deadland_village",
-    ashfallHarbor: "world_current_object_premium_dock_village_small",
     ashenKeep: "world_current_object_premium_volcanic_fortress",
-    emberVault: "world_current_object_premium_black_mountain_gate",
-    volcanicFortress: "world_current_object_premium_volcano_fortress",
-    obsidianGate: "world_current_object_premium_lava_dark_gate",
+    starfallGate: "world_current_object_premium_sealed_gate_chained",
     eclipseSpire: "world_current_object_premium_dark_haunted_castle"
   };
   const exact = poi.id ? existingTextureKey(byId[poi.id]) : undefined;
@@ -349,16 +321,10 @@ function worldCurrentThemedPoiTextureKeyFor(poi: WorldCurrentPoiDescriptor): str
   }
   if (islandId === "highspire") {
     if (poi.kind === "town") return existingTextureKey("world_current_object_premium_stone_village_gray");
-    if (poi.kind === "dungeon") return existingTextureKey("world_current_object_premium_castle_town_keep");
+    if (poi.kind === "dungeon") return existingTextureKey("world_current_object_premium_volcanic_fortress");
     if (poi.kind === "gate") return existingTextureKey("world_current_object_premium_sealed_gate_chained");
-    if (poi.landmarkKind === "ruins") return existingTextureKey("world_current_object_premium_ruin_arch_blocks");
-  }
-  if (islandId === "ashfall") {
-    if (poi.kind === "town") return existingTextureKey("world_current_object_premium_deadland_village");
-    if (poi.kind === "harbor") return existingTextureKey("world_current_object_premium_dock_village_small");
-    if (poi.kind === "dungeon") return existingTextureKey("world_current_object_premium_volcano_fortress");
-    if (poi.kind === "gate") return existingTextureKey("world_current_object_premium_lava_dark_gate");
     if (poi.kind === "final") return existingTextureKey("world_current_object_premium_dark_haunted_castle");
+    if (poi.landmarkKind === "ruins") return existingTextureKey("world_current_object_premium_ruin_arch_blocks");
   }
   if (islandId === "greenhaven") {
     if (poi.kind === "town") return existingTextureKey("world_current_object_premium_farming_village_silos");

@@ -22,7 +22,7 @@ export function worldEncounterKeyAt(this: CrystalOathSceneContext, x: number, y:
   const islandId = this.generatedWorld?.islandByTile[y]?.[x] ?? this.currentIslandId;
   const biome = this.generatedWorld?.biomes[y]?.[x];
   if (biome === "forest") return islandId === "coralreach" ? "forest" : "forest";
-  if ((islandId === "highspire" || islandId === "ashfall") && (biome === "darkland" || biome === "lava" || biome === "mountain")) return "final";
+  if (islandId === "highspire" && (biome === "darkland" || biome === "lava" || biome === "mountain")) return "final";
   if (islandId === "frostmere" && (biome === "snow" || biome === "mountain")) return "hills";
   if (islandId === "coralreach" && biome === "desert") return "sand";
   return this.terrainEncounterKey(terrain);
@@ -112,7 +112,7 @@ export function discoverLandmark(this: CrystalOathSceneContext, loc: LocationDef
   if (landmarkKind === "monsterNest") {
     this.gold += Math.floor(rewardGold / 2);
     this.saveGame();
-    this.say([`${loc.name} stirs. Clearing it should make the island safer.`], () => this.startRandomBattle(this.currentIslandId === "highspire" || this.currentIslandId === "ashfall" ? ["ashGolem", "coalKnight"] : ["greenWolf", "bandit"], undefined));
+    this.say([`${loc.name} stirs. Clearing it should make the island safer.`], () => this.startRandomBattle(this.currentIslandId === "highspire" ? ["ashGolem", "coalKnight"] : ["greenWolf", "bandit"], undefined));
     return;
   }
   if (landmarkKind === "secretMerchant") {
