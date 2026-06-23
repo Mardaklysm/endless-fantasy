@@ -193,9 +193,7 @@ function classifySample(world: SemanticWorld, sampleX: number, sampleY: number):
   const boundaryNoise = hashNoise(`${world.seed}:mask-terrain-boundary`, noiseX, noiseY, 0) - 0.5;
 
   const roadEdgeNoise = hashNoise(`${world.seed}:mask-road-edge`, noiseX, noiseY, 1);
-  const roadCoreHit = routeMaskSample(world, world.layers.roadMap, sampleX, sampleY, 0.105);
-  const roadEdgeHit = !roadCoreHit && roadEdgeNoise > 0.34 && routeMaskSample(world, world.layers.roadMap, sampleX, sampleY, 0.152);
-  const roadHit = roadCoreHit || roadEdgeHit;
+  const roadHit = roadMaskSample(world, sampleX, sampleY, roadEdgeNoise);
   const riverHit = routeMaskSample(world, world.layers.riverMap, sampleX, sampleY, 0.27);
   const crossingHit = routeMaskSample(world, world.layers.riverCrossingMap, sampleX, sampleY, 0.18);
   if (roadHit && (!riverHit || crossingHit)) return TERRAIN_CLASS_IDS.road;
@@ -223,6 +221,68 @@ function classifySample(world: SemanticWorld, sampleX: number, sampleY: number):
   if (iceScore >= grassScore && iceScore >= sandScore) return TERRAIN_CLASS_IDS.ice;
   if (sandScore >= grassScore && sandScore >= iceScore) return TERRAIN_CLASS_IDS.sand;
   return TERRAIN_CLASS_IDS.grassland;
+}
+
+function roadMaskSample(world: SemanticWorld, sampleX: number, sampleY: number, edgeNoise: number): boolean {
+  const coreHit = routeMaskSample(world, world.layers.roadMap, sampleX, sampleY, 0.108);
+  if (coreHit) return true;
+  const polishHit = roadPolishPatchHit(world, sampleX, sampleY, edgeNoise);
+  if (polishHit) return true;
+  return edgeNoise > 0.38 && routeMaskSample(world, world.layers.roadMap, sampleX, sampleY, 0.148);
+}
+
+function roadPolishPatchHit(world: SemanticWorld, sampleX: number, sampleY: number, edgeNoise: number): boolean {
+  const x = clampInt(Math.floor(sampleX), 0, world.width - 1);
+  const y = clampInt(Math.floor(sampleY), 0, world.height - 1);
+  if (!routeCellAt(world, world.layers.roadMap, x, y)) return false;
+  const localX = sampleX - x;
+  const localY = sampleY - y;
+  const dx = localX - 0.5;
+  const dy = localY - 0.5;
+  const centerDistance = Math.hypot(dx, dy);
+  const north = routeCellAt(world, world.layers.roadMap, x, y - 1);
+  const east = routeCellAt(world, world.layers.roadMap, x + 1, y);
+  const south = routeCellAt(world, world.layers.roadMap, x, y + 1);
+  const west = routeCellAt(world, world.layers.roadMap, x - 1, y);
+  const northEast = routeCellAt(world, world.layers.roadMap, x + 1, y - 1);
+  const southEast = routeCellAt(world, world.layers.roadMap, x + 1, y + 1);
+  const southWest = routeCellAt(world, world.layers.roadMap, x - 1, y + 1);
+  const northWest = routeCellAt(world, world.layers.roadMap, x - 1, y - 1);
+  const neighborCount = [north, east, south, west, northEast, southEast, southWest, northWest].filter(Boolean).length;
+  const cardinalCount = [north, east, south, west].filter(Boolean).length;
+  const raggedEdge = edgeNoise > 0.18 ? 0.018 : -0.006;
+
+  if (neighborCount <= 1 && centerDistance <= 0.235 + raggedEdge) return true;
+  if (cardinalCount >= 3 && centerDistance <= 0.255 + raggedEdge) return true;
+  if (isAdjacentToBridgeCrossing(world, x, y) && centerDistance <= 0.23 + raggedEdge) return true;
+
+  if (north && east && !south && !west && roundedRoadCornerHit(localX, localY, 1, -1, 0.225 + raggedEdge)) return true;
+  if (east && south && !west && !north && roundedRoadCornerHit(localX, localY, 1, 1, 0.225 + raggedEdge)) return true;
+  if (south && west && !north && !east && roundedRoadCornerHit(localX, localY, -1, 1, 0.225 + raggedEdge)) return true;
+  if (west && north && !east && !south && roundedRoadCornerHit(localX, localY, -1, -1, 0.225 + raggedEdge)) return true;
+
+  return false;
+}
+
+function roundedRoadCornerHit(localX: number, localY: number, dx: -1 | 1, dy: -1 | 1, radius: number): boolean {
+  const cornerX = 0.5 + dx * 0.17;
+  const cornerY = 0.5 + dy * 0.17;
+  if (dx > 0 && localX < 0.5) return false;
+  if (dx < 0 && localX > 0.5) return false;
+  if (dy > 0 && localY < 0.5) return false;
+  if (dy < 0 && localY > 0.5) return false;
+  const distance = Math.hypot(localX - cornerX, localY - cornerY);
+  return distance <= radius && Math.abs((localX - 0.5) - dx * (localY - 0.5) * dy) <= 0.42;
+}
+
+function isAdjacentToBridgeCrossing(world: SemanticWorld, x: number, y: number): boolean {
+  return (
+    routeCellAt(world, world.layers.riverCrossingMap, x, y) ||
+    routeCellAt(world, world.layers.riverCrossingMap, x + 1, y) ||
+    routeCellAt(world, world.layers.riverCrossingMap, x - 1, y) ||
+    routeCellAt(world, world.layers.riverCrossingMap, x, y + 1) ||
+    routeCellAt(world, world.layers.riverCrossingMap, x, y - 1)
+  );
 }
 
 function routeMaskSample(world: SemanticWorld, values: ArrayLike<number>, sampleX: number, sampleY: number, halfWidth: number): boolean {
