@@ -81,7 +81,7 @@ export function currentBattleSpawnLayout(this: CrystalOathSceneContext) {
     background: this.battle?.background,
     partyCount: this.party.length,
     enemies: this.battle?.enemies ?? [],
-    seed: `${this.worldSeed}:${this.battle?.dungeonId ?? "world"}:${this.battle?.bossId ?? ""}`
+    encounterKind: this.battle?.kind === "boss" ? "boss" : "normal"
   });
 }
 

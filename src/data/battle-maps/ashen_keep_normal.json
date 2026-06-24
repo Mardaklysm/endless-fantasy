@@ -1,0 +1,96 @@
+{
+  "id": "ashen_keep_normal",
+  "baseMapId": "ashen_keep",
+  "displayName": "Ashen Keep",
+  "type": "fortress",
+  "background": {
+    "key": "battle_bg_ashen_keep",
+    "path": "assets_v2/battle/backgrounds/ashen_keep.jpeg"
+  },
+  "dimensions": {
+    "width": 2752,
+    "height": 1536
+  },
+  "playerSlots": [
+    {
+      "id": "player_1",
+      "x": 2081,
+      "y": 499,
+      "order": 1,
+      "facing": "left",
+      "radius": 138,
+      "previewSpriteId": "arlen"
+    },
+    {
+      "id": "player_2",
+      "x": 2225,
+      "y": 722,
+      "order": 2,
+      "facing": "left",
+      "radius": 138,
+      "previewSpriteId": "mira"
+    },
+    {
+      "id": "player_3",
+      "x": 2368,
+      "y": 946,
+      "order": 3,
+      "facing": "left",
+      "radius": 138,
+      "previewSpriteId": "kael"
+    },
+    {
+      "id": "player_4",
+      "x": 2140,
+      "y": 984,
+      "order": 4,
+      "facing": "left",
+      "radius": 138,
+      "previewSpriteId": "arlen"
+    }
+  ],
+  "variant": "normal",
+  "enemySlots": [
+    {
+      "id": "enemy_1",
+      "x": 364,
+      "y": 579,
+      "order": 1,
+      "role": "front",
+      "facing": "right",
+      "radius": 152,
+      "previewSpriteId": "slimebud"
+    },
+    {
+      "id": "enemy_2",
+      "x": 829,
+      "y": 740,
+      "order": 2,
+      "role": "normal",
+      "facing": "right",
+      "radius": 152,
+      "previewSpriteId": "bristleRat"
+    },
+    {
+      "id": "enemy_3",
+      "x": 416,
+      "y": 923,
+      "order": 3,
+      "role": "back",
+      "facing": "right",
+      "radius": 152,
+      "previewSpriteId": "fieldImp"
+    },
+    {
+      "id": "enemy_4",
+      "x": 1030,
+      "y": 585,
+      "order": 4,
+      "role": "normal",
+      "facing": "right",
+      "radius": 152,
+      "previewSpriteId": "mossling"
+    }
+  ],
+  "bossSlot": null
+}

@@ -3,12 +3,8 @@ import type { AssetKey } from "../assets/assetTypes";
 import type { EnemyState } from "./gameDataTypes";
 
 export type BattleSpawnFacing = "left" | "right" | "up" | "down";
-export type BattleEnemySpawnRole = "default" | "front" | "back" | "boss" | "flying" | "large";
-
-export type BattleSpawnShape =
-  | { type: "rect"; x: number; y: number; width: number; height: number }
-  | { type: "circle"; x: number; y: number; radius: number }
-  | { type: "polygon"; points: { x: number; y: number }[] };
+export type BattleMapVariant = "normal" | "boss";
+export type BattleEnemySpawnRole = "normal" | "front" | "back" | "boss" | "flying" | "large";
 
 export interface BattleSpawnSlot {
   id: string;
@@ -17,31 +13,20 @@ export interface BattleSpawnSlot {
   order: number;
   facing: BattleSpawnFacing;
   radius?: number;
+  previewSpriteId?: string;
   notes?: string;
 }
 
 export interface BattleEnemySpawnSlot extends BattleSpawnSlot {
   role?: BattleEnemySpawnRole;
-  weight?: number;
-}
-
-export interface BattleSpawnZone {
-  id: string;
-  shape: BattleSpawnShape;
-  capacity?: number;
-  facing?: BattleSpawnFacing;
-  notes?: string;
-}
-
-export interface BattleEnemySpawnZone extends BattleSpawnZone {
-  role?: BattleEnemySpawnRole;
-  weight?: number;
 }
 
 export interface BattleMapSpawnMetadata {
   id: string;
+  baseMapId: string;
   displayName: string;
   type?: string;
+  variant: BattleMapVariant;
   background: {
     key: AssetKey;
     path: string;
@@ -50,12 +35,9 @@ export interface BattleMapSpawnMetadata {
     width: number;
     height: number;
   };
-  spawns: {
-    playerSlots: BattleSpawnSlot[];
-    enemySlots: BattleEnemySpawnSlot[];
-    playerZones: BattleSpawnZone[];
-    enemyZones: BattleEnemySpawnZone[];
-  };
+  playerSlots: BattleSpawnSlot[];
+  enemySlots: BattleEnemySpawnSlot[];
+  bossSlot: BattleEnemySpawnSlot | null;
 }
 
 export interface ResolvedBattleSpawnSlot {
@@ -66,7 +48,7 @@ export interface ResolvedBattleSpawnSlot {
   facing: BattleSpawnFacing;
   radius: number;
   role?: BattleEnemySpawnRole;
-  source: "slot" | "zone" | "fallback";
+  source: "slot" | "fallback";
   metadataX: number;
   metadataY: number;
 }
@@ -81,17 +63,31 @@ export interface BattleSpawnLayout {
 const modules = import.meta.glob("./battle-maps/*.json", { eager: true, import: "default" }) as Record<string, BattleMapSpawnMetadata>;
 
 export const battleMapSpawnRegistry = Object.fromEntries(Object.values(modules).map((metadata) => [metadata.id, normalizeBattleMap(metadata)]));
-export const battleMapSpawnMetadata = Object.values(battleMapSpawnRegistry).sort((a, b) => a.displayName.localeCompare(b.displayName));
+export const battleMapSpawnMetadata = Object.values(battleMapSpawnRegistry).sort(
+  (a, b) => a.displayName.localeCompare(b.displayName) || a.variant.localeCompare(b.variant)
+);
 
 const warnedMessages = new Set<string>();
 
-export function battleMapIdForBackground(background: AssetKey | undefined): string | undefined {
+export function battleMapIdForBackground(background: AssetKey | undefined, variant: BattleMapVariant = "normal"): string | undefined {
   if (!background) return undefined;
-  return battleMapSpawnMetadata.find((metadata) => metadata.background.key === background)?.id;
+  return battleMapSpawnMetadata.find((metadata) => metadata.background.key === background && metadata.variant === variant)?.id;
 }
 
 export function battleMapBackgroundKeyForId(id: string | undefined): AssetKey | undefined {
   return id ? battleMapSpawnRegistry[id]?.background.key : undefined;
+}
+
+export function resolveBattleMapVariant(baseMapId: string | undefined, variant: BattleMapVariant): BattleMapSpawnMetadata | undefined {
+  if (!baseMapId) return undefined;
+  return (
+    battleMapSpawnMetadata.find((metadata) => metadata.baseMapId === baseMapId && metadata.variant === variant) ??
+    battleMapSpawnMetadata.find((metadata) => metadata.baseMapId === baseMapId)
+  );
+}
+
+export function isBossEncounter(enemies: EnemyState[], kind?: "random" | "boss", bossId?: string): boolean {
+  return kind === "boss" || !!bossId || enemies.some((enemy) => !!enemy.boss);
 }
 
 export function resolveBattleSpawnPositions(input: {
@@ -99,10 +95,13 @@ export function resolveBattleSpawnPositions(input: {
   background?: AssetKey;
   partyCount: number;
   enemies: EnemyState[];
-  seed?: string | number;
+  encounterKind?: "normal" | "boss";
   warn?: (message: string) => void;
 }): BattleSpawnLayout {
-  const battleMap = input.battleMapId ? battleMapSpawnRegistry[input.battleMapId] : battleMapSpawnRegistry[battleMapIdForBackground(input.background) ?? ""];
+  const desiredVariant = input.encounterKind ?? (input.enemies.some((enemy) => enemy.boss) ? "boss" : "normal");
+  const battleMap = input.battleMapId
+    ? battleMapSpawnRegistry[input.battleMapId]
+    : battleMapSpawnRegistry[battleMapIdForBackground(input.background, desiredVariant) ?? ""];
   const warnings: string[] = [];
   const warn = (message: string) => warnings.push(message);
   if (!battleMap) {
@@ -116,44 +115,80 @@ export function resolveBattleSpawnPositions(input: {
     return layout;
   }
 
+  if (battleMap.variant !== desiredVariant) warn(`${battleMap.id} is a ${battleMap.variant} map used for a ${desiredVariant} encounter.`);
   const playerSlots = resolvePlayerSlots(battleMap, input.partyCount, warn);
-  const enemySlots = resolveEnemySlots(battleMap, input.enemies, warn, input.seed);
+  const enemySlots = battleMap.variant === "boss" || desiredVariant === "boss"
+    ? resolveBossEnemySlots(battleMap, input.enemies, warn)
+    : resolveNormalEnemySlots(battleMap, input.enemies, warn);
   const layout = { battleMap, playerSlots, enemySlots, warnings };
   emitWarnings(warnings, input.warn);
   return layout;
 }
 
 function normalizeBattleMap(metadata: BattleMapSpawnMetadata): BattleMapSpawnMetadata {
-  metadata.spawns ??= { playerSlots: [], enemySlots: [], playerZones: [], enemyZones: [] };
-  metadata.spawns.playerSlots ??= [];
-  metadata.spawns.enemySlots ??= [];
-  metadata.spawns.playerZones ??= [];
-  metadata.spawns.enemyZones ??= [];
+  metadata.baseMapId ??= metadata.id.replace(/_(normal|boss)$/, "");
+  metadata.variant ??= metadata.id.endsWith("_boss") ? "boss" : "normal";
+  metadata.playerSlots ??= [];
+  metadata.enemySlots ??= [];
+  metadata.bossSlot ??= null;
   return metadata;
 }
 
 function resolvePlayerSlots(battleMap: BattleMapSpawnMetadata, partyCount: number, warn: (message: string) => void): ResolvedBattleSpawnSlot[] {
   const used: ResolvedBattleSpawnSlot[] = [];
-  const exactSlots = [...battleMap.spawns.playerSlots].sort(byOrderThenId);
+  const exactSlots = [...battleMap.playerSlots].sort(byOrderThenId);
   for (const slot of exactSlots) {
     if (used.length >= partyCount) break;
     const resolved = playerSlotFromPoint(battleMap, slot, "slot");
     if (fitsAndDoesNotOverlap(resolved, used)) used.push(resolved);
   }
-  if (used.length < partyCount) fillFromZones(battleMap, "player", partyCount, used, warn);
   if (used.length < partyCount) fillWithFallback("player", battleMap, partyCount, used, warn);
-  if (!battleMap.spawns.playerSlots.length && !battleMap.spawns.playerZones.length) warn(`${battleMap.id} has no player spawn sources.`);
+  if (!battleMap.playerSlots.length) warn(`${battleMap.id} has no player spawn sources.`);
   return used;
 }
 
-function resolveEnemySlots(
+function resolveNormalEnemySlots(
   battleMap: BattleMapSpawnMetadata,
   enemies: EnemyState[],
-  warn: (message: string) => void,
-  seed: string | number | undefined
+  warn: (message: string) => void
 ): ResolvedBattleSpawnSlot[] {
   const used: ResolvedBattleSpawnSlot[] = [];
-  const exactSlots = [...battleMap.spawns.enemySlots].sort(byOrderThenId);
+  const allowedEnemies = enemies.slice(0, 4);
+  if (enemies.length > 4) warn(`${battleMap.id} normal layout supports 4 enemies; ${enemies.length} were provided.`);
+  const exactSlots = [...battleMap.enemySlots].sort(byOrderThenId).slice(0, 4);
+  resolveEnemiesIntoSlots(battleMap, allowedEnemies, exactSlots, used);
+  if (!battleMap.enemySlots.length) warn(`${battleMap.id} has no enemy spawn sources.`);
+  return used;
+}
+
+function resolveBossEnemySlots(
+  battleMap: BattleMapSpawnMetadata,
+  enemies: EnemyState[],
+  warn: (message: string) => void
+): ResolvedBattleSpawnSlot[] {
+  const used: ResolvedBattleSpawnSlot[] = [];
+  const bossIndex = enemies.findIndex((enemy) => enemy.boss);
+  const boss = bossIndex >= 0 ? enemies[bossIndex] : enemies[0];
+  const minions = enemies.filter((enemy, index) => index !== bossIndex && !enemy.boss).slice(0, 3);
+  if (enemies.filter((enemy) => !enemy.boss).length > 3) warn(`${battleMap.id} boss layout supports 3 non-boss enemies.`);
+  if (boss && battleMap.bossSlot) {
+    used.push(enemySlotFromPoint(battleMap, battleMap.bossSlot, boss, "slot"));
+  } else if (boss) {
+    warn(`${battleMap.id} is missing a bossSlot; using the first enemy slot or fallback.`);
+    const fallbackBossSlot = battleMap.enemySlots[0];
+    used.push(fallbackBossSlot ? enemySlotFromPoint(battleMap, { ...fallbackBossSlot, role: "boss", radius: 256 }, boss, "slot") : fallbackEnemySlots([boss])[0]);
+  }
+  resolveEnemiesIntoSlots(battleMap, minions, [...battleMap.enemySlots].sort(byOrderThenId).slice(0, 3), used);
+  if (!battleMap.bossSlot) warn(`${battleMap.id} has no bossSlot.`);
+  return used;
+}
+
+function resolveEnemiesIntoSlots(
+  battleMap: BattleMapSpawnMetadata,
+  enemies: EnemyState[],
+  exactSlots: BattleEnemySpawnSlot[],
+  used: ResolvedBattleSpawnSlot[]
+) {
   const claimed = new Set<string>();
   for (const enemy of enemies) {
     const role = enemyRole(enemy);
@@ -168,66 +203,9 @@ function resolveEnemySlots(
         continue;
       }
     }
-    const before = used.length;
-    fillFromZones(battleMap, "enemy", used.length + 1, used, warn, role, seed);
-    if (used.length === before) {
-      const fallback = fallbackEnemySlots([enemy])[0];
-      if (fallback) used.push(offsetFallback(fallback, used.length, "enemy"));
-    }
+    const fallback = fallbackEnemySlots([enemy])[0];
+    if (fallback) used.push(offsetFallback(fallback, used.length, "enemy"));
   }
-  if (!battleMap.spawns.enemySlots.length && !battleMap.spawns.enemyZones.length) warn(`${battleMap.id} has no enemy spawn sources.`);
-  return used;
-}
-
-function fillFromZones(
-  battleMap: BattleMapSpawnMetadata,
-  side: "player" | "enemy",
-  desiredCount: number,
-  used: ResolvedBattleSpawnSlot[],
-  warn: (message: string) => void,
-  role: BattleEnemySpawnRole = "default",
-  seed?: string | number
-) {
-  const zones = side === "player" ? battleMap.spawns.playerZones : battleMap.spawns.enemyZones.filter((zone) => roleMatches(zone.role, role));
-  for (const zone of zones) {
-    const capacity = Math.max(1, zone.capacity ?? 1);
-    for (let i = 0; i < capacity && used.length < desiredCount; i += 1) {
-      const point = samplePointInSpawnZone(zone.shape, used.length + i, capacity, seed);
-      if (!point || !pointInsideMap(point, battleMap)) continue;
-      const source = {
-        id: `${zone.id}_${i + 1}`,
-        x: point.x,
-        y: point.y,
-        order: used.length + 1,
-        facing: zone.facing ?? (side === "player" ? "left" : "right"),
-        radius: side === "player" ? 138 : role === "boss" ? 256 : 152,
-        role: side === "enemy" ? role : undefined
-      };
-      const resolved = side === "player" ? playerSlotFromPoint(battleMap, source, "zone") : enemySlotFromPoint(battleMap, source, undefined, "zone");
-      if (fitsAndDoesNotOverlap(resolved, used)) used.push(resolved);
-    }
-  }
-  if (used.length < desiredCount && zones.length) warn(`${battleMap.id} spawn zones could not satisfy all ${side} placements without overlap.`);
-}
-
-export function samplePointInSpawnZone(shape: BattleSpawnShape, index = 0, capacity = 1, seed?: string | number): { x: number; y: number } | undefined {
-  const jitter = seededJitter(seed, index);
-  if (shape.type === "rect") {
-    const columns = Math.ceil(Math.sqrt(capacity));
-    const rows = Math.ceil(capacity / columns);
-    const col = index % columns;
-    const row = Math.floor(index / columns);
-    return {
-      x: shape.x + ((col + 0.5 + jitter.x * 0.24) / columns) * shape.width,
-      y: shape.y + ((row + 0.5 + jitter.y * 0.24) / rows) * shape.height
-    };
-  }
-  if (shape.type === "circle") {
-    const angle = (index / Math.max(1, capacity)) * Math.PI * 2 + jitter.x * 0.4;
-    const radius = shape.radius * (capacity <= 1 ? 0 : 0.58 + jitter.y * 0.12);
-    return { x: shape.x + Math.cos(angle) * radius, y: shape.y + Math.sin(angle) * radius };
-  }
-  return polygonCentroid(shape.points);
 }
 
 function fillWithFallback(
@@ -267,7 +245,7 @@ function enemySlotFromPoint(
   enemy: EnemyState | undefined,
   source: ResolvedBattleSpawnSlot["source"]
 ): ResolvedBattleSpawnSlot {
-  const role = slot.role ?? (enemy ? enemyRole(enemy) : "default");
+  const role = slot.role ?? (enemy ? enemyRole(enemy) : "normal");
   const baseSize = role === "boss" || enemy?.boss ? 178 : role === "large" ? 138 : 106;
   const size = Math.round(clamp(screenRadius(battleMap, slot.radius ?? (role === "boss" ? 256 : 152)) * 2, baseSize * 0.85, baseSize * 1.25));
   const point = imageToScreenPoint(battleMap, slot.x, slot.y);
@@ -322,7 +300,7 @@ function fallbackEnemySlots(enemies: EnemyState[]): ResolvedBattleSpawnSlot[] {
   }
   return [
     { id: "enemy_fallback_1", x: 74, y: 100, size: 106, facing: "right", radius: 53, role: "front", source: "fallback", metadataX: 74, metadataY: 100 },
-    { id: "enemy_fallback_2", x: 236, y: 156, size: 106, facing: "right", radius: 53, role: "default", source: "fallback", metadataX: 236, metadataY: 156 },
+    { id: "enemy_fallback_2", x: 236, y: 156, size: 106, facing: "right", radius: 53, role: "normal", source: "fallback", metadataX: 236, metadataY: 156 },
     { id: "enemy_fallback_3", x: 92, y: 220, size: 106, facing: "right", radius: 53, role: "back", source: "fallback", metadataX: 92, metadataY: 220 }
   ];
 }
@@ -345,42 +323,23 @@ function slotCenter(slot: ResolvedBattleSpawnSlot) {
   return { x: slot.x + slot.size / 2, y: slot.y + slot.size * 0.72 };
 }
 
-function pointInsideMap(point: { x: number; y: number }, battleMap: BattleMapSpawnMetadata) {
-  return point.x >= 0 && point.x <= battleMap.dimensions.width && point.y >= 0 && point.y <= battleMap.dimensions.height;
-}
-
 function enemyRole(enemy: EnemyState): BattleEnemySpawnRole {
   if (enemy.boss) return "boss";
   if (enemy.sprite === "wing") return "flying";
   if (enemy.sprite === "serpent" || enemy.sprite === "crown") return "large";
-  return "default";
+  return "normal";
 }
 
 function roleMatches(slotRole: BattleEnemySpawnRole | undefined, desired: BattleEnemySpawnRole) {
-  if (!slotRole || slotRole === "default") return desired === "default" || desired === "front" || desired === "back";
+  if (!slotRole || slotRole === "normal") return desired === "normal" || desired === "front" || desired === "back";
   if (slotRole === desired) return true;
-  if (desired === "default") return slotRole === "front";
+  if (desired === "normal") return slotRole === "front";
   if (desired === "large") return slotRole === "boss";
   return false;
 }
 
 function byOrderThenId(a: { order?: number; id: string }, b: { order?: number; id: string }) {
   return (a.order ?? 999) - (b.order ?? 999) || a.id.localeCompare(b.id);
-}
-
-function polygonCentroid(points: { x: number; y: number }[] | undefined) {
-  if (!points?.length) return undefined;
-  const sum = points.reduce((acc, point) => ({ x: acc.x + point.x, y: acc.y + point.y }), { x: 0, y: 0 });
-  return { x: sum.x / points.length, y: sum.y / points.length };
-}
-
-function seededJitter(seed: string | number | undefined, index: number) {
-  const text = `${seed ?? "battle-spawn"}:${index}`;
-  let hash = 2166136261;
-  for (let i = 0; i < text.length; i += 1) hash = Math.imul(hash ^ text.charCodeAt(i), 16777619);
-  const a = ((hash >>> 8) & 255) / 255 - 0.5;
-  const b = ((hash >>> 16) & 255) / 255 - 0.5;
-  return { x: a, y: b };
 }
 
 function emitWarnings(warnings: string[], customWarn: ((message: string) => void) | undefined) {

@@ -9,23 +9,27 @@ const coords = document.querySelector("#coords");
 const statusEl = document.querySelector("#status");
 const validationEl = document.querySelector("#validation");
 const mapTitle = document.querySelector("#mapTitle");
+const variantState = document.querySelector("#variantState");
 const modeSelect = document.querySelector("#modeSelect");
 const playerPreviewCount = document.querySelector("#playerPreviewCount");
 const enemyPreviewCount = document.querySelector("#enemyPreviewCount");
 const toggles = {
   player: document.querySelector("#playerToggle"),
   enemy: document.querySelector("#enemyToggle"),
-  zones: document.querySelector("#zonesToggle"),
+  boss: document.querySelector("#bossToggle"),
   preview: document.querySelector("#previewToggle")
 };
 
 const slotDialog = document.querySelector("#slotDialog");
 const slotForm = document.querySelector("#slotForm");
-const zoneDialog = document.querySelector("#zoneDialog");
-const zoneForm = document.querySelector("#zoneForm");
+const spriteDialog = document.querySelector("#spriteDialog");
+const spriteGrid = document.querySelector("#spriteGrid");
+const spriteSearch = document.querySelector("#spriteSearch");
 
 let battleMaps = [];
 let battleMap = undefined;
+let spriteCatalog = { players: [], enemies: [] };
+let spriteFilter = "player";
 let image = undefined;
 let scale = 1;
 let pan = { x: 0, y: 0 };
@@ -36,13 +40,13 @@ let spaceHeld = false;
 let canvasCssSize = { width: 0, height: 0 };
 let selected = undefined;
 let editingSlot = undefined;
-let editingZone = undefined;
+const spriteImages = new Map();
 
 init();
 
 async function init() {
   bindEvents();
-  await loadBattleMapList();
+  await Promise.all([loadBattleMapList(), loadSpriteCatalog()]);
   if (battleMaps.length) await loadBattleMap(battleMaps[0].id);
   requestAnimationFrame(draw);
 }
@@ -53,6 +57,7 @@ function bindEvents() {
   reloadBtn.addEventListener("click", () => loadBattleMap(battleMap?.id));
   resetViewBtn.addEventListener("click", resetView);
   battleMapSelect.addEventListener("change", () => loadBattleMap(battleMapSelect.value));
+  modeSelect.addEventListener("change", enforceModeForVariant);
   Object.values(toggles).forEach((toggle) => toggle.addEventListener("change", refreshValidation));
   playerPreviewCount.addEventListener("change", refreshValidation);
   enemyPreviewCount.addEventListener("change", refreshValidation);
@@ -71,18 +76,31 @@ function bindEvents() {
     event.returnValue = "";
   });
   slotForm.addEventListener("submit", onSlotFormSubmit);
-  zoneForm.addEventListener("submit", onZoneFormSubmit);
   document.querySelector("#slotCancelBtn").addEventListener("click", cancelSlotDialog);
-  document.querySelector("#zoneCancelBtn").addEventListener("click", cancelZoneDialog);
   document.querySelector("#slotDeleteBtn").addEventListener("click", deleteEditingSlot);
-  document.querySelector("#zoneDeleteBtn").addEventListener("click", deleteEditingZone);
-  document.querySelector("#slotSide").addEventListener("change", updateDialogEnemyFields);
-  document.querySelector("#zoneSide").addEventListener("change", updateDialogEnemyFields);
+  document.querySelector("#slotSide").addEventListener("change", updateSlotDialogFields);
+  document.querySelector("#slotPreviewBtn").addEventListener("click", openSpritePicker);
+  document.querySelector("#spriteCancelBtn").addEventListener("click", () => spriteDialog.close());
+  document.querySelector("#clearSpriteBtn").addEventListener("click", clearPreviewSprite);
+  spriteSearch.addEventListener("input", renderSpriteGrid);
+  document.querySelectorAll("[data-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      spriteFilter = button.dataset.filter;
+      renderSpriteGrid();
+    });
+  });
 }
 
 async function loadBattleMapList() {
   battleMaps = await fetchJson("/api/battle-maps");
-  battleMapSelect.innerHTML = battleMaps.map((entry) => `<option value="${entry.id}">${entry.displayName}${entry.type ? ` (${entry.type})` : ""}</option>`).join("");
+  battleMapSelect.innerHTML = battleMaps
+    .map((entry) => `<option value="${entry.id}">${entry.displayName} [${titleCase(entry.variant)}]${entry.type ? ` (${entry.type})` : ""}</option>`)
+    .join("");
+}
+
+async function loadSpriteCatalog() {
+  spriteCatalog = await fetchJson("/api/battle-sprites");
+  await Promise.all([...spriteCatalog.players, ...spriteCatalog.enemies].map(preloadSpriteImage));
 }
 
 async function loadBattleMap(id) {
@@ -91,13 +109,16 @@ async function loadBattleMap(id) {
   normalizeBattleMap(battleMap);
   battleMapSelect.value = battleMap.id;
   mapTitle.textContent = `${battleMap.displayName} - ${battleMap.id}`;
+  variantState.textContent = `Variant: ${titleCase(battleMap.variant)}`;
   image = await loadImage(`/api/asset?path=${encodeURIComponent(battleMap.background.path)}`);
   if (!battleMap.dimensions?.width || !battleMap.dimensions?.height) {
     battleMap.dimensions = { width: image.naturalWidth, height: image.naturalHeight };
   }
   selected = undefined;
+  editingSlot = undefined;
   setDirty(false);
   resetView();
+  updateVariantControls();
   refreshValidation();
   showStatus("Loaded.");
 }
@@ -148,39 +169,19 @@ function onPointerDown(event) {
     drag = { type: "pan", start: { x: event.clientX, y: event.clientY }, pan: { ...pan } };
     return;
   }
-  if (event.button === 2) {
-    if (event.shiftKey) return deleteZoneAt(pointer);
-    if (modeSelect.value === "drawPlayerZone" || modeSelect.value === "drawEnemyZone") {
-      drag = { type: "zoneRect", side: modeSelect.value === "drawPlayerZone" ? "player" : "enemy", start: pointer, current: pointer };
-      return;
-    }
-    const zoneHit = findZoneAt(pointer);
-    if (zoneHit) openZoneForm(zoneHit.side, zoneHit.index);
-    return;
-  }
   if (event.button !== 0) return;
   if (event.shiftKey) {
-    if (!deleteSlotAt(pointer)) deleteZoneAt(pointer);
+    deleteSlotAt(pointer);
     return;
   }
-  if (modeSelect.value === "addPlayer") {
-    createSlot("player", pointer);
-    return;
-  }
-  if (modeSelect.value === "addEnemy") {
-    createSlot("enemy", pointer);
-    return;
-  }
+  if (modeSelect.value === "addPlayer") return createSlot("player", pointer);
+  if (modeSelect.value === "addEnemy") return createSlot("enemy", pointer);
+  if (modeSelect.value === "addBoss") return createSlot("boss", pointer);
   const slotHit = findSlotAt(pointer);
-  if (slotHit) {
-    selected = { type: "slot", ...slotHit };
-    const slot = slotCollection(slotHit.side)[slotHit.index];
-    drag = { type: "slot", side: slotHit.side, index: slotHit.index, start: pointer, origin: { x: slot.x, y: slot.y }, moved: false };
-    return;
-  }
-  const zoneHit = findZoneAt(pointer);
-  selected = zoneHit ? { type: "zone", ...zoneHit } : undefined;
-  if (zoneHit) openZoneForm(zoneHit.side, zoneHit.index);
+  selected = slotHit ? { type: "slot", ...slotHit } : undefined;
+  if (!slotHit) return;
+  const slot = slotFor(slotHit.side, slotHit.index);
+  drag = { type: "slot", side: slotHit.side, index: slotHit.index, start: pointer, origin: { x: slot.x, y: slot.y }, moved: false };
 }
 
 function onPointerMove(event) {
@@ -189,10 +190,10 @@ function onPointerMove(event) {
   if (!drag) return;
   if (drag.type === "pan") {
     pan = { x: drag.pan.x + event.clientX - drag.start.x, y: drag.pan.y + event.clientY - drag.start.y };
-  } else if (drag.type === "zoneRect") {
-    drag.current = pointer;
-  } else if (drag.type === "slot") {
-    const slot = slotCollection(drag.side)[drag.index];
+    return;
+  }
+  if (drag.type === "slot") {
+    const slot = slotFor(drag.side, drag.index);
     slot.x = Math.round(drag.origin.x + pointer.x - drag.start.x);
     slot.y = Math.round(drag.origin.y + pointer.y - drag.start.y);
     drag.moved ||= distance(pointer, drag.start) > 2;
@@ -202,12 +203,7 @@ function onPointerMove(event) {
 }
 
 function onPointerUp() {
-  if (drag?.type === "zoneRect") {
-    const rect = normalizeRect(drag.start, drag.current);
-    if (rect.width > 4 && rect.height > 4) createZone(drag.side, rect);
-  } else if (drag?.type === "slot" && !drag.moved) {
-    openSlotForm(drag.side, drag.index);
-  }
+  if (drag?.type === "slot" && !drag.moved) openSlotForm(drag.side, drag.index);
   drag = undefined;
 }
 
@@ -234,21 +230,23 @@ function onKeyDown(event) {
 }
 
 function createSlot(side, point) {
+  if (side === "boss") {
+    if (battleMap.variant !== "boss") return showStatus("Boss slots are only available on boss variants.", true);
+    if (battleMap.bossSlot && !confirm("Replace the existing boss slot?")) return;
+    battleMap.bossSlot = makeSlot("boss", point, 0);
+    selected = { type: "slot", side: "boss", index: 0 };
+    setDirty(true);
+    refreshValidation();
+    showStatus("Boss slot added.");
+    openSlotForm("boss", 0);
+    return;
+  }
+  const limit = side === "player" ? 4 : battleMap.variant === "boss" ? 3 : 4;
   const collection = slotCollection(side);
+  if (collection.length >= limit) return showStatus(`${titleCase(side)} slots are limited to ${limit} on this variant.`, true);
   const wasDirty = isDirty;
   const order = collection.reduce((max, slot) => Math.max(max, Number(slot.order) || 0), 0) + 1;
-  const slot = {
-    id: uniqueId(side === "player" ? "player" : "enemy", collection),
-    x: Math.round(point.x),
-    y: Math.round(point.y),
-    order,
-    facing: side === "player" ? "left" : "right",
-    radius: side === "player" ? 138 : 152
-  };
-  if (side === "enemy") {
-    slot.role = "default";
-    slot.weight = 1;
-  }
+  const slot = makeSlot(side, point, order);
   collection.push(slot);
   selected = { type: "slot", side, index: collection.length - 1 };
   setDirty(true);
@@ -257,31 +255,23 @@ function createSlot(side, point) {
   openSlotForm(side, collection.length - 1, true, wasDirty);
 }
 
-function createZone(side, rect) {
-  const collection = zoneCollection(side);
-  const wasDirty = isDirty;
-  const zone = {
-    id: uniqueId(`${side}_zone`, collection),
-    shape: { type: "rect", ...roundRect(rect) },
-    capacity: side === "player" ? 4 : 3,
+function makeSlot(side, point, order) {
+  const slot = {
+    id: side === "boss" ? "boss_1" : uniqueId(side, slotCollection(side)),
+    x: Math.round(point.x),
+    y: Math.round(point.y),
+    order,
     facing: side === "player" ? "left" : "right",
-    notes: ""
+    radius: side === "boss" ? 256 : side === "player" ? 138 : 152
   };
-  if (side === "enemy") {
-    zone.role = "default";
-    zone.weight = 1;
-  }
-  collection.push(zone);
-  selected = { type: "zone", side, index: collection.length - 1 };
-  setDirty(true);
-  refreshValidation();
-  showStatus(`${side} zone added.`);
-  openZoneForm(side, collection.length - 1, true, wasDirty);
+  if (side === "enemy") slot.role = "normal";
+  if (side === "boss") slot.role = "boss";
+  return slot;
 }
 
 function openSlotForm(side, index, isNew = false, wasDirty = isDirty) {
   editingSlot = { side, index, isNew, wasDirty };
-  const slot = slotCollection(side)[index];
+  const slot = slotFor(side, index);
   document.querySelector("#slotId").value = slot.id;
   document.querySelector("#slotSide").value = side;
   document.querySelector("#slotOrder").value = slot.order ?? index + 1;
@@ -289,19 +279,19 @@ function openSlotForm(side, index, isNew = false, wasDirty = isDirty) {
   document.querySelector("#slotY").value = Math.round(slot.y);
   document.querySelector("#slotFacing").value = slot.facing ?? (side === "player" ? "left" : "right");
   document.querySelector("#slotRadius").value = slot.radius ?? "";
-  document.querySelector("#slotRole").value = side === "enemy" ? slot.role ?? "default" : "";
-  document.querySelector("#slotWeight").value = side === "enemy" ? slot.weight ?? "" : "";
+  document.querySelector("#slotRole").value = side === "boss" ? "boss" : side === "enemy" ? slot.role ?? "normal" : "normal";
+  document.querySelector("#slotPreviewSprite").value = slot.previewSpriteId ?? "";
   document.querySelector("#slotNotes").value = slot.notes ?? "";
-  updateDialogEnemyFields();
+  updateSlotDialogFields();
   slotDialog.showModal();
 }
 
 function onSlotFormSubmit(event) {
   event.preventDefault();
   if (!editingSlot) return;
-  const oldCollection = slotCollection(editingSlot.side);
-  const oldSlot = oldCollection[editingSlot.index];
+  const oldSlot = slotFor(editingSlot.side, editingSlot.index);
   const side = document.querySelector("#slotSide").value;
+  if (!canPlaceSide(side, editingSlot)) return;
   const next = {
     id: document.querySelector("#slotId").value.trim(),
     x: numberFrom("#slotX"),
@@ -309,18 +299,16 @@ function onSlotFormSubmit(event) {
     order: numberFrom("#slotOrder"),
     facing: document.querySelector("#slotFacing").value,
     radius: optionalNumberFrom("#slotRadius"),
+    previewSpriteId: document.querySelector("#slotPreviewSprite").value.trim(),
     notes: document.querySelector("#slotNotes").value.trim()
   };
-  if (side === "enemy") {
-    next.role = document.querySelector("#slotRole").value || "default";
-    next.weight = optionalNumberFrom("#slotWeight");
-  }
+  if (side === "enemy") next.role = document.querySelector("#slotRole").value || "normal";
+  if (side === "boss") next.role = "boss";
   stripEmpty(next);
   if (!next.id) return showStatus("Slot id is required.", true);
-  oldCollection.splice(editingSlot.index, 1);
-  const newCollection = slotCollection(side);
-  newCollection.push(next);
-  selected = { type: "slot", side, index: newCollection.length - 1 };
+  removeSlot(editingSlot.side, editingSlot.index);
+  addSlot(side, next);
+  selected = { type: "slot", side, index: side === "boss" ? 0 : slotCollection(side).length - 1 };
   editingSlot = undefined;
   setDirty(true);
   refreshValidation();
@@ -330,7 +318,7 @@ function onSlotFormSubmit(event) {
 
 function cancelSlotDialog() {
   if (editingSlot?.isNew) {
-    slotCollection(editingSlot.side).splice(editingSlot.index, 1);
+    removeSlot(editingSlot.side, editingSlot.index);
     setDirty(editingSlot.wasDirty);
   }
   editingSlot = undefined;
@@ -340,7 +328,7 @@ function cancelSlotDialog() {
 
 function deleteEditingSlot() {
   if (!editingSlot) return;
-  slotCollection(editingSlot.side).splice(editingSlot.index, 1);
+  removeSlot(editingSlot.side, editingSlot.index);
   editingSlot = undefined;
   selected = undefined;
   setDirty(true);
@@ -349,80 +337,66 @@ function deleteEditingSlot() {
   showStatus("Slot deleted.");
 }
 
-function openZoneForm(side, index, isNew = false, wasDirty = isDirty) {
-  editingZone = { side, index, isNew, wasDirty };
-  const zone = zoneCollection(side)[index];
-  document.querySelector("#zoneId").value = zone.id;
-  document.querySelector("#zoneSide").value = side;
-  document.querySelector("#zoneShape").value = shapeSummary(zone.shape);
-  document.querySelector("#zoneCapacity").value = zone.capacity ?? "";
-  document.querySelector("#zoneFacing").value = zone.facing ?? "";
-  document.querySelector("#zoneRole").value = side === "enemy" ? zone.role ?? "default" : "";
-  document.querySelector("#zoneWeight").value = side === "enemy" ? zone.weight ?? "" : "";
-  document.querySelector("#zoneNotes").value = zone.notes ?? "";
-  updateDialogEnemyFields();
-  zoneDialog.showModal();
+function updateSlotDialogFields() {
+  const side = document.querySelector("#slotSide").value;
+  const isEnemyLike = side === "enemy" || side === "boss";
+  const roleSelect = document.querySelector("#slotRole");
+  slotDialog.querySelectorAll(".enemyOnly").forEach((el) => (el.style.display = isEnemyLike ? "grid" : "none"));
+  roleSelect.disabled = side === "boss";
+  if (side === "boss") roleSelect.value = "boss";
 }
 
-function onZoneFormSubmit(event) {
-  event.preventDefault();
-  if (!editingZone) return;
-  const oldCollection = zoneCollection(editingZone.side);
-  const oldZone = oldCollection[editingZone.index];
-  const side = document.querySelector("#zoneSide").value;
-  const next = {
-    ...structuredClone(oldZone),
-    id: document.querySelector("#zoneId").value.trim(),
-    capacity: optionalNumberFrom("#zoneCapacity"),
-    facing: document.querySelector("#zoneFacing").value,
-    notes: document.querySelector("#zoneNotes").value.trim()
-  };
-  if (side === "enemy") {
-    next.role = document.querySelector("#zoneRole").value || "default";
-    next.weight = optionalNumberFrom("#zoneWeight");
-  } else {
-    delete next.role;
-    delete next.weight;
+function openSpritePicker() {
+  if (!editingSlot) return;
+  spriteFilter = editingSlot.side === "player" ? "player" : editingSlot.side === "boss" ? "boss" : "enemy";
+  spriteSearch.value = "";
+  renderSpriteGrid();
+  spriteDialog.showModal();
+}
+
+function renderSpriteGrid() {
+  const term = spriteSearch.value.trim().toLowerCase();
+  document.querySelectorAll("[data-filter]").forEach((button) => button.classList.toggle("active", button.dataset.filter === spriteFilter));
+  const entries = spriteEntriesForFilter()
+    .filter((entry) => !term || entry.id.toLowerCase().includes(term) || entry.name.toLowerCase().includes(term))
+    .sort((a, b) => Number(b.boss) - Number(a.boss) || a.name.localeCompare(b.name));
+  spriteGrid.innerHTML = "";
+  for (const entry of entries) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "spriteChoice";
+    button.innerHTML = `<span class="spriteThumb"></span><strong>${entry.name}</strong><small>${entry.id}${entry.boss ? " · boss" : entry.role ? ` · ${entry.role}` : ""}</small>`;
+    const thumb = button.querySelector(".spriteThumb");
+    const img = spriteImages.get(entry.id);
+    if (img) drawThumb(thumb, entry, img);
+    button.addEventListener("click", () => assignPreviewSprite(entry.id));
+    spriteGrid.append(button);
   }
-  stripEmpty(next);
-  if (!next.id) return showStatus("Zone id is required.", true);
-  oldCollection.splice(editingZone.index, 1);
-  const newCollection = zoneCollection(side);
-  newCollection.push(next);
-  selected = { type: "zone", side, index: newCollection.length - 1 };
-  editingZone = undefined;
+}
+
+function spriteEntriesForFilter() {
+  if (spriteFilter === "player") return spriteCatalog.players;
+  if (spriteFilter === "boss") return spriteCatalog.enemies.filter((entry) => entry.boss || entry.role === "large");
+  return spriteCatalog.enemies;
+}
+
+function assignPreviewSprite(spriteId) {
+  const slot = slotFor(editingSlot.side, editingSlot.index);
+  slot.previewSpriteId = spriteId;
+  document.querySelector("#slotPreviewSprite").value = spriteId;
   setDirty(true);
   refreshValidation();
-  zoneDialog.close();
-  showStatus(`${oldZone.id} updated.`);
+  spriteDialog.close();
 }
 
-function cancelZoneDialog() {
-  if (editingZone?.isNew) {
-    zoneCollection(editingZone.side).splice(editingZone.index, 1);
-    setDirty(editingZone.wasDirty);
-  }
-  editingZone = undefined;
-  refreshValidation();
-  zoneDialog.close();
-}
-
-function deleteEditingZone() {
-  if (!editingZone) return;
-  zoneCollection(editingZone.side).splice(editingZone.index, 1);
-  editingZone = undefined;
-  selected = undefined;
+function clearPreviewSprite() {
+  if (!editingSlot) return;
+  const slot = slotFor(editingSlot.side, editingSlot.index);
+  delete slot.previewSpriteId;
+  document.querySelector("#slotPreviewSprite").value = "";
   setDirty(true);
   refreshValidation();
-  zoneDialog.close();
-  showStatus("Zone deleted.");
-}
-
-function updateDialogEnemyFields() {
-  const slotSide = document.querySelector("#slotSide").value;
-  const zoneSide = document.querySelector("#zoneSide").value;
-  slotDialog.querySelectorAll(".enemyOnly").forEach((el) => (el.style.display = slotSide === "enemy" ? "grid" : "none"));
-  zoneDialog.querySelectorAll(".enemyOnly").forEach((el) => (el.style.display = zoneSide === "enemy" ? "grid" : "none"));
+  spriteDialog.close();
 }
 
 function draw() {
@@ -435,39 +409,68 @@ function draw() {
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(image, 0, 0);
     if (battleMap) {
-      if (toggles.zones.checked) drawZones();
-      if (toggles.preview.checked) drawPreview();
-      if (toggles.player.checked) battleMap.spawns.playerSlots.forEach((slot, index) => drawSlot(slot, "player", index));
-      if (toggles.enemy.checked) battleMap.spawns.enemySlots.forEach((slot, index) => drawSlot(slot, "enemy", index));
-      if (drag?.type === "zoneRect") drawShape({ type: "rect", ...normalizeRect(drag.start, drag.current) }, "rgba(255, 255, 255, 0.18)", "#ffffff");
+      if (toggles.preview.checked) drawPreviewSprites();
+      if (toggles.player.checked) battleMap.playerSlots.forEach((slot, index) => drawSlot(slot, "player", index));
+      if (toggles.enemy.checked) battleMap.enemySlots.forEach((slot, index) => drawSlot(slot, "enemy", index));
+      if (toggles.boss.checked && battleMap.bossSlot) drawSlot(battleMap.bossSlot, "boss", 0);
     }
     ctx.restore();
   }
   requestAnimationFrame(draw);
 }
 
-function drawZones() {
-  battleMap.spawns.playerZones.forEach((zone, index) => drawZone(zone, "player", index));
-  battleMap.spawns.enemyZones.forEach((zone, index) => drawZone(zone, "enemy", index));
+function drawPreviewSprites() {
+  const playerLimit = Math.min(4, Number(playerPreviewCount.value) || 4);
+  const enemyLimit = Math.min(battleMap.variant === "boss" ? 3 : 4, Number(enemyPreviewCount.value) || 4);
+  battleMap.playerSlots.slice().sort(byOrderThenId).slice(0, playerLimit).forEach((slot) => drawSpritePreview(slot, "player"));
+  battleMap.enemySlots.slice().sort(byOrderThenId).slice(0, enemyLimit).forEach((slot) => drawSpritePreview(slot, "enemy"));
+  if (battleMap.variant === "boss" && battleMap.bossSlot) drawSpritePreview(battleMap.bossSlot, "boss");
 }
 
-function drawZone(zone, side, index) {
-  const isSelected = selected?.type === "zone" && selected.side === side && selected.index === index;
-  const fill = side === "player" ? "rgba(77, 213, 255, 0.18)" : "rgba(255, 121, 66, 0.18)";
-  const stroke = isSelected ? "#fff0a6" : side === "player" ? "#4dd5ff" : "#ff7942";
-  drawShape(zone.shape, fill, stroke);
-  const center = shapeCenter(zone.shape);
-  drawLabel(`${zone.id}${zone.capacity ? ` x${zone.capacity}` : ""}`, center.x, center.y);
+function drawSpritePreview(slot, side) {
+  const entry = spriteEntry(slot.previewSpriteId);
+  const img = entry ? spriteImages.get(entry.id) : undefined;
+  if (!entry || !img) return drawGhost(slot, side);
+  const radius = slot.radius ?? defaultRadius(side);
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.globalAlpha = 0.82;
+  if (entry.category === "player" && entry.frame) {
+    const height = radius * 1.92;
+    const width = height * (entry.frame.width / entry.frame.height);
+    ctx.drawImage(img, entry.frame.x, entry.frame.y, entry.frame.width, entry.frame.height, slot.x - width / 2, slot.y - height * 0.86, width, height);
+  } else {
+    const maxSide = radius * (side === "boss" ? 2.05 : 1.55);
+    const ratio = img.naturalWidth / Math.max(1, img.naturalHeight);
+    const width = ratio >= 1 ? maxSide : maxSide * ratio;
+    const height = ratio >= 1 ? maxSide / ratio : maxSide;
+    ctx.drawImage(img, slot.x - width / 2, slot.y - height * 0.85, width, height);
+  }
+  ctx.restore();
+}
+
+function drawGhost(slot, side) {
+  const radius = slot.radius ?? defaultRadius(side);
+  ctx.save();
+  ctx.fillStyle = side === "player" ? "rgba(129, 232, 255, 0.18)" : side === "boss" ? "rgba(255, 213, 92, 0.18)" : "rgba(255, 186, 99, 0.18)";
+  ctx.strokeStyle = side === "player" ? "#81e8ff" : side === "boss" ? "#ffd55c" : "#ffba63";
+  ctx.setLineDash([10 / scale, 8 / scale]);
+  ctx.lineWidth = 3 / scale;
+  ctx.beginPath();
+  ctx.ellipse(slot.x, slot.y, radius, radius * 0.42, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
 }
 
 function drawSlot(slot, side, index) {
   const isSelected = selected?.type === "slot" && selected.side === side && selected.index === index;
-  const color = side === "player" ? "#4dd5ff" : "#ff7942";
-  const fill = side === "player" ? "rgba(77, 213, 255, 0.28)" : "rgba(255, 121, 66, 0.3)";
-  const radius = slot.radius ?? (side === "player" ? 138 : 152);
+  const color = side === "player" ? "#4dd5ff" : side === "boss" ? "#ffd55c" : "#ff7942";
+  const fill = side === "player" ? "rgba(77, 213, 255, 0.26)" : side === "boss" ? "rgba(181, 75, 255, 0.23)" : "rgba(255, 121, 66, 0.28)";
+  const radius = slot.radius ?? defaultRadius(side);
   ctx.save();
-  ctx.lineWidth = (isSelected ? 5 : 2) / scale;
-  ctx.strokeStyle = isSelected ? "#fff0a6" : color;
+  ctx.lineWidth = (isSelected ? 5 : side === "boss" ? 4 : 2) / scale;
+  ctx.strokeStyle = isSelected ? "#ffffff" : color;
   ctx.fillStyle = fill;
   ctx.beginPath();
   ctx.arc(slot.x, slot.y, radius, 0, Math.PI * 2);
@@ -475,66 +478,14 @@ function drawSlot(slot, side, index) {
   ctx.stroke();
   ctx.fillStyle = color;
   ctx.beginPath();
-  ctx.arc(slot.x, slot.y, 12 / scale, 0, Math.PI * 2);
+  ctx.arc(slot.x, slot.y, (side === "boss" ? 16 : 12) / scale, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = "#07101d";
   ctx.lineWidth = 3 / scale;
   ctx.stroke();
   drawFacingArrow(slot.x, slot.y, slot.facing ?? (side === "player" ? "left" : "right"), color);
-  drawLabel(`${slot.id} #${slot.order ?? index + 1}`, slot.x, slot.y - radius - 10 / scale);
+  drawLabel(side === "boss" ? slot.id : `${slot.id} #${slot.order ?? index + 1}`, slot.x, slot.y - radius - 10 / scale);
   ctx.restore();
-}
-
-function drawPreview() {
-  previewSlots("player", Number(playerPreviewCount.value) || 4).forEach((point, index) => drawPreviewMarker(point, "player", index));
-  previewSlots("enemy", Number(enemyPreviewCount.value) || 4).forEach((point, index) => drawPreviewMarker(point, "enemy", index));
-}
-
-function previewSlots(side, count) {
-  const slots = [...slotCollection(side)].sort((a, b) => (a.order ?? 999) - (b.order ?? 999) || a.id.localeCompare(b.id));
-  const points = slots.slice(0, count).map((slot) => ({ x: slot.x, y: slot.y, radius: slot.radius ?? (side === "player" ? 138 : 152) }));
-  const zones = zoneCollection(side);
-  for (const zone of zones) {
-    const capacity = Math.max(1, zone.capacity ?? 1);
-    for (let i = 0; i < capacity && points.length < count; i += 1) {
-      const point = sampleZone(zone.shape, i, capacity);
-      if (point) points.push({ ...point, radius: side === "player" ? 138 : 152 });
-    }
-  }
-  return points;
-}
-
-function drawPreviewMarker(point, side, index) {
-  ctx.save();
-  ctx.fillStyle = side === "player" ? "rgba(129, 232, 255, 0.18)" : "rgba(255, 186, 99, 0.18)";
-  ctx.strokeStyle = side === "player" ? "#81e8ff" : "#ffba63";
-  ctx.setLineDash([10 / scale, 8 / scale]);
-  ctx.lineWidth = 3 / scale;
-  ctx.beginPath();
-  ctx.ellipse(point.x, point.y, point.radius, point.radius * 0.42, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-  drawLabel(`${side[0].toUpperCase()}${index + 1}`, point.x, point.y + 5 / scale);
-  ctx.restore();
-}
-
-function drawShape(shape, fill, stroke) {
-  ctx.fillStyle = fill;
-  ctx.strokeStyle = stroke;
-  ctx.lineWidth = 2 / scale;
-  ctx.beginPath();
-  if (shape.type === "rect") {
-    ctx.rect(shape.x, shape.y, shape.width, shape.height);
-  } else if (shape.type === "circle") {
-    ctx.arc(shape.x, shape.y, shape.radius, 0, Math.PI * 2);
-  } else {
-    if (!shape.points?.length) return;
-    ctx.moveTo(shape.points[0].x, shape.points[0].y);
-    for (const point of shape.points.slice(1)) ctx.lineTo(point.x, point.y);
-    ctx.closePath();
-  }
-  ctx.fill();
-  ctx.stroke();
 }
 
 function drawFacingArrow(x, y, facing, color) {
@@ -568,24 +519,12 @@ function drawLabel(text, x, y) {
 
 function findSlotAt(point) {
   const candidates = [
-    ...battleMap.spawns.enemySlots.map((slot, index) => ({ side: "enemy", index, slot })),
-    ...battleMap.spawns.playerSlots.map((slot, index) => ({ side: "player", index, slot }))
+    ...(battleMap.bossSlot ? [{ side: "boss", index: 0, slot: battleMap.bossSlot }] : []),
+    ...battleMap.enemySlots.map((slot, index) => ({ side: "enemy", index, slot })),
+    ...battleMap.playerSlots.map((slot, index) => ({ side: "player", index, slot }))
   ];
-  for (let i = candidates.length - 1; i >= 0; i--) {
-    const candidate = candidates[i];
-    if (distance(point, candidate.slot) <= Math.max(24 / scale, candidate.slot.radius ?? 120)) return { side: candidate.side, index: candidate.index };
-  }
-  return undefined;
-}
-
-function findZoneAt(point) {
-  const candidates = [
-    ...battleMap.spawns.enemyZones.map((zone, index) => ({ side: "enemy", index, zone })),
-    ...battleMap.spawns.playerZones.map((zone, index) => ({ side: "player", index, zone }))
-  ];
-  for (let i = candidates.length - 1; i >= 0; i--) {
-    const candidate = candidates[i];
-    if (pointInShape(point, candidate.zone.shape)) return { side: candidate.side, index: candidate.index };
+  for (const candidate of candidates) {
+    if (distance(point, candidate.slot) <= Math.max(24 / scale, candidate.slot.radius ?? defaultRadius(candidate.side))) return { side: candidate.side, index: candidate.index };
   }
   return undefined;
 }
@@ -593,18 +532,7 @@ function findZoneAt(point) {
 function deleteSlotAt(point) {
   const hit = findSlotAt(point);
   if (!hit) return false;
-  const [removed] = slotCollection(hit.side).splice(hit.index, 1);
-  selected = undefined;
-  setDirty(true);
-  refreshValidation();
-  showStatus(`${removed.id} deleted.`);
-  return true;
-}
-
-function deleteZoneAt(point) {
-  const hit = findZoneAt(point);
-  if (!hit) return false;
-  const [removed] = zoneCollection(hit.side).splice(hit.index, 1);
+  const removed = removeSlot(hit.side, hit.index);
   selected = undefined;
   setDirty(true);
   refreshValidation();
@@ -615,30 +543,32 @@ function deleteZoneAt(point) {
 function refreshValidation() {
   if (!battleMap) return;
   const warnings = validateBattleMap();
-  validationEl.textContent = warnings.length ? `Warnings:\n${warnings.map((warning) => `- ${warning}`).join("\n")}` : "No validation warnings.";
-  validationEl.classList.toggle("error", warnings.some((warning) => warning.includes("Duplicate") || warning.includes("outside")));
+  validationEl.textContent = warnings.length ? `Variant: ${titleCase(battleMap.variant)}\nWarnings:\n${warnings.map((warning) => `- ${warning}`).join("\n")}` : `Variant: ${titleCase(battleMap.variant)}\nNo validation warnings.`;
+  validationEl.classList.toggle("error", warnings.some((warning) => warning.includes("Duplicate") || warning.includes("outside") || warning.includes("missing")));
 }
 
 function validateBattleMap() {
   const warnings = [];
   if (!battleMap.background?.path || !battleMap.background?.key) warnings.push("Missing background asset key/path.");
-  if (!battleMap.spawns.playerSlots.length && !battleMap.spawns.playerZones.length) warnings.push("Battle map has no player spawn source.");
-  if (!battleMap.spawns.enemySlots.length && !battleMap.spawns.enemyZones.length) warnings.push("Battle map has no enemy spawn source.");
-  if (!battleMap.spawns.playerSlots.length) warnings.push("playerSlots is empty.");
-  if (!battleMap.spawns.enemySlots.length) warnings.push("enemySlots is empty.");
+  if (battleMap.playerSlots.length < 4) warnings.push("Fewer than 4 player slots.");
+  if (battleMap.playerSlots.length > 4) warnings.push("More than 4 player slots.");
+  if (battleMap.variant === "normal") {
+    if (battleMap.bossSlot) warnings.push("Normal variant should not have a boss slot.");
+    if (!battleMap.enemySlots.length) warnings.push("Normal variant has no enemy slots.");
+    if (battleMap.enemySlots.length > 4) warnings.push("Normal variant supports max 4 enemy slots.");
+  } else {
+    if (!battleMap.bossSlot) warnings.push("Boss variant is missing bossSlot.");
+    if (battleMap.enemySlots.length > 3) warnings.push("Boss variant supports max 3 normal enemy slots.");
+  }
   const ids = new Set();
-  for (const item of allSpawnItems()) {
-    if (!item.value.id) warnings.push("Spawn item with missing id.");
-    else if (ids.has(item.value.id)) warnings.push(`Duplicate ID: ${item.value.id}`);
-    ids.add(item.value.id);
-  }
-  for (const slot of [...battleMap.spawns.playerSlots, ...battleMap.spawns.enemySlots]) {
+  for (const slot of allSlots()) {
+    if (!slot.id) warnings.push("Spawn slot with missing id.");
+    else if (ids.has(slot.id)) warnings.push(`Duplicate ID: ${slot.id}`);
+    ids.add(slot.id);
     if (!pointInsideImage(slot)) warnings.push(`${slot.id} is outside image bounds.`);
+    if (slot.previewSpriteId && !spriteEntry(slot.previewSpriteId)) warnings.push(`${slot.id} references missing preview sprite ${slot.previewSpriteId}.`);
   }
-  for (const zone of [...battleMap.spawns.playerZones, ...battleMap.spawns.enemyZones]) {
-    if (!shapeInsideImage(zone.shape)) warnings.push(`${zone.id} extends outside image bounds.`);
-  }
-  const slots = [...battleMap.spawns.playerSlots, ...battleMap.spawns.enemySlots];
+  const slots = allSlots();
   for (let i = 0; i < slots.length; i += 1) {
     for (let j = i + 1; j < slots.length; j += 1) {
       const minSpacing = ((slots[i].radius ?? 120) + (slots[j].radius ?? 120)) * 0.72;
@@ -648,29 +578,72 @@ function validateBattleMap() {
   return warnings;
 }
 
-function allSpawnItems() {
-  return [
-    ...battleMap.spawns.playerSlots.map((value) => ({ value })),
-    ...battleMap.spawns.enemySlots.map((value) => ({ value })),
-    ...battleMap.spawns.playerZones.map((value) => ({ value })),
-    ...battleMap.spawns.enemyZones.map((value) => ({ value }))
-  ];
+function allSlots() {
+  return [...battleMap.playerSlots, ...battleMap.enemySlots, ...(battleMap.bossSlot ? [battleMap.bossSlot] : [])];
 }
 
 function slotCollection(side) {
-  return side === "player" ? battleMap.spawns.playerSlots : battleMap.spawns.enemySlots;
+  if (side === "boss") return battleMap.bossSlot ? [battleMap.bossSlot] : [];
+  return side === "player" ? battleMap.playerSlots : battleMap.enemySlots;
 }
 
-function zoneCollection(side) {
-  return side === "player" ? battleMap.spawns.playerZones : battleMap.spawns.enemyZones;
+function slotFor(side, index) {
+  return side === "boss" ? battleMap.bossSlot : slotCollection(side)[index];
+}
+
+function addSlot(side, slot) {
+  if (side === "boss") battleMap.bossSlot = slot;
+  else slotCollection(side).push(slot);
+}
+
+function removeSlot(side, index) {
+  if (side === "boss") {
+    const removed = battleMap.bossSlot;
+    battleMap.bossSlot = null;
+    return removed;
+  }
+  return slotCollection(side).splice(index, 1)[0];
+}
+
+function canPlaceSide(side, current) {
+  if (side === "boss") {
+    if (battleMap.variant !== "boss") return fail("Normal variants cannot have boss slots.");
+    if (battleMap.bossSlot && current.side !== "boss") return fail("This boss variant already has a boss slot.");
+    return true;
+  }
+  const collection = slotCollection(side);
+  const limit = side === "player" ? 4 : battleMap.variant === "boss" ? 3 : 4;
+  const sameCollection = current.side === side;
+  if (collection.length >= limit && !sameCollection) return fail(`${titleCase(side)} slots are limited to ${limit} on this variant.`);
+  return true;
+}
+
+function fail(message) {
+  showStatus(message, true);
+  return false;
 }
 
 function normalizeBattleMap(metadata) {
-  metadata.spawns ??= {};
-  metadata.spawns.playerSlots ??= [];
-  metadata.spawns.enemySlots ??= [];
-  metadata.spawns.playerZones ??= [];
-  metadata.spawns.enemyZones ??= [];
+  metadata.baseMapId ??= metadata.id.replace(/_(normal|boss)$/, "");
+  metadata.variant ??= metadata.id.endsWith("_boss") ? "boss" : "normal";
+  metadata.playerSlots ??= [];
+  metadata.enemySlots ??= [];
+  metadata.bossSlot ??= null;
+}
+
+function updateVariantControls() {
+  const bossOption = modeSelect.querySelector('option[value="addBoss"]');
+  bossOption.disabled = battleMap?.variant !== "boss";
+  enemyPreviewCount.max = battleMap?.variant === "boss" ? "3" : "4";
+  if (Number(enemyPreviewCount.value) > Number(enemyPreviewCount.max)) enemyPreviewCount.value = enemyPreviewCount.max;
+  enforceModeForVariant();
+}
+
+function enforceModeForVariant() {
+  if (battleMap?.variant !== "boss" && modeSelect.value === "addBoss") {
+    modeSelect.value = "select";
+    showStatus("Boss slot mode is only enabled for boss variants.", true);
+  }
 }
 
 function screenToImage(event) {
@@ -680,67 +653,8 @@ function screenToImage(event) {
   };
 }
 
-function normalizeRect(a, b) {
-  const x = Math.min(a.x, b.x);
-  const y = Math.min(a.y, b.y);
-  return { x, y, width: Math.abs(a.x - b.x), height: Math.abs(a.y - b.y) };
-}
-
-function roundRect(rect) {
-  return { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) };
-}
-
-function pointInShape(point, shape) {
-  if (shape.type === "rect") return point.x >= shape.x && point.x <= shape.x + shape.width && point.y >= shape.y && point.y <= shape.y + shape.height;
-  if (shape.type === "circle") return distance(point, shape) <= shape.radius;
-  let inside = false;
-  for (let i = 0, j = shape.points.length - 1; i < shape.points.length; j = i++) {
-    const a = shape.points[i];
-    const b = shape.points[j];
-    if (a.y > point.y !== b.y > point.y && point.x < ((b.x - a.x) * (point.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
-  }
-  return inside;
-}
-
-function shapeCenter(shape) {
-  if (shape.type === "rect") return { x: shape.x + shape.width / 2, y: shape.y + shape.height / 2 };
-  if (shape.type === "circle") return { x: shape.x, y: shape.y };
-  const sum = shape.points.reduce((acc, point) => ({ x: acc.x + point.x, y: acc.y + point.y }), { x: 0, y: 0 });
-  return { x: sum.x / shape.points.length, y: sum.y / shape.points.length };
-}
-
-function shapeSummary(shape) {
-  if (shape.type === "rect") return `rect x${Math.round(shape.x)} y${Math.round(shape.y)} w${Math.round(shape.width)} h${Math.round(shape.height)}`;
-  if (shape.type === "circle") return `circle x${Math.round(shape.x)} y${Math.round(shape.y)} r${Math.round(shape.radius)}`;
-  return `polygon ${shape.points?.length ?? 0} points`;
-}
-
-function sampleZone(shape, index, capacity) {
-  if (shape.type === "rect") {
-    const columns = Math.ceil(Math.sqrt(capacity));
-    const rows = Math.ceil(capacity / columns);
-    return {
-      x: shape.x + (((index % columns) + 0.5) / columns) * shape.width,
-      y: shape.y + ((Math.floor(index / columns) + 0.5) / rows) * shape.height
-    };
-  }
-  if (shape.type === "circle") {
-    const angle = (index / Math.max(1, capacity)) * Math.PI * 2;
-    return { x: shape.x + Math.cos(angle) * shape.radius * 0.55, y: shape.y + Math.sin(angle) * shape.radius * 0.55 };
-  }
-  return shapeCenter(shape);
-}
-
 function pointInsideImage(point) {
   return point.x >= 0 && point.x <= battleMap.dimensions.width && point.y >= 0 && point.y <= battleMap.dimensions.height;
-}
-
-function shapeInsideImage(shape) {
-  if (shape.type === "rect") return pointInsideImage(shape) && pointInsideImage({ x: shape.x + shape.width, y: shape.y + shape.height });
-  if (shape.type === "circle") {
-    return pointInsideImage({ x: shape.x - shape.radius, y: shape.y - shape.radius }) && pointInsideImage({ x: shape.x + shape.radius, y: shape.y + shape.radius });
-  }
-  return shape.points.every(pointInsideImage);
 }
 
 function distance(a, b) {
@@ -748,7 +662,7 @@ function distance(a, b) {
 }
 
 function uniqueId(prefix, collection) {
-  const used = new Set(collection.map((item) => item.id));
+  const used = new Set([...collection.map((item) => item.id), ...(battleMap.bossSlot ? [battleMap.bossSlot.id] : [])]);
   let index = 1;
   let id = `${prefix}_${index}`;
   while (used.has(id)) id = `${prefix}_${++index}`;
@@ -782,8 +696,50 @@ function showStatus(message, isError = false) {
   statusEl.classList.toggle("error", isError);
 }
 
+function defaultRadius(side) {
+  return side === "boss" ? 256 : side === "player" ? 138 : 152;
+}
+
+function byOrderThenId(a, b) {
+  return (a.order ?? 999) - (b.order ?? 999) || a.id.localeCompare(b.id);
+}
+
+function spriteEntry(id) {
+  return id ? [...spriteCatalog.players, ...spriteCatalog.enemies].find((entry) => entry.id === id) : undefined;
+}
+
+async function preloadSpriteImage(entry) {
+  if (!entry.assetPath) return;
+  try {
+    spriteImages.set(entry.id, await loadImage(`/api/asset?path=${encodeURIComponent(entry.assetPath)}`));
+  } catch {
+    console.warn(`Missing preview sprite asset: ${entry.id}`);
+  }
+}
+
+function drawThumb(target, entry, img) {
+  const thumbCanvas = document.createElement("canvas");
+  thumbCanvas.width = 58;
+  thumbCanvas.height = 58;
+  const thumbCtx = thumbCanvas.getContext("2d");
+  thumbCtx.imageSmoothingEnabled = false;
+  if (entry.frame) {
+    thumbCtx.drawImage(img, entry.frame.x, entry.frame.y, entry.frame.width, entry.frame.height, 3, 0, 52, 58);
+  } else {
+    const ratio = img.naturalWidth / Math.max(1, img.naturalHeight);
+    const width = ratio >= 1 ? 52 : 52 * ratio;
+    const height = ratio >= 1 ? 52 / ratio : 52;
+    thumbCtx.drawImage(img, (58 - width) / 2, (58 - height) / 2, width, height);
+  }
+  target.append(thumbCanvas);
+}
+
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+function titleCase(value) {
+  return value ? `${value[0].toUpperCase()}${value.slice(1)}` : "";
 }
 
 function loadImage(src) {

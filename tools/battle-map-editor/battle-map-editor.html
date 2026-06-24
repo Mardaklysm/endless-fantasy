@@ -18,10 +18,10 @@
           <option value="select">Select / Move</option>
           <option value="addPlayer">Add Player Slot</option>
           <option value="addEnemy">Add Enemy Slot</option>
-          <option value="drawPlayerZone">Draw Player Zone</option>
-          <option value="drawEnemyZone">Draw Enemy Zone</option>
+          <option value="addBoss">Add Boss Slot</option>
         </select>
       </label>
+      <span id="variantState">Variant: -</span>
       <span id="dirtyState">clean</span>
       <span id="coords">x -, y -</span>
     </header>
@@ -31,15 +31,14 @@
         <div class="toggles">
           <label><input id="playerToggle" type="checkbox" checked /> Player Spawns</label>
           <label><input id="enemyToggle" type="checkbox" checked /> Enemy Spawns</label>
-          <label><input id="zonesToggle" type="checkbox" checked /> Spawn Zones</label>
+          <label><input id="bossToggle" type="checkbox" checked /> Boss Spawn</label>
           <label><input id="previewToggle" type="checkbox" checked /> Preview Sprites</label>
         </div>
-        <label class="numberControl">Player preview count <input id="playerPreviewCount" type="number" min="1" max="8" value="4" /></label>
-        <label class="numberControl">Enemy preview count <input id="enemyPreviewCount" type="number" min="1" max="12" value="4" /></label>
+        <label class="numberControl">Player preview count <input id="playerPreviewCount" type="number" min="1" max="4" value="4" /></label>
+        <label class="numberControl">Enemy preview count <input id="enemyPreviewCount" type="number" min="1" max="4" value="4" /></label>
         <p>Left click adds a spawn slot in Add mode.</p>
         <p>Drag a spawn slot to move it. Click a spawn slot to edit it.</p>
-        <p>Shift + click deletes a spawn slot or zone.</p>
-        <p>Right drag creates a rectangular spawn zone for the selected zone mode. Right click edits a zone.</p>
+        <p>Shift + click deletes a spawn slot.</p>
         <p>Mouse wheel zooms. Middle drag or Space + drag pans.</p>
         <div id="validation"></div>
         <div id="status"></div>
@@ -53,7 +52,13 @@
       <form method="dialog" id="slotForm">
         <h2>Spawn Slot</h2>
         <label>ID <input id="slotId" required /></label>
-        <label>Side <select id="slotSide"><option value="player">player</option><option value="enemy">enemy</option></select></label>
+        <label>Side
+          <select id="slotSide">
+            <option value="player">player</option>
+            <option value="enemy">enemy</option>
+            <option value="boss">boss</option>
+          </select>
+        </label>
         <label>Order <input id="slotOrder" type="number" required /></label>
         <label>X <input id="slotX" type="number" step="1" required /></label>
         <label>Y <input id="slotY" type="number" step="1" required /></label>
@@ -61,15 +66,20 @@
         <label>Radius <input id="slotRadius" type="number" min="1" step="1" /></label>
         <label class="enemyOnly">Role
           <select id="slotRole">
-            <option value="default">default</option>
+            <option value="normal">normal</option>
             <option value="front">front</option>
             <option value="back">back</option>
-            <option value="boss">boss</option>
-            <option value="flying">flying</option>
             <option value="large">large</option>
+            <option value="flying">flying</option>
+            <option value="boss">boss</option>
           </select>
         </label>
-        <label class="enemyOnly">Weight <input id="slotWeight" type="number" min="0" step="0.1" /></label>
+        <label>Preview Sprite
+          <div class="spriteField">
+            <input id="slotPreviewSprite" readonly placeholder="none" />
+            <button type="button" id="slotPreviewBtn">Choose</button>
+          </div>
+        </label>
         <label>Notes <textarea id="slotNotes" rows="3"></textarea></label>
         <menu>
           <button type="button" id="slotDeleteBtn">Delete</button>
@@ -80,31 +90,20 @@
       </form>
     </dialog>
 
-    <dialog id="zoneDialog">
-      <form method="dialog" id="zoneForm">
-        <h2>Spawn Zone</h2>
-        <label>ID <input id="zoneId" required /></label>
-        <label>Side <select id="zoneSide"><option value="player">player</option><option value="enemy">enemy</option></select></label>
-        <label>Shape <input id="zoneShape" disabled /></label>
-        <label>Capacity <input id="zoneCapacity" type="number" min="1" step="1" /></label>
-        <label>Facing <select id="zoneFacing"><option value="">default</option><option>left</option><option>right</option><option>up</option><option>down</option></select></label>
-        <label class="enemyOnly">Role
-          <select id="zoneRole">
-            <option value="default">default</option>
-            <option value="front">front</option>
-            <option value="back">back</option>
-            <option value="boss">boss</option>
-            <option value="flying">flying</option>
-            <option value="large">large</option>
-          </select>
-        </label>
-        <label class="enemyOnly">Weight <input id="zoneWeight" type="number" min="0" step="0.1" /></label>
-        <label>Notes <textarea id="zoneNotes" rows="3"></textarea></label>
+    <dialog id="spriteDialog" class="spriteDialog">
+      <form method="dialog" id="spriteForm">
+        <h2>Choose Preview Sprite</h2>
+        <div class="spriteToolbar">
+          <button type="button" data-filter="player">Player</button>
+          <button type="button" data-filter="enemy">Enemy</button>
+          <button type="button" data-filter="boss">Boss-capable</button>
+          <input id="spriteSearch" placeholder="Search sprites" />
+        </div>
+        <div id="spriteGrid" class="spriteGrid"></div>
         <menu>
-          <button type="button" id="zoneDeleteBtn">Delete</button>
+          <button type="button" id="clearSpriteBtn">Clear</button>
           <span></span>
-          <button type="button" id="zoneCancelBtn">Cancel</button>
-          <button id="zoneSaveBtn" value="default">Apply</button>
+          <button type="button" id="spriteCancelBtn">Close</button>
         </menu>
       </form>
     </dialog>

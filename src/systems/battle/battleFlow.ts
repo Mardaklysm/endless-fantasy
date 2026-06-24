@@ -11,7 +11,7 @@ import type {
   EnemyState,
   PlayerSkillDef
 } from "../../data/gameDataTypes";
-import { battleMapBackgroundKeyForId } from "../../data/battleMapSpawns";
+import { battleMapBackgroundKeyForId, isBossEncounter, resolveBattleMapVariant } from "../../data/battleMapSpawns";
 import { ITEMS } from "../../data/items";
 import { PLAYER_SKILLS } from "../../data/playerSkills";
 import { SPELLS } from "../../data/spells";
@@ -98,29 +98,34 @@ export function intentMessage(this: CrystalOathSceneContext, enemyName: string, 
 }
 
 export function battleBackgroundFor(this: CrystalOathSceneContext, dungeonId?: string): AssetKey {
-  return battleMapBackgroundKeyForId(this.battleMapIdFor(dungeonId)) ?? "battle_bg_plains";
+  return battleMapBackgroundKeyForId(this.battleMapIdFor(dungeonId, "normal")) ?? "battle_bg_plains";
 }
 
-export function battleMapIdFor(this: CrystalOathSceneContext, dungeonId?: string): string {
+export function battleMapBaseIdFor(this: CrystalOathSceneContext, dungeonId?: string): string {
   if (dungeonId === "mossCave") return "moss_cave";
   if (dungeonId === "ashenKeep") return "ashen_keep";
   if (dungeonId === "tideShrine") return "tide_shrine";
   if (dungeonId === "eclipseSpire") return "eclipse_spire";
-  if (dungeonId === "skyglassTower") return "plains";
+  if (dungeonId === "skyglassTower") return "sunlit_plains";
   const terrain = this.world[this.worldPos.y]?.[this.worldPos.x];
   const family = terrain ? worldTileEncounterFamily(terrain) : undefined;
   if (family === "forest") return "forest_path";
   if (family === "sand") return "ashen_keep";
   if (family === "water") return "tide_shrine";
   if (family === "final") return "eclipse_spire";
-  return "plains";
+  return "sunlit_plains";
+}
+
+export function battleMapIdFor(this: CrystalOathSceneContext, dungeonId?: string, variant: "normal" | "boss" = "normal"): string {
+  return resolveBattleMapVariant(this.battleMapBaseIdFor(dungeonId), variant)?.id ?? "sunlit_plains_normal";
 }
 
 export function beginBattle(this: CrystalOathSceneContext, kind: BattleState["kind"], enemies: EnemyState[], canRun: boolean, intro: string, dungeonId?: string, bossId?: string) {
   this.clearHeldMovement();
   this.syncAllVisualPositions();
   this.party.forEach((c) => (c.defending = false));
-  const battleMapId = this.battleMapIdFor(dungeonId);
+  const encounterKind = isBossEncounter(enemies, kind, bossId) ? "boss" : "normal";
+  const battleMapId = this.battleMapIdFor(dungeonId, encounterKind);
   this.battle = {
     kind,
     enemies,

@@ -42,6 +42,14 @@ textarea {
   color: #a9bad8;
 }
 
+#variantState {
+  padding: 4px 8px;
+  border: 1px solid #594d83;
+  border-radius: 4px;
+  color: #d9ccff;
+  white-space: nowrap;
+}
+
 #dirtyState.dirty {
   color: #ffe18a;
   border-color: #9b7831;
@@ -165,4 +173,81 @@ menu {
   gap: 8px;
   padding: 0;
   margin: 14px 0 0;
+}
+
+.spriteField {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.spriteField button {
+  min-width: 82px;
+}
+
+.spriteDialog {
+  width: min(760px, calc(100vw - 32px));
+}
+
+.spriteToolbar {
+  display: grid;
+  grid-template-columns: auto auto auto 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.spriteToolbar button.active {
+  color: #10131a;
+  background: #fff0a6;
+  border-color: #fff0a6;
+}
+
+.spriteGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 8px;
+  max-height: min(58vh, 520px);
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.spriteChoice {
+  display: grid;
+  grid-template-rows: 62px auto auto;
+  gap: 4px;
+  align-items: center;
+  justify-items: center;
+  min-height: 118px;
+  padding: 8px;
+  border: 1px solid #425372;
+  border-radius: 6px;
+  background: #0e1727;
+  color: #f4f7ff;
+  text-align: center;
+}
+
+.spriteChoice:hover {
+  border-color: #fff0a6;
+  background: #16233a;
+}
+
+.spriteChoice strong,
+.spriteChoice small {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.spriteChoice small {
+  color: #aebcd6;
+}
+
+.spriteThumb {
+  display: grid;
+  place-items: center;
+  width: 62px;
+  height: 62px;
+  border: 1px solid #2e3b56;
+  background: #060a12;
 }
