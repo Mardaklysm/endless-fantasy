@@ -3,7 +3,13 @@ import { BATTLE_TURN_DELAY_MS } from "../../app/config";
 import type { CharacterState, EnemyState, StatusState } from "../../data/gameDataTypes";
 import { ARMORS, WEAPONS } from "../../data/gear";
 import { ITEMS } from "../../data/items";
+import { SPELLS } from "../../data/spells";
 import type { CrystalOathSceneContext } from "../../scene/sceneContext";
+import type { BattleLevelUpReward, BattleLootReward } from "./battleTypes";
+
+const POTION_DROP_CHANCE = 10;
+const RARE_DROP_CHANCE = 1;
+const RARE_LOOT_ITEM_ID = "etherleaf";
 
 function queueStatusDamageFloat(this: CrystalOathSceneContext, actor: CharacterState | EnemyState, damage: number) {
   if (!this.battle) return;
@@ -73,7 +79,18 @@ export function applyTurnStartStatuses(this: CrystalOathSceneContext, actor: Cha
 export function checkBattleEnd(this: CrystalOathSceneContext): boolean {
   if (!this.battle) return true;
   if (this.allEnemiesDefeated()) {
-    this.awardVictory();
+    if (!this.battle.victoryAwarded) {
+      if (this.battle.victoryPending) {
+        const remaining = this.remainingBattleFloatingTextMs();
+        if (remaining > 0) {
+          this.battle.actionTimer = remaining;
+          return true;
+        }
+        this.awardVictory();
+      } else {
+        this.beginVictorySequence();
+      }
+    }
     return true;
   }
   if (this.allPartyDefeated()) {
@@ -83,6 +100,24 @@ export function checkBattleEnd(this: CrystalOathSceneContext): boolean {
     return true;
   }
   return false;
+}
+
+export function beginVictorySequence(this: CrystalOathSceneContext) {
+  if (!this.battle || this.battle.victoryAwarded || this.battle.victoryPending) return;
+  this.battle.victoryPending = true;
+  this.battle.current = undefined;
+  this.battle.pendingAction = undefined;
+  this.battle.animation = undefined;
+  this.battle.selected = 0;
+  if (this.battle.carousel) this.battle.carousel.dissolves = [];
+  const remaining = this.remainingBattleFloatingTextMs();
+  if (remaining > 0) {
+    this.battle.phase = "resolving";
+    this.battle.actionTimer = remaining;
+    this.markDirty();
+    return;
+  }
+  this.awardVictory();
 }
 
 export function tickStatus(this: CrystalOathSceneContext, actor: CharacterState | EnemyState) {
@@ -100,11 +135,39 @@ export function statusActive(this: CrystalOathSceneContext, actor: CharacterStat
 
 export function awardVictory(this: CrystalOathSceneContext) {
   if (!this.battle || this.battle.victoryAwarded) return;
-  const xp = this.battle.enemies.reduce((sum, e) => sum + e.xp, 0) * this.settings.xpMultiplier;
-  const gold = this.battle.enemies.reduce((sum, e) => sum + e.gold, 0);
+  this.cleanupBattleFloatingTexts();
+  const defeatedEnemies = this.battle.enemies.filter((enemy) => enemy.hp <= 0);
+  const xp = Math.max(0, Math.round(defeatedEnemies.reduce((sum, e) => sum + e.xp, 0) * this.settings.xpMultiplier));
+  const gold = defeatedEnemies.reduce((sum, enemy) => sum + rollGoldForEnemy.call(this, enemy), 0);
+  const loot = rollVictoryLoot.call(this, defeatedEnemies);
   this.gold += gold;
+  for (const item of loot) {
+    this.inventory[item.itemId] = (this.inventory[item.itemId] ?? 0) + item.quantity;
+  }
   this.battle.log.push(`Victory! Gained ${xp} XP and ${gold} gold.`);
+  const levelUps = applyVictoryXp.call(this, xp);
+  this.battle.victoryRewards = { xp, gold, loot, levelUps };
+  this.battle.victoryPending = false;
+  if (this.battle.carousel) this.battle.carousel.dissolves = [];
+  this.battle.victoryAwarded = true;
+  this.battle.phase = "victory";
+  this.audio.blip("victory");
+  this.markDirty();
+}
+
+function applyVictoryXp(this: CrystalOathSceneContext, xp: number): BattleLevelUpReward[] {
+  const levelUps: BattleLevelUpReward[] = [];
   for (const member of this.party) {
+    const before = {
+      level: member.level,
+      maxHp: member.maxHp,
+      attack: member.baseAttack,
+      defense: member.baseDefense,
+      speed: member.speed,
+      luck: member.luck,
+      spells: [...member.spells],
+      chargeMaxes: chargeMaxes(member)
+    };
     member.xp += xp;
     while (member.level < 12 && member.xp >= member.nextXp) {
       member.xp -= member.nextXp;
@@ -118,25 +181,79 @@ export function awardVictory(this: CrystalOathSceneContext) {
       if (member.level % 3 === 0) member.luck += 1;
       if (member.id === "fighter" && member.level >= 7 && !member.spells.includes("rally")) member.spells.push("rally");
       this.refreshCharges(member, true);
-      this.battle.log.push(`${member.name} reached level ${member.level}!`);
+    }
+    if (member.level > before.level) {
+      const newSpells = member.spells.filter((spellId) => !before.spells.includes(spellId)).map((spellId) => SPELLS[spellId]?.name ?? spellId);
+      levelUps.push({
+        characterId: member.id,
+        name: member.name,
+        oldLevel: before.level,
+        newLevel: member.level,
+        hpGain: member.maxHp - before.maxHp,
+        attackGain: member.baseAttack - before.attack,
+        defenseGain: member.baseDefense - before.defense,
+        speedGain: member.speed - before.speed,
+        luckGain: member.luck - before.luck,
+        newSpells,
+        chargeLines: chargeDeltaLines(before.chargeMaxes, chargeMaxes(member))
+      });
     }
   }
-  if (this.battle.kind === "random") {
-    const bestEnemy = [...this.battle.enemies].sort((a, b) => b.xp + b.gold - (a.xp + a.gold))[0];
-    const dropChance = Phaser.Math.Clamp(20 + Math.floor((bestEnemy?.xp ?? 0) / 10), 20, 38);
-    if (Phaser.Math.Between(1, 100) <= dropChance) {
-      const loot = bestEnemy && bestEnemy.xp > 60 ? Phaser.Utils.Array.GetRandom(["etherleaf", "phoenixAsh", "smokeBomb"]) : Phaser.Utils.Array.GetRandom(["potion", "antidote", "potion"]);
-      this.inventory[loot] = (this.inventory[loot] ?? 0) + 1;
-      this.battle.log.push(`Found ${ITEMS[loot].name}.`);
-    }
+  return levelUps;
+}
+
+function rollVictoryLoot(this: CrystalOathSceneContext, enemies: EnemyState[]): BattleLootReward[] {
+  const rewards = new Map<string, BattleLootReward>();
+  for (const enemy of enemies) {
+    if (Phaser.Math.Between(1, 100) <= POTION_DROP_CHANCE) addLootReward(rewards, "potion");
+    if (Phaser.Math.Between(1, 100) <= RARE_DROP_CHANCE) addLootReward(rewards, RARE_LOOT_ITEM_ID);
   }
-  this.battle.victoryAwarded = true;
-  this.battle.phase = "log";
-  this.audio.blip("victory");
+  return [...rewards.values()];
+}
+
+function addLootReward(rewards: Map<string, BattleLootReward>, itemId: string) {
+  const existing = rewards.get(itemId);
+  if (existing) {
+    existing.quantity += 1;
+    return;
+  }
+  rewards.set(itemId, {
+    itemId,
+    name: ITEMS[itemId]?.name ?? itemId,
+    quantity: 1
+  });
+}
+
+function rollGoldForEnemy(this: CrystalOathSceneContext, enemy: EnemyState) {
+  const level = Math.max(1, Math.floor(enemy.level ?? 1));
+  const min = level * 3;
+  const max = level * 7 + 1;
+  const multiplier = enemy.boss ? 3 : 1;
+  return Phaser.Math.Between(min, max) * multiplier;
+}
+
+function chargeMaxes(member: CharacterState) {
+  return {
+    "1": member.charges["1"]?.max ?? 0,
+    "2": member.charges["2"]?.max ?? 0,
+    "3": member.charges["3"]?.max ?? 0
+  };
+}
+
+function chargeDeltaLines(before: Record<string, number>, after: Record<string, number>) {
+  const lines: string[] = [];
+  for (const tier of ["1", "2", "3"]) {
+    if ((after[tier] ?? 0) > (before[tier] ?? 0)) lines.push(`T${tier} slots ${before[tier] ?? 0}->${after[tier]}`);
+  }
+  return lines;
 }
 
 export function advanceBattleLog(this: CrystalOathSceneContext) {
   if (!this.battle) return;
+  if (this.battle.phase === "victory") {
+    this.finishBattle(true);
+    return;
+  }
   if (this.allEnemiesDefeated() && this.battle.victoryAwarded) {
     this.finishBattle(true);
     return;
@@ -160,6 +277,8 @@ export function finishBattle(this: CrystalOathSceneContext, won: boolean) {
     this.updateCloudOverlay(0);
     this.markDirty();
   };
+  this.cleanupBattleFloatingTexts();
+  if (this.battle.carousel) this.battle.carousel.dissolves = [];
   this.battle = undefined;
   if (!won) {
     this.mode = dungeonId ? "dungeon" : "world";

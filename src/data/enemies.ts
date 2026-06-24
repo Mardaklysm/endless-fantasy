@@ -111,6 +111,7 @@ export function enemy(
     attack,
     defense,
     speed,
+    level: inferredEnemyLevel(maxHp, xp),
     xp,
     gold,
     element,
@@ -138,5 +139,11 @@ export function boss(
   sprite: EnemyDef["sprite"],
   moves: EnemyMove[]
 ): EnemyDef {
-  return { ...enemy(id, name, maxHp, attack, defense, speed, xp, gold, element, weak, resist, palette, sprite, moves), boss: true };
+  return { ...enemy(id, name, maxHp, attack, defense, speed, xp, gold, element, weak, resist, palette, sprite, moves), level: inferredEnemyLevel(maxHp, xp, true), boss: true };
+}
+
+function inferredEnemyLevel(maxHp: number, xp: number, boss = false) {
+  const pressure = Math.max(xp, Math.floor(maxHp * 0.75));
+  const level = Math.max(1, Math.ceil(pressure / 28));
+  return boss ? Math.max(3, level + 1) : level;
 }

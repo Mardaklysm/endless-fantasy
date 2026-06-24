@@ -77,35 +77,36 @@ export function drawEnemySprite(this: CrystalOathSceneContext, enemy: EnemyState
   }
   const p = enemy.palette.map((c) => parseInt(c.slice(1), 16));
   const dead = enemy.hp <= 0 ? 0.28 : 1;
-  this.g.fillStyle(p[0], dead);
+  const graphics = this.ui;
+  graphics.fillStyle(p[0], dead);
   if (enemy.sprite === "blob") {
-    this.g.fillRect(x, y + 34, 20 * s, 10 * s);
-    this.g.fillRect(x + 4 * s, y + 18, 12 * s, 16 * s);
-    this.g.fillStyle(p[1], dead).fillRect(x + 8 * s, y + 12, 8 * s, 8 * s);
+    graphics.fillRect(x, y + 34, 20 * s, 10 * s);
+    graphics.fillRect(x + 4 * s, y + 18, 12 * s, 16 * s);
+    graphics.fillStyle(p[1], dead).fillRect(x + 8 * s, y + 12, 8 * s, 8 * s);
   } else if (enemy.sprite === "wing") {
-    this.g.fillTriangle(x, y + 32, x + 10 * s, y + 8, x + 16 * s, y + 36);
-    this.g.fillTriangle(x + 20 * s, y + 32, x + 10 * s, y + 8, x + 4 * s, y + 36);
-    this.g.fillStyle(p[1], dead).fillRect(x + 8 * s, y + 14, 8 * s, 18 * s);
+    graphics.fillTriangle(x, y + 32, x + 10 * s, y + 8, x + 16 * s, y + 36);
+    graphics.fillTriangle(x + 20 * s, y + 32, x + 10 * s, y + 8, x + 4 * s, y + 36);
+    graphics.fillStyle(p[1], dead).fillRect(x + 8 * s, y + 14, 8 * s, 18 * s);
   } else if (enemy.sprite === "knight") {
-    this.g.fillRect(x + 5 * s, y + 8, 12 * s, 26 * s);
-    this.g.fillStyle(p[1], dead).fillRect(x + 3 * s, y + 18, 16 * s, 18 * s);
-    this.g.fillStyle(p[2], dead).fillRect(x + 8 * s, y + 11, 8 * s, 4 * s);
+    graphics.fillRect(x + 5 * s, y + 8, 12 * s, 26 * s);
+    graphics.fillStyle(p[1], dead).fillRect(x + 3 * s, y + 18, 16 * s, 18 * s);
+    graphics.fillStyle(p[2], dead).fillRect(x + 8 * s, y + 11, 8 * s, 4 * s);
   } else if (enemy.sprite === "serpent") {
     for (let i = 0; i < 5; i += 1) {
-      this.g.fillStyle(p[i % 2], dead).fillRect(x + i * 6 * s, y + (i % 2) * 5 * s + 18, 8 * s, 8 * s);
+      graphics.fillStyle(p[i % 2], dead).fillRect(x + i * 6 * s, y + (i % 2) * 5 * s + 18, 8 * s, 8 * s);
     }
-    this.g.fillStyle(p[2], dead).fillRect(x + 30 * s, y + 12, 10 * s, 10 * s);
+    graphics.fillStyle(p[2], dead).fillRect(x + 30 * s, y + 12, 10 * s, 10 * s);
   } else if (enemy.sprite === "crown") {
-    this.g.fillRect(x + 4 * s, y + 20, 18 * s, 16 * s);
-    this.g.fillStyle(p[2], dead);
-    this.g.fillTriangle(x + 4 * s, y + 20, x + 8 * s, y + 4, x + 12 * s, y + 20);
-    this.g.fillTriangle(x + 11 * s, y + 20, x + 15 * s, y + 2, x + 19 * s, y + 20);
+    graphics.fillRect(x + 4 * s, y + 20, 18 * s, 16 * s);
+    graphics.fillStyle(p[2], dead);
+    graphics.fillTriangle(x + 4 * s, y + 20, x + 8 * s, y + 4, x + 12 * s, y + 20);
+    graphics.fillTriangle(x + 11 * s, y + 20, x + 15 * s, y + 2, x + 19 * s, y + 20);
   } else {
-    this.g.fillRect(x + 4 * s, y + 12, 16 * s, 22 * s);
-    this.g.fillStyle(p[1], dead).fillRect(x, y + 25, 24 * s, 10 * s);
+    graphics.fillRect(x + 4 * s, y + 12, 16 * s, 22 * s);
+    graphics.fillStyle(p[1], dead).fillRect(x, y + 25, 24 * s, 10 * s);
   }
-  this.g.fillStyle(0xffffff, dead).fillRect(x + 8 * s, y + 20, 2 * s, 2 * s);
-  this.g.fillRect(x + 14 * s, y + 20, 2 * s, 2 * s);
+  graphics.fillStyle(0xffffff, dead).fillRect(x + 8 * s, y + 20, 2 * s, 2 * s);
+  graphics.fillRect(x + 14 * s, y + 20, 2 * s, 2 * s);
 }
 
 export function drawPixelCrystal(this: CrystalOathSceneContext, x: number, y: number, scale: number) {

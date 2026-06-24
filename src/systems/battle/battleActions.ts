@@ -20,11 +20,14 @@ export function queueBattleFloatingText(
   if (!this.battle) return;
   const sign = kind === "heal" ? "+" : kind === "damage" ? "-" : "";
   const numeric = Math.abs(amount);
+  const anchor = this.battleActorCenter(side, actorId) ?? { x: 0, y: 0 };
   this.battle.floatingTexts ??= [];
   this.battle.floatingTexts.push({
     id: `float_${++floatingTextId}`,
     side,
     actorId,
+    anchorX: anchor.x,
+    anchorY: anchor.y,
     amount,
     maxHp,
     kind,
@@ -34,6 +37,24 @@ export function queueBattleFloatingText(
     duration: options.critical ? 980 : 820,
     jitterX: Phaser.Math.Between(-8, 8)
   });
+}
+
+export function remainingBattleFloatingTextMs(this: CrystalOathSceneContext) {
+  if (!this.battle?.floatingTexts?.length) return 0;
+  const now = this.time.now;
+  let remaining = 0;
+  this.battle.floatingTexts = this.battle.floatingTexts.filter((entry) => {
+    const entryRemaining = entry.duration - (now - entry.createdAt);
+    if (entryRemaining <= 0) return false;
+    remaining = Math.max(remaining, entryRemaining);
+    return true;
+  });
+  return remaining;
+}
+
+export function cleanupBattleFloatingTexts(this: CrystalOathSceneContext) {
+  if (!this.battle) return;
+  this.battle.floatingTexts = [];
 }
 
 export function confirmBattleSelection(this: CrystalOathSceneContext) {

@@ -117,6 +117,7 @@ export interface EnemyDef {
   attack: number;
   defense: number;
   speed: number;
+  level: number;
   xp: number;
   gold: number;
   element: ElementType;

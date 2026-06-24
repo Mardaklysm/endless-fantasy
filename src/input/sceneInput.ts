@@ -236,6 +236,11 @@ export function handleExplore(this: CrystalOathSceneContext, event: KeyboardEven
 export function handleBattle(this: CrystalOathSceneContext, event: KeyboardEvent) {
   if (!this.battle) return;
   if (this.battle.phase === "resolving") return;
+  if (this.battle.phase === "victory") {
+    if (isConfirm(event)) this.finishBattle(true);
+    this.markDirty();
+    return;
+  }
   if (this.battle.phase === "log") {
     if (isConfirm(event) || isCancel(event)) {
       this.advanceBattleLog();

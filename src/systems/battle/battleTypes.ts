@@ -28,6 +28,8 @@ export interface BattleFloatingText {
   id: string;
   side: "party" | "enemy";
   actorId: string;
+  anchorX: number;
+  anchorY: number;
   text: string;
   amount: number;
   maxHp: number;
@@ -73,7 +75,34 @@ export interface BattleCarouselState {
   dissolves?: BattleCarouselDissolve[];
 }
 
-export type BattlePhase = "command" | "target" | "skill" | "spell" | "item" | "allyTarget" | "resolving" | "log";
+export type BattlePhase = "command" | "target" | "skill" | "spell" | "item" | "allyTarget" | "resolving" | "log" | "victory";
+
+export interface BattleLootReward {
+  itemId: string;
+  name: string;
+  quantity: number;
+}
+
+export interface BattleLevelUpReward {
+  characterId: string;
+  name: string;
+  oldLevel: number;
+  newLevel: number;
+  hpGain: number;
+  attackGain: number;
+  defenseGain: number;
+  speedGain: number;
+  luckGain: number;
+  newSpells: string[];
+  chargeLines: string[];
+}
+
+export interface BattleVictoryRewards {
+  xp: number;
+  gold: number;
+  loot: BattleLootReward[];
+  levelUps: BattleLevelUpReward[];
+}
 
 export interface InitiativeEntry {
   side: "party" | "enemy";
@@ -102,5 +131,7 @@ export interface BattleState {
   floatingTexts?: BattleFloatingText[];
   carousel?: BattleCarouselState;
   actionTimer: number;
+  victoryPending?: boolean;
+  victoryRewards?: BattleVictoryRewards;
   victoryAwarded: boolean;
 }
