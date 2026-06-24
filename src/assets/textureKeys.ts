@@ -223,6 +223,12 @@ export const PARTY_CLASS: Record<CharacterState["id"], CharacterSpriteClass> = {
 export const ENEMY_TEXTURES: Record<string, AssetKey> = {
   slimebud: "enemy_slimebud",
   bristleRat: "enemy_bristle_rat",
+  greenWolf: "enemy_green_wolf",
+  bandit: "enemy_bandit",
+  reefCrab: "enemy_reef_crab",
+  jungleShaman: "enemy_jungle_shaman",
+  ashGolem: "enemy_ash_golem",
+  seaSerpent: "enemy_sea_serpent",
   fieldImp: "enemy_field_imp",
   thornWisp: "enemy_thorn_wisp",
   mossling: "enemy_mossling",
