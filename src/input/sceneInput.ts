@@ -243,10 +243,10 @@ export function handleBattle(this: CrystalOathSceneContext, event: KeyboardEvent
     this.markDirty();
     return;
   }
-  if (isUp(event)) this.adjustBattleSelection(-1);
-  else if (isDown(event)) this.adjustBattleSelection(1);
-  else if (isLeft(event)) this.adjustBattleSelection(-1);
-  else if (isRight(event)) this.adjustBattleSelection(1);
+  if (isUp(event)) this.adjustBattleSelection("up");
+  else if (isDown(event)) this.adjustBattleSelection("down");
+  else if (isLeft(event)) this.adjustBattleSelection("left");
+  else if (isRight(event)) this.adjustBattleSelection("right");
   else if (isCancel(event)) this.cancelBattleSubmenu();
   else if (isConfirm(event)) this.confirmBattleSelection();
   this.markDirty();

@@ -1,11 +1,11 @@
 {
   "player": {
-    "defaultRadius": 138,
+    "defaultRadius": 174,
     "slotSize": 96,
     "bodyCenterX": 48,
     "feetBaselineY": 82,
-    "spriteCellWidth": 166,
-    "shadowWidth": 74,
+    "spriteCellWidth": 174,
+    "shadowWidth": 80,
     "shadowHeight": 14
   },
   "enemy": {

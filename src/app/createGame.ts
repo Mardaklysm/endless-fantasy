@@ -19,5 +19,9 @@ export function createGameConfig(parent = "game"): Phaser.Types.Core.GameConfig 
 }
 
 export function createGame(parent = "game") {
-  return new Phaser.Game(createGameConfig(parent));
+  const game = new Phaser.Game(createGameConfig(parent));
+  if (import.meta.env.DEV) {
+    (globalThis as typeof globalThis & { __CRYSTAL_OATH_GAME__?: Phaser.Game }).__CRYSTAL_OATH_GAME__ = game;
+  }
+  return game;
 }

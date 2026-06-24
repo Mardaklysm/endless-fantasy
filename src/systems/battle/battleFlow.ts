@@ -339,10 +339,33 @@ export function tickSkillCooldowns(this: CrystalOathSceneContext, actor: Charact
   }
 }
 
-export function adjustBattleSelection(this: CrystalOathSceneContext, delta: number) {
+type BattleSelectionMove = number | "up" | "down" | "left" | "right";
+
+export function adjustBattleSelection(this: CrystalOathSceneContext, move: BattleSelectionMove) {
   if (!this.battle) return;
   const options = this.battleOptions();
   if (!options.length) return;
-  this.battle.selected = wrap(this.battle.selected + delta, options.length);
+  if (typeof move === "number") {
+    this.battle.selected = wrap(this.battle.selected + move, options.length);
+    this.audio.blip("confirm");
+    return;
+  }
+  if (this.battle.phase === "command") {
+    const columns = 2;
+    const rows = Math.ceil(options.length / columns);
+    const row = Math.floor(this.battle.selected / columns);
+    const col = this.battle.selected % columns;
+    if (move === "up" || move === "down") {
+      const nextRow = wrap(row + (move === "down" ? 1 : -1), rows);
+      this.battle.selected = Math.min(options.length - 1, nextRow * columns + col);
+    } else {
+      const rowStart = row * columns;
+      const rowCount = Math.min(columns, options.length - rowStart);
+      this.battle.selected = rowStart + wrap(col + (move === "right" ? 1 : -1), rowCount);
+    }
+    this.audio.blip("confirm");
+    return;
+  }
+  this.battle.selected = wrap(this.battle.selected + (move === "down" || move === "right" ? 1 : -1), options.length);
   this.audio.blip("confirm");
 }
