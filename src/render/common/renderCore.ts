@@ -276,7 +276,11 @@ export function explorationCharacterFrame(this: CrystalOathSceneContext, stepFra
   return `walk_down_${suffix}` as CharacterSpriteFrameName;
 }
 
-export function battleCharacterFrame(this: CrystalOathSceneContext, member: CharacterState): CharacterSpriteFrameName {
+export function battleCharacterFrame(
+  this: CrystalOathSceneContext,
+  member: CharacterState,
+  facing: "left" | "right" | "up" | "down" = "left"
+): CharacterSpriteFrameName {
   const animation = this.battle?.animation;
   if (animation?.action.side === "party" && animation.action.actorId === member.id) {
     if (animation.action.type === "attack" || animation.action.type === "skill") {
@@ -284,7 +288,7 @@ export function battleCharacterFrame(this: CrystalOathSceneContext, member: Char
     }
     return animation.elapsed < animation.impactAt ? "walk_left_b" : "walk_left_a";
   }
-  return "walk_left_a";
+  return `walk_${facing}_a` as CharacterSpriteFrameName;
 }
 
 export function drawTileTexture(this: CrystalOathSceneContext, key: AssetKey | undefined, x: number, y: number, depth = LAYER_WORLD_IMAGE, flipX = false, flipY = false): boolean {

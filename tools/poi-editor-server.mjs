@@ -6,10 +6,13 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
-const editorRoot = path.join(__dirname, "poi-editor");
+const editorMode = process.argv.includes("--battle-map") ? "battle" : "poi";
+const editorRoot = path.join(__dirname, editorMode === "battle" ? "battle-map-editor" : "poi-editor");
+const editorIndex = editorMode === "battle" ? "/battle-map-editor.html" : "/index.html";
 const poiDir = path.join(repoRoot, "src", "data", "pois");
+const battleMapDir = path.join(repoRoot, "src", "data", "battle-maps");
 const host = "127.0.0.1";
-const startPort = Number(process.env.POI_EDITOR_PORT ?? 5188);
+const startPort = Number((editorMode === "battle" ? process.env.BATTLE_MAP_EDITOR_PORT : process.env.POI_EDITOR_PORT) ?? 5188);
 
 const mimeTypes = new Map([
   [".html", "text/html; charset=utf-8"],
@@ -32,9 +35,15 @@ const server = createServer(async (req, res) => {
       if (req.method === "GET") return sendJson(res, await readPoi(id));
       if (req.method === "PUT") return savePoi(req, res, id);
     }
+    if (url.pathname === "/api/battle-maps" && req.method === "GET") return sendJson(res, await listBattleMaps());
+    if (url.pathname.startsWith("/api/battle-maps/")) {
+      const id = decodeURIComponent(url.pathname.slice("/api/battle-maps/".length));
+      if (req.method === "GET") return sendJson(res, await readBattleMap(id));
+      if (req.method === "PUT") return saveBattleMap(req, res, id);
+    }
     if (url.pathname === "/api/asset" && req.method === "GET") return serveAsset(res, url.searchParams.get("path") ?? "");
     if (req.method !== "GET") return sendText(res, 405, "Method not allowed");
-    return serveStatic(res, url.pathname === "/" ? "/index.html" : url.pathname);
+    return serveStatic(res, url.pathname === "/" ? editorIndex : url.pathname);
   } catch (error) {
     console.error(error);
     return sendJson(res, { error: error instanceof Error ? error.message : String(error) }, 500);
@@ -51,7 +60,7 @@ function listenOnAvailablePort(port) {
   });
   server.listen(port, host, () => {
     const url = `http://${host}:${port}/`;
-    console.log(`POI editor running at ${url}`);
+    console.log(`${editorMode === "battle" ? "Battle Map Spawn Editor" : "POI editor"} running at ${url}`);
     openBrowser(url);
   });
 }
@@ -109,6 +118,88 @@ function normalizePoi(poi) {
   poi.walkableZones ??= [];
   poi.blockedZones ??= [];
   poi.eventZones ??= [];
+}
+
+async function listBattleMaps() {
+  await fs.mkdir(battleMapDir, { recursive: true });
+  const entries = await fs.readdir(battleMapDir, { withFileTypes: true });
+  const battleMaps = [];
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+    const metadata = JSON.parse(await fs.readFile(path.join(battleMapDir, entry.name), "utf8"));
+    battleMaps.push({
+      id: metadata.id,
+      displayName: metadata.displayName,
+      type: metadata.type,
+      background: metadata.background
+    });
+  }
+  return battleMaps.sort((a, b) => a.displayName.localeCompare(b.displayName) || a.id.localeCompare(b.id));
+}
+
+async function readBattleMap(id) {
+  const file = battleMapFileForId(id);
+  const metadata = JSON.parse(await fs.readFile(file, "utf8"));
+  normalizeBattleMap(metadata);
+  return metadata;
+}
+
+async function saveBattleMap(req, res, id) {
+  const body = await readRequestBody(req);
+  const metadata = JSON.parse(body);
+  normalizeBattleMap(metadata);
+  validateBattleMap(id, metadata);
+  const file = battleMapFileForId(id);
+  const backup = `${file}.bak`;
+  try {
+    await fs.copyFile(file, backup);
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  await fs.writeFile(file, `${JSON.stringify(metadata, null, 2)}\n`, "utf8");
+  return sendJson(res, { ok: true, backup: path.relative(repoRoot, backup).replaceAll("\\", "/") });
+}
+
+function normalizeBattleMap(metadata) {
+  metadata.spawns ??= {};
+  metadata.spawns.playerSlots ??= [];
+  metadata.spawns.enemySlots ??= [];
+  metadata.spawns.playerZones ??= [];
+  metadata.spawns.enemyZones ??= [];
+}
+
+function validateBattleMap(id, metadata) {
+  if (!metadata || typeof metadata !== "object") throw new Error("Battle map metadata must be an object.");
+  if (metadata.id !== id) throw new Error("Battle map id must match the URL id.");
+  if (!metadata.displayName) throw new Error("Battle map metadata needs displayName.");
+  if (!metadata.background?.path || !metadata.background?.key) throw new Error("Battle map metadata needs a background key/path.");
+  if (!metadata.dimensions || !Number.isFinite(metadata.dimensions.width) || !Number.isFinite(metadata.dimensions.height)) {
+    throw new Error("Battle map metadata needs finite dimensions.");
+  }
+  if (metadata.dimensions.width <= 0 || metadata.dimensions.height <= 0) throw new Error("Battle map dimensions must be positive.");
+  const idSet = new Set();
+  for (const slot of [...metadata.spawns.playerSlots, ...metadata.spawns.enemySlots]) validateSpawnSlot(slot, idSet);
+  for (const zone of [...metadata.spawns.playerZones, ...metadata.spawns.enemyZones]) validateSpawnZone(zone, idSet);
+}
+
+function validateSpawnSlot(slot, idSet) {
+  if (!slot?.id) throw new Error("Every spawn slot needs an id.");
+  if (idSet.has(slot.id)) throw new Error(`Duplicate spawn id: ${slot.id}`);
+  idSet.add(slot.id);
+  for (const key of ["x", "y", "order"]) validateFinite(slot[key], `Slot ${slot.id}.${key}`);
+  if (!["left", "right", "up", "down"].includes(slot.facing)) throw new Error(`Slot ${slot.id} needs a valid facing.`);
+  if (slot.radius !== undefined) validateFinite(slot.radius, `Slot ${slot.id}.radius`);
+  if (slot.weight !== undefined) validateFinite(slot.weight, `Slot ${slot.id}.weight`);
+}
+
+function validateSpawnZone(zone, idSet) {
+  if (!zone?.id) throw new Error("Every spawn zone needs an id.");
+  if (idSet.has(zone.id)) throw new Error(`Duplicate spawn id: ${zone.id}`);
+  idSet.add(zone.id);
+  validateShape(zone.shape, zone.id);
+  if (zone.capacity !== undefined) validateFinite(zone.capacity, `Zone ${zone.id}.capacity`);
+  if (zone.facing !== undefined && !["left", "right", "up", "down"].includes(zone.facing)) throw new Error(`Zone ${zone.id} has invalid facing.`);
+  if (zone.weight !== undefined) validateFinite(zone.weight, `Zone ${zone.id}.weight`);
 }
 
 function validateZone(zone) {
@@ -181,6 +272,11 @@ function poiFileForId(id) {
   return path.join(poiDir, `${id}.json`);
 }
 
+function battleMapFileForId(id) {
+  if (!/^[a-zA-Z0-9_-]+$/.test(id)) throw new Error("Invalid battle map id.");
+  return path.join(battleMapDir, `${id}.json`);
+}
+
 function readRequestBody(req) {
   return new Promise((resolve, reject) => {
     let body = "";
@@ -208,7 +304,7 @@ function sendText(res, status, text) {
 }
 
 function openBrowser(url) {
-  if (process.env.POI_EDITOR_NO_OPEN === "1") return;
+  if (process.env.POI_EDITOR_NO_OPEN === "1" || process.env.BATTLE_MAP_EDITOR_NO_OPEN === "1" || process.env.EDITOR_NO_OPEN === "1") return;
   const command = process.platform === "win32" ? "cmd" : process.platform === "darwin" ? "open" : "xdg-open";
   const args = process.platform === "win32" ? ["/c", "start", "", url] : [url];
   const child = spawn(command, args, { detached: true, stdio: "ignore" });

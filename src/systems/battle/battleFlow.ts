@@ -11,6 +11,7 @@ import type {
   EnemyState,
   PlayerSkillDef
 } from "../../data/gameDataTypes";
+import { battleMapBackgroundKeyForId } from "../../data/battleMapSpawns";
 import { ITEMS } from "../../data/items";
 import { PLAYER_SKILLS } from "../../data/playerSkills";
 import { SPELLS } from "../../data/spells";
@@ -97,30 +98,36 @@ export function intentMessage(this: CrystalOathSceneContext, enemyName: string, 
 }
 
 export function battleBackgroundFor(this: CrystalOathSceneContext, dungeonId?: string): AssetKey {
-  if (dungeonId === "mossCave") return "battle_bg_moss_cave";
-  if (dungeonId === "ashenKeep") return "battle_bg_ashen_keep";
-  if (dungeonId === "tideShrine") return "battle_bg_tide_shrine";
-  if (dungeonId === "eclipseSpire") return "battle_bg_eclipse_spire";
-  if (dungeonId === "skyglassTower") return "battle_bg_plains";
+  return battleMapBackgroundKeyForId(this.battleMapIdFor(dungeonId)) ?? "battle_bg_plains";
+}
+
+export function battleMapIdFor(this: CrystalOathSceneContext, dungeonId?: string): string {
+  if (dungeonId === "mossCave") return "moss_cave";
+  if (dungeonId === "ashenKeep") return "ashen_keep";
+  if (dungeonId === "tideShrine") return "tide_shrine";
+  if (dungeonId === "eclipseSpire") return "eclipse_spire";
+  if (dungeonId === "skyglassTower") return "plains";
   const terrain = this.world[this.worldPos.y]?.[this.worldPos.x];
   const family = terrain ? worldTileEncounterFamily(terrain) : undefined;
-  if (family === "forest") return "battle_bg_forest_path";
-  if (family === "sand") return "battle_bg_ashen_keep";
-  if (family === "water") return "battle_bg_tide_shrine";
-  if (family === "final") return "battle_bg_eclipse_spire";
-  return "battle_bg_plains";
+  if (family === "forest") return "forest_path";
+  if (family === "sand") return "ashen_keep";
+  if (family === "water") return "tide_shrine";
+  if (family === "final") return "eclipse_spire";
+  return "plains";
 }
 
 export function beginBattle(this: CrystalOathSceneContext, kind: BattleState["kind"], enemies: EnemyState[], canRun: boolean, intro: string, dungeonId?: string, bossId?: string) {
   this.clearHeldMovement();
   this.syncAllVisualPositions();
   this.party.forEach((c) => (c.defending = false));
+  const battleMapId = this.battleMapIdFor(dungeonId);
   this.battle = {
     kind,
     enemies,
     bossId,
     dungeonId,
-    background: this.battleBackgroundFor(dungeonId),
+    battleMapId,
+    background: battleMapBackgroundKeyForId(battleMapId) ?? this.battleBackgroundFor(dungeonId),
     canRun,
     phase: "resolving",
     turnOrder: [],

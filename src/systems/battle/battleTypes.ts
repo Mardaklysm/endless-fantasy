@@ -35,6 +35,7 @@ export interface BattleState {
   enemies: EnemyState[];
   bossId?: string;
   dungeonId?: string;
+  battleMapId?: string;
   background: AssetKey;
   canRun: boolean;
   phase: BattlePhase;

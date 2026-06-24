@@ -1,6 +1,8 @@
 import Phaser from "phaser";
 import { HEIGHT, LAYER_BATTLE_IMAGE, LAYER_WORLD_IMAGE, WIDTH } from "../../app/config";
 import { PARTY_CLASS } from "../../assets/textureKeys";
+import { resolveBattleSpawnPositions } from "../../data/battleMapSpawns";
+import type { BattleSpawnFacing } from "../../data/battleMapSpawns";
 import type { CharacterState, EnemyState, StatusState } from "../../data/gameDataTypes";
 import type { Vec } from "../../scene/sceneTypes";
 import type { CrystalOathSceneContext } from "../../scene/sceneContext";
@@ -23,7 +25,7 @@ export function drawBattle(this: CrystalOathSceneContext) {
       this.currentBattleEntry()?.actorId === member.id &&
       !this.battle?.animation &&
       this.battle?.phase !== "resolving";
-    this.drawPartyBattler(member, slot.x + offset.x, slot.y + offset.y, idx, active);
+    this.drawPartyBattler(member, slot.x + offset.x, slot.y + offset.y, idx, active, slot.facing);
   });
   this.drawBattleTargetPanel(14, 374, 288, 152);
   this.drawBattleCommandPanel(312, 374, 216, 152);
@@ -63,23 +65,24 @@ export function drawBattleBackdrop(this: CrystalOathSceneContext) {
   this.g.fillStyle(0x000000, 0.28).fillRect(0, 0, WIDTH, HEIGHT);
 }
 
-export function enemyBattleSlot(this: CrystalOathSceneContext, enemy: EnemyState, idx: number): { x: number; y: number; size: number } {
-  if (enemy.boss) return { x: 116, y: 78, size: 178 };
-  const slots = [
-    { x: 74, y: 100, size: 106 },
-    { x: 236, y: 156, size: 106 },
-    { x: 92, y: 220, size: 106 }
-  ];
-  return slots[idx % slots.length];
+export function enemyBattleSlot(this: CrystalOathSceneContext, enemy: EnemyState, idx: number): { x: number; y: number; size: number; facing?: BattleSpawnFacing } {
+  const layout = this.currentBattleSpawnLayout();
+  return layout.enemySlots[idx] ?? (enemy.boss ? { x: 116, y: 78, size: 178, facing: "right" } : { x: 74, y: 100, size: 106, facing: "right" });
 }
 
-export function partyBattleSlot(this: CrystalOathSceneContext, idx: number): { x: number; y: number; size: number } {
-  const slots = [
-    { x: 678, y: 92, size: 96 },
-    { x: 728, y: 170, size: 96 },
-    { x: 778, y: 248, size: 96 }
-  ];
-  return slots[idx % slots.length];
+export function partyBattleSlot(this: CrystalOathSceneContext, idx: number): { x: number; y: number; size: number; facing?: BattleSpawnFacing } {
+  const layout = this.currentBattleSpawnLayout();
+  return layout.playerSlots[idx] ?? { x: 678, y: 92, size: 96, facing: "left" };
+}
+
+export function currentBattleSpawnLayout(this: CrystalOathSceneContext) {
+  return resolveBattleSpawnPositions({
+    battleMapId: this.battle?.battleMapId,
+    background: this.battle?.background,
+    partyCount: this.party.length,
+    enemies: this.battle?.enemies ?? [],
+    seed: `${this.worldSeed}:${this.battle?.dungeonId ?? "world"}:${this.battle?.bossId ?? ""}`
+  });
 }
 
 export function battleActorCenter(this: CrystalOathSceneContext, side: "party" | "enemy", actorId: string): Vec | undefined {
@@ -142,9 +145,17 @@ export function drawBattleEnemy(this: CrystalOathSceneContext, enemy: EnemyState
   this.drawBar(x, y + size + 25, size, 8, enemy.hp, enemy.maxHp, 0xd95252);
 }
 
-export function drawPartyBattler(this: CrystalOathSceneContext, member: CharacterState, x: number, y: number, idx: number, active: boolean) {
+export function drawPartyBattler(
+  this: CrystalOathSceneContext,
+  member: CharacterState,
+  x: number,
+  y: number,
+  idx: number,
+  active: boolean,
+  facing: BattleSpawnFacing = "left"
+) {
   const classId = PARTY_CLASS[member.id];
-  const frame = this.battleCharacterFrame(member);
+  const frame = this.battleCharacterFrame(member, facing);
   const alpha = member.hp <= 0 ? 0.36 : 1;
   const bodyCenterX = x + 48;
   const feetBaselineY = y + 82;

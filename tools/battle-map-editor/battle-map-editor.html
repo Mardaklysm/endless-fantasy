@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Endless Fantasy Battle Map Spawn Editor</title>
+    <link rel="stylesheet" href="/battle-map-editor.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <strong>Battle Map Spawn Editor</strong>
+      <select id="battleMapSelect" aria-label="Battle map"></select>
+      <button id="reloadBtn">Reload</button>
+      <button id="saveBtn">Save</button>
+      <button id="resetViewBtn">Reset View</button>
+      <label>Mode
+        <select id="modeSelect">
+          <option value="select">Select / Move</option>
+          <option value="addPlayer">Add Player Slot</option>
+          <option value="addEnemy">Add Enemy Slot</option>
+          <option value="drawPlayerZone">Draw Player Zone</option>
+          <option value="drawEnemyZone">Draw Enemy Zone</option>
+        </select>
+      </label>
+      <span id="dirtyState">clean</span>
+      <span id="coords">x -, y -</span>
+    </header>
+    <main>
+      <aside>
+        <div id="mapTitle">No battle map loaded</div>
+        <div class="toggles">
+          <label><input id="playerToggle" type="checkbox" checked /> Player Spawns</label>
+          <label><input id="enemyToggle" type="checkbox" checked /> Enemy Spawns</label>
+          <label><input id="zonesToggle" type="checkbox" checked /> Spawn Zones</label>
+          <label><input id="previewToggle" type="checkbox" checked /> Preview Sprites</label>
+        </div>
+        <label class="numberControl">Player preview count <input id="playerPreviewCount" type="number" min="1" max="8" value="4" /></label>
+        <label class="numberControl">Enemy preview count <input id="enemyPreviewCount" type="number" min="1" max="12" value="4" /></label>
+        <p>Left click adds a spawn slot in Add mode.</p>
+        <p>Drag a spawn slot to move it. Click a spawn slot to edit it.</p>
+        <p>Shift + click deletes a spawn slot or zone.</p>
+        <p>Right drag creates a rectangular spawn zone for the selected zone mode. Right click edits a zone.</p>
+        <p>Mouse wheel zooms. Middle drag or Space + drag pans.</p>
+        <div id="validation"></div>
+        <div id="status"></div>
+      </aside>
+      <section id="canvasWrap">
+        <canvas id="editorCanvas"></canvas>
+      </section>
+    </main>
+
+    <dialog id="slotDialog">
+      <form method="dialog" id="slotForm">
+        <h2>Spawn Slot</h2>
+        <label>ID <input id="slotId" required /></label>
+        <label>Side <select id="slotSide"><option value="player">player</option><option value="enemy">enemy</option></select></label>
+        <label>Order <input id="slotOrder" type="number" required /></label>
+        <label>X <input id="slotX" type="number" step="1" required /></label>
+        <label>Y <input id="slotY" type="number" step="1" required /></label>
+        <label>Facing <select id="slotFacing"><option>left</option><option>right</option><option>up</option><option>down</option></select></label>
+        <label>Radius <input id="slotRadius" type="number" min="1" step="1" /></label>
+        <label class="enemyOnly">Role
+          <select id="slotRole">
+            <option value="default">default</option>
+            <option value="front">front</option>
+            <option value="back">back</option>
+            <option value="boss">boss</option>
+            <option value="flying">flying</option>
+            <option value="large">large</option>
+          </select>
+        </label>
+        <label class="enemyOnly">Weight <input id="slotWeight" type="number" min="0" step="0.1" /></label>
+        <label>Notes <textarea id="slotNotes" rows="3"></textarea></label>
+        <menu>
+          <button type="button" id="slotDeleteBtn">Delete</button>
+          <span></span>
+          <button type="button" id="slotCancelBtn">Cancel</button>
+          <button id="slotSaveBtn" value="default">Apply</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="zoneDialog">
+      <form method="dialog" id="zoneForm">
+        <h2>Spawn Zone</h2>
+        <label>ID <input id="zoneId" required /></label>
+        <label>Side <select id="zoneSide"><option value="player">player</option><option value="enemy">enemy</option></select></label>
+        <label>Shape <input id="zoneShape" disabled /></label>
+        <label>Capacity <input id="zoneCapacity" type="number" min="1" step="1" /></label>
+        <label>Facing <select id="zoneFacing"><option value="">default</option><option>left</option><option>right</option><option>up</option><option>down</option></select></label>
+        <label class="enemyOnly">Role
+          <select id="zoneRole">
+            <option value="default">default</option>
+            <option value="front">front</option>
+            <option value="back">back</option>
+            <option value="boss">boss</option>
+            <option value="flying">flying</option>
+            <option value="large">large</option>
+          </select>
+        </label>
+        <label class="enemyOnly">Weight <input id="zoneWeight" type="number" min="0" step="0.1" /></label>
+        <label>Notes <textarea id="zoneNotes" rows="3"></textarea></label>
+        <menu>
+          <button type="button" id="zoneDeleteBtn">Delete</button>
+          <span></span>
+          <button type="button" id="zoneCancelBtn">Cancel</button>
+          <button id="zoneSaveBtn" value="default">Apply</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <script type="module" src="/battle-map-editor.js"></script>
+  </body>
+</html>
