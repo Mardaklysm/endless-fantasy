@@ -41,6 +41,8 @@ let canvasCssSize = { width: 0, height: 0 };
 let selected = undefined;
 let editingSlot = undefined;
 const spriteImages = new Map();
+const PLAYER_SLOT_LIMIT = 3;
+let assetCacheNonce = Date.now();
 
 init();
 
@@ -54,7 +56,7 @@ async function init() {
 function bindEvents() {
   window.addEventListener("resize", resizeCanvas);
   saveBtn.addEventListener("click", saveBattleMap);
-  reloadBtn.addEventListener("click", () => loadBattleMap(battleMap?.id));
+  reloadBtn.addEventListener("click", reloadCurrentEditorState);
   resetViewBtn.addEventListener("click", resetView);
   battleMapSelect.addEventListener("change", () => loadBattleMap(battleMapSelect.value));
   modeSelect.addEventListener("change", enforceModeForVariant);
@@ -98,7 +100,11 @@ async function loadBattleMapList() {
     .join("");
 }
 
-async function loadSpriteCatalog() {
+async function loadSpriteCatalog(refreshAssets = false) {
+  if (refreshAssets) {
+    assetCacheNonce = Date.now();
+    spriteImages.clear();
+  }
   spriteCatalog = await fetchJson("/api/battle-sprites");
   await Promise.all([...spriteCatalog.players, ...spriteCatalog.enemies].map(preloadSpriteImage));
 }
@@ -110,7 +116,7 @@ async function loadBattleMap(id) {
   battleMapSelect.value = battleMap.id;
   mapTitle.textContent = `${battleMap.displayName} - ${battleMap.id}`;
   variantState.textContent = `Variant: ${titleCase(battleMap.variant)}`;
-  image = await loadImage(`/api/asset?path=${encodeURIComponent(battleMap.background.path)}`);
+  image = await loadImage(assetUrl(battleMap.background.path));
   if (!battleMap.dimensions?.width || !battleMap.dimensions?.height) {
     battleMap.dimensions = { width: image.naturalWidth, height: image.naturalHeight };
   }
@@ -121,6 +127,11 @@ async function loadBattleMap(id) {
   updateVariantControls();
   refreshValidation();
   showStatus("Loaded.");
+}
+
+async function reloadCurrentEditorState() {
+  await loadSpriteCatalog(true);
+  await loadBattleMap(battleMap?.id);
 }
 
 async function saveBattleMap() {
@@ -241,7 +252,7 @@ function createSlot(side, point) {
     openSlotForm("boss", 0);
     return;
   }
-  const limit = side === "player" ? 4 : battleMap.variant === "boss" ? 3 : 4;
+  const limit = side === "player" ? PLAYER_SLOT_LIMIT : battleMap.variant === "boss" ? 3 : 4;
   const collection = slotCollection(side);
   if (collection.length >= limit) return showStatus(`${titleCase(side)} slots are limited to ${limit} on this variant.`, true);
   const wasDirty = isDirty;
@@ -365,11 +376,13 @@ function renderSpriteGrid() {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "spriteChoice";
-    button.innerHTML = `<span class="spriteThumb"></span><strong>${entry.name}</strong><small>${entry.id}${entry.boss ? " · boss" : entry.role ? ` · ${entry.role}` : ""}</small>`;
+    button.innerHTML = `<span class="spriteThumb"></span><strong>${entry.name}</strong><small>${entry.id}${entry.boss ? " - boss" : entry.role ? ` - ${entry.role}` : ""}</small>`;
     const thumb = button.querySelector(".spriteThumb");
     const img = spriteImages.get(entry.id);
     if (img) drawThumb(thumb, entry, img);
-    button.addEventListener("click", () => assignPreviewSprite(entry.id));
+    button.addEventListener("click", () => {
+      void assignPreviewSprite(entry.id);
+    });
     spriteGrid.append(button);
   }
 }
@@ -380,13 +393,16 @@ function spriteEntriesForFilter() {
   return spriteCatalog.enemies;
 }
 
-function assignPreviewSprite(spriteId) {
+async function assignPreviewSprite(spriteId) {
   const slot = slotFor(editingSlot.side, editingSlot.index);
   slot.previewSpriteId = spriteId;
   document.querySelector("#slotPreviewSprite").value = spriteId;
+  const entry = spriteEntry(spriteId);
+  if (entry) await reloadSpriteImage(entry);
   setDirty(true);
   refreshValidation();
   spriteDialog.close();
+  showStatus(`Preview sprite set to ${spriteId}.`);
 }
 
 function clearPreviewSprite() {
@@ -420,7 +436,7 @@ function draw() {
 }
 
 function drawPreviewSprites() {
-  const playerLimit = Math.min(4, Number(playerPreviewCount.value) || 4);
+  const playerLimit = Math.min(PLAYER_SLOT_LIMIT, Number(playerPreviewCount.value) || PLAYER_SLOT_LIMIT);
   const enemyLimit = Math.min(battleMap.variant === "boss" ? 3 : 4, Number(enemyPreviewCount.value) || 4);
   battleMap.playerSlots.slice().sort(byOrderThenId).slice(0, playerLimit).forEach((slot) => drawSpritePreview(slot, "player"));
   battleMap.enemySlots.slice().sort(byOrderThenId).slice(0, enemyLimit).forEach((slot) => drawSpritePreview(slot, "enemy"));
@@ -550,8 +566,8 @@ function refreshValidation() {
 function validateBattleMap() {
   const warnings = [];
   if (!battleMap.background?.path || !battleMap.background?.key) warnings.push("Missing background asset key/path.");
-  if (battleMap.playerSlots.length < 4) warnings.push("Fewer than 4 player slots.");
-  if (battleMap.playerSlots.length > 4) warnings.push("More than 4 player slots.");
+  if (battleMap.playerSlots.length < PLAYER_SLOT_LIMIT) warnings.push(`Fewer than ${PLAYER_SLOT_LIMIT} player slots.`);
+  if (battleMap.playerSlots.length > PLAYER_SLOT_LIMIT) warnings.push(`More than ${PLAYER_SLOT_LIMIT} player slots.`);
   if (battleMap.variant === "normal") {
     if (battleMap.bossSlot) warnings.push("Normal variant should not have a boss slot.");
     if (!battleMap.enemySlots.length) warnings.push("Normal variant has no enemy slots.");
@@ -612,7 +628,7 @@ function canPlaceSide(side, current) {
     return true;
   }
   const collection = slotCollection(side);
-  const limit = side === "player" ? 4 : battleMap.variant === "boss" ? 3 : 4;
+  const limit = side === "player" ? PLAYER_SLOT_LIMIT : battleMap.variant === "boss" ? 3 : 4;
   const sameCollection = current.side === side;
   if (collection.length >= limit && !sameCollection) return fail(`${titleCase(side)} slots are limited to ${limit} on this variant.`);
   return true;
@@ -634,6 +650,8 @@ function normalizeBattleMap(metadata) {
 function updateVariantControls() {
   const bossOption = modeSelect.querySelector('option[value="addBoss"]');
   bossOption.disabled = battleMap?.variant !== "boss";
+  playerPreviewCount.max = String(PLAYER_SLOT_LIMIT);
+  if (Number(playerPreviewCount.value) > PLAYER_SLOT_LIMIT) playerPreviewCount.value = String(PLAYER_SLOT_LIMIT);
   enemyPreviewCount.max = battleMap?.variant === "boss" ? "3" : "4";
   if (Number(enemyPreviewCount.value) > Number(enemyPreviewCount.max)) enemyPreviewCount.value = enemyPreviewCount.max;
   enforceModeForVariant();
@@ -711,10 +729,19 @@ function spriteEntry(id) {
 async function preloadSpriteImage(entry) {
   if (!entry.assetPath) return;
   try {
-    spriteImages.set(entry.id, await loadImage(`/api/asset?path=${encodeURIComponent(entry.assetPath)}`));
+    spriteImages.set(entry.id, await loadImage(assetUrl(entry.assetPath)));
   } catch {
     console.warn(`Missing preview sprite asset: ${entry.id}`);
   }
+}
+
+async function reloadSpriteImage(entry) {
+  if (!entry.assetPath) return;
+  spriteImages.set(entry.id, await loadImage(`${assetUrl(entry.assetPath)}&picked=${Date.now()}`));
+}
+
+function assetUrl(assetPath) {
+  return `/api/asset?path=${encodeURIComponent(assetPath)}&v=${assetCacheNonce}`;
 }
 
 function drawThumb(target, entry, img) {

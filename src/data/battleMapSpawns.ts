@@ -278,8 +278,7 @@ function fallbackPlayerSlots(count: number): ResolvedBattleSpawnSlot[] {
   const slots = [
     { x: 678, y: 92 },
     { x: 728, y: 170 },
-    { x: 778, y: 248 },
-    { x: 698, y: 286 }
+    { x: 778, y: 248 }
   ];
   return slots.slice(0, Math.max(1, count)).map((slot, index) => ({
     id: `player_fallback_${index + 1}`,

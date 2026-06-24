@@ -38,15 +38,6 @@
       "facing": "left",
       "radius": 138,
       "previewSpriteId": "kael"
-    },
-    {
-      "id": "player_4",
-      "x": 2140,
-      "y": 984,
-      "order": 4,
-      "facing": "left",
-      "radius": 138,
-      "previewSpriteId": "arlen"
     }
   ],
   "variant": "boss",
