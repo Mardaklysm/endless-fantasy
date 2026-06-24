@@ -19,7 +19,7 @@
       "order": 1,
       "facing": "left",
       "radius": 138,
-      "previewSpriteId": "arlen"
+      "previewSpriteId": "fighter"
     },
     {
       "id": "player_2",
@@ -28,7 +28,7 @@
       "order": 2,
       "facing": "left",
       "radius": 138,
-      "previewSpriteId": "mira"
+      "previewSpriteId": "priest"
     },
     {
       "id": "player_3",
@@ -37,7 +37,7 @@
       "order": 3,
       "facing": "left",
       "radius": 138,
-      "previewSpriteId": "kael"
+      "previewSpriteId": "mage"
     }
   ],
   "variant": "boss",

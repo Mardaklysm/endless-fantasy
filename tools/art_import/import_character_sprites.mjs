@@ -8,8 +8,8 @@ const __dirname = path.dirname(__filename);
 const PROJECT_ROOT = path.resolve(__dirname, "..", "..");
 
 const SOURCE_ROOT = "D:/Tools/rembg/bg_output";
-const SOURCE_COPY_DIR = path.join(PROJECT_ROOT, "assets_v2", "source_sheets", "class_sprites");
-const OUTPUT_DIR = path.join(PROJECT_ROOT, "assets_v2", "characters", "classes");
+const SOURCE_COPY_DIR = path.join(PROJECT_ROOT, "src", "assets", "heroes", "source_sheets");
+const OUTPUT_DIR = path.join(PROJECT_ROOT, "src", "assets", "heroes");
 const REPORT_DIR = path.join(PROJECT_ROOT, "docs", "debug", "sprite-import");
 const DATA_OUTPUT = path.join(PROJECT_ROOT, "src", "data", "characterSprites.ts");
 
@@ -20,9 +20,9 @@ const CELL_MARGIN = 48;
 const ALPHA_THRESHOLD = 8;
 
 const CLASSES = [
-  { id: "fighter", source: "fighter.png", textureKey: "class_fighter_sheet" },
-  { id: "priest", source: "priest.png", textureKey: "class_priest_sheet" },
-  { id: "wizard", source: "wizard.png", textureKey: "class_wizard_sheet" }
+  { id: "fighter", source: "fighter.png", textureKey: "hero_fighter_sprite" },
+  { id: "priest", source: "priest.png", textureKey: "hero_priest_sprite" },
+  { id: "mage", source: "mage.png", textureKey: "hero_mage_sprite" }
 ];
 
 const FRAME_LAYOUT = [
@@ -51,7 +51,7 @@ function main() {
   for (const classData of prepared) {
     const result = normalizeClass(classData, dimensions);
     manifest[classData.id] = result.manifestEntry;
-    writePng(path.join(OUTPUT_DIR, `${classData.id}_normalized.png`), result.sheet);
+    writePng(path.join(OUTPUT_DIR, `sprite_hero_${classData.id}.png`), result.sheet);
     writePng(path.join(REPORT_DIR, `${classData.id}.debug.png`), result.debugPreview);
     fs.writeFileSync(path.join(REPORT_DIR, `${classData.id}.import-report.md`), result.report, "utf8");
   }
@@ -181,7 +181,7 @@ function normalizeClass(classData, dimensions) {
   }
 
   const manifestEntry = {
-    image: `assets_v2/characters/classes/${classData.id}_normalized.png`,
+    image: `src/assets/heroes/sprite_hero_${classData.id}.png`,
     textureKey: classData.textureKey,
     source: {
       originalFile: normalizeSlash(classData.sourcePath),

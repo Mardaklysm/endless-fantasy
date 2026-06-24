@@ -20,7 +20,7 @@ export function drawLeader(this: CrystalOathSceneContext, x: number, y: number, 
   const feetBaselineY = y + bodyOffsetY;
   this.drawActorShadow(bodyCenterX, feetBaselineY, shadowWidth, shadowHeight, 0.34 * alpha);
   this.g.lineStyle(1, 0xfff0a8, 0.62 * alpha).strokeEllipse(bodyCenterX, feetBaselineY, ellipseW, ellipseH);
-  if (this.drawCharacterSpriteFrame(PARTY_CLASS.arlen, this.explorationCharacterFrame(frame), bodyCenterX, feetBaselineY, spriteCellWidth, LAYER_CHARACTER_IMAGE, alpha)) {
+  if (this.drawCharacterSpriteFrame(PARTY_CLASS.fighter, this.explorationCharacterFrame(frame), bodyCenterX, feetBaselineY, spriteCellWidth, LAYER_CHARACTER_IMAGE, alpha)) {
     return;
   }
   const scale = 2;
@@ -54,13 +54,13 @@ export function drawNpc(this: CrystalOathSceneContext, x: number, y: number, idx
 export function drawPortrait(this: CrystalOathSceneContext, c: CharacterState, x: number, y: number, scale: number) {
   const portraitTexture = PORTRAIT_TEXTURES[c.id];
   if (this.hasTexture(portraitTexture)) {
-    this.drawTexture(portraitTexture, x, y, 32 * scale, 40 * scale, LAYER_BATTLE_IMAGE, c.hp <= 0 ? 0.35 : 1);
+    this.drawCoveredTexture(portraitTexture, x, y, 30 * scale, 40 * scale, LAYER_BATTLE_IMAGE, c.hp <= 0 ? 0.35 : 1);
     return;
   }
   const palettes = {
-    arlen: [0xf1c897, 0xb73b36, 0xe9edf7],
-    mira: [0xf0d0b0, 0x5ca46f, 0xffffff],
-    kael: [0xe1b284, 0xa33c36, 0xffd66b]
+    fighter: [0xf1c897, 0xb73b36, 0xe9edf7],
+    priest: [0xf0d0b0, 0x5ca46f, 0xffffff],
+    mage: [0xe1b284, 0xa33c36, 0xffd66b]
   }[c.id];
   this.g.fillStyle(0x0b1020, 1).fillRect(x, y, 22 * scale, 28 * scale);
   this.g.lineStyle(2, 0xffffff, 0.8).strokeRect(x, y, 22 * scale, 28 * scale);
@@ -72,7 +72,7 @@ export function drawPortrait(this: CrystalOathSceneContext, c: CharacterState, x
 export function drawEnemySprite(this: CrystalOathSceneContext, enemy: EnemyState, x: number, y: number, s: number, displaySize = 96) {
   const texture = ENEMY_TEXTURES[enemy.id];
   if (texture && this.hasTexture(texture)) {
-    this.drawTexture(texture, x, y, displaySize, displaySize, LAYER_BATTLE_IMAGE, enemy.hp <= 0 ? 0.28 : 1);
+    this.drawContainedTexture(texture, x, y, displaySize, displaySize, LAYER_BATTLE_IMAGE, enemy.hp <= 0 ? 0.28 : 1);
     return;
   }
   const p = enemy.palette.map((c) => parseInt(c.slice(1), 16));

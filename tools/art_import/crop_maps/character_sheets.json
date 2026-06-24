@@ -1,9 +1,9 @@
 {
   "assets": [
     {
-      "id": "arlen_portrait",
+      "id": "fighter_portrait",
       "source": "04_characters/warrior/warrior_master_sheet.png",
-      "output": "portraits/arlen.png",
+      "output": "heroes/portrait_hero_fighter.png",
       "crop": { "x": 735, "y": 83, "w": 501, "h": 509 },
       "transparent": true,
       "background": "#bcb4aa",
@@ -14,9 +14,9 @@
       "strip": true
     },
     {
-      "id": "mira_portrait",
+      "id": "priest_portrait",
       "source": "04_characters/cleric/cleric_master_sheet.png",
-      "output": "portraits/mira.png",
+      "output": "heroes/portrait_hero_priest.png",
       "crop": { "x": 687, "y": 52, "w": 509, "h": 560 },
       "transparent": true,
       "background": "#bab2a8",
@@ -27,9 +27,9 @@
       "strip": true
     },
     {
-      "id": "kael_portrait",
+      "id": "mage_portrait",
       "source": "04_characters/mage/mage_master_sheet.png",
-      "output": "portraits/kael.png",
+      "output": "heroes/portrait_hero_mage.png",
       "crop": { "x": 707, "y": 61, "w": 480, "h": 512 },
       "transparent": true,
       "background": "#e8e6e3",
@@ -40,9 +40,9 @@
       "strip": true
     },
     {
-      "id": "arlen_battle",
+      "id": "fighter_battle",
       "source": "04_characters/warrior/warrior_master_sheet.png",
-      "output": "characters/arlen_battle.png",
+      "output": "heroes/fighter_battle.png",
       "crop": { "x": 580, "y": 720, "w": 660, "h": 470 },
       "transparent": true,
       "background": "#bcb4aa",
@@ -53,9 +53,9 @@
       "strip": true
     },
     {
-      "id": "mira_battle",
+      "id": "priest_battle",
       "source": "04_characters/cleric/cleric_master_sheet.png",
-      "output": "characters/mira_battle.png",
+      "output": "heroes/priest_battle.png",
       "crop": { "x": 660, "y": 630, "w": 540, "h": 550 },
       "transparent": true,
       "background": "#bab2a8",
@@ -66,9 +66,9 @@
       "strip": true
     },
     {
-      "id": "kael_battle",
+      "id": "mage_battle",
       "source": "04_characters/mage/mage_master_sheet.png",
-      "output": "characters/kael_battle.png",
+      "output": "heroes/mage_battle.png",
       "crop": { "x": 630, "y": 630, "w": 570, "h": 560 },
       "transparent": true,
       "background": "#e8e6e3",
@@ -81,9 +81,9 @@
   ],
   "sheets": [
     {
-      "id": "arlen_map",
+      "id": "fighter_map",
       "source": "04_characters/warrior/map_sprite_sheet.png",
-      "output": "characters/arlen_map.png",
+      "output": "heroes/fighter_map.png",
       "background": "#bfb7ae",
       "fuzzPercent": 7,
       "frameSize": { "w": 16, "h": 16 },
@@ -100,9 +100,9 @@
       ]
     },
     {
-      "id": "mira_map",
+      "id": "priest_map",
       "source": "04_characters/cleric/map_sprite_sheet.png",
-      "output": "characters/mira_map.png",
+      "output": "heroes/priest_map.png",
       "background": "#beb4ab",
       "fuzzPercent": 7,
       "frameSize": { "w": 16, "h": 16 },
@@ -119,9 +119,9 @@
       ]
     },
     {
-      "id": "kael_map",
+      "id": "mage_map",
       "source": "04_characters/mage/map_sprite_sheet.png",
-      "output": "characters/kael_map.png",
+      "output": "heroes/mage_map.png",
       "background": "#ece8e6",
       "fuzzPercent": 7,
       "frameSize": { "w": 16, "h": 16 },

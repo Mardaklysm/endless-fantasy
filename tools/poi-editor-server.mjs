@@ -287,7 +287,7 @@ function pathIsFile(file) {
 }
 
 function characterName(id) {
-  return { arlen: "Arlen", mira: "Mira", kael: "Kael" }[id] ?? id;
+  return { fighter: "Arlen", priest: "Mira", mage: "Kael" }[id] ?? id;
 }
 
 function variantSort(variant) {

@@ -4,7 +4,7 @@ export const SPELLS: Record<string, SpellDef> = {
   mend: {
     id: "mend",
     name: "Mend",
-    caster: "mira",
+    caster: "priest",
     tier: 1,
     target: "ally",
     element: "light",
@@ -17,7 +17,7 @@ export const SPELLS: Record<string, SpellDef> = {
   ward: {
     id: "ward",
     name: "Ward",
-    caster: "mira",
+    caster: "priest",
     tier: 1,
     target: "ally",
     element: "light",
@@ -30,7 +30,7 @@ export const SPELLS: Record<string, SpellDef> = {
   glow: {
     id: "glow",
     name: "Glow",
-    caster: "mira",
+    caster: "priest",
     tier: 1,
     target: "enemy",
     element: "light",
@@ -43,7 +43,7 @@ export const SPELLS: Record<string, SpellDef> = {
   mendall: {
     id: "mendall",
     name: "Mendall",
-    caster: "mira",
+    caster: "priest",
     tier: 2,
     target: "allAllies",
     element: "light",
@@ -56,7 +56,7 @@ export const SPELLS: Record<string, SpellDef> = {
   revive: {
     id: "revive",
     name: "Revive",
-    caster: "mira",
+    caster: "priest",
     tier: 2,
     target: "ally",
     element: "light",
@@ -69,7 +69,7 @@ export const SPELLS: Record<string, SpellDef> = {
   starveil: {
     id: "starveil",
     name: "Starveil",
-    caster: "mira",
+    caster: "priest",
     tier: 3,
     target: "allAllies",
     element: "light",
@@ -82,7 +82,7 @@ export const SPELLS: Record<string, SpellDef> = {
   spark: {
     id: "spark",
     name: "Spark",
-    caster: "kael",
+    caster: "mage",
     tier: 1,
     target: "enemy",
     element: "lightning",
@@ -95,7 +95,7 @@ export const SPELLS: Record<string, SpellDef> = {
   ember: {
     id: "ember",
     name: "Ember",
-    caster: "kael",
+    caster: "mage",
     tier: 1,
     target: "enemy",
     element: "fire",
@@ -108,7 +108,7 @@ export const SPELLS: Record<string, SpellDef> = {
   frost: {
     id: "frost",
     name: "Frost",
-    caster: "kael",
+    caster: "mage",
     tier: 1,
     target: "enemy",
     element: "ice",
@@ -121,7 +121,7 @@ export const SPELLS: Record<string, SpellDef> = {
   quakelet: {
     id: "quakelet",
     name: "Quakelet",
-    caster: "kael",
+    caster: "mage",
     tier: 2,
     target: "allEnemies",
     element: "earth",
@@ -134,7 +134,7 @@ export const SPELLS: Record<string, SpellDef> = {
   storm: {
     id: "storm",
     name: "Storm",
-    caster: "kael",
+    caster: "mage",
     tier: 2,
     target: "allEnemies",
     element: "wind",
@@ -147,7 +147,7 @@ export const SPELLS: Record<string, SpellDef> = {
   nova: {
     id: "nova",
     name: "Nova",
-    caster: "kael",
+    caster: "mage",
     tier: 3,
     target: "enemy",
     element: "none",
@@ -160,7 +160,7 @@ export const SPELLS: Record<string, SpellDef> = {
   rally: {
     id: "rally",
     name: "Rally",
-    caster: "arlen",
+    caster: "fighter",
     tier: 2,
     target: "allAllies",
     element: "none",

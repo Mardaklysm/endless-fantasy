@@ -206,6 +206,47 @@ export function drawContainedTexture(this: CrystalOathSceneContext, key: AssetKe
   );
 }
 
+export function drawCoveredTexture(this: CrystalOathSceneContext, key: AssetKey,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  depth = LAYER_WORLD_IMAGE,
+  alpha = 1) {
+  const source = this.textures.get(key).getSourceImage() as { width?: number; height?: number } | undefined;
+  const sourceWidth = source?.width ?? 0;
+  const sourceHeight = source?.height ?? 0;
+  if (sourceWidth <= 0 || sourceHeight <= 0) {
+    return this.drawTexture(key, x, y, width, height, depth, alpha);
+  }
+  const targetRatio = width / height;
+  const sourceRatio = sourceWidth / sourceHeight;
+  let cropX = 0;
+  let cropY = 0;
+  let cropWidth = sourceWidth;
+  let cropHeight = sourceHeight;
+  if (sourceRatio > targetRatio) {
+    cropWidth = sourceHeight * targetRatio;
+    cropX = (sourceWidth - cropWidth) / 2;
+  } else if (sourceRatio < targetRatio) {
+    cropHeight = sourceWidth / targetRatio;
+    cropY = (sourceHeight - cropHeight) / 2;
+  }
+  return this.drawCroppedTexture(
+    key,
+    x,
+    y,
+    Math.round(cropX),
+    Math.round(cropY),
+    Math.round(cropWidth),
+    Math.round(cropHeight),
+    width,
+    height,
+    depth,
+    alpha
+  );
+}
+
 export function drawCroppedTexture(this: CrystalOathSceneContext, key: AssetKey,
   x: number,
   y: number,

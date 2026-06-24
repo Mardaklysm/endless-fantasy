@@ -28,9 +28,9 @@ export function buildWorldFromSeed(this: CrystalOathSceneContext, seed: string) 
 
 export function newGame(this: CrystalOathSceneContext) {
   this.party = [
-    this.makeCharacter("arlen", "Arlen", "Vanguard", 42, 9, 7, 5, 4, "trainingBlade", "travelCloth", []),
-    this.makeCharacter("mira", "Mira", "White Sage", 30, 4, 4, 6, 7, "willowRod", "travelCloth", ["mend", "ward"]),
-    this.makeCharacter("kael", "Kael", "Ember Adept", 26, 3, 3, 7, 5, "willowRod", "travelCloth", ["spark", "ember"])
+    this.makeCharacter("fighter", "Arlen", "Vanguard", 42, 9, 7, 5, 4, "trainingBlade", "travelCloth", []),
+    this.makeCharacter("priest", "Mira", "White Sage", 30, 4, 4, 6, 7, "willowRod", "travelCloth", ["mend", "ward"]),
+    this.makeCharacter("mage", "Kael", "Ember Adept", 26, 3, 3, 7, 5, "willowRod", "travelCloth", ["spark", "ember"])
   ];
   this.inventory = { potion: 5, antidote: 2, tent: 1, phoenixAsh: 0, etherleaf: 0, smokeBomb: 0, charteredCompass: 0 };
   this.gearBag = { trainingBlade: 1, willowRod: 2, travelCloth: 3 };
@@ -106,7 +106,7 @@ export function makeCharacter(this: CrystalOathSceneContext, id: CharacterState[
     armor,
     statuses: {},
     charges: {
-      "1": { current: id === "arlen" ? 0 : 3, max: id === "arlen" ? 0 : 3 },
+      "1": { current: id === "fighter" ? 0 : 3, max: id === "fighter" ? 0 : 3 },
       "2": { current: 0, max: 0 },
       "3": { current: 0, max: 0 }
     },
@@ -153,9 +153,9 @@ export function normalizeFlags(this: CrystalOathSceneContext, raw: Partial<Retur
 export function normalizeParty(this: CrystalOathSceneContext, rawParty: CharacterState[]): CharacterState[] {
   if (!rawParty.length) {
     return [
-      this.makeCharacter("arlen", "Arlen", "Vanguard", 42, 9, 7, 5, 4, "trainingBlade", "travelCloth", []),
-      this.makeCharacter("mira", "Mira", "White Sage", 30, 4, 4, 6, 7, "willowRod", "travelCloth", ["mend", "ward"]),
-      this.makeCharacter("kael", "Kael", "Ember Adept", 26, 3, 3, 7, 5, "willowRod", "travelCloth", ["spark", "ember"])
+      this.makeCharacter("fighter", "Arlen", "Vanguard", 42, 9, 7, 5, 4, "trainingBlade", "travelCloth", []),
+      this.makeCharacter("priest", "Mira", "White Sage", 30, 4, 4, 6, 7, "willowRod", "travelCloth", ["mend", "ward"]),
+      this.makeCharacter("mage", "Kael", "Ember Adept", 26, 3, 3, 7, 5, "willowRod", "travelCloth", ["spark", "ember"])
     ];
   }
   return rawParty.map((member) => ({

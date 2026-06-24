@@ -7,7 +7,7 @@ export const WEAPONS: Record<string, GearDef> = {
     price: 0,
     power: 2,
     kind: "weapon",
-    users: ["arlen"],
+    users: ["fighter"],
     description: "A plain Greenhaven sword."
   },
   ironSaber: {
@@ -16,7 +16,7 @@ export const WEAPONS: Record<string, GearDef> = {
     price: 95,
     power: 6,
     kind: "weapon",
-    users: ["arlen"],
+    users: ["fighter"],
     description: "Reliable steel edge."
   },
   starbrand: {
@@ -25,7 +25,7 @@ export const WEAPONS: Record<string, GearDef> = {
     price: 0,
     power: 13,
     kind: "weapon",
-    users: ["arlen"],
+    users: ["fighter"],
     description: "A treasure blade set with pale gems."
   },
   willowRod: {
@@ -34,7 +34,7 @@ export const WEAPONS: Record<string, GearDef> = {
     price: 0,
     power: 1,
     kind: "weapon",
-    users: ["mira", "kael"],
+    users: ["priest", "mage"],
     description: "A light spell focus."
   },
   glassWand: {
@@ -43,7 +43,7 @@ export const WEAPONS: Record<string, GearDef> = {
     price: 120,
     power: 4,
     kind: "weapon",
-    users: ["mira", "kael"],
+    users: ["priest", "mage"],
     description: "A bright wand for sages."
   },
   emberStaff: {
@@ -52,7 +52,7 @@ export const WEAPONS: Record<string, GearDef> = {
     price: 0,
     power: 8,
     kind: "weapon",
-    users: ["kael"],
+    users: ["mage"],
     description: "Warm even in rain."
   }
 };
@@ -64,7 +64,7 @@ export const ARMORS: Record<string, GearDef> = {
     price: 0,
     power: 1,
     kind: "armor",
-    users: ["arlen", "mira", "kael"],
+    users: ["fighter", "priest", "mage"],
     description: "Simple road clothes."
   },
   ringMail: {
@@ -73,7 +73,7 @@ export const ARMORS: Record<string, GearDef> = {
     price: 90,
     power: 4,
     kind: "armor",
-    users: ["arlen"],
+    users: ["fighter"],
     description: "Flexible front-line armor."
   },
   sageMantle: {
@@ -82,7 +82,7 @@ export const ARMORS: Record<string, GearDef> = {
     price: 85,
     power: 3,
     kind: "armor",
-    users: ["mira", "kael"],
+    users: ["priest", "mage"],
     description: "Light, warded cloth."
   },
   tidePlate: {
@@ -91,7 +91,7 @@ export const ARMORS: Record<string, GearDef> = {
     price: 0,
     power: 8,
     kind: "armor",
-    users: ["arlen"],
+    users: ["fighter"],
     description: "Armor with a wave-like sheen."
   },
   galeCloak: {
@@ -100,7 +100,7 @@ export const ARMORS: Record<string, GearDef> = {
     price: 0,
     power: 7,
     kind: "armor",
-    users: ["mira", "kael"],
+    users: ["priest", "mage"],
     description: "Moves before the wind does."
   }
 };

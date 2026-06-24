@@ -209,15 +209,15 @@ export const TOWN_PROP_TEXTURES = {
 } as const satisfies Record<string, AssetKey>;
 
 export const CHARACTER_CLASS_TEXTURES: Record<CharacterSpriteClass, AssetKey> = {
-  fighter: "class_fighter_sheet",
-  priest: "class_priest_sheet",
-  wizard: "class_wizard_sheet"
+  fighter: "hero_fighter_sprite",
+  priest: "hero_priest_sprite",
+  mage: "hero_mage_sprite"
 };
 
 export const PARTY_CLASS: Record<CharacterState["id"], CharacterSpriteClass> = {
-  arlen: "fighter",
-  mira: "priest",
-  kael: "wizard"
+  fighter: "fighter",
+  priest: "priest",
+  mage: "mage"
 };
 
 export const ENEMY_TEXTURES: Record<string, AssetKey> = {
@@ -250,9 +250,9 @@ export const ENEMY_TEXTURES: Record<string, AssetKey> = {
 };
 
 export const PORTRAIT_TEXTURES: Record<CharacterState["id"], AssetKey> = {
-  arlen: "battle_arlen_portrait",
-  mira: "battle_mira_portrait",
-  kael: "battle_kael_portrait"
+  fighter: "hero_fighter_portrait",
+  priest: "hero_priest_portrait",
+  mage: "hero_mage_portrait"
 };
 
 export const NPC_TEXTURES: AssetKey[] = ["npc_guard", "npc_merchant", "npc_elder", "npc_villager", "npc_sage"];

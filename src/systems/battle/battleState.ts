@@ -110,13 +110,13 @@ export function awardVictory(this: CrystalOathSceneContext) {
       member.xp -= member.nextXp;
       member.level += 1;
       member.nextXp = Math.floor(42 + member.level * member.level * 26);
-      member.maxHp += member.id === "arlen" ? 9 : member.id === "mira" ? 6 : 5;
+      member.maxHp += member.id === "fighter" ? 9 : member.id === "priest" ? 6 : 5;
       if (member.hp > 0) member.hp = member.maxHp;
-      member.baseAttack += member.id === "arlen" ? 2 : 1;
-      member.baseDefense += member.id === "arlen" ? 2 : 1;
+      member.baseAttack += member.id === "fighter" ? 2 : 1;
+      member.baseDefense += member.id === "fighter" ? 2 : 1;
       if (member.level % 2 === 0) member.speed += 1;
       if (member.level % 3 === 0) member.luck += 1;
-      if (member.id === "arlen" && member.level >= 7 && !member.spells.includes("rally")) member.spells.push("rally");
+      if (member.id === "fighter" && member.level >= 7 && !member.spells.includes("rally")) member.spells.push("rally");
       this.refreshCharges(member, true);
       this.battle.log.push(`${member.name} reached level ${member.level}!`);
     }
@@ -244,10 +244,10 @@ export function partyAverage(this: CrystalOathSceneContext, stat: "speed" | "luc
 }
 
 export function refreshCharges(this: CrystalOathSceneContext, member: CharacterState, fill: boolean) {
-  const tier1 = member.id === "arlen" ? (member.level >= 7 ? 1 : 0) : 2 + Math.floor(member.level / 2);
+  const tier1 = member.id === "fighter" ? (member.level >= 7 ? 1 : 0) : 2 + Math.floor(member.level / 2);
   const tier2 = member.level >= 4 ? 1 + Math.floor((member.level - 4) / 3) : 0;
   const tier3 = member.level >= 8 ? 1 + Math.floor((member.level - 8) / 4) : 0;
-  const maxes = { "1": tier1, "2": member.id === "arlen" ? (member.level >= 7 ? 1 : 0) : tier2, "3": member.id === "arlen" ? 0 : tier3 };
+  const maxes = { "1": tier1, "2": member.id === "fighter" ? (member.level >= 7 ? 1 : 0) : tier2, "3": member.id === "fighter" ? 0 : tier3 };
   for (const tier of ["1", "2", "3"]) {
     const current = member.charges[tier]?.current ?? 0;
     member.charges[tier] = { max: maxes[tier], current: fill ? maxes[tier] : Math.min(current, maxes[tier]) };

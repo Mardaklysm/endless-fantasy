@@ -1,7 +1,14 @@
 import { SAVE_KEY } from "../../app/config";
 import { perfNow, perfRecordSaveLoad } from "../../debug/perf";
 import { createWorldSeed, getIslandAt } from "../../world/worldGenerator";
+import type { CharacterState } from "../../data/gameDataTypes";
 import type { CrystalOathSceneContext } from "../../scene/sceneContext";
+
+const LEGACY_HERO_IDS: Partial<Record<string, CharacterState["id"]>> = {
+  arlen: "fighter",
+  mira: "priest",
+  kael: "mage"
+};
 
 export function loadGame(this: CrystalOathSceneContext): boolean {
   const saveLoadStartMs = perfNow();
@@ -14,7 +21,7 @@ export function loadGame(this: CrystalOathSceneContext): boolean {
     const data = JSON.parse(raw);
     perfRecordSaveLoad(this, perfNow() - saveLoadStartMs);
     this.buildWorldFromSeed(data.worldSeed ?? createWorldSeed());
-    this.party = this.normalizeParty(data.party ?? []);
+    this.party = this.normalizeParty(migrateLegacyPartyIds(data.party ?? []));
     this.inventory = { potion: 0, antidote: 0, tent: 0, phoenixAsh: 0, etherleaf: 0, smokeBomb: 0, charteredCompass: 0, ...(data.inventory ?? {}) };
     this.gearBag = data.gearBag ?? {};
     this.gold = data.gold ?? 0;
@@ -53,4 +60,11 @@ export function loadGame(this: CrystalOathSceneContext): boolean {
     perfRecordSaveLoad(this, perfNow() - saveLoadStartMs);
     return false;
   }
+}
+
+function migrateLegacyPartyIds(rawParty: CharacterState[]): CharacterState[] {
+  return rawParty.map((member) => ({
+    ...member,
+    id: LEGACY_HERO_IDS[member.id] ?? member.id
+  }));
 }

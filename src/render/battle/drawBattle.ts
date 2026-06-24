@@ -206,9 +206,9 @@ export function drawPartyBattler(
   }
   if (!this.drawCharacterSpriteFrame(classId, frame, bodyCenterX, feetBaselineY, battlePlayerSpriteCellWidth(), LAYER_BATTLE_IMAGE, alpha)) {
     const palettes = {
-      arlen: [0xf0c18d, 0xc9433f, 0xe9edf7, 0x362a4b],
-      mira: [0xf1d0aa, 0xf5f2e8, 0x5fac73, 0x314c33],
-      kael: [0xe1b284, 0x1c365d, 0xf0b13e, 0x121827]
+      fighter: [0xf0c18d, 0xc9433f, 0xe9edf7, 0x362a4b],
+      priest: [0xf1d0aa, 0xf5f2e8, 0x5fac73, 0x314c33],
+      mage: [0xe1b284, 0x1c365d, 0xf0b13e, 0x121827]
     }[member.id];
     this.g.fillStyle(0x050812, alpha).fillRect(x + 14, y + 16, 22, 38);
     this.g.fillStyle(palettes[0], alpha).fillRect(x + 16, y + 8, 16, 16);
@@ -248,7 +248,7 @@ export function drawBattlePartyStatusHud(this: CrystalOathSceneContext) {
     if (active) {
       this.ui.lineStyle(1, BATTLE_UI.goldBright, 0.62).strokeRect(x + 6, rowY - 4, w - 12, rowH - 5);
     }
-    drawPartyCardPortrait.call(this, member, x + 12, rowY + 4, 30, 38);
+    drawPartyCardPortrait.call(this, member, x + 12, rowY + 3, 30, 40);
     this.text(x + 50, rowY + 3, member.name, 10, down ? "#858b98" : "#ffffff", "left", { wordWrapWidth: 76, strokeThickness: 1 });
     this.text(x + w - 56, rowY + 4, `${member.hp}/${member.maxHp}`, 9, down ? "#858b98" : "#dce9ff", "left", {
       wordWrapWidth: 50,
@@ -339,8 +339,8 @@ export function drawBattleTurnCarousel(this: CrystalOathSceneContext) {
   const state = (this.battle.carousel ??= { dissolves: [] });
   const cards = this.battleCarouselCards();
   if (!cards.length) return;
-  const cardW = 58;
-  const cardH = 46;
+  const cardW = 48;
+  const cardH = 64;
   const gap = 8;
   const totalW = cards.length * cardW + (cards.length - 1) * gap;
   const startX = Math.round(WIDTH / 2 - totalW / 2);
@@ -406,7 +406,7 @@ export function drawBattleCarouselCard(this: CrystalOathSceneContext, card: Batt
   this.ui.fillStyle(0xffffff, 0.04 * finalAlpha).fillRect(x + 2, y + 2, w - 4, Math.floor(h * 0.38));
   this.ui.lineStyle(card.current ? 2 : 1, border, (card.current ? 1 : 0.78) * finalAlpha).strokeRect(x, y, w, h);
   this.ui.lineStyle(1, BATTLE_UI.goldBright, (card.current ? 0.64 : 0.3) * finalAlpha).strokeRect(x + 2, y + 2, w - 4, h - 4);
-  drawCarouselPortrait.call(this, card, x + 6, y + 6, w - 12, h - 12, finalAlpha);
+  drawCarouselPortrait.call(this, card, x + 6, y + 8, 36, 48, finalAlpha);
   if (card.current) {
     this.ui.fillStyle(BATTLE_UI.goldBright, 0.96 * finalAlpha).fillRect(x + w - 24, y - 10, 30, 12);
     this.ui.lineStyle(1, BATTLE_UI.shadow, 0.7 * finalAlpha).strokeRect(x + w - 24, y - 10, 30, 12);
@@ -531,12 +531,12 @@ function drawPartyCardPortrait(this: CrystalOathSceneContext, member: CharacterS
   const texture = PORTRAIT_TEXTURES[member.id];
   this.ui.fillStyle(0x030711, 0.92).fillRect(x, y, w, h);
   if (texture && this.hasTexture(texture)) {
-    this.drawTexture(texture, x, y, w, h, LAYER_UI_IMAGE, alpha);
+    this.drawCoveredTexture(texture, x, y, w, h, LAYER_UI_IMAGE, alpha);
   } else {
     const palettes = {
-      arlen: [0xf1c07f, 0xd8c7a2, 0x7a3b24],
-      mira: [0xdfe4ef, 0x8364bc, 0xc9d2ff],
-      kael: [0xd18a45, 0x244d88, 0xe9edf7]
+      fighter: [0xf1c07f, 0xd8c7a2, 0x7a3b24],
+      priest: [0xdfe4ef, 0x8364bc, 0xc9d2ff],
+      mage: [0xd18a45, 0x244d88, 0xe9edf7]
     }[member.id];
     this.ui.fillStyle(palettes[0], alpha).fillRect(x + 9, y + 5, 12, 12);
     this.ui.fillStyle(palettes[1], alpha).fillRect(x + 6, y + 17, 18, 16);
@@ -551,14 +551,14 @@ function drawCarouselPortrait(this: CrystalOathSceneContext, card: BattleCarouse
     const member = this.party.find((candidate) => candidate.id === card.actorId);
     const texture = member ? PORTRAIT_TEXTURES[member.id] : undefined;
     if (texture && this.hasTexture(texture)) {
-      this.drawTexture(texture, x, y, w, h, LAYER_UI_IMAGE, alpha);
+      this.drawCoveredTexture(texture, x, y, w, h, LAYER_UI_IMAGE, alpha);
       return;
     }
   } else {
     const enemy = this.battle?.enemies.find((candidate) => candidate.uid === card.actorId);
     const texture = enemy ? ENEMY_TEXTURES[enemy.id] : undefined;
     if (texture && this.hasTexture(texture)) {
-      this.drawTexture(texture, x, y, w, h, LAYER_UI_IMAGE, alpha);
+      this.drawContainedTexture(texture, x, y, w, h, LAYER_UI_IMAGE, alpha);
       return;
     }
   }

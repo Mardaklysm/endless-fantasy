@@ -4,7 +4,7 @@ export const PLAYER_SKILLS: Record<string, PlayerSkillDef> = {
   powerStrike: {
     id: "powerStrike",
     name: "Power Strike",
-    users: ["arlen"],
+    users: ["fighter"],
     target: "enemy",
     cooldown: 2,
     description: "Heavy weapon damage."
@@ -12,7 +12,7 @@ export const PLAYER_SKILLS: Record<string, PlayerSkillDef> = {
   guardBreak: {
     id: "guardBreak",
     name: "Guard Break",
-    users: ["arlen"],
+    users: ["fighter"],
     target: "enemy",
     cooldown: 3,
     description: "Damage and weaken defense."
@@ -20,7 +20,7 @@ export const PLAYER_SKILLS: Record<string, PlayerSkillDef> = {
   quickSlash: {
     id: "quickSlash",
     name: "Quick Slash",
-    users: ["arlen"],
+    users: ["fighter"],
     target: "enemy",
     cooldown: 1,
     description: "Fast cut with better crit odds."
@@ -28,7 +28,7 @@ export const PLAYER_SKILLS: Record<string, PlayerSkillDef> = {
   firstAid: {
     id: "firstAid",
     name: "First Aid",
-    users: ["mira"],
+    users: ["priest"],
     target: "ally",
     cooldown: 3,
     description: "Small heal without charges."
@@ -36,7 +36,7 @@ export const PLAYER_SKILLS: Record<string, PlayerSkillDef> = {
   fireSpark: {
     id: "fireSpark",
     name: "Fire Spark",
-    users: ["kael"],
+    users: ["mage"],
     target: "enemy",
     cooldown: 2,
     description: "Fire damage with a burn chance."

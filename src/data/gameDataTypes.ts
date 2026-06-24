@@ -28,7 +28,7 @@ export interface StatusState {
 }
 
 export interface CharacterState {
-  id: "arlen" | "mira" | "kael";
+  id: "fighter" | "priest" | "mage";
   name: string;
   role: string;
   level: number;
@@ -61,7 +61,7 @@ export interface ItemDef {
 export interface SpellDef {
   id: string;
   name: string;
-  caster: "mira" | "kael" | "arlen";
+  caster: CharacterState["id"];
   tier: 1 | 2 | 3;
   target: TargetKind;
   element: ElementType;

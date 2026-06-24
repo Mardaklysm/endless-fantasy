@@ -14,38 +14,38 @@
   "playerSlots": [
     {
       "id": "player_1",
-      "x": 2081,
-      "y": 499,
+      "x": 1920,
+      "y": 786,
       "order": 1,
       "facing": "left",
       "radius": 138,
-      "previewSpriteId": "arlen"
+      "previewSpriteId": "fighter"
     },
     {
       "id": "player_2",
-      "x": 2225,
-      "y": 722,
+      "x": 1959,
+      "y": 994,
       "order": 2,
       "facing": "left",
       "radius": 138,
-      "previewSpriteId": "mira"
+      "previewSpriteId": "priest"
     },
     {
       "id": "player_3",
-      "x": 2368,
-      "y": 946,
+      "x": 2048,
+      "y": 1210,
       "order": 3,
       "facing": "left",
       "radius": 138,
-      "previewSpriteId": "kael"
+      "previewSpriteId": "mage"
     }
   ],
   "variant": "normal",
   "enemySlots": [
     {
       "id": "enemy_1",
-      "x": 364,
-      "y": 579,
+      "x": 1101,
+      "y": 1091,
       "order": 1,
       "role": "front",
       "facing": "right",
@@ -54,8 +54,8 @@
     },
     {
       "id": "enemy_2",
-      "x": 829,
-      "y": 740,
+      "x": 1029,
+      "y": 1428,
       "order": 2,
       "role": "normal",
       "facing": "right",
@@ -64,8 +64,8 @@
     },
     {
       "id": "enemy_3",
-      "x": 416,
-      "y": 923,
+      "x": 758,
+      "y": 1055,
       "order": 3,
       "role": "back",
       "facing": "right",
@@ -74,8 +74,8 @@
     },
     {
       "id": "enemy_4",
-      "x": 1030,
-      "y": 585,
+      "x": 1094,
+      "y": 770,
       "order": 4,
       "role": "normal",
       "facing": "right",

@@ -50,9 +50,9 @@ export const ASSET_PATHS = [
   ["chest_open", "tiles/objects/chest_open.png"],
   ["switch_floor", "tiles/objects/switch_floor.png"],
   ["boss_relic_seal", "tiles/objects/boss_relic_seal.png"],
-  ["class_fighter_sheet", "characters/classes/fighter_normalized.png"],
-  ["class_priest_sheet", "characters/classes/priest_normalized.png"],
-  ["class_wizard_sheet", "characters/classes/wizard_normalized.png"],
+  ["hero_fighter_sprite", "heroes/sprite_hero_fighter.png"],
+  ["hero_priest_sprite", "heroes/sprite_hero_priest.png"],
+  ["hero_mage_sprite", "heroes/sprite_hero_mage.png"],
   ["npc_guard", "characters/npc_guard.png"],
   ["npc_merchant", "characters/npc_merchant.png"],
   ["npc_elder", "characters/npc_elder.png"],
@@ -60,9 +60,9 @@ export const ASSET_PATHS = [
   ["npc_sage", "characters/npc_sage.png"],
   ["vehicle_boat", "characters/vehicle_boat.png"],
   ["vehicle_skyship", "characters/vehicle_skyship.png"],
-  ["battle_arlen_portrait", "portraits/battle_arlen.png"],
-  ["battle_mira_portrait", "portraits/battle_mira.png"],
-  ["battle_kael_portrait", "portraits/battle_kael.png"],
+  ["hero_fighter_portrait", "heroes/portrait_hero_fighter.png"],
+  ["hero_priest_portrait", "heroes/portrait_hero_priest.png"],
+  ["hero_mage_portrait", "heroes/portrait_hero_mage.png"],
   ["battle_bg_forest_path", "battle/backgrounds/forest_path.jpeg"],
   ["battle_bg_plains", "battle/backgrounds/plains.jpeg"],
   ["battle_bg_moss_cave", "battle/backgrounds/moss_cave.jpeg"],
@@ -136,7 +136,7 @@ export const ASSET_PATHS = [
   ["poi_starting_grassland_village", "poi/starting_grassland_village.jpeg"]
 ] as const;
 
-export const ASSET_MODULES = import.meta.glob(["../../assets/**/*.{png,jpeg,jpg}", "!../../assets/characters/arlen_map.png"], {
+export const ASSET_MODULES = import.meta.glob("../../assets/**/*.{png,jpeg,jpg}", {
   eager: true,
   query: "?url",
   import: "default"
@@ -168,12 +168,6 @@ export const CHARTER_BOAT_8DIR_FRAME_HEIGHT = 512;
 export const ASSET_V2_MODULES = import.meta.glob(
   [
     "../../assets_v2/**/*.{png,jpeg,jpg}",
-    "!../../assets_v2/characters/arlen_battle.png",
-    "!../../assets_v2/characters/arlen_map.png",
-    "!../../assets_v2/characters/kael_battle.png",
-    "!../../assets_v2/characters/kael_map.png",
-    "!../../assets_v2/characters/mira_battle.png",
-    "!../../assets_v2/characters/mira_map.png",
     "!../../assets_v2/previews/**/*.{png,jpeg,jpg}",
     "!../../assets_v2/source_sheets/**/*.{png,jpeg,jpg}",
     "!../../assets_v2/ui/command_window.png",
@@ -193,9 +187,6 @@ export const ASSET_V2_PATH_OVERRIDES: Partial<Record<AssetKey, string>> = {
   tile_water_b: "tiles/world/water_shallow.png",
   tile_deep_water_a: "tiles/world/water_deep.png",
   tile_deep_water_b: "tiles/world/water_deep.png",
-  battle_arlen_portrait: "portraits/arlen.png",
-  battle_mira_portrait: "portraits/mira.png",
-  battle_kael_portrait: "portraits/kael.png",
   ui_window_panel: "ui/window_panel.png",
   ui_hp_bar: "ui/hp_bar.png"
 };
