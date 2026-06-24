@@ -140,6 +140,9 @@ export function beginBattle(this: CrystalOathSceneContext, kind: BattleState["ki
     actions: [],
     selected: 0,
     log: [intro],
+    debugLogVisible: false,
+    floatingTexts: [],
+    carousel: { dissolves: [] },
     actionTimer: BATTLE_TURN_DELAY_MS,
     victoryAwarded: false
   };

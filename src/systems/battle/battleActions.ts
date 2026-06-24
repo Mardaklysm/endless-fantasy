@@ -3,8 +3,38 @@ import type { CharacterState, EnemyState, PlayerSkillDef } from "../../data/game
 import { ITEMS } from "../../data/items";
 import { PLAYER_SKILLS } from "../../data/playerSkills";
 import { SPELLS } from "../../data/spells";
-import type { BattleAction, BattleAnimation } from "./battleTypes";
+import type { BattleAction, BattleAnimation, BattleFloatingTextKind } from "./battleTypes";
 import type { CrystalOathSceneContext } from "../../scene/sceneContext";
+
+let floatingTextId = 0;
+
+export function queueBattleFloatingText(
+  this: CrystalOathSceneContext,
+  side: "party" | "enemy",
+  actorId: string,
+  amount: number,
+  maxHp: number,
+  kind: BattleFloatingTextKind,
+  options: { critical?: boolean; text?: string } = {}
+) {
+  if (!this.battle) return;
+  const sign = kind === "heal" ? "+" : kind === "damage" ? "-" : "";
+  const numeric = Math.abs(amount);
+  this.battle.floatingTexts ??= [];
+  this.battle.floatingTexts.push({
+    id: `float_${++floatingTextId}`,
+    side,
+    actorId,
+    amount,
+    maxHp,
+    kind,
+    critical: options.critical,
+    text: options.text ?? `${sign}${numeric}`,
+    createdAt: this.time.now,
+    duration: options.critical ? 980 : 820,
+    jitterX: Phaser.Math.Between(-8, 8)
+  });
+}
 
 export function confirmBattleSelection(this: CrystalOathSceneContext) {
   if (!this.battle) return;
@@ -225,6 +255,7 @@ export function resolvePartyAction(this: CrystalOathSceneContext, action: Battle
     if (!target) return false;
     const damage = this.physicalDamage(this.attackPower(actor), this.effectiveEnemyDefense(target), actor.luck);
     target.hp = Math.max(0, target.hp - damage.amount);
+    this.queueBattleFloatingText("enemy", target.uid, -damage.amount, target.maxHp, "damage", { critical: damage.critical });
     this.battle.log.push(`${actor.name} hits ${target.name} for ${damage.amount}${damage.critical ? " critical" : ""}.`);
     this.audio.blip("hit");
     return true;
@@ -260,6 +291,7 @@ export function resolveEnemyAction(this: CrystalOathSceneContext, action: Battle
     const target = allies.sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0] ?? enemy;
     const amount = Math.min(target.maxHp - target.hp, move.power + Phaser.Math.Between(0, 8));
     target.hp += Math.max(0, amount);
+    if (amount > 0) this.queueBattleFloatingText("enemy", target.uid, amount, target.maxHp, "heal");
     this.battle.log.push(`${enemy.name}'s ${move.name} restores ${amount} HP to ${target.name}.`);
     enemy.intent = this.planEnemyIntent(enemy);
     return true;
@@ -278,6 +310,7 @@ export function resolveEnemyAction(this: CrystalOathSceneContext, action: Battle
     if (target) {
       const chip = Math.max(1, enemy.attack - this.defensePower(target) + 3);
       target.hp = Math.max(0, target.hp - chip);
+      this.queueBattleFloatingText("party", target.id, -chip, target.maxHp, "damage");
       this.battle.log.push(`${enemy.name}'s ${move.name} clips ${target.name} for ${chip} and steals ${stolen} gold.`);
     } else this.battle.log.push(`${enemy.name} steals ${stolen} gold.`);
     enemy.intent = this.planEnemyIntent(enemy);
@@ -302,6 +335,7 @@ export function resolveEnemyAction(this: CrystalOathSceneContext, action: Battle
     if (target.statuses.guarded) damage = Math.ceil(damage * 0.55);
     if (target.statuses.starveil) damage = Math.ceil(damage * 0.65);
     target.hp = Math.max(0, target.hp - damage);
+    this.queueBattleFloatingText("party", target.id, -damage, target.maxHp, "damage");
     this.battle.log.push(`${enemy.name}'s ${move.name} hits ${target.name} for ${damage}.`);
     if (move.status && target.hp > 0 && Phaser.Math.Between(1, 100) <= 40) {
       target.statuses[move.status] = move.status === "poison" ? 99 : 3;
@@ -328,6 +362,7 @@ export function usePlayerSkill(this: CrystalOathSceneContext, actor: CharacterSt
     if (!target) return false;
     const damage = this.physicalDamage(this.attackPower(actor) + 12, this.effectiveEnemyDefense(target), actor.luck);
     target.hp = Math.max(0, target.hp - damage.amount);
+    this.queueBattleFloatingText("enemy", target.uid, -damage.amount, target.maxHp, "damage", { critical: damage.critical });
     this.battle.log.push(`${actor.name} uses Power Strike for ${damage.amount}${damage.critical ? " critical" : ""}.`);
     this.setSkillCooldown(actor, skill);
     this.audio.blip("hit");
@@ -338,6 +373,7 @@ export function usePlayerSkill(this: CrystalOathSceneContext, actor: CharacterSt
     if (!target) return false;
     const damage = this.physicalDamage(this.attackPower(actor) + 4, this.effectiveEnemyDefense(target), actor.luck);
     target.hp = Math.max(0, target.hp - damage.amount);
+    this.queueBattleFloatingText("enemy", target.uid, -damage.amount, target.maxHp, "damage", { critical: damage.critical });
     target.statuses.weakness = 3;
     this.battle.log.push(`${actor.name} cracks ${target.name}'s guard for ${damage.amount}. Weakness takes hold.`);
     this.setSkillCooldown(actor, skill);
@@ -349,6 +385,7 @@ export function usePlayerSkill(this: CrystalOathSceneContext, actor: CharacterSt
     if (!target) return false;
     const damage = this.physicalDamage(this.attackPower(actor) - 1, this.effectiveEnemyDefense(target), actor.luck + 10);
     target.hp = Math.max(0, target.hp - damage.amount);
+    this.queueBattleFloatingText("enemy", target.uid, -damage.amount, target.maxHp, "damage", { critical: damage.critical });
     this.battle.log.push(`${actor.name} flashes in with Quick Slash for ${damage.amount}${damage.critical ? " critical" : ""}.`);
     this.setSkillCooldown(actor, skill);
     this.audio.blip("hit");
@@ -362,6 +399,7 @@ export function usePlayerSkill(this: CrystalOathSceneContext, actor: CharacterSt
     if (target.resist.includes("fire")) amount = Math.floor(amount * 0.55);
     amount = Math.max(3, amount);
     target.hp = Math.max(0, target.hp - amount);
+    this.queueBattleFloatingText("enemy", target.uid, -amount, target.maxHp, "damage");
     if (Phaser.Math.Between(1, 100) <= 45) target.statuses.burn = 3;
     this.battle.log.push(`${actor.name} casts Fire Spark. ${target.name} takes ${amount}${target.statuses.burn ? " and burns" : ""}.`);
     this.setSkillCooldown(actor, skill);
@@ -375,7 +413,10 @@ export function usePlayerSkill(this: CrystalOathSceneContext, actor: CharacterSt
       return false;
     }
     const amount = 22 + actor.level * 3;
+    const before = target.hp;
     target.hp = Math.min(target.maxHp, target.hp + amount);
+    const recovered = target.hp - before;
+    if (recovered > 0) this.queueBattleFloatingText("party", target.id, recovered, target.maxHp, "heal");
     delete target.statuses.bleed;
     this.battle.log.push(`${actor.name} uses First Aid. ${target.name} recovers ${amount}.`);
     this.setSkillCooldown(actor, skill);
@@ -422,7 +463,10 @@ export function castSpell(this: CrystalOathSceneContext, actor: CharacterState, 
     for (const target of targets) {
       if (target.hp <= 0) continue;
       const amount = spell.power + actor.level * 4 + Phaser.Math.Between(0, 8);
+      const before = target.hp;
       target.hp = Math.min(target.maxHp, target.hp + amount);
+      const recovered = target.hp - before;
+      if (recovered > 0) this.queueBattleFloatingText("party", target.id, recovered, target.maxHp, "heal");
       this.battle.log.push(`${actor.name} casts ${spell.name}. ${target.name} recovers ${amount}.`);
     }
     return true;
@@ -437,6 +481,7 @@ export function castSpell(this: CrystalOathSceneContext, actor: CharacterState, 
     this.audio.blip("spell");
     target.hp = Math.max(1, Math.floor(target.maxHp * 0.35));
     target.statuses = {};
+    this.queueBattleFloatingText("party", target.id, target.hp, target.maxHp, "heal", { text: `+${target.hp}` });
     this.battle.log.push(`${target.name} rises with ${target.hp} HP.`);
     return true;
   }
@@ -467,6 +512,7 @@ export function castSpell(this: CrystalOathSceneContext, actor: CharacterState, 
     if (target.statuses.guarded) amount = Math.ceil(amount * 0.7);
     amount = Math.max(2, amount);
     target.hp = Math.max(0, target.hp - amount);
+    this.queueBattleFloatingText("enemy", target.uid, -amount, target.maxHp, "damage");
     this.battle.log.push(`${actor.name} casts ${spell.name}. ${target.name} takes ${amount}.`);
   }
   return true;
@@ -509,7 +555,10 @@ export function useBattleItem(this: CrystalOathSceneContext, actor: CharacterSta
     }
     this.inventory[itemId] -= 1;
     const amount = 35;
+    const before = target.hp;
     target.hp = Math.min(target.maxHp, target.hp + amount);
+    const recovered = target.hp - before;
+    if (recovered > 0) this.queueBattleFloatingText("party", target.id, recovered, target.maxHp, "heal");
     this.battle.log.push(`${actor.name} uses Potion. ${target.name} recovers ${amount}.`);
     return true;
   } else if (itemId === "antidote") {
@@ -529,6 +578,7 @@ export function useBattleItem(this: CrystalOathSceneContext, actor: CharacterSta
     this.inventory[itemId] -= 1;
     target.hp = Math.floor(target.maxHp * 0.35);
     target.statuses = {};
+    this.queueBattleFloatingText("party", target.id, target.hp, target.maxHp, "heal", { text: `+${target.hp}` });
     this.battle.log.push(`${target.name} rises from Phoenix Ash.`);
     return true;
   }

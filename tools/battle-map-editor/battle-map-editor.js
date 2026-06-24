@@ -29,6 +29,10 @@ const spriteSearch = document.querySelector("#spriteSearch");
 let battleMaps = [];
 let battleMap = undefined;
 let spriteCatalog = { players: [], enemies: [] };
+let spritePresentation = {
+  player: { defaultRadius: 138 },
+  enemy: { defaultRadius: 152, bossDefaultRadius: 256, previewRadiusToDisplayScale: 1.18 }
+};
 let spriteFilter = "player";
 let image = undefined;
 let scale = 1;
@@ -48,7 +52,7 @@ init();
 
 async function init() {
   bindEvents();
-  await Promise.all([loadBattleMapList(), loadSpriteCatalog()]);
+  await Promise.all([loadBattleMapList(), loadSpriteCatalog(), loadSpritePresentation()]);
   if (battleMaps.length) await loadBattleMap(battleMaps[0].id);
   requestAnimationFrame(draw);
 }
@@ -107,6 +111,14 @@ async function loadSpriteCatalog(refreshAssets = false) {
   }
   spriteCatalog = await fetchJson("/api/battle-sprites");
   await Promise.all([...spriteCatalog.players, ...spriteCatalog.enemies].map(preloadSpriteImage));
+}
+
+async function loadSpritePresentation() {
+  try {
+    spritePresentation = await fetchJson("/api/asset?path=src%2Fdata%2FbattleSpritePresentation.json");
+  } catch (error) {
+    console.warn(error);
+  }
 }
 
 async function loadBattleMap(id) {
@@ -273,7 +285,7 @@ function makeSlot(side, point, order) {
     y: Math.round(point.y),
     order,
     facing: side === "player" ? "left" : "right",
-    radius: side === "boss" ? 256 : side === "player" ? 138 : 152
+    radius: defaultRadius(side)
   };
   if (side === "enemy") slot.role = "normal";
   if (side === "boss") slot.role = "boss";
@@ -456,7 +468,7 @@ function drawSpritePreview(slot, side) {
     const width = height * (entry.frame.width / entry.frame.height);
     ctx.drawImage(img, entry.frame.x, entry.frame.y, entry.frame.width, entry.frame.height, slot.x - width / 2, slot.y - height * 0.86, width, height);
   } else {
-    const maxSide = radius * (side === "boss" ? 2.05 : 1.55);
+    const maxSide = radius * (side === "boss" ? spritePresentation.enemy.previewRadiusToDisplayScale * 1.18 : spritePresentation.enemy.previewRadiusToDisplayScale);
     const ratio = img.naturalWidth / Math.max(1, img.naturalHeight);
     const width = ratio >= 1 ? maxSide : maxSide * ratio;
     const height = ratio >= 1 ? maxSide / ratio : maxSide;
@@ -715,7 +727,11 @@ function showStatus(message, isError = false) {
 }
 
 function defaultRadius(side) {
-  return side === "boss" ? 256 : side === "player" ? 138 : 152;
+  return side === "boss"
+    ? spritePresentation.enemy.bossDefaultRadius
+    : side === "player"
+      ? spritePresentation.player.defaultRadius
+      : spritePresentation.enemy.defaultRadius;
 }
 
 function byOrderThenId(a, b) {

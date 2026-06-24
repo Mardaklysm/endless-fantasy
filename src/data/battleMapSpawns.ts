@@ -1,5 +1,13 @@
 import { HEIGHT, WIDTH } from "../app/config";
 import type { AssetKey } from "../assets/assetTypes";
+import {
+  battleEnemyDisplaySizeForRole,
+  battleMapImageToScreenPoint,
+  battleMapRadiusToScreen,
+  battlePlayerSlotOrigin,
+  battlePlayerSlotSize,
+  defaultBattleSpriteRadius
+} from "./battleSpritePresentation";
 import type { EnemyState } from "./gameDataTypes";
 
 export type BattleSpawnFacing = "left" | "right" | "up" | "down";
@@ -226,13 +234,16 @@ function playerSlotFromPoint(
   source: ResolvedBattleSpawnSlot["source"]
 ): ResolvedBattleSpawnSlot {
   const point = imageToScreenPoint(battleMap, slot.x, slot.y);
+  const origin = battlePlayerSlotOrigin();
+  const slotSize = battlePlayerSlotSize();
+  const radius = slot.radius ?? defaultBattleSpriteRadius("player");
   return {
     id: slot.id,
-    x: point.x - 48,
-    y: point.y - 82,
-    size: 96,
+    x: point.x - origin.bodyCenterX,
+    y: point.y - origin.feetBaselineY,
+    size: slotSize,
     facing: slot.facing ?? "left",
-    radius: screenRadius(battleMap, slot.radius ?? 138),
+    radius: screenRadius(battleMap, radius),
     source,
     metadataX: slot.x,
     metadataY: slot.y
@@ -246,8 +257,9 @@ function enemySlotFromPoint(
   source: ResolvedBattleSpawnSlot["source"]
 ): ResolvedBattleSpawnSlot {
   const role = slot.role ?? (enemy ? enemyRole(enemy) : "normal");
-  const baseSize = role === "boss" || enemy?.boss ? 178 : role === "large" ? 138 : 106;
-  const size = Math.round(clamp(screenRadius(battleMap, slot.radius ?? (role === "boss" ? 256 : 152)) * 2, baseSize * 0.85, baseSize * 1.25));
+  const presentationRole = role === "boss" || enemy?.boss ? "boss" : role;
+  const radius = slot.radius ?? defaultBattleSpriteRadius(presentationRole === "boss" ? "boss" : "enemy");
+  const size = battleEnemyDisplaySizeForRole(battleMap, radius, presentationRole);
   const point = imageToScreenPoint(battleMap, slot.x, slot.y);
   return {
     id: slot.id,
@@ -264,14 +276,11 @@ function enemySlotFromPoint(
 }
 
 function imageToScreenPoint(battleMap: BattleMapSpawnMetadata, x: number, y: number) {
-  return {
-    x: (x / battleMap.dimensions.width) * WIDTH,
-    y: (y / battleMap.dimensions.height) * HEIGHT
-  };
+  return battleMapImageToScreenPoint(battleMap, x, y);
 }
 
 function screenRadius(battleMap: BattleMapSpawnMetadata, radius: number) {
-  return radius * ((WIDTH / battleMap.dimensions.width + HEIGHT / battleMap.dimensions.height) / 2);
+  return battleMapRadiusToScreen(battleMap, radius);
 }
 
 function fallbackPlayerSlots(count: number): ResolvedBattleSpawnSlot[] {
@@ -284,9 +293,9 @@ function fallbackPlayerSlots(count: number): ResolvedBattleSpawnSlot[] {
     id: `player_fallback_${index + 1}`,
     x: slot.x,
     y: slot.y,
-    size: 96,
+    size: battlePlayerSlotSize(),
     facing: "left",
-    radius: 48,
+    radius: battlePlayerSlotSize() / 2,
     source: "fallback",
     metadataX: slot.x,
     metadataY: slot.y
@@ -295,12 +304,12 @@ function fallbackPlayerSlots(count: number): ResolvedBattleSpawnSlot[] {
 
 function fallbackEnemySlots(enemies: EnemyState[]): ResolvedBattleSpawnSlot[] {
   if (enemies.length === 1 && enemies[0]?.boss) {
-    return [{ id: "enemy_fallback_boss", x: 116, y: 78, size: 178, facing: "right", radius: 89, role: "boss", source: "fallback", metadataX: 116, metadataY: 78 }];
+    return [{ id: "enemy_fallback_boss", x: 130, y: 98, size: 150, facing: "right", radius: 75, role: "boss", source: "fallback", metadataX: 130, metadataY: 98 }];
   }
   return [
-    { id: "enemy_fallback_1", x: 74, y: 100, size: 106, facing: "right", radius: 53, role: "front", source: "fallback", metadataX: 74, metadataY: 100 },
-    { id: "enemy_fallback_2", x: 236, y: 156, size: 106, facing: "right", radius: 53, role: "normal", source: "fallback", metadataX: 236, metadataY: 156 },
-    { id: "enemy_fallback_3", x: 92, y: 220, size: 106, facing: "right", radius: 53, role: "back", source: "fallback", metadataX: 92, metadataY: 220 }
+    { id: "enemy_fallback_1", x: 86, y: 116, size: 88, facing: "right", radius: 44, role: "front", source: "fallback", metadataX: 86, metadataY: 116 },
+    { id: "enemy_fallback_2", x: 242, y: 164, size: 88, facing: "right", radius: 44, role: "normal", source: "fallback", metadataX: 242, metadataY: 164 },
+    { id: "enemy_fallback_3", x: 108, y: 226, size: 88, facing: "right", radius: 44, role: "back", source: "fallback", metadataX: 108, metadataY: 226 }
   ];
 }
 

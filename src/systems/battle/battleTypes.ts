@@ -22,6 +22,57 @@ export interface BattleAnimation {
   targetActorId?: string;
 }
 
+export type BattleFloatingTextKind = "damage" | "heal" | "status" | "miss";
+
+export interface BattleFloatingText {
+  id: string;
+  side: "party" | "enemy";
+  actorId: string;
+  text: string;
+  amount: number;
+  maxHp: number;
+  kind: BattleFloatingTextKind;
+  critical?: boolean;
+  createdAt: number;
+  duration: number;
+  jitterX: number;
+}
+
+export interface BattleCarouselCardSnapshot {
+  key: string;
+  side: "party" | "enemy";
+  actorId: string;
+  name: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface BattleCarouselDissolveParticle {
+  x: number;
+  y: number;
+  size: number;
+  vx: number;
+  vy: number;
+  color: number;
+  delay: number;
+}
+
+export interface BattleCarouselDissolve {
+  key: string;
+  createdAt: number;
+  duration: number;
+  particles: BattleCarouselDissolveParticle[];
+}
+
+export interface BattleCarouselState {
+  lastKey?: string;
+  animationStartedAt?: number;
+  previousCards?: BattleCarouselCardSnapshot[];
+  dissolves?: BattleCarouselDissolve[];
+}
+
 export type BattlePhase = "command" | "target" | "skill" | "spell" | "item" | "allyTarget" | "resolving" | "log";
 
 export interface InitiativeEntry {
@@ -47,6 +98,9 @@ export interface BattleState {
   pendingAction?: Partial<BattleAction>;
   animation?: BattleAnimation;
   log: string[];
+  debugLogVisible?: boolean;
+  floatingTexts?: BattleFloatingText[];
+  carousel?: BattleCarouselState;
   actionTimer: number;
   victoryAwarded: boolean;
 }

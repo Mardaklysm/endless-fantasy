@@ -1,0 +1,27 @@
+{
+  "player": {
+    "defaultRadius": 138,
+    "slotSize": 96,
+    "bodyCenterX": 48,
+    "feetBaselineY": 82,
+    "spriteCellWidth": 166,
+    "shadowWidth": 74,
+    "shadowHeight": 14
+  },
+  "enemy": {
+    "defaultRadius": 152,
+    "bossDefaultRadius": 256,
+    "radiusToDisplayScale": 1.18,
+    "previewRadiusToDisplayScale": 1.18,
+    "roleDisplaySizes": {
+      "normal": 88,
+      "front": 88,
+      "back": 88,
+      "flying": 86,
+      "large": 114,
+      "boss": 150
+    },
+    "minDisplayScale": 0.84,
+    "maxDisplayScale": 1.18
+  }
+}

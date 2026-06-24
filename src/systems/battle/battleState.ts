@@ -5,6 +5,13 @@ import { ARMORS, WEAPONS } from "../../data/gear";
 import { ITEMS } from "../../data/items";
 import type { CrystalOathSceneContext } from "../../scene/sceneContext";
 
+function queueStatusDamageFloat(this: CrystalOathSceneContext, actor: CharacterState | EnemyState, damage: number) {
+  if (!this.battle) return;
+  const enemy = this.battle.enemies.find((candidate) => candidate === actor);
+  if (enemy) this.queueBattleFloatingText("enemy", enemy.uid, -damage, enemy.maxHp, "damage");
+  else this.queueBattleFloatingText("party", (actor as CharacterState).id, -damage, actor.maxHp, "damage");
+}
+
 export function allEnemiesDefeated(this: CrystalOathSceneContext): boolean {
   return !!this.battle && this.battle.enemies.every((e) => e.hp <= 0);
 }
@@ -38,18 +45,21 @@ export function applyTurnStartStatuses(this: CrystalOathSceneContext, actor: Cha
   if (actor.hp > 0 && actor.statuses.poison) {
     const damage = Math.max(1, Math.floor(actor.maxHp * 0.05));
     actor.hp = Math.max(0, actor.hp - damage);
+    queueStatusDamageFloat.call(this, actor, damage);
     this.battle.log.push(`${actor.name} suffers ${damage} poison damage.`);
     if (actor.hp <= 0) return true;
   }
   if (actor.hp > 0 && actor.statuses.burn) {
     const damage = Math.max(1, Math.floor(actor.maxHp * 0.04));
     actor.hp = Math.max(0, actor.hp - damage);
+    queueStatusDamageFloat.call(this, actor, damage);
     this.battle.log.push(`${actor.name} burns for ${damage}.`);
     if (actor.hp <= 0) return true;
   }
   if (actor.hp > 0 && actor.statuses.bleed) {
     const damage = Math.max(1, Math.floor(actor.maxHp * 0.03));
     actor.hp = Math.max(0, actor.hp - damage);
+    queueStatusDamageFloat.call(this, actor, damage);
     this.battle.log.push(`${actor.name} bleeds for ${damage}.`);
     if (actor.hp <= 0) return true;
   }

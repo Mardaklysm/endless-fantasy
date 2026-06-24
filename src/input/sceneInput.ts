@@ -54,6 +54,11 @@ export function handleKey(this: CrystalOathSceneContext, event: KeyboardEvent) {
     this.markDirty();
     return;
   }
+  if (this.mode === "battle" && this.battle && (event.code === "KeyL" || event.code === "Backquote")) {
+    this.battle.debugLogVisible = !this.battle.debugLogVisible;
+    this.markDirty();
+    return;
+  }
 
   if (this.mode === "title") this.handleTitle(event);
   else if (this.mode === "dialogue") this.handleDialogue(event);
@@ -79,6 +84,8 @@ export function isGameControlKey(this: CrystalOathSceneContext, event: KeyboardE
     isCancel(event) ||
     event.code === "KeyM" ||
     event.code === "KeyF" ||
+    event.code === "KeyL" ||
+    event.code === "Backquote" ||
     event.code === "F6" ||
     event.code === "F7" ||
     event.code === "F9"
