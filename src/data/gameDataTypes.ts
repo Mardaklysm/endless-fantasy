@@ -36,6 +36,8 @@ export interface CharacterState {
   nextXp: number;
   hp: number;
   maxHp: number;
+  mp: number;
+  maxMp: number;
   baseAttack: number;
   baseDefense: number;
   speed: number;

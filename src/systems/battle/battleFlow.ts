@@ -158,7 +158,7 @@ export function updateBattleFlow(this: CrystalOathSceneContext, delta: number) {
     this.updateBattleAnimation(delta);
     return;
   }
-  if (["command", "target", "spell", "item", "allyTarget"].includes(this.battle.phase)) this.markDirty();
+  if (["command", "target", "skill", "spell", "item", "allyTarget"].includes(this.battle.phase)) this.markDirty();
   if (this.battle.phase !== "resolving") return;
   this.battle.actionTimer -= delta;
   if (this.battle.actionTimer <= 0) this.advanceBattleAfterDelay();
@@ -297,7 +297,7 @@ export function turnPreviewText(this: CrystalOathSceneContext): string {
 
 export function battleOptions(this: CrystalOathSceneContext): string[] {
   if (!this.battle) return [];
-  if (this.battle.phase === "command") return ["Attack", "Skill", "Magic", "Item", "Defend", "Run"];
+  if (this.battle.phase === "command") return ["Attack", "Magic", "Skill", "Item", "Defend", "Run"];
   if (this.battle.phase === "target") return this.battle.enemies.filter((e) => e.hp > 0).map((e) => `${e.name} ${e.hp}/${e.maxHp}`);
   if (this.battle.phase === "skill") {
     const actor = this.currentBattleActor();
@@ -311,8 +311,7 @@ export function battleOptions(this: CrystalOathSceneContext): string[] {
       .filter((id) => actor.level >= SPELLS[id].minLevel)
       .map((id) => {
         const spell = SPELLS[id];
-        const charge = actor.charges[String(spell.tier)]?.current ?? 0;
-        return `${spell.name} T${spell.tier} (${charge})`;
+        return `${spell.name} MP ${this.battleSpellMpCost(id)}`;
       });
   }
   if (this.battle.phase === "item") {
@@ -351,7 +350,7 @@ export function adjustBattleSelection(this: CrystalOathSceneContext, move: Battl
     return;
   }
   if (this.battle.phase === "command") {
-    const columns = 2;
+    const columns = options.length;
     const rows = Math.ceil(options.length / columns);
     const row = Math.floor(this.battle.selected / columns);
     const col = this.battle.selected % columns;
@@ -366,6 +365,11 @@ export function adjustBattleSelection(this: CrystalOathSceneContext, move: Battl
     this.audio.blip("confirm");
     return;
   }
-  this.battle.selected = wrap(this.battle.selected + (move === "down" || move === "right" ? 1 : -1), options.length);
+  if ((this.battle.phase === "target" || this.battle.phase === "allyTarget") && (move === "left" || move === "right")) {
+    const step = move === "right" ? 1 : -1;
+    this.battle.selected = wrap(this.battle.selected + step, options.length);
+  } else {
+    this.battle.selected = wrap(this.battle.selected + (move === "down" || move === "right" ? 1 : -1), options.length);
+  }
   this.audio.blip("confirm");
 }

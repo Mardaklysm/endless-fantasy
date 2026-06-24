@@ -161,6 +161,7 @@ function applyVictoryXp(this: CrystalOathSceneContext, xp: number): BattleLevelU
     const before = {
       level: member.level,
       maxHp: member.maxHp,
+      maxMp: member.maxMp,
       attack: member.baseAttack,
       defense: member.baseDefense,
       speed: member.speed,
@@ -190,6 +191,7 @@ function applyVictoryXp(this: CrystalOathSceneContext, xp: number): BattleLevelU
         oldLevel: before.level,
         newLevel: member.level,
         hpGain: member.maxHp - before.maxHp,
+        mpGain: member.maxMp - before.maxMp,
         attackGain: member.baseAttack - before.attack,
         defenseGain: member.baseDefense - before.defense,
         speedGain: member.speed - before.speed,
@@ -371,6 +373,21 @@ export function refreshCharges(this: CrystalOathSceneContext, member: CharacterS
     const current = member.charges[tier]?.current ?? 0;
     member.charges[tier] = { max: maxes[tier], current: fill ? maxes[tier] : Math.min(current, maxes[tier]) };
   }
+  const currentMp = member.mp ?? 0;
+  member.maxMp = battleMaxMpFor(member);
+  member.mp = fill ? member.maxMp : Math.min(currentMp, member.maxMp);
+}
+
+export function battleSpellMpCost(this: CrystalOathSceneContext, spellId: string) {
+  const spell = SPELLS[spellId];
+  if (!spell) return 0;
+  return spell.tier * 4 + (spell.target === "allAllies" || spell.target === "allEnemies" ? 2 : 0);
+}
+
+function battleMaxMpFor(member: CharacterState) {
+  if (member.id === "fighter") return member.level >= 7 ? 10 + (member.level - 7) * 2 : 0;
+  if (member.id === "priest") return 16 + member.level * 2;
+  return 22 + member.level * 2;
 }
 
 export function applyWalkPoison(this: CrystalOathSceneContext) {

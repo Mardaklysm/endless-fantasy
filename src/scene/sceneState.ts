@@ -98,6 +98,8 @@ export function makeCharacter(this: CrystalOathSceneContext, id: CharacterState[
     nextXp: 42,
     hp: maxHp,
     maxHp,
+    mp: startingMaxMp(id, 1),
+    maxMp: startingMaxMp(id, 1),
     baseAttack: attack,
     baseDefense: defense,
     speed,
@@ -158,18 +160,29 @@ export function normalizeParty(this: CrystalOathSceneContext, rawParty: Characte
       this.makeCharacter("mage", "Kael", "Ember Adept", 26, 3, 3, 7, 5, "willowRod", "travelCloth", ["spark", "ember"])
     ];
   }
-  return rawParty.map((member) => ({
-    ...member,
-    statuses: member.statuses ?? {},
-    charges: member.charges ?? {
-      "1": { current: 0, max: 0 },
-      "2": { current: 0, max: 0 },
-      "3": { current: 0, max: 0 }
-    },
-    spells: member.spells ?? [],
-    skillCooldowns: member.skillCooldowns ?? {},
-    defending: false
-  }));
+  return rawParty.map((member) => {
+    const maxMp = member.maxMp ?? startingMaxMp(member.id, member.level ?? 1);
+    return {
+      ...member,
+      mp: Math.min(member.mp ?? maxMp, maxMp),
+      maxMp,
+      statuses: member.statuses ?? {},
+      charges: member.charges ?? {
+        "1": { current: 0, max: 0 },
+        "2": { current: 0, max: 0 },
+        "3": { current: 0, max: 0 }
+      },
+      spells: member.spells ?? [],
+      skillCooldowns: member.skillCooldowns ?? {},
+      defending: false
+    };
+  });
+}
+
+function startingMaxMp(id: CharacterState["id"], level: number) {
+  if (id === "fighter") return level >= 7 ? 10 + (level - 7) * 2 : 0;
+  if (id === "priest") return 16 + level * 2;
+  return 22 + level * 2;
 }
 
 export function locations(this: CrystalOathSceneContext): LocationDef[] {

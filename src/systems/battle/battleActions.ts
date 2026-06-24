@@ -106,6 +106,7 @@ export function confirmBattleSelection(this: CrystalOathSceneContext) {
       return;
     }
     this.battle.pendingAction = { side: "party", actorId: actor.id, type: "skill", skillId: skill.id };
+    this.battle.menuReturnSelected = this.battle.selected;
     if (skill.target === "enemy") {
       this.battle.phase = "target";
       this.battle.selected = 0;
@@ -129,12 +130,13 @@ export function confirmBattleSelection(this: CrystalOathSceneContext) {
     const spellId = spells[this.battle.selected];
     if (!spellId) return;
     const spell = SPELLS[spellId];
-    const charge = actor.charges[String(spell.tier)];
-    if (!charge || charge.current <= 0) {
-      this.battle.log = [`No T${spell.tier} charges left.`];
+    const mpCost = this.battleSpellMpCost(spellId);
+    if ((actor.mp ?? 0) < mpCost) {
+      this.battle.log = [`${actor.name} needs ${mpCost} MP.`];
       return;
     }
     this.battle.pendingAction = { side: "party", actorId: actor.id, type: "spell", spellId };
+    this.battle.menuReturnSelected = this.battle.selected;
     if (spell.target === "enemy") {
       this.battle.phase = "target";
       this.battle.selected = 0;
@@ -151,6 +153,7 @@ export function confirmBattleSelection(this: CrystalOathSceneContext) {
     const itemId = itemIds[this.battle.selected];
     if (!itemId) return;
     this.battle.pendingAction = { side: "party", actorId: actor.id, type: "item", itemId };
+    this.battle.menuReturnSelected = this.battle.selected;
     if (itemId === "smokeBomb" || itemId === "etherleaf") this.executePlayerAction(this.battle.pendingAction as BattleAction);
     else {
       this.battle.phase = "allyTarget";
@@ -173,6 +176,7 @@ export function queueBattleActionAnimation(this: CrystalOathSceneContext, action
   const target = this.battleAnimationTarget(action);
   this.battle.phase = "resolving";
   this.battle.pendingAction = undefined;
+  this.battle.menuReturnSelected = undefined;
   this.battle.selected = 0;
   this.battle.actionTimer = 0;
   this.battle.animation = {
@@ -226,9 +230,24 @@ export function cancelBattleSubmenu(this: CrystalOathSceneContext) {
     this.audio.blip("cancel");
     return;
   }
+  if (this.battle.phase === "target" || this.battle.phase === "allyTarget") {
+    const action = this.battle.pendingAction;
+    const returnSelected = this.battle.menuReturnSelected ?? 0;
+    this.battle.pendingAction = undefined;
+    this.battle.menuReturnSelected = undefined;
+    if (action?.type === "spell") this.battle.phase = "spell";
+    else if (action?.type === "skill") this.battle.phase = "skill";
+    else if (action?.type === "item") this.battle.phase = "item";
+    else this.battle.phase = "command";
+    this.battle.selected = returnSelected;
+    this.audio.blip("cancel");
+    return;
+  }
+  const rootSelected = this.battle.phase === "spell" ? 1 : this.battle.phase === "skill" ? 2 : this.battle.phase === "item" ? 3 : 0;
   this.battle.phase = "command";
   this.battle.pendingAction = undefined;
-  this.battle.selected = 0;
+  this.battle.menuReturnSelected = undefined;
+  this.battle.selected = rootSelected;
   this.audio.blip("cancel");
 }
 
@@ -446,6 +465,7 @@ export function usePlayerSkill(this: CrystalOathSceneContext, actor: CharacterSt
   }
   if (skill.id === "focus") {
     actor.statuses.guarded = 2;
+    actor.mp = Math.min(actor.maxMp, actor.mp + 6);
     for (const tier of ["1", "2", "3"]) {
       const charge = actor.charges[tier];
       if (charge && charge.current < charge.max) {
@@ -453,7 +473,7 @@ export function usePlayerSkill(this: CrystalOathSceneContext, actor: CharacterSt
         break;
       }
     }
-    this.battle.log.push(`${actor.name} focuses, guarding and steadying their magic.`);
+    this.battle.log.push(`${actor.name} focuses, guarding and restoring MP.`);
     this.setSkillCooldown(actor, skill);
     this.audio.blip("spell");
     return true;
@@ -468,9 +488,9 @@ export function setSkillCooldown(this: CrystalOathSceneContext, actor: Character
 export function castSpell(this: CrystalOathSceneContext, actor: CharacterState, spellId: string, targetIndex?: number): boolean {
   if (!this.battle) return false;
   const spell = SPELLS[spellId];
-  const charge = actor.charges[String(spell.tier)];
-  if (!charge || charge.current <= 0) {
-    this.battle.log.push(`${actor.name} lacks a T${spell.tier} charge.`);
+  const mpCost = this.battleSpellMpCost(spellId);
+  if ((actor.mp ?? 0) < mpCost) {
+    this.battle.log.push(`${actor.name} lacks ${mpCost} MP.`);
     return false;
   }
   if (spell.kind === "heal") {
@@ -479,7 +499,7 @@ export function castSpell(this: CrystalOathSceneContext, actor: CharacterState, 
       this.battle.log.push(`${spell.name} needs a standing ally.`);
       return false;
     }
-    charge.current -= 1;
+    actor.mp = Math.max(0, actor.mp - mpCost);
     this.audio.blip("spell");
     for (const target of targets) {
       if (target.hp <= 0) continue;
@@ -498,7 +518,7 @@ export function castSpell(this: CrystalOathSceneContext, actor: CharacterState, 
       this.battle.log.push(`${spell.name} finds no fallen ally.`);
       return false;
     }
-    charge.current -= 1;
+    actor.mp = Math.max(0, actor.mp - mpCost);
     this.audio.blip("spell");
     target.hp = Math.max(1, Math.floor(target.maxHp * 0.35));
     target.statuses = {};
@@ -512,7 +532,7 @@ export function castSpell(this: CrystalOathSceneContext, actor: CharacterState, 
       this.battle.log.push(`${spell.name} needs a standing ally.`);
       return false;
     }
-    charge.current -= 1;
+    actor.mp = Math.max(0, actor.mp - mpCost);
     this.audio.blip("spell");
     for (const target of targets) {
       if (spell.id === "starveil") target.statuses.starveil = 4;
@@ -523,7 +543,7 @@ export function castSpell(this: CrystalOathSceneContext, actor: CharacterState, 
   }
   const targets = spell.target === "allEnemies" ? this.battle.enemies.filter((e) => e.hp > 0) : [this.getLivingEnemy(targetIndex)].filter(Boolean) as EnemyState[];
   if (!targets.length) return false;
-  charge.current -= 1;
+  actor.mp = Math.max(0, actor.mp - mpCost);
   this.audio.blip("spell");
   for (const target of targets) {
     let amount = spell.power + actor.level * 5 + Phaser.Math.Between(0, 8) - Math.floor(this.effectiveEnemyDefense(target) / 2);
@@ -559,12 +579,13 @@ export function useBattleItem(this: CrystalOathSceneContext, actor: CharacterSta
   if (itemId === "etherleaf") {
     this.inventory[itemId] -= 1;
     for (const member of this.party) {
+      member.mp = Math.min(member.maxMp, member.mp + 12);
       for (const tier of ["1", "2", "3"]) {
         const charge = member.charges[tier];
         if (charge) charge.current = Math.min(charge.max, charge.current + 1);
       }
     }
-    this.battle.log.push(`${actor.name} crushes Etherleaf. Spell charges return.`);
+    this.battle.log.push(`${actor.name} crushes Etherleaf. MP returns.`);
     return true;
   }
   const target = this.party[targetIndex ?? 0];

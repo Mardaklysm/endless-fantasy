@@ -89,6 +89,7 @@ export interface BattleLevelUpReward {
   oldLevel: number;
   newLevel: number;
   hpGain: number;
+  mpGain: number;
   attackGain: number;
   defenseGain: number;
   speedGain: number;
@@ -124,6 +125,7 @@ export interface BattleState {
   current?: InitiativeEntry;
   actions: BattleAction[];
   selected: number;
+  menuReturnSelected?: number;
   pendingAction?: Partial<BattleAction>;
   animation?: BattleAnimation;
   log: string[];

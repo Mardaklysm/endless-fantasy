@@ -11,6 +11,8 @@ import {
 import { resolveBattleSpawnPositions } from "../../data/battleMapSpawns";
 import type { BattleSpawnFacing } from "../../data/battleMapSpawns";
 import type { CharacterState, EnemyState, StatusState } from "../../data/gameDataTypes";
+import { ITEMS } from "../../data/items";
+import { SPELLS } from "../../data/spells";
 import type { CrystalOathSceneContext } from "../../scene/sceneContext";
 import type { Vec } from "../../scene/sceneTypes";
 import type { BattleCarouselCardSnapshot, BattleCarouselDissolveParticle, BattleVictoryRewards, InitiativeEntry } from "../../systems/battle/battleTypes";
@@ -34,6 +36,7 @@ const BATTLE_UI = {
   text: "#ffffff",
   mutedText: "#8e98aa",
   hp: 0x5be17a,
+  mp: 0x1fb7ff,
   slotReady: 0x7fc8ff,
   slotSpent: 0x1b2638
 };
@@ -47,6 +50,8 @@ const COMMAND_ICONS: Record<string, "attack" | "skill" | "magic" | "item" | "def
   Run: "run"
 };
 
+const BATTLE_COMMANDS = ["Attack", "Magic", "Skill", "Item", "Defend", "Run"];
+
 export function drawBattle(this: CrystalOathSceneContext) {
   if (!this.battle) return;
   this.drawBattleBackdrop();
@@ -55,12 +60,15 @@ export function drawBattle(this: CrystalOathSceneContext) {
     return;
   }
   const selectedEnemy = this.selectedBattleEnemy();
+  const selectedAlly = this.selectedBattleAlly();
+  const targetingEnemies = this.battle.phase === "target";
+  const targetingAllies = this.battle.phase === "allyTarget";
   this.battle.enemies.forEach((enemy, idx) => {
     if (enemy.hp <= 0) return;
     const slot = this.enemyBattleSlot(enemy, idx);
     const targeted = selectedEnemy?.uid === enemy.uid;
     const offset = this.battleActorOffset("enemy", enemy.uid);
-    this.drawBattleEnemy(enemy, slot.x + offset.x, slot.y + offset.y, slot.size, targeted);
+    this.drawBattleEnemy(enemy, slot.x + offset.x, slot.y + offset.y, slot.size, targeted, targetingEnemies);
   });
   this.party.forEach((member, idx) => {
     const slot = this.partyBattleSlot(idx);
@@ -70,7 +78,7 @@ export function drawBattle(this: CrystalOathSceneContext) {
       this.currentBattleEntry()?.actorId === member.id &&
       !this.battle?.animation &&
       this.battle?.phase !== "resolving";
-    this.drawPartyBattler(member, slot.x + offset.x, slot.y + offset.y, idx, active, slot.facing);
+    this.drawPartyBattler(member, slot.x + offset.x, slot.y + offset.y, idx, active, slot.facing, selectedAlly?.id === member.id, targetingAllies);
   });
   this.drawBattleFloatingTexts();
   this.drawBattleTurnCarousel();
@@ -169,15 +177,21 @@ export function selectedBattleEnemy(this: CrystalOathSceneContext): EnemyState |
   return this.battle.enemies.filter((enemy) => enemy.hp > 0)[this.battle.selected];
 }
 
-export function drawBattleEnemy(this: CrystalOathSceneContext, enemy: EnemyState, x: number, y: number, size: number, targeted: boolean) {
+export function selectedBattleAlly(this: CrystalOathSceneContext): CharacterState | undefined {
+  if (!this.battle || this.battle.phase !== "allyTarget") return undefined;
+  return this.party[this.battle.selected] ?? this.party[0];
+}
+
+export function drawBattleEnemy(this: CrystalOathSceneContext, enemy: EnemyState, x: number, y: number, size: number, targeted: boolean, targetable = false) {
   const alive = enemy.hp > 0;
   this.drawActorShadow(x + size / 2, y + size - 3, size * 0.76, Math.max(10, size * 0.13), alive ? 0.3 : 0.14);
-  if (targeted) {
-    this.ui.fillStyle(0xfff0a8, 0.13).fillEllipse(x + size / 2, y + size - 2, size * 0.92, Math.max(20, size * 0.22));
-    this.ui.lineStyle(2, 0xfff0a8, 0.95).strokeRect(x - 6, y - 6, size + 12, size + 12);
+  if (targetable) {
+    this.ui.fillStyle(0xfff0a8, targeted ? 0.13 : 0.05).fillEllipse(x + size / 2, y + size - 2, size * 0.92, Math.max(20, size * 0.22));
+    drawTargetBrackets.call(this, x - 6, y - 6, size + 12, size + 12, targeted ? 0.95 : 0.36);
   }
   this.drawEnemySprite(enemy, x, y, enemy.boss ? 5 : 4, size);
   if (targeted) {
+    this.drawActiveTurnMarker(x + size / 2, y - 11);
     this.text(x + size / 2, y + size + 4, enemy.name, 10, "#fff2a8", "center", { wordWrapWidth: Math.max(86, size + 28), strokeThickness: 2 });
   }
 }
@@ -189,7 +203,9 @@ export function drawPartyBattler(
   y: number,
   idx: number,
   active: boolean,
-  facing: BattleSpawnFacing = "left"
+  facing: BattleSpawnFacing = "left",
+  targeted = false,
+  targetable = false
 ) {
   const classId = PARTY_CLASS[member.id];
   const frame = this.battleCharacterFrame(member, facing);
@@ -202,9 +218,9 @@ export function drawPartyBattler(
   const ringW = Math.round(visualHeight * 0.86);
   const ringH = Math.max(20, Math.round(visualHeight * 0.2));
   this.drawActorShadow(bodyCenterX, feetBaselineY - 4, Math.round(ringW * 0.92), Math.max(14, Math.round(ringH * 0.62)), 0.32 * alpha);
-  if (active) {
-    this.ui.fillStyle(0xfff0a8, 0.16).fillEllipse(bodyCenterX, feetBaselineY - 4, ringW, ringH);
-    this.ui.lineStyle(2, 0xfff0a8, 0.88).strokeEllipse(bodyCenterX, feetBaselineY - 4, ringW, ringH);
+  if (active || targetable) {
+    this.ui.fillStyle(0xfff0a8, active || targeted ? 0.16 : 0.05).fillEllipse(bodyCenterX, feetBaselineY - 4, ringW, ringH);
+    this.ui.lineStyle(active || targeted ? 2 : 1, 0xfff0a8, active || targeted ? 0.88 : 0.36).strokeEllipse(bodyCenterX, feetBaselineY - 4, ringW, ringH);
   }
   if (!this.drawCharacterSpriteFrame(classId, frame, bodyCenterX, feetBaselineY, displayCellWidth, LAYER_BATTLE_IMAGE, alpha)) {
     const palettes = {
@@ -219,7 +235,8 @@ export function drawPartyBattler(
     this.g.fillStyle(palettes[3], alpha).fillRect(x + 11, y + 53, 8, 10 + (idx % 2));
     this.g.fillRect(x + 28, y + 53, 8, 10 + ((idx + 1) % 2));
   }
-  if (active) this.drawActiveTurnMarker(bodyCenterX, y + 10);
+  if (targeted) drawTargetBrackets.call(this, bodyCenterX - ringW / 2, feetBaselineY - visualHeight - 6, ringW, visualHeight + 10, 0.95);
+  if (active || targeted) this.drawActiveTurnMarker(bodyCenterX, y + 10);
 }
 
 export function drawActiveTurnMarker(this: CrystalOathSceneContext, cx: number, y: number) {
@@ -231,14 +248,14 @@ export function drawActiveTurnMarker(this: CrystalOathSceneContext, cx: number, 
 
 export function drawBattlePartyStatusHud(this: CrystalOathSceneContext) {
   if (!this.battle) return;
-  const rowH = 54;
-  const w = 208;
-  const h = 16 + this.party.length * rowH + 8;
-  const x = WIDTH - w - 10;
-  const y = 18;
+  const rowH = 35;
+  const w = 254;
+  const h = 12 + this.party.length * rowH + 8;
+  const x = WIDTH - w - 12;
+  const y = 14;
   drawBattlePartyStatusPanel.call(this, x, y, w, h);
   this.party.forEach((member, idx) => {
-    const rowY = y + 12 + idx * rowH;
+    const rowY = y + 10 + idx * rowH;
     const active =
       this.currentBattleEntry()?.side === "party" &&
       this.currentBattleEntry()?.actorId === member.id &&
@@ -246,25 +263,29 @@ export function drawBattlePartyStatusHud(this: CrystalOathSceneContext) {
       this.battle?.phase !== "resolving";
     const down = member.hp <= 0;
     const statuses = compactStatuses(member.statuses);
-    if (idx > 0) this.ui.fillStyle(0xffe0a0, 0.16).fillRect(x + 10, rowY - 3, w - 20, 1);
-    this.ui.fillStyle(active ? 0x182238 : 0x060d18, active ? 0.52 : 0.18).fillRect(x + 7, rowY - 4, w - 14, rowH - 5);
+    if (idx > 0) this.ui.fillStyle(0xffe0a0, 0.14).fillRect(x + 12, rowY - 2, w - 24, 1);
+    this.ui.fillStyle(active ? 0x182238 : 0x060d18, active ? 0.42 : 0.12).fillRect(x + 8, rowY - 3, w - 16, rowH - 4);
     if (active) {
-      this.ui.fillStyle(BATTLE_UI.goldBright, 0.82).fillRect(x + 7, rowY - 4, 2, rowH - 5);
+      this.drawCursor(x + 8, rowY + 2);
     }
-    drawPartyCardPortrait.call(this, member, x + 12, rowY + 3, 30, 40);
-    this.text(x + 50, rowY + 3, member.name, 10, down ? "#858b98" : "#ffffff", "left", { wordWrapWidth: 88, strokeThickness: 1 });
+    this.text(x + 24, rowY + 1, member.name, 10, down ? "#858b98" : "#ffffff", "left", { wordWrapWidth: 78, strokeThickness: 1 });
     if (down) {
-      this.text(x + w - 54, rowY + 4, "Fallen", 7, "#9aa3b2", "left", { wordWrapWidth: 46, strokeThickness: 1 });
+      this.text(x + 92, rowY + 1, "Fallen", 7, "#9aa3b2", "left", { wordWrapWidth: 48, strokeThickness: 1 });
     } else if (statuses !== "ok") {
-      this.text(x + w - 58, rowY + 4, statuses.toUpperCase(), 7, "#ffd69b", "left", { wordWrapWidth: 52, strokeThickness: 1 });
+      this.text(x + 92, rowY + 1, statuses.toUpperCase(), 7, "#ffd69b", "left", { wordWrapWidth: 48, strokeThickness: 1 });
     }
-    this.text(x + 50, rowY + 21, "HP", 8, down ? "#777f91" : "#89f39d", "left", { strokeThickness: 1 });
-    this.drawThinBar(x + 70, rowY + 24, 80, 6, member.hp, member.maxHp, BATTLE_UI.hp);
-    this.text(x + 154, rowY + 21, `${member.hp}/${member.maxHp}`, 8, down ? "#858b98" : "#dce9ff", "left", {
-      wordWrapWidth: 44,
+    this.text(x + 24, rowY + 18, "HP", 7, down ? "#777f91" : "#89f39d", "left", { strokeThickness: 1 });
+    this.drawThinBar(x + 43, rowY + 21, 58, 5, member.hp, member.maxHp, BATTLE_UI.hp);
+    this.text(x + 106, rowY + 17, `${member.hp}/${member.maxHp}`, 7, down ? "#858b98" : "#dce9ff", "left", {
+      wordWrapWidth: 42,
       strokeThickness: 1
     });
-    drawSpellSlotRow.call(this, member, x + 50, rowY + 37, 136);
+    this.text(x + 154, rowY + 18, "MP", 7, down ? "#777f91" : "#65c8ff", "left", { strokeThickness: 1 });
+    this.drawThinBar(x + 174, rowY + 21, 38, 5, member.mp, member.maxMp, BATTLE_UI.mp);
+    this.text(x + 218, rowY + 17, `${member.mp}`, 7, down ? "#858b98" : "#dce9ff", "left", {
+      wordWrapWidth: 22,
+      strokeThickness: 1
+    });
   });
 }
 
@@ -272,44 +293,9 @@ export function drawBattleCommandMenu(this: CrystalOathSceneContext) {
   if (!this.battle) return;
   const actor = this.currentBattleActor();
   if (!["command", "target", "skill", "spell", "item", "allyTarget"].includes(this.battle.phase) || !actor) return;
-  const options = this.battleOptions();
-  if (!options.length) return;
-  const prompt =
-    this.battle.phase === "command"
-      ? actor.name
-      : this.battle.phase === "target"
-        ? "Target"
-        : this.battle.phase === "skill"
-          ? "Skill"
-          : this.battle.phase === "spell"
-            ? "Magic"
-            : this.battle.phase === "item"
-              ? "Item"
-              : "Ally";
-
-  if (this.battle.phase === "command") {
-    drawBattleCommandGrid.call(this, actor.name, options);
-    return;
-  }
-
-  const rowH = 20;
-  const w = 286;
-  const h = 38 + options.length * rowH + 10;
-  const x = Math.round(WIDTH / 2 - w / 2);
-  const y = HEIGHT - h - 14;
-  this.drawBattleHudPanel(x, y, w, h, 0.86);
-  drawPanelTitle.call(this, x, y + 8, w, prompt);
-  options.forEach((option, idx) => {
-    const selected = idx === this.battle!.selected;
-    const rowY = y + 36 + idx * rowH;
-    if (selected) {
-      this.ui.fillStyle(0xfff0a8, 0.16).fillRect(x + 8, rowY - 3, w - 16, 18);
-      this.ui.lineStyle(1, 0xfff0a8, 0.7).strokeRect(x + 8, rowY - 3, w - 16, 18);
-      this.drawCursor(x + 12, rowY - 1);
-    }
-    const prefix = selected && !this.hasTexture("ui_cursor_arrow") ? ">" : "";
-    this.text(x + 34, rowY - 3, `${prefix}${option}`, 10, "#ffffff", "left", { wordWrapWidth: w - 44, strokeThickness: 1 });
-  });
+  drawBattleCommandBar.call(this, actor.name);
+  const submenu = battleSubmenuForActivePath.call(this, actor);
+  if (submenu) drawBattleSubmenuPanel.call(this, submenu.title, submenu.options, submenu.selected);
 }
 
 export function drawBattleLogPrompt(this: CrystalOathSceneContext) {
@@ -345,12 +331,12 @@ export function drawBattleTurnCarousel(this: CrystalOathSceneContext) {
   const state = (this.battle.carousel ??= { dissolves: [] });
   const cards = this.battleCarouselCards();
   if (!cards.length) return;
-  const cardW = 48;
-  const cardH = 64;
-  const gap = 8;
+  const cardW = 40;
+  const cardH = 50;
+  const gap = 7;
   const totalW = cards.length * cardW + (cards.length - 1) * gap;
   const startX = Math.round(WIDTH / 2 - totalW / 2);
-  const y = 10;
+  const y = 8;
   const now = this.time.now;
   const key = cards.map((card) => card.key).join("|");
   const previous = state.previousCards ?? [];
@@ -408,9 +394,9 @@ export function drawBattleCarouselCard(this: CrystalOathSceneContext, card: Batt
   this.ui.fillStyle(0xffffff, 0.04 * finalAlpha).fillRect(x + 2, y + 2, w - 4, Math.floor(h * 0.38));
   this.ui.lineStyle(card.current ? 2 : 1, border, (card.current ? 1 : 0.78) * finalAlpha).strokeRect(x, y, w, h);
   this.ui.lineStyle(1, BATTLE_UI.goldBright, (card.current ? 0.64 : 0.3) * finalAlpha).strokeRect(x + 2, y + 2, w - 4, h - 4);
-  drawCarouselPortrait.call(this, card, x + 6, y + 8, 36, 48, finalAlpha);
+  drawCarouselPortrait.call(this, card, x + 5, y + 6, 30, 38, finalAlpha);
   if (card.current) {
-    this.ui.fillStyle(BATTLE_UI.goldBright, 0.94 * finalAlpha).fillTriangle(x + w / 2, y + h + 7, x + w / 2 - 7, y + h - 1, x + w / 2 + 7, y + h - 1);
+    this.ui.fillStyle(BATTLE_UI.goldBright, 0.94 * finalAlpha).fillTriangle(x + w / 2, y + h + 6, x + w / 2 - 6, y + h - 1, x + w / 2 + 6, y + h - 1);
   }
 }
 
@@ -498,6 +484,7 @@ function victoryRewardLines(rewards: BattleVictoryRewards | undefined) {
     lines.push(`${level.name} reached Level ${level.newLevel}! (${level.oldLevel} -> ${level.newLevel})`);
     const stats = [
       level.hpGain ? `HP +${level.hpGain}` : "",
+      level.mpGain ? `MP +${level.mpGain}` : "",
       level.attackGain ? `ATK +${level.attackGain}` : "",
       level.defenseGain ? `DEF +${level.defenseGain}` : "",
       level.speedGain ? `SPD +${level.speedGain}` : "",
@@ -545,39 +532,115 @@ function drawBattlePartyStatusPanel(this: CrystalOathSceneContext, x: number, y:
   this.ui.fillRect(x + w - 8, y + h - 8, 3, 3);
 }
 
-function drawBattleCommandGrid(this: CrystalOathSceneContext, actorName: string, options: string[]) {
-  const w = 334;
-  const h = 136;
-  const x = Math.round(WIDTH / 2 - w / 2);
-  const y = HEIGHT - h - 14;
-  const optionW = 142;
-  const optionH = 26;
-  const colGap = 14;
-  const rowGap = 7;
-  const startX = x + 20;
-  const startY = y + 42;
+function battleCommandBarLayout() {
+  const optionW = 74;
+  const h = 36;
+  const w = optionW * BATTLE_COMMANDS.length + 10;
+  return { x: 70, y: HEIGHT - h - 5, w, h, optionW };
+}
 
-  this.drawBattleHudPanel(x, y, w, h, 0.88);
-  drawPanelTitle.call(this, x, y + 9, w, actorName);
-
-  options.forEach((option, idx) => {
-    const selected = idx === this.battle!.selected;
-    const col = idx % 2;
-    const row = Math.floor(idx / 2);
-    const optionX = startX + col * (optionW + colGap);
-    const optionY = startY + row * (optionH + rowGap);
-    this.ui.fillStyle(selected ? BATTLE_UI.panelWarm : 0x050b15, selected ? 0.82 : 0.58).fillRect(optionX, optionY, optionW, optionH);
-    this.ui.lineStyle(1, selected ? BATTLE_UI.goldBright : 0x526071, selected ? 0.88 : 0.5).strokeRect(optionX, optionY, optionW, optionH);
+function drawBattleCommandBar(this: CrystalOathSceneContext, actorName: string) {
+  const layout = battleCommandBarLayout();
+  const selectedIndex = rootCommandIndex(this.battle?.phase, this.battle?.pendingAction?.type, this.battle?.selected ?? 0);
+  this.drawBattleHudPanel(layout.x, layout.y, layout.w, layout.h, 0.82);
+  this.text(layout.x + 10, layout.y - 13, actorName, 8, "#fff2a8", "left", { wordWrapWidth: 120, strokeThickness: 1 });
+  BATTLE_COMMANDS.forEach((option, idx) => {
+    const selected = idx === selectedIndex;
+    const optionX = layout.x + 5 + idx * layout.optionW;
+    const optionY = layout.y + 5;
+    this.ui.fillStyle(selected ? BATTLE_UI.panelWarm : 0x050b15, selected ? 0.82 : 0.56).fillRect(optionX, optionY, layout.optionW - 2, 26);
+    this.ui.lineStyle(1, selected ? BATTLE_UI.goldBright : 0x526071, selected ? 0.9 : 0.42).strokeRect(optionX, optionY, layout.optionW - 2, 26);
     if (selected) {
-      this.ui.fillStyle(BATTLE_UI.goldBright, 0.13).fillRect(optionX + 2, optionY + 2, optionW - 4, optionH - 4);
-      this.drawCursor(optionX - 18, optionY + 5);
+      this.ui.fillStyle(BATTLE_UI.goldBright, 0.12).fillRect(optionX + 2, optionY + 2, layout.optionW - 6, 22);
+      this.drawCursor(optionX - 13, optionY + 5);
     }
-    drawCommandIcon.call(this, COMMAND_ICONS[option], optionX + 15, optionY + 13, selected);
-    this.text(optionX + 40, optionY + 5, option, 10, selected ? "#fff7c7" : BATTLE_UI.text, "left", {
-      wordWrapWidth: optionW - 48,
+    drawCommandIcon.call(this, COMMAND_ICONS[option], optionX + 16, optionY + 13, selected);
+    this.text(optionX + 31, optionY + 6, option, 8, selected ? "#fff7c7" : BATTLE_UI.text, "left", {
+      wordWrapWidth: layout.optionW - 36,
       strokeThickness: 1
     });
   });
+}
+
+function battleSubmenuForActivePath(this: CrystalOathSceneContext, actor: CharacterState) {
+  if (!this.battle) return undefined;
+  const source = this.battle.phase === "target" || this.battle.phase === "allyTarget" ? this.battle.pendingAction?.type : this.battle.phase;
+  const selected = this.battle.phase === "target" || this.battle.phase === "allyTarget" ? this.battle.menuReturnSelected ?? 0 : this.battle.selected;
+  if (source === "spell") {
+    return {
+      title: "Magic",
+      selected,
+      options: actor.spells
+        .filter((id) => actor.level >= SPELLS[id].minLevel)
+        .map((id) => ({ label: SPELLS[id].name, meta: `MP ${this.battleSpellMpCost(id)}`, icon: COMMAND_ICONS.Magic }))
+    };
+  }
+  if (source === "skill") {
+    return {
+      title: "Skill",
+      selected,
+      options: this.skillsForActor(actor).map((skill) => ({
+        label: skill.name,
+        meta: (actor.skillCooldowns[skill.id] ?? 0) > 0 ? `${actor.skillCooldowns[skill.id]}` : "",
+        icon: COMMAND_ICONS.Skill
+      }))
+    };
+  }
+  if (source === "item") {
+    return {
+      title: "Item",
+      selected,
+      options: Object.keys(ITEMS)
+        .filter((id) => ITEMS[id].battle && (this.inventory[id] ?? 0) > 0)
+        .map((id) => ({ label: ITEMS[id].name, meta: `x${this.inventory[id]}`, icon: COMMAND_ICONS.Item }))
+    };
+  }
+  return undefined;
+}
+
+function drawBattleSubmenuPanel(
+  this: CrystalOathSceneContext,
+  title: string,
+  options: { label: string; meta: string; icon: (typeof COMMAND_ICONS)[string] }[],
+  selectedIndex: number
+) {
+  if (!options.length) return;
+  const root = battleCommandBarLayout();
+  const rowH = 26;
+  const w = 170;
+  const h = 24 + options.length * rowH + 8;
+  const x = root.x + root.w + 28;
+  const y = HEIGHT - h - 5;
+  this.drawBattleHudPanel(x, y, w, h, 0.84);
+  this.text(x + 12, y + 7, title, 8, "#fff2a8", "left", { wordWrapWidth: 70, strokeThickness: 1 });
+  options.forEach((option, idx) => {
+    const selected = idx === selectedIndex;
+    const rowY = y + 24 + idx * rowH;
+    if (idx > 0) this.ui.fillStyle(0xffe0a0, 0.13).fillRect(x + 9, rowY - 2, w - 18, 1);
+    this.ui.fillStyle(selected ? BATTLE_UI.panelWarm : 0x050b15, selected ? 0.76 : 0.35).fillRect(x + 7, rowY, w - 14, 22);
+    if (selected) {
+      this.ui.lineStyle(1, BATTLE_UI.goldBright, 0.86).strokeRect(x + 7, rowY, w - 14, 22);
+      this.drawCursor(x + 8, rowY + 4);
+    }
+    drawCommandIcon.call(this, option.icon, x + 31, rowY + 11, selected);
+    this.text(x + 46, rowY + 5, option.label, 8, selected ? "#fff7c7" : "#ffffff", "left", {
+      wordWrapWidth: 76,
+      strokeThickness: 1
+    });
+    this.text(x + w - 50, rowY + 5, option.meta, 7, "#7fd5ff", "left", {
+      wordWrapWidth: 45,
+      strokeThickness: 1
+    });
+  });
+}
+
+function rootCommandIndex(phase: string | undefined, pendingType: string | undefined, selected: number) {
+  if (phase === "command") return selected;
+  const command = phase === "target" || phase === "allyTarget" ? pendingType : phase;
+  if (command === "spell") return BATTLE_COMMANDS.indexOf("Magic");
+  if (command === "skill") return BATTLE_COMMANDS.indexOf("Skill");
+  if (command === "item") return BATTLE_COMMANDS.indexOf("Item");
+  return BATTLE_COMMANDS.indexOf("Attack");
 }
 
 function drawPanelTitle(this: CrystalOathSceneContext, x: number, y: number, w: number, title: string) {
@@ -736,6 +799,19 @@ function drawDiamond(this: CrystalOathSceneContext, cx: number, cy: number, size
   this.ui.fillTriangle(cx, cy + size, cx - size, cy, cx + size, cy);
   this.ui.lineStyle(1, BATTLE_UI.shadow, 0.48).strokeTriangle(cx, cy - size, cx - size, cy, cx + size, cy);
   this.ui.strokeTriangle(cx, cy + size, cx - size, cy, cx + size, cy);
+}
+
+function drawTargetBrackets(this: CrystalOathSceneContext, x: number, y: number, w: number, h: number, alpha: number) {
+  const len = Math.max(8, Math.min(16, Math.floor(Math.min(w, h) * 0.18)));
+  this.ui.lineStyle(2, BATTLE_UI.goldBright, alpha);
+  this.ui.lineBetween(x, y, x + len, y);
+  this.ui.lineBetween(x, y, x, y + len);
+  this.ui.lineBetween(x + w, y, x + w - len, y);
+  this.ui.lineBetween(x + w, y, x + w, y + len);
+  this.ui.lineBetween(x, y + h, x + len, y + h);
+  this.ui.lineBetween(x, y + h, x, y + h - len);
+  this.ui.lineBetween(x + w, y + h, x + w - len, y + h);
+  this.ui.lineBetween(x + w, y + h, x + w, y + h - len);
 }
 
 function compactStatuses(statuses: StatusState) {
