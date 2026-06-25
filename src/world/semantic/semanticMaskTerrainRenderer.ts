@@ -37,6 +37,8 @@ export interface SemanticRoadRibbonSample {
   highlightAlpha: number;
   rutAlpha: number;
   pebbleAlpha: number;
+  streakAlpha: number;
+  scuffAlpha: number;
   terrainFleckAlpha: number;
   tangentX: number;
   tangentY: number;
@@ -673,14 +675,18 @@ function drawRoadRibbonLayer(
 
   const shadowCanvas = createLayerCanvas(plan);
   const edgeCanvas = createLayerCanvas(plan);
+  const bodyTintCanvas = createLayerCanvas(plan);
+  const centerTintCanvas = createLayerCanvas(plan);
   const highlightCanvas = createLayerCanvas(plan);
   const detailsCanvas = createLayerCanvas(plan);
   const shadowCtx = shadowCanvas.getContext("2d");
   const edgeCtx = edgeCanvas.getContext("2d");
+  const bodyTintCtx = bodyTintCanvas.getContext("2d");
+  const centerTintCtx = centerTintCanvas.getContext("2d");
   const highlightCtx = highlightCanvas.getContext("2d");
   const detailsCtx = detailsCanvas.getContext("2d");
-  if (!shadowCtx || !edgeCtx || !highlightCtx || !detailsCtx) throw new Error("Unable to create semantic road ribbon canvases.");
-  for (const layerCtx of [shadowCtx, edgeCtx, highlightCtx, detailsCtx]) layerCtx.imageSmoothingEnabled = false;
+  if (!shadowCtx || !edgeCtx || !bodyTintCtx || !centerTintCtx || !highlightCtx || !detailsCtx) throw new Error("Unable to create semantic road ribbon canvases.");
+  for (const layerCtx of [shadowCtx, edgeCtx, bodyTintCtx, centerTintCtx, highlightCtx, detailsCtx]) layerCtx.imageSmoothingEnabled = false;
 
   const visited = new Uint8Array(plan.maskWidth * plan.maskHeight);
   const cache = roadRibbonCacheFor(world);
@@ -715,10 +721,14 @@ function drawRoadRibbonLayer(
             edgeCtx.fillRect(mx * plan.pixelBlock, my * plan.pixelBlock, plan.pixelBlock, plan.pixelBlock);
           }
           if (sample.bodyAlpha > 0) {
+            bodyTintCtx.fillStyle = rgbaCss(palette.body, sample.bodyAlpha * palette.bodyAlpha);
+            bodyTintCtx.fillRect(mx * plan.pixelBlock, my * plan.pixelBlock, plan.pixelBlock, plan.pixelBlock);
             bodyCtx.fillStyle = `rgba(255, 255, 255, ${sample.bodyAlpha.toFixed(3)})`;
             bodyCtx.fillRect(mx, my, 1, 1);
           }
           if (sample.centerAlpha > 0) {
+            centerTintCtx.fillStyle = rgbaCss(palette.center, sample.centerAlpha * palette.centerAlpha);
+            centerTintCtx.fillRect(mx * plan.pixelBlock, my * plan.pixelBlock, plan.pixelBlock, plan.pixelBlock);
             centerCtx.fillStyle = `rgba(255, 255, 255, ${sample.centerAlpha.toFixed(3)})`;
             centerCtx.fillRect(mx, my, 1, 1);
           }
@@ -734,8 +744,10 @@ function drawRoadRibbonLayer(
 
   ctx.drawImage(shadowCanvas, 0, 0);
   ctx.drawImage(edgeCanvas, 0, 0);
-  drawMaskedPatternLayer(ctx, plan, fillStyles.road, bodyMask, 0.96);
-  drawMaskedPatternLayer(ctx, plan, fillStyles.road, centerMask, 0.72);
+  ctx.drawImage(bodyTintCanvas, 0, 0);
+  drawMaskedPatternLayer(ctx, plan, fillStyles.road, bodyMask, 0.16);
+  ctx.drawImage(centerTintCanvas, 0, 0);
+  drawMaskedPatternLayer(ctx, plan, fillStyles.road, centerMask, 0.07);
   ctx.drawImage(highlightCanvas, 0, 0);
   ctx.drawImage(detailsCanvas, 0, 0);
 }
@@ -788,6 +800,23 @@ function drawRoadRibbonDetails(
   const x = mx * plan.pixelBlock;
   const y = my * plan.pixelBlock;
   const width = Math.max(1, plan.pixelBlock);
+  const sampleX = plan.originX + (mx + 0.5) / plan.maskPixelsPerCell;
+  const sampleY = plan.originY + (my + 0.5) / plan.maskPixelsPerCell;
+  const along = sampleX * sample.tangentX + sampleY * sample.tangentY;
+  const lateral = sampleX * -sample.tangentY + sampleY * sample.tangentX;
+  const directionNoise = hashNoise(`road-ribbon-direction-detail:${sample.roadTheme}`, Math.floor(along * 9), Math.floor(lateral * 17));
+  if (sample.streakAlpha > 0) {
+    ctx.fillStyle = rgbaCss(palette.streak, sample.streakAlpha);
+    if (Math.abs(sample.tangentX) >= Math.abs(sample.tangentY)) {
+      ctx.fillRect(x, y + Math.floor(width / 2), width, Math.max(1, Math.ceil(width / 3)));
+    } else {
+      ctx.fillRect(x + Math.floor(width / 2), y, Math.max(1, Math.ceil(width / 3)), width);
+    }
+  }
+  if (sample.scuffAlpha > 0 && directionNoise > 0.28) {
+    ctx.fillStyle = rgbaCss(palette.scuff, sample.scuffAlpha);
+    ctx.fillRect(x, y, width, width);
+  }
   if (sample.terrainFleckAlpha > 0) {
     ctx.fillStyle = rgbaCss(palette.fleck, sample.terrainFleckAlpha);
     ctx.fillRect(x, y, width, width);
@@ -818,19 +847,30 @@ export function roadRibbonSampleAt(world: SemanticWorld, sampleX: number, sample
   const visual = sample.profile.visual;
   const signedDistance = sample.distance - sample.halfWidth;
   const edgeBand = sample.edgeBand;
-  const bodyAlpha = clamp01((1 - smoothstepRange(sample.bodyHalfWidth, sample.bodyHalfWidth + edgeBand, sample.distance)) * Math.max(0.88, visual.alpha));
-  const centerAlpha = clamp01((1 - smoothstepRange(sample.centerHalfWidth * 0.72, sample.centerHalfWidth, sample.distance)) * 0.92);
-  const edgeAlpha = clamp01((1 - smoothstepRange(sample.halfWidth, sample.halfWidth + edgeBand * 1.15, sample.distance)) * (1 - bodyAlpha * 0.22) * 0.3);
-  const shadowAlpha = clamp01((1 - smoothstepRange(sample.halfWidth + 0.015, sample.halfWidth + edgeBand * 1.35, sample.distance)) * 0.18);
-  const highlightAlpha = clamp01(centerAlpha * (0.12 + 0.08 * hashNoise(`${world.seed}:road-ribbon-highlight:${sample.profile.profileId}`, Math.floor(sampleX * 11), Math.floor(sampleY * 11))));
+  const tuning = roadRibbonThemeTuning(sample.theme);
   const lateral = roadSignedLateral(sampleX, sampleY, sample.closestX, sample.closestY, sample.tangentX, sample.tangentY);
+  const along = sample.closestX * sample.tangentX + sample.closestY * sample.tangentY;
+  const edgeNoise = hashNoise(`${world.seed}:road-ribbon-edge:${sample.profile.profileId}`, Math.floor(sampleX * 31), Math.floor(sampleY * 31));
+  const outerEdgeBand = clamp01(smoothstepRange(sample.halfWidth - 0.08, sample.halfWidth + 0.11, sample.distance));
+  const edgeBreakFactor = 1 - clamp01((edgeNoise - 0.34) * 1.7) * outerEdgeBand * visual.edgeBreakup * 0.34;
+  const bodyAlpha = clamp01((1 - smoothstepRange(sample.bodyHalfWidth, sample.bodyHalfWidth + edgeBand, sample.distance)) * Math.max(0.88, visual.alpha));
+  const centerAlpha = clamp01((1 - smoothstepRange(sample.centerHalfWidth * 0.68, sample.centerHalfWidth, sample.distance)) * tuning.centerAlpha);
+  const edgeAlpha = clamp01((1 - smoothstepRange(sample.halfWidth, sample.halfWidth + edgeBand * 1.15, sample.distance)) * (1 - bodyAlpha * 0.22) * tuning.edgeAlpha * edgeBreakFactor);
+  const shadowAlpha = clamp01((1 - smoothstepRange(sample.halfWidth + 0.015, sample.halfWidth + edgeBand * 1.35, sample.distance)) * tuning.shadowAlpha * edgeBreakFactor);
+  const highlightNoise = hashNoise(`${world.seed}:road-ribbon-highlight:${sample.profile.profileId}`, Math.floor(along * 7), Math.floor(Math.abs(lateral) * 23));
+  const highlightAlpha = clamp01(centerAlpha * (tuning.highlightBase + tuning.highlightNoise * highlightNoise));
   const rutBand = Math.max(0, 1 - smoothstepRange(0.035, 0.095, Math.abs(Math.abs(lateral) - sample.centerHalfWidth * 0.52)));
-  const detailNoise = hashNoise(`${world.seed}:road-ribbon-detail:${sample.profile.profileId}`, Math.floor(sampleX * 29), Math.floor(sampleY * 29));
-  const rutAlpha = clamp01(rutBand * bodyAlpha * (0.16 + detailNoise * 0.08));
-  const pebbleAlpha = detailNoise < visual.pebbleNoise * 1.5 && bodyAlpha > 0.68 ? clamp01(bodyAlpha * 0.28) : 0;
-  const fleckNoise = hashNoise(`${world.seed}:road-ribbon-fleck:${sample.profile.profileId}`, Math.floor(sampleX * 19), Math.floor(sampleY * 19));
-  const edgeOnly = clamp01(edgeAlpha * (1 - bodyAlpha) * 1.4);
-  const terrainFleckAlpha = fleckNoise > 0.82 && edgeOnly > 0.04 ? clamp01(edgeOnly * 0.45) : 0;
+  const detailNoise = hashNoise(`${world.seed}:road-ribbon-detail:${sample.profile.profileId}`, Math.floor(along * 29), Math.floor((lateral + 12) * 23));
+  const rutAlpha = clamp01(rutBand * bodyAlpha * tuning.rutAlpha * (0.7 + detailNoise * 0.55));
+  const pebbleAlpha = detailNoise < visual.pebbleNoise * tuning.pebbleRate && bodyAlpha > 0.66 ? clamp01(bodyAlpha * tuning.pebbleAlpha) : 0;
+  const centerBand = 1 - smoothstepRange(sample.centerHalfWidth * 0.18, sample.centerHalfWidth * 0.92, Math.abs(lateral));
+  const lowFrequency = 0.5 + 0.5 * Math.sin(along * tuning.streakFrequency + hashNoise(`${world.seed}:road-ribbon-streak-phase`, Math.floor(along / 8), Math.floor(sampleY / 8)) * Math.PI * 2);
+  const streakAlpha = clamp01(centerBand * centerAlpha * tuning.streakAlpha * (0.55 + lowFrequency * 0.45));
+  const scuffNoise = hashNoise(`${world.seed}:road-ribbon-scuff:${sample.profile.profileId}`, Math.floor(along * 4), Math.floor((lateral + 8) * 7));
+  const scuffAlpha = scuffNoise > tuning.scuffThreshold && bodyAlpha > 0.62 ? clamp01(bodyAlpha * tuning.scuffAlpha * (scuffNoise - tuning.scuffThreshold) / (1 - tuning.scuffThreshold)) : 0;
+  const fleckNoise = hashNoise(`${world.seed}:road-ribbon-fleck:${sample.profile.profileId}`, Math.floor(along * 17), Math.floor((lateral + 8) * 19));
+  const edgeOnly = clamp01((edgeAlpha + outerEdgeBand * 0.12) * (1 - bodyAlpha) * 1.5);
+  const terrainFleckAlpha = fleckNoise > tuning.fleckThreshold && edgeOnly > 0.04 ? clamp01(edgeOnly * tuning.fleckAlpha) : 0;
   return {
     distance: signedDistance,
     centerAlpha,
@@ -840,6 +880,8 @@ export function roadRibbonSampleAt(world: SemanticWorld, sampleX: number, sample
     highlightAlpha,
     rutAlpha,
     pebbleAlpha,
+    streakAlpha,
+    scuffAlpha,
     terrainFleckAlpha,
     tangentX: sample.tangentX,
     tangentY: sample.tangentY,
@@ -902,10 +944,13 @@ interface RoadRibbonSegment {
 interface RoadRibbonNode {
   x: number;
   y: number;
-  radius: number;
-  bodyRadius: number;
-  centerRadius: number;
+  radiusX: number;
+  radiusY: number;
+  bodyScale: number;
+  centerScale: number;
   edgeBand: number;
+  tangentX: number;
+  tangentY: number;
   profile: IslandRoadProfile;
   theme: SemanticRoadRibbonTheme;
 }
@@ -928,6 +973,8 @@ function emptyRoadRibbonSample(world: SemanticWorld, sampleX: number, sampleY: n
     highlightAlpha: 0,
     rutAlpha: 0,
     pebbleAlpha: 0,
+    streakAlpha: 0,
+    scuffAlpha: 0,
     terrainFleckAlpha: 0,
     tangentX: 1,
     tangentY: 0,
@@ -959,19 +1006,25 @@ function roadRibbonDistanceAt(world: SemanticWorld, sampleX: number, sampleY: nu
     }
   }
   for (const node of cache.nodes) {
-    const distance = Math.hypot(sampleX - node.x, sampleY - node.y);
-    if (distance > node.radius + node.edgeBand * 2) continue;
-    if (!best || distance - node.radius < best.distance - best.halfWidth) {
+    const dx = sampleX - node.x;
+    const dy = sampleY - node.y;
+    const along = dx * node.tangentX + dy * node.tangentY;
+    const lateral = dx * -node.tangentY + dy * node.tangentX;
+    const normalizedDistance = Math.hypot(along / node.radiusX, lateral / node.radiusY);
+    const averageRadius = (node.radiusX + node.radiusY) / 2;
+    if (normalizedDistance > 1 + (node.edgeBand * 2) / averageRadius) continue;
+    const distance = normalizedDistance * averageRadius;
+    if (!best || distance - averageRadius < best.distance - best.halfWidth) {
       best = {
         distance,
-        halfWidth: node.radius,
-        bodyHalfWidth: node.bodyRadius,
-        centerHalfWidth: node.centerRadius,
+        halfWidth: averageRadius,
+        bodyHalfWidth: averageRadius * node.bodyScale,
+        centerHalfWidth: averageRadius * node.centerScale,
         edgeBand: node.edgeBand,
         closestX: node.x,
         closestY: node.y,
-        tangentX: 1,
-        tangentY: 0,
+        tangentX: node.tangentX,
+        tangentY: node.tangentY,
         profile: node.profile,
         theme: node.theme
       };
@@ -1098,13 +1151,17 @@ function addRoadRibbonNodes(world: SemanticWorld, nodes: RoadRibbonNode[]) {
       const junctionBoost = info.cardinalCount >= 3 || info.neighborCount >= 4 ? profile.generation.junctionPatchScale * 0.18 : 0;
       const bridgeBoost = isAdjacentToBridgeCrossing(world, x, y) ? 0.12 : 0;
       const radius = clamp(width * 0.58 + endpointBoost + junctionBoost + bridgeBoost, 0.46, 0.88);
+      const tangent = roadNodeTangent(info);
       nodes.push({
         x: x + 0.5,
         y: y + 0.5,
-        radius,
-        bodyRadius: radius * 0.76,
-        centerRadius: radius * 0.42,
+        radiusX: radius * (info.neighborCount <= 1 ? 1.08 : 1),
+        radiusY: radius * (info.neighborCount <= 1 ? 0.9 : 1),
+        bodyScale: 0.76,
+        centerScale: 0.42,
         edgeBand: 0.065,
+        tangentX: tangent.x,
+        tangentY: tangent.y,
         profile,
         theme: roadThemeForProfile(profile)
       });
@@ -1112,14 +1169,18 @@ function addRoadRibbonNodes(world: SemanticWorld, nodes: RoadRibbonNode[]) {
   }
   for (const poi of world.poiList) {
     const profile = roadProfileAt(world, poi.approachTile.x + 0.5, poi.approachTile.y + 0.5);
-    const radius = clamp(0.62 * profile.visual.widthScale * profile.generation.endpointApronScale, 0.48, 0.82);
+    const tangent = normalizeVec(poi.approachTile.x - poi.entranceTile.x, poi.approachTile.y - poi.entranceTile.y, 1, 0);
+    const apron = roadPoiApronShape(poi.type, profile);
     nodes.push({
       x: poi.approachTile.x + 0.5,
       y: poi.approachTile.y + 0.5,
-      radius,
-      bodyRadius: radius * 0.78,
-      centerRadius: radius * 0.42,
+      radiusX: apron.radiusX,
+      radiusY: apron.radiusY,
+      bodyScale: apron.bodyScale,
+      centerScale: apron.centerScale,
       edgeBand: 0.065,
+      tangentX: tangent.x,
+      tangentY: tangent.y,
       profile,
       theme: roadThemeForProfile(profile)
     });
@@ -1171,7 +1232,26 @@ function roadNeighborInfo(world: SemanticWorld, x: number, y: number) {
 }
 
 function nearRoadNode(cache: RoadRibbonCache, x: number, y: number, radius: number): boolean {
-  return cache.nodes.some((node) => Math.abs(node.x - x) <= radius && Math.abs(node.y - y) <= radius);
+  return cache.nodes.some((node) => Math.abs(node.x - x) <= radius + node.radiusX && Math.abs(node.y - y) <= radius + node.radiusY);
+}
+
+function roadNodeTangent(info: ReturnType<typeof roadNeighborInfo>): RoadRibbonPoint {
+  if (info.neighbors.length === 0) return { x: 1, y: 0 };
+  const primary = info.neighbors.reduce(
+    (sum, neighbor) => ({ x: sum.x + neighbor.dx, y: sum.y + neighbor.dy }),
+    { x: 0, y: 0 }
+  );
+  if (Math.hypot(primary.x, primary.y) > 0.01) return normalizeVec(primary.x, primary.y, 1, 0);
+  const first = info.neighbors[0];
+  return normalizeVec(first.dx, first.dy, 1, 0);
+}
+
+function roadPoiApronShape(type: SemanticWorld["poiList"][number]["type"], profile: IslandRoadProfile): { radiusX: number; radiusY: number; bodyScale: number; centerScale: number } {
+  const base = profile.visual.widthScale * profile.generation.endpointApronScale;
+  if (type === "town" || type === "village") return { radiusX: clamp(0.84 * base, 0.62, 0.98), radiusY: clamp(0.62 * base, 0.5, 0.82), bodyScale: 0.8, centerScale: 0.45 };
+  if (type === "port") return { radiusX: clamp(0.68 * base, 0.5, 0.82), radiusY: clamp(0.44 * base, 0.36, 0.62), bodyScale: 0.78, centerScale: 0.42 };
+  if (type === "cave") return { radiusX: clamp(0.58 * base, 0.46, 0.74), radiusY: clamp(0.4 * base, 0.34, 0.56), bodyScale: 0.76, centerScale: 0.4 };
+  return { radiusX: clamp(0.62 * base, 0.48, 0.82), radiusY: clamp(0.5 * base, 0.4, 0.68), bodyScale: 0.78, centerScale: 0.42 };
 }
 
 function segmentNearSample(segment: RoadRibbonSegment, sampleX: number, sampleY: number): boolean {
@@ -1193,35 +1273,81 @@ function roadThemeForProfile(profile: IslandRoadProfile): SemanticRoadRibbonThem
 }
 
 interface RoadRibbonPalette {
+  body: Rgb;
+  center: Rgb;
   shadow: Rgb;
   edge: Rgb;
   highlight: Rgb;
   rut: Rgb;
   pebble: Rgb;
   fleck: Rgb;
+  streak: Rgb;
+  scuff: Rgb;
+  bodyAlpha: number;
+  centerAlpha: number;
 }
 
 function roadRibbonPalette(theme: SemanticRoadRibbonTheme, visual: IslandRoadVisualConfig): RoadRibbonPalette {
   if (theme === "desertSand") {
-    return { shadow: [133, 101, 58], edge: [191, 154, 85], highlight: [238, 207, 135], rut: [143, 112, 67], pebble: [117, 93, 61], fleck: [222, 190, 117] };
+    return { body: [202, 170, 101], center: [234, 206, 137], shadow: [135, 105, 66], edge: [190, 157, 91], highlight: [246, 222, 155], rut: [151, 119, 74], pebble: [132, 104, 70], fleck: [229, 200, 124], streak: [243, 215, 145], scuff: [178, 143, 84], bodyAlpha: 0.88, centerAlpha: 0.34 };
   }
   if (theme === "snowPack") {
-    return { shadow: [90, 117, 126], edge: [162, 181, 182], highlight: [232, 244, 240], rut: [93, 111, 117], pebble: [119, 135, 137], fleck: [224, 239, 237] };
+    return { body: [190, 202, 198], center: [225, 229, 214], shadow: [88, 113, 124], edge: [169, 185, 184], highlight: [238, 245, 239], rut: [91, 108, 118], pebble: [139, 132, 116], fleck: [232, 242, 240], streak: [235, 240, 231], scuff: [160, 147, 122], bodyAlpha: 0.82, centerAlpha: 0.42 };
   }
   if (theme === "ashCinder") {
-    return { shadow: [38, 35, 32], edge: [88, 80, 70], highlight: [132, 116, 94], rut: [34, 32, 31], pebble: [110, 91, 76], fleck: [121, 66, 45] };
+    return { body: [82, 76, 68], center: [118, 105, 86], shadow: [40, 37, 34], edge: [98, 89, 76], highlight: [143, 125, 98], rut: [36, 34, 32], pebble: [119, 101, 84], fleck: [132, 69, 44], streak: [130, 115, 93], scuff: [61, 57, 52], bodyAlpha: 0.9, centerAlpha: 0.28 };
   }
   if (theme === "highlandGravel") {
-    return { shadow: [74, 65, 52], edge: [137, 120, 84], highlight: [197, 178, 123], rut: [75, 68, 57], pebble: [103, 96, 82], fleck: [99, 117, 75] };
+    return { body: [147, 128, 89], center: [193, 174, 122], shadow: [76, 68, 56], edge: [133, 119, 88], highlight: [209, 191, 134], rut: [78, 72, 62], pebble: [111, 106, 92], fleck: [103, 119, 80], streak: [200, 181, 126], scuff: [111, 101, 82], bodyAlpha: 0.88, centerAlpha: 0.3 };
   }
+  const center = mixRgb(hexRgb(visual.lightNoiseColor, [240, 199, 131]), [255, 226, 160], 0.18);
   return {
-    shadow: hexRgb(visual.darkNoiseColor, [112, 79, 47]),
-    edge: hexRgb(visual.edgeColor, [159, 120, 67]),
-    highlight: hexRgb(visual.lightNoiseColor, [240, 199, 131]),
+    body: mixRgb(hexRgb(visual.centerColor, [214, 169, 103]), [222, 181, 113], 0.24),
+    center,
+    shadow: mixRgb(hexRgb(visual.darkNoiseColor, [112, 79, 47]), [89, 66, 44], 0.18),
+    edge: mixRgb(hexRgb(visual.edgeColor, [159, 120, 67]), [142, 104, 61], 0.12),
+    highlight: center,
     rut: hexRgb(visual.darkNoiseColor, COLORS.roadPebble),
     pebble: hexRgb(visual.darkNoiseColor, COLORS.roadPebble),
-    fleck: visual.terrainFleckColor ? hexRgb(visual.terrainFleckColor, COLORS.roadGrassFleck) : COLORS.roadGrassFleck
+    fleck: visual.terrainFleckColor ? hexRgb(visual.terrainFleckColor, COLORS.roadGrassFleck) : COLORS.roadGrassFleck,
+    streak: mixRgb(center, [255, 235, 174], 0.2),
+    scuff: mixRgb(hexRgb(visual.edgeColor, [159, 120, 67]), [178, 135, 80], 0.2),
+    bodyAlpha: 0.9,
+    centerAlpha: 0.34
   };
+}
+
+interface RoadRibbonThemeTuning {
+  centerAlpha: number;
+  edgeAlpha: number;
+  shadowAlpha: number;
+  highlightBase: number;
+  highlightNoise: number;
+  rutAlpha: number;
+  pebbleAlpha: number;
+  pebbleRate: number;
+  fleckAlpha: number;
+  fleckThreshold: number;
+  streakAlpha: number;
+  streakFrequency: number;
+  scuffAlpha: number;
+  scuffThreshold: number;
+}
+
+function roadRibbonThemeTuning(theme: SemanticRoadRibbonTheme): RoadRibbonThemeTuning {
+  if (theme === "desertSand") {
+    return { centerAlpha: 0.94, edgeAlpha: 0.2, shadowAlpha: 0.1, highlightBase: 0.12, highlightNoise: 0.08, rutAlpha: 0.12, pebbleAlpha: 0.16, pebbleRate: 1.15, fleckAlpha: 0.22, fleckThreshold: 0.86, streakAlpha: 0.22, streakFrequency: 3.1, scuffAlpha: 0.12, scuffThreshold: 0.8 };
+  }
+  if (theme === "snowPack") {
+    return { centerAlpha: 0.9, edgeAlpha: 0.18, shadowAlpha: 0.12, highlightBase: 0.14, highlightNoise: 0.06, rutAlpha: 0.18, pebbleAlpha: 0.08, pebbleRate: 0.72, fleckAlpha: 0.18, fleckThreshold: 0.88, streakAlpha: 0.2, streakFrequency: 2.7, scuffAlpha: 0.08, scuffThreshold: 0.88 };
+  }
+  if (theme === "ashCinder") {
+    return { centerAlpha: 0.92, edgeAlpha: 0.26, shadowAlpha: 0.16, highlightBase: 0.08, highlightNoise: 0.06, rutAlpha: 0.2, pebbleAlpha: 0.2, pebbleRate: 1.35, fleckAlpha: 0.14, fleckThreshold: 0.93, streakAlpha: 0.12, streakFrequency: 2.4, scuffAlpha: 0.16, scuffThreshold: 0.82 };
+  }
+  if (theme === "highlandGravel") {
+    return { centerAlpha: 0.94, edgeAlpha: 0.26, shadowAlpha: 0.14, highlightBase: 0.1, highlightNoise: 0.07, rutAlpha: 0.18, pebbleAlpha: 0.24, pebbleRate: 1.55, fleckAlpha: 0.24, fleckThreshold: 0.86, streakAlpha: 0.16, streakFrequency: 2.6, scuffAlpha: 0.14, scuffThreshold: 0.82 };
+  }
+  return { centerAlpha: 0.96, edgeAlpha: 0.26, shadowAlpha: 0.12, highlightBase: 0.14, highlightNoise: 0.08, rutAlpha: 0.16, pebbleAlpha: 0.16, pebbleRate: 1.25, fleckAlpha: 0.3, fleckThreshold: 0.82, streakAlpha: 0.16, streakFrequency: 2.8, scuffAlpha: 0.1, scuffThreshold: 0.84 };
 }
 
 function roadCrossingRibbonAt(world: SemanticWorld, sampleX: number, sampleY: number): number {
@@ -1253,6 +1379,12 @@ function roadSignedLateral(px: number, py: number, cx: number, cy: number, tange
   const nx = -tangentY;
   const ny = tangentX;
   return (px - cx) * nx + (py - cy) * ny;
+}
+
+function normalizeVec(x: number, y: number, fallbackX: number, fallbackY: number): RoadRibbonPoint {
+  const length = Math.hypot(x, y);
+  if (length <= 0.0001) return { x: fallbackX, y: fallbackY };
+  return { x: x / length, y: y / length };
 }
 
 function drawMaskBoundaryAccents(ctx: CanvasRenderingContext2D, world: SemanticWorld, plan: SemanticMaskTerrainRenderPlan, classGrid: Uint8Array) {
@@ -1505,6 +1637,15 @@ function hexRgb(value: string, fallback: Rgb): Rgb {
   ];
   HEX_COLOR_CACHE.set(normalized, color);
   return color;
+}
+
+function mixRgb(a: Rgb, b: Rgb, t: number): Rgb {
+  const amount = clamp01(t);
+  return [
+    Math.round(a[0] + (b[0] - a[0]) * amount),
+    Math.round(a[1] + (b[1] - a[1]) * amount),
+    Math.round(a[2] + (b[2] - a[2]) * amount)
+  ];
 }
 
 function rgbCss(color: Rgb): string {
