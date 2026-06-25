@@ -746,7 +746,7 @@ function drawVictoryLevelUpCard(
     if (!gain) return;
     const col = idx % 3;
     const row = Math.floor(idx / 3);
-    drawVictoryStatChip.call(this, graphics, statStartX + col * 42, y + 13 + row * 19, iconKey, `+${gain} ${label}`);
+    drawVictoryStatGain.call(this, statStartX + col * 42, y + 13 + row * 19, iconKey, `+${gain} ${label}`);
   });
 }
 
@@ -770,20 +770,15 @@ function drawVictoryPortraitFallback(
   graphics.fillStyle(colors[2], 1).fillRect(x + 16, y + 24, 8, 14);
 }
 
-function drawVictoryStatChip(
+function drawVictoryStatGain(
   this: CrystalOathSceneContext,
-  graphics: Phaser.GameObjects.Graphics,
   x: number,
   y: number,
   iconKey: string,
   label: string
 ) {
-  const chipW = 39;
-  const chipH = 15;
-  graphics.fillStyle(0x030711, 0.62).fillRect(x - 2, y - 1, chipW, chipH);
-  graphics.lineStyle(1, BATTLE_UI.gold, 0.2).strokeRect(x - 2, y - 1, chipW, chipH);
   this.drawFantasyDialogIcon(iconKey, x, y + 1, 10);
-  this.text(x + 12, y + 1, label, 7, "#eff7ff", "left", { wordWrapWidth: chipW - 13, strokeThickness: 1 });
+  this.text(x + 12, y + 1, label, 7, "#eff7ff", "left", { wordWrapWidth: 28, strokeThickness: 1 });
 }
 
 export function drawThinBar(this: CrystalOathSceneContext, x: number, y: number, w: number, h: number, value: number, max: number, color: number) {
