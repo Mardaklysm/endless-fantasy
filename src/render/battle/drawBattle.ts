@@ -69,7 +69,7 @@ export function drawBattle(this: CrystalOathSceneContext) {
     const slot = this.enemyBattleSlot(enemy, idx);
     const targeted = targetingEnemies && targetingAll ? enemy.hp > 0 : selectedEnemy?.uid === enemy.uid;
     const offset = this.battleActorOffset("enemy", enemy.uid);
-    this.drawBattleEnemy(enemy, slot.x + offset.x, slot.y + offset.y, slot.size, targeted, targetingEnemies);
+    this.drawBattleEnemy(enemy, slot.x + offset.x, slot.y + offset.y, slot.size, targeted);
   });
   this.party.forEach((member, idx) => {
     const slot = this.partyBattleSlot(idx);
@@ -80,7 +80,7 @@ export function drawBattle(this: CrystalOathSceneContext) {
       !this.battle?.animation &&
       this.battle?.phase !== "resolving";
     const targeted = targetingAllies && targetingAll ? member.hp > 0 : selectedAlly?.id === member.id;
-    this.drawPartyBattler(member, slot.x + offset.x, slot.y + offset.y, idx, active, slot.facing, targeted, targetingAllies);
+    this.drawPartyBattler(member, slot.x + offset.x, slot.y + offset.y, idx, active, slot.facing, targeted);
   });
   this.drawBattleFloatingTexts();
   this.drawBattleTurnCarousel();
@@ -186,12 +186,12 @@ export function selectedBattleAlly(this: CrystalOathSceneContext): CharacterStat
   return this.party[this.battle.selected] ?? this.party[0];
 }
 
-export function drawBattleEnemy(this: CrystalOathSceneContext, enemy: EnemyState, x: number, y: number, size: number, targeted: boolean, targetable = false) {
+export function drawBattleEnemy(this: CrystalOathSceneContext, enemy: EnemyState, x: number, y: number, size: number, targeted: boolean) {
   const alive = enemy.hp > 0;
   this.drawActorShadow(x + size / 2, y + size - 3, size * 0.76, Math.max(10, size * 0.13), alive ? 0.3 : 0.14);
   this.drawEnemySprite(enemy, x, y, enemy.boss ? 5 : 4, size);
   if (targeted) {
-    this.drawActiveTurnMarker(x + size / 2, y - 11);
+    this.drawBattleTargetArrow(x + size / 2, y - 11);
     this.text(x + size / 2, y + size + 4, enemy.name, 10, "#fff2a8", "center", { wordWrapWidth: Math.max(86, size + 28), strokeThickness: 2 });
   }
 }
@@ -204,8 +204,7 @@ export function drawPartyBattler(
   idx: number,
   active: boolean,
   facing: BattleSpawnFacing = "left",
-  targeted = false,
-  targetable = false
+  targeted = false
 ) {
   const classId = PARTY_CLASS[member.id];
   const frame = this.battleCharacterFrame(member, facing);
@@ -218,9 +217,9 @@ export function drawPartyBattler(
   const ringW = Math.round(visualHeight * 0.86);
   const ringH = Math.max(20, Math.round(visualHeight * 0.2));
   this.drawActorShadow(bodyCenterX, feetBaselineY - 4, Math.round(ringW * 0.92), Math.max(14, Math.round(ringH * 0.62)), 0.32 * alpha);
-  if (active || targetable) {
-    this.ui.fillStyle(0xfff0a8, active || targeted ? 0.16 : 0.05).fillEllipse(bodyCenterX, feetBaselineY - 4, ringW, ringH);
-    this.ui.lineStyle(active || targeted ? 2 : 1, 0xfff0a8, active || targeted ? 0.88 : 0.36).strokeEllipse(bodyCenterX, feetBaselineY - 4, ringW, ringH);
+  if (active) {
+    this.g.fillStyle(0xfff0a8, 0.16).fillEllipse(bodyCenterX, feetBaselineY - 4, ringW, ringH);
+    this.g.lineStyle(2, 0xfff0a8, 0.88).strokeEllipse(bodyCenterX, feetBaselineY - 4, ringW, ringH);
   }
   if (!this.drawCharacterSpriteFrame(classId, frame, bodyCenterX, feetBaselineY, displayCellWidth, LAYER_BATTLE_IMAGE, alpha)) {
     const palettes = {
@@ -235,11 +234,10 @@ export function drawPartyBattler(
     this.g.fillStyle(palettes[3], alpha).fillRect(x + 11, y + 53, 8, 10 + (idx % 2));
     this.g.fillRect(x + 28, y + 53, 8, 10 + ((idx + 1) % 2));
   }
-  if (targeted) drawTargetBrackets.call(this, bodyCenterX - ringW / 2, feetBaselineY - visualHeight - 6, ringW, visualHeight + 10, 0.95);
-  if (active || targeted) this.drawActiveTurnMarker(bodyCenterX, feetBaselineY - visualHeight - 8);
+  if (targeted) this.drawBattleTargetArrow(bodyCenterX, feetBaselineY - visualHeight - 8);
 }
 
-export function drawActiveTurnMarker(this: CrystalOathSceneContext, cx: number, y: number) {
+export function drawBattleTargetArrow(this: CrystalOathSceneContext, cx: number, y: number) {
   const bob = Math.sin(this.time.now / 140) * 3;
   this.ui.fillStyle(0x050812, 0.45).fillTriangle(cx, y + bob + 3, cx - 10, y + bob - 9, cx + 10, y + bob - 9);
   this.ui.fillStyle(0xfff0a8, 1).fillTriangle(cx, y + bob + 1, cx - 8, y + bob - 8, cx + 8, y + bob - 8);
@@ -264,9 +262,10 @@ export function drawBattlePartyStatusHud(this: CrystalOathSceneContext) {
     const down = member.hp <= 0;
     const statuses = compactStatuses(member.statuses);
     if (idx > 0) this.ui.fillStyle(0xffe0a0, 0.14).fillRect(x + 12, rowY - 2, w - 24, 1);
-    this.ui.fillStyle(active ? 0x182238 : 0x060d18, active ? 0.42 : 0.12).fillRect(x + 8, rowY - 3, w - 16, rowH - 4);
+    this.ui.fillStyle(active ? BATTLE_UI.panelWarm : 0x060d18, active ? 0.76 : 0.12).fillRect(x + 8, rowY - 3, w - 16, rowH - 4);
     if (active) {
-      this.drawCursor(x + 8, rowY + 2);
+      this.ui.lineStyle(1, BATTLE_UI.goldBright, 0.9).strokeRect(x + 8, rowY - 3, w - 16, rowH - 4);
+      this.ui.fillStyle(BATTLE_UI.goldBright, 0.12).fillRect(x + 10, rowY - 1, w - 20, rowH - 8);
     }
     this.text(x + 24, rowY + 1, member.name, 10, down ? "#858b98" : "#ffffff", "left", { wordWrapWidth: 78, strokeThickness: 1 });
     if (down) {
@@ -797,19 +796,6 @@ function drawDiamond(this: CrystalOathSceneContext, cx: number, cy: number, size
   this.ui.fillTriangle(cx, cy + size, cx - size, cy, cx + size, cy);
   this.ui.lineStyle(1, BATTLE_UI.shadow, 0.48).strokeTriangle(cx, cy - size, cx - size, cy, cx + size, cy);
   this.ui.strokeTriangle(cx, cy + size, cx - size, cy, cx + size, cy);
-}
-
-function drawTargetBrackets(this: CrystalOathSceneContext, x: number, y: number, w: number, h: number, alpha: number) {
-  const len = Math.max(8, Math.min(16, Math.floor(Math.min(w, h) * 0.18)));
-  this.ui.lineStyle(2, BATTLE_UI.goldBright, alpha);
-  this.ui.lineBetween(x, y, x + len, y);
-  this.ui.lineBetween(x, y, x, y + len);
-  this.ui.lineBetween(x + w, y, x + w - len, y);
-  this.ui.lineBetween(x + w, y, x + w, y + len);
-  this.ui.lineBetween(x, y + h, x + len, y + h);
-  this.ui.lineBetween(x, y + h, x, y + h - len);
-  this.ui.lineBetween(x + w, y + h, x + w - len, y + h);
-  this.ui.lineBetween(x + w, y + h, x + w, y + h - len);
 }
 
 function compactStatuses(statuses: StatusState) {
