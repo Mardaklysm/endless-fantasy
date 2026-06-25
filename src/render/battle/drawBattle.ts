@@ -548,7 +548,6 @@ function drawBattleCommandBar(this: CrystalOathSceneContext, actorName: string) 
     this.ui.lineStyle(1, selected ? BATTLE_UI.goldBright : 0x526071, selected ? 0.9 : 0.42).strokeRect(optionX, optionY, layout.optionW - 2, 26);
     if (selected) {
       this.ui.fillStyle(BATTLE_UI.goldBright, 0.12).fillRect(optionX + 2, optionY + 2, layout.optionW - 6, 22);
-      this.drawCursor(optionX - 13, optionY + 5);
     }
     drawCommandIcon.call(this, COMMAND_ICONS[option], optionX + 16, optionY + 13, selected);
     this.text(optionX + 31, optionY + 6, option, 8, selected ? "#fff7c7" : BATTLE_UI.text, "left", {
@@ -616,7 +615,6 @@ function drawBattleSubmenuPanel(
     this.ui.fillStyle(selected ? BATTLE_UI.panelWarm : 0x050b15, selected ? 0.76 : 0.35).fillRect(x + 7, rowY, w - 14, 22);
     if (selected) {
       this.ui.lineStyle(1, BATTLE_UI.goldBright, 0.86).strokeRect(x + 7, rowY, w - 14, 22);
-      this.drawCursor(x + 8, rowY + 4);
     }
     drawCommandIcon.call(this, option.icon, x + 31, rowY + 11, selected);
     this.text(x + 46, rowY + 5, option.label, 8, selected ? "#fff7c7" : "#ffffff", "left", {
