@@ -232,7 +232,7 @@ export function drawPartyBattler(
     this.g.fillRect(x + 28, y + 53, 8, 10 + ((idx + 1) % 2));
   }
   if (targeted) drawTargetBrackets.call(this, bodyCenterX - ringW / 2, feetBaselineY - visualHeight - 6, ringW, visualHeight + 10, 0.95);
-  if (active || targeted) this.drawActiveTurnMarker(bodyCenterX, y + 10);
+  if (active || targeted) this.drawActiveTurnMarker(bodyCenterX, feetBaselineY - visualHeight - 8);
 }
 
 export function drawActiveTurnMarker(this: CrystalOathSceneContext, cx: number, y: number) {
