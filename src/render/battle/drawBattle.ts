@@ -19,6 +19,7 @@ import type {
   BattleCarouselCardSnapshot,
   BattleCarouselDissolveParticle,
   BattleEnemyDeathDissolve,
+  BattleLevelUpReward,
   BattleVictoryRewards,
   InitiativeEntry
 } from "../../systems/battle/battleTypes";
@@ -533,54 +534,134 @@ export function drawBattleFloatingTexts(this: CrystalOathSceneContext) {
 export function drawBattleVictoryDialog(this: CrystalOathSceneContext) {
   if (!this.battle || this.battle.phase !== "victory") return;
   const rewards = this.battle.victoryRewards;
-  const lines = victoryRewardLines(rewards);
-  const w = 360;
-  const lineH = 14;
-  const h = Phaser.Math.Clamp(76 + lines.length * lineH, 132, 292);
+  const levelUps = rewards?.levelUps ?? [];
+  const w = 560;
+  const h = Phaser.Math.Clamp(232 + Math.max(1, levelUps.length) * 49, 286, 438);
   const x = Math.round(WIDTH / 2 - w / 2);
   const y = Math.round(HEIGHT / 2 - h / 2);
-  this.ui.fillStyle(0x000000, 0.34).fillRect(0, 0, WIDTH, HEIGHT);
-  this.drawBattleHudPanel(x, y, w, h, 0.93);
-  drawPanelTitle.call(this, x, y + 12, w, "Victory!");
-  this.text(x + w / 2, y + 34, "The party stands triumphant.", 9, "#dce9ff", "center", {
-    wordWrapWidth: w - 36,
-    strokeThickness: 1
+  this.ui.fillStyle(0x000000, 0.42).fillRect(0, 0, WIDTH, HEIGHT);
+  this.drawFantasyDialogFrame(x, y, w, h, { variant: "fancy", showCrest: true, alpha: 0.95 });
+  this.text(x + w / 2, y + 34, "Victory!", 36, "#ffd98a", "center", {
+    wordWrapWidth: w - 96,
+    stroke: "#050812",
+    strokeThickness: 4
   });
-  let lineY = y + 56;
-  lines.forEach((line) => {
-    const accent = line.startsWith("Press ") ? "#fff2a8" : line.includes("Level") || line.startsWith("New:") ? "#bfe9ff" : "#ffffff";
-    this.text(x + 24, lineY, line, line.startsWith("Press ") ? 9 : 8, accent, "left", {
-      wordWrapWidth: w - 48,
+  this.drawFantasyDialogDivider(x + 58, y + 72, w - 116, "short", 0.84);
+  this.text(x + w / 2, y + 84, "The party stands triumphant.", 13, "#ffffff", "center", {
+    wordWrapWidth: w - 84,
+    stroke: "#050812",
+    strokeThickness: 2
+  });
+
+  const cardY = y + 114;
+  const cardGap = 8;
+  const cardW = Math.floor((w - 72 - cardGap * 2) / 3);
+  drawVictoryRewardCard.call(this, x + 36, cardY, cardW, "ui_battle_result_icon_exp", rewards ? `${rewards.xp} EXP` : "Tallying EXP");
+  drawVictoryRewardCard.call(
+    this,
+    x + 36 + cardW + cardGap,
+    cardY,
+    cardW,
+    "ui_battle_result_icon_gold",
+    rewards ? `${rewards.gold} Gold` : "Tallying Gold"
+  );
+  drawVictoryRewardCard.call(
+    this,
+    x + 36 + (cardW + cardGap) * 2,
+    cardY,
+    cardW,
+    "ui_battle_result_icon_potion",
+    lootSummary(rewards)
+  );
+
+  const sectionY = cardY + 58;
+  this.drawFantasyDialogDivider(x + 44, sectionY, w - 88, "short", 0.84);
+  this.text(x + w / 2, sectionY - 12, levelUps.length ? "Level Up" : "Rewards", 16, "#ffd98a", "center", {
+    wordWrapWidth: w - 92,
+    stroke: "#050812",
+    strokeThickness: 2
+  });
+
+  if (levelUps.length) {
+    levelUps.forEach((level, idx) => {
+      drawVictoryLevelUpRow.call(this, level, x + 36, sectionY + 18 + idx * 49, w - 72, 40);
+    });
+  } else {
+    this.text(x + w / 2, sectionY + 22, "No level-ups this time.", 12, "#dce9ff", "center", {
+      wordWrapWidth: w - 92,
       strokeThickness: 1
     });
-    lineY += lineH;
+  }
+
+  this.drawFantasyDialogDivider(x + w / 2 - 44, y + h - 47, 88, "mini", 0.75);
+  this.text(x + w / 2, y + h - 34, "Press Enter to continue", 12, "#fff4c8", "center", {
+    wordWrapWidth: w - 90,
+    stroke: "#050812",
+    strokeThickness: 2
   });
 }
 
-function victoryRewardLines(rewards: BattleVictoryRewards | undefined) {
-  if (!rewards) return ["Rewards are being tallied.", "Press Enter to continue."];
-  const lines = [
-    `Gained ${rewards.xp} XP and ${rewards.gold} gold.`,
-    rewards.loot.length
-      ? `Found: ${rewards.loot.map((item) => `${item.name} x${item.quantity}`).join(", ")}`
-      : "Loot: None"
-  ];
-  for (const level of rewards.levelUps) {
-    lines.push(`${level.name} reached Level ${level.newLevel}! (${level.oldLevel} -> ${level.newLevel})`);
-    const stats = [
-      level.hpGain ? `HP +${level.hpGain}` : "",
-      level.mpGain ? `MP +${level.mpGain}` : "",
-      level.attackGain ? `ATK +${level.attackGain}` : "",
-      level.defenseGain ? `DEF +${level.defenseGain}` : "",
-      level.speedGain ? `SPD +${level.speedGain}` : "",
-      level.luckGain ? `LCK +${level.luckGain}` : ""
-    ].filter(Boolean);
-    if (stats.length) lines.push(`${level.name}: ${stats.join(", ")}`);
-    if (level.newSpells.length) lines.push(`New: ${level.newSpells.join(", ")}`);
-    if (level.chargeLines.length) lines.push(`${level.name}: ${level.chargeLines.join(", ")}`);
+function lootSummary(rewards: BattleVictoryRewards | undefined) {
+  if (!rewards) return "Tallying Loot";
+  if (!rewards.loot.length) return "No Loot";
+  if (rewards.loot.length === 1) return `${rewards.loot[0].name} x${rewards.loot[0].quantity}`;
+  const totalQuantity = rewards.loot.reduce((sum, item) => sum + item.quantity, 0);
+  return `${totalQuantity} Items`;
+}
+
+function drawVictoryRewardCard(this: CrystalOathSceneContext, x: number, y: number, w: number, iconKey: string, label: string) {
+  this.drawFantasyDialogOption(x, y, w, 40, false);
+  this.drawFantasyDialogIcon(iconKey, x + 14, y + 8, 24);
+  this.text(x + 48, y + 12, label, 13, "#fff4c8", "left", {
+    wordWrapWidth: w - 56,
+    stroke: "#050812",
+    strokeThickness: 2
+  });
+}
+
+function drawVictoryLevelUpRow(this: CrystalOathSceneContext, level: BattleLevelUpReward, x: number, y: number, w: number, h: number) {
+  this.ui.fillStyle(0x071225, 0.72).fillRect(x, y, w, h);
+  this.ui.fillStyle(0xffffff, 0.035).fillRect(x + 2, y + 2, w - 4, 12);
+  this.ui.lineStyle(1, BATTLE_UI.gold, 0.7).strokeRect(x, y, w, h);
+  const member = this.party.find((candidate) => candidate.id === level.characterId);
+  if (member) {
+    drawPartyCardPortrait.call(this, member, x + 5, y + 4, 32, 32);
+  } else {
+    this.ui.fillStyle(0x030711, 0.92).fillRect(x + 5, y + 4, 32, 32);
+    this.ui.lineStyle(1, BATTLE_UI.gold, 0.72).strokeRect(x + 5, y + 4, 32, 32);
   }
-  lines.push("Press Enter to continue.");
-  return lines;
+  this.text(x + 46, y + 7, level.name, 14, "#ffd98a", "left", {
+    wordWrapWidth: 90,
+    stroke: "#050812",
+    strokeThickness: 2
+  });
+  this.text(x + 46, y + 24, `Lv. ${level.newLevel}`, 11, "#ffffff", "left", { wordWrapWidth: 62, strokeThickness: 1 });
+
+  const stats = [
+    ["ui_battle_result_icon_hp", "HP", level.hpGain],
+    ["ui_battle_result_icon_mp", "MP", level.mpGain],
+    ["ui_battle_result_icon_atk", "ATK", level.attackGain],
+    ["ui_battle_result_icon_def", "DEF", level.defenseGain],
+    ["ui_battle_result_icon_spd", "SPD", level.speedGain]
+  ] as const;
+  let statX = x + 138;
+  const statY = y + 10;
+  stats.forEach(([iconKey, label, gain]) => {
+    if (!gain) return;
+    drawVictoryStatGain.call(this, statX, statY, iconKey, `+${gain} ${label}`);
+    statX += label === "ATK" || label === "DEF" ? 62 : 58;
+  });
+  if (level.newSpells.length) {
+    this.text(x + w - 116, y + 24, `New: ${level.newSpells.join(", ")}`, 8, "#bfe9ff", "left", {
+      wordWrapWidth: 108,
+      strokeThickness: 1
+    });
+  }
+}
+
+function drawVictoryStatGain(this: CrystalOathSceneContext, x: number, y: number, iconKey: string, label: string) {
+  this.drawFantasyDialogIcon(iconKey, x, y, 18);
+  this.text(x + 19, y + 3, label, 9, "#eff7ff", "left", { wordWrapWidth: 45, strokeThickness: 1 });
 }
 
 export function drawThinBar(this: CrystalOathSceneContext, x: number, y: number, w: number, h: number, value: number, max: number, color: number) {
@@ -726,15 +807,6 @@ function rootCommandIndex(phase: string | undefined, pendingType: string | undef
   return BATTLE_COMMANDS.indexOf("Attack");
 }
 
-function drawPanelTitle(this: CrystalOathSceneContext, x: number, y: number, w: number, title: string) {
-  const cy = y + 7;
-  this.text(x + w / 2, y, title, 11, "#fff2a8", "center", { wordWrapWidth: w - 70, strokeThickness: 1 });
-  this.ui.fillStyle(BATTLE_UI.goldBright, 0.55).fillRect(x + 58, cy, Math.max(20, w / 2 - 96), 1);
-  this.ui.fillRect(x + w / 2 + 42, cy, Math.max(20, w / 2 - 100), 1);
-  drawDiamond.call(this, x + 78, cy, 5, 0.86);
-  drawDiamond.call(this, x + w - 78, cy, 5, 0.86);
-}
-
 function drawPartyCardPortrait(this: CrystalOathSceneContext, member: CharacterState, x: number, y: number, w: number, h: number) {
   const alpha = member.hp <= 0 ? 0.42 : 1;
   const texture = PORTRAIT_TEXTURES[member.id];
@@ -875,13 +947,6 @@ function drawCommandIcon(this: CrystalOathSceneContext, kind: (typeof COMMAND_IC
     this.ui.fillRect(x - 2, y + 5, 10, 4);
     this.ui.fillStyle(0x342312, 0.88).fillRect(x - 7, y + 7, 16, 2);
   }
-}
-
-function drawDiamond(this: CrystalOathSceneContext, cx: number, cy: number, size: number, alpha: number) {
-  this.ui.fillStyle(BATTLE_UI.goldBright, alpha).fillTriangle(cx, cy - size, cx - size, cy, cx + size, cy);
-  this.ui.fillTriangle(cx, cy + size, cx - size, cy, cx + size, cy);
-  this.ui.lineStyle(1, BATTLE_UI.shadow, 0.48).strokeTriangle(cx, cy - size, cx - size, cy, cx + size, cy);
-  this.ui.strokeTriangle(cx, cy + size, cx - size, cy, cx + size, cy);
 }
 
 function compactStatuses(statuses: StatusState) {

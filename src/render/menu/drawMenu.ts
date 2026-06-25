@@ -5,21 +5,43 @@ export function drawMenuScreen(this: CrystalOathSceneContext) {
   this.drawBaseSceneForMode(this.previousMode);
   if (!this.menu) return;
   this.clearOverlayChrome();
-  this.ui.fillStyle(0x02040a, 0.72).fillRect(0, 0, WIDTH, HEIGHT);
-  this.drawPanel(155, 58, 650, 430);
-  this.text(184, 96, this.menu.title, 24, "#fff2a8");
-  const startY = 144;
+  this.ui.fillStyle(0x02040a, 0.68).fillRect(0, 0, WIDTH, HEIGHT);
+  const labels = this.menu.options.map((option) => (typeof option.label === "function" ? option.label() : option.label));
+  const longestLabel = labels.reduce((max, label) => Math.max(max, label.length), this.menu.title.length);
+  const dialogW = Math.min(690, Math.max(420, longestLabel * 10 + 128));
+  const rowH = 29;
+  const footerH = this.menu.footer ? 40 : 16;
+  const dialogH = Math.min(454, Math.max(170, 84 + this.menu.options.length * rowH + footerH));
+  const x = Math.round(WIDTH / 2 - dialogW / 2);
+  const y = Math.round(HEIGHT / 2 - dialogH / 2);
+  this.drawFantasyDialogFrame(x, y, dialogW, dialogH, { variant: "standard" });
+  this.text(x + dialogW / 2, y + 27, this.menu.title, 22, "#ffd98a", "center", {
+    wordWrapWidth: dialogW - 52,
+    stroke: "#040712",
+    strokeThickness: 2
+  });
+  this.drawFantasyDialogDivider(x + 48, y + 58, dialogW - 96, "mini", 0.76);
+  const startY = y + 76;
+  const optionX = x + 36;
+  const optionW = dialogW - 72;
   this.menu.options.forEach((option, idx) => {
     const disabled = option.disabled?.() ?? false;
-    const label = typeof option.label === "function" ? option.label() : option.label;
+    const label = labels[idx];
     const selected = idx === this.menu!.selected;
-    if (selected) this.drawCursor(176, startY + idx * 28 + 4);
-    const prefix = selected && !this.hasTexture("ui_cursor_arrow") ? ">" : " ";
-    this.text(194, startY + idx * 28, `${prefix} ${label}`, 18, disabled ? "#6f7486" : "#ffffff");
+    const optionY = startY + idx * rowH;
+    this.drawFantasyDialogOption(optionX, optionY, optionW, 23, selected, { disabled });
+    this.text(optionX + 14, optionY + 3, label, 15, disabled ? "#7c8497" : selected ? "#fff4c8" : "#ffffff", "left", {
+      wordWrapWidth: optionW - 28,
+      stroke: "#030712",
+      strokeThickness: 1
+    });
   });
   if (this.menu.footer) {
     const footer = typeof this.menu.footer === "function" ? this.menu.footer() : this.menu.footer;
-    this.text(184, 454, footer, 14, "#b8c4e0");
+    this.text(x + dialogW / 2, y + dialogH - 31, footer, 12, "#bdc8df", "center", {
+      wordWrapWidth: dialogW - 72,
+      strokeThickness: 1
+    });
   }
 }
 
@@ -28,9 +50,18 @@ export function drawDialogue(this: CrystalOathSceneContext) {
   if (!this.dialogue) return;
   this.clearOverlayChrome();
   this.ui.fillStyle(0x02040a, 0.38).fillRect(0, 0, WIDTH, HEIGHT);
-  this.drawPanel(56, 324, WIDTH - 112, 184);
-  this.text(84, 356, this.dialogue.lines[this.dialogue.index], 20, "#ffffff");
-  this.text(WIDTH - 256, 474, "Enter / Z", 14, "#aab3c8");
+  const x = 70;
+  const y = 326;
+  const w = WIDTH - 140;
+  const h = 162;
+  this.drawFantasyDialogFrame(x, y, w, h, { variant: "standard" });
+  this.text(x + 28, y + 34, this.dialogue.lines[this.dialogue.index], 19, "#ffffff", "left", {
+    wordWrapWidth: w - 56,
+    stroke: "#030712",
+    strokeThickness: 2
+  });
+  this.drawFantasyDialogDivider(x + w - 190, y + h - 32, 86, "mini", 0.72);
+  this.text(x + w - 94, y + h - 38, "Enter / Z", 13, "#bdc8df", "center", { strokeThickness: 1 });
 }
 
 export function drawGameOver(this: CrystalOathSceneContext) {
