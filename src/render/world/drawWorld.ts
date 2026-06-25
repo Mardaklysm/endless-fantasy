@@ -14,6 +14,7 @@ import {
   WORLD_CURRENT_OBJECT_TEXTURE_KEY_BY_ID,
   WORLD_CURRENT_ROUTE_TEXTURE_KEYS,
   WORLD_CURRENT_TERRAIN_TEXTURE_KEYS,
+  WORLD_CURRENT_TERRAIN_VARIANT_TEXTURE_KEYS,
   worldCurrentAssetByTextureKey,
   worldCurrentObjectTextureKey
 } from "../../data/worldCurrentAssets";
@@ -32,7 +33,7 @@ import { WORLD_TILES, worldTileHasTag } from "../../data/worldTiles";
 import type { WorldTileId } from "../../data/worldTiles";
 import type { Terrain, Vec } from "../../scene/sceneTypes";
 import { createSemanticMaskTerrainTexture } from "../../world/semantic/semanticMaskTerrainRenderer";
-import type { SemanticMaskTerrainClass, SemanticMaskTerrainSources } from "../../world/semantic/semanticMaskTerrainRenderer";
+import type { SemanticMaskTerrainClass, SemanticMaskTerrainSources, SemanticMaskTerrainVariantSources } from "../../world/semantic/semanticMaskTerrainRenderer";
 import { createSemanticRouteOverlayTexture } from "../../world/semantic/semanticRouteRenderer";
 import { SEMANTIC_BIOME, SEMANTIC_WATER } from "../../world/semantic/semanticTypes";
 import type { GeneratedWorld, WorldRoadVisual } from "../../world/worldGenerator";
@@ -216,6 +217,18 @@ export function drawSemanticDebugOverlay(this: CrystalOathSceneContext, startX: 
         }
         if (semantic.layers.lakeMap[i] || semantic.layers.riverMap[i]) color = 0x3aa8d8;
         debugGraphics.fillStyle(color, 0.4).fillRect(x * TILE - tileCam.x, y * TILE - tileCam.y, TILE, TILE);
+      }
+    }
+  }
+  if (this.semanticDebugOverlay === "terrainVariants") {
+    const colors = [0x000000, 0xb8f26d, 0x66ccff, 0xff8a43];
+    for (let y = startY; y <= endY; y += 1) {
+      for (let x = startX; x <= endX; x += 1) {
+        const i = y * semantic.width + x;
+        const variant = semantic.layers.terrainVariant[i] ?? 0;
+        if (!variant) continue;
+        const alpha = Math.max(0.16, Math.min(0.52, (semantic.layers.terrainPatchStrength[i] ?? 0) * 0.62));
+        debugGraphics.fillStyle(colors[variant] ?? 0xff4f55, alpha).fillRect(x * TILE - tileCam.x, y * TILE - tileCam.y, TILE, TILE);
       }
     }
   }
@@ -485,6 +498,17 @@ export function currentSemanticTerrainSources(this: CrystalOathSceneContext): Se
   return sources;
 }
 
+export function currentSemanticTerrainVariantSources(this: CrystalOathSceneContext): SemanticMaskTerrainVariantSources {
+  const sources: SemanticMaskTerrainVariantSources = {};
+  for (const [terrainClass, textureKeys] of Object.entries(WORLD_CURRENT_TERRAIN_VARIANT_TEXTURE_KEYS) as [SemanticMaskTerrainClass, string[]][]) {
+    const loadedSources = textureKeys
+      .filter((textureKey) => this.textures.exists(textureKey))
+      .map((textureKey) => this.textures.get(textureKey).getSourceImage() as CanvasImageSource & { width: number; height: number });
+    if (loadedSources.length > 0) sources[terrainClass] = loadedSources;
+  }
+  return sources;
+}
+
 export function assertCurrentWorldAssetTextures(this: CrystalOathSceneContext) {
   if (this.currentWorldAssetsValidated) return;
   for (const [terrainClass, textureKey] of Object.entries(WORLD_CURRENT_TERRAIN_TEXTURE_KEYS) as [SemanticMaskTerrainClass, string][]) {
@@ -494,6 +518,15 @@ export function assertCurrentWorldAssetTextures(this: CrystalOathSceneContext) {
     const source = this.textures.get(textureKey).getSourceImage() as { width: number; height: number };
     if (source.width !== 256 || source.height !== 256) {
       throw new Error(`Current world terrain asset ${textureKey} must be 256x256; got ${source.width}x${source.height}.`);
+    }
+  }
+  for (const [terrainClass, textureKeys] of Object.entries(WORLD_CURRENT_TERRAIN_VARIANT_TEXTURE_KEYS) as [SemanticMaskTerrainClass, string[]][]) {
+    for (const textureKey of textureKeys) {
+      if (!this.textures.exists(textureKey)) continue;
+      const source = this.textures.get(textureKey).getSourceImage() as { width: number; height: number };
+      if (source.width !== 256 || source.height !== 256) {
+        throw new Error(`Current world terrain variant asset ${textureKey} for ${terrainClass} must be 256x256; got ${source.width}x${source.height}.`);
+      }
     }
   }
   this.currentWorldAssetsValidated = true;
@@ -629,6 +662,8 @@ export function getOrCreateWorldTerrainChunk(this: CrystalOathSceneContext, chun
     textureKey,
     terrainSources: this.currentSemanticTerrainSources(),
     terrainSourceLabels: WORLD_CURRENT_TERRAIN_TEXTURE_KEYS,
+    terrainVariantSources: this.currentSemanticTerrainVariantSources(),
+    terrainVariantSourceLabels: WORLD_CURRENT_TERRAIN_VARIANT_TEXTURE_KEYS,
     renderArea: { x: areaX, y: areaY, width: areaMaxX - areaX, height: areaMaxY - areaY }
   });
   const texture = this.textures.get(textureKey);

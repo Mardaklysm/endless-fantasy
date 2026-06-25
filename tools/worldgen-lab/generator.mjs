@@ -60,6 +60,8 @@ export function serializeWorld(world) {
       islandId: row(world.layers.islandId),
       waterClass: row(world.layers.waterClass),
       biome: row(world.layers.biome, (value) => BIOME_NAMES[value] ?? String(value)),
+      terrainVariant: row(world.layers.terrainVariant),
+      terrainPatchStrength: row(world.layers.terrainPatchStrength, round),
       distanceToLand: row(world.layers.distanceToLand),
       distanceToWater: row(world.layers.distanceToWater),
       elevation: row(world.layers.elevation, round),

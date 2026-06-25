@@ -96,6 +96,7 @@ export interface WorldCurrentAssetManifest {
     giantTransitionTilesets: boolean;
   };
   semanticTerrain: Record<SemanticMaskTerrainClass, string>;
+  semanticTerrainVariants?: Partial<Record<SemanticMaskTerrainClass, string[]>>;
   routeMappings: Record<string, string>;
   premiumRouteMappings?: Record<string, string>;
   poiMappings: Record<string, string>;
@@ -160,6 +161,7 @@ export const WORLD_CURRENT_ASSET_BY_TEXTURE_KEY = Object.fromEntries(WORLD_CURRE
 >;
 export const WORLD_CURRENT_TEXTURE_KEY_SET = new Set(WORLD_CURRENT_ASSETS.map((asset) => asset.textureKey));
 export const WORLD_CURRENT_TERRAIN_TEXTURE_KEYS = WORLD_CURRENT_ASSET_MANIFEST.semanticTerrain;
+export const WORLD_CURRENT_TERRAIN_VARIANT_TEXTURE_KEYS = WORLD_CURRENT_ASSET_MANIFEST.semanticTerrainVariants ?? {};
 export const WORLD_CURRENT_BACKUP_ROUTE_TEXTURE_KEYS = WORLD_CURRENT_ASSET_MANIFEST.routeMappings;
 export const WORLD_CURRENT_BACKUP_POI_TEXTURE_KEYS = WORLD_CURRENT_ASSET_MANIFEST.poiMappings;
 export const WORLD_CURRENT_BACKUP_OBJECT_TEXTURE_KEY_BY_ID = WORLD_CURRENT_ASSET_MANIFEST.objectMappings;

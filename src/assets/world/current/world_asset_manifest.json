@@ -43,6 +43,32 @@
     "ash": "world_current_terrain_black_ash_ground",
     "ice": "world_current_terrain_v1_atlas_snow"
   },
+  "semanticTerrainVariants": {
+    "beach": [
+      "world_current_terrain_warm_dry_beach_sand",
+      "world_current_terrain_coral_white_tropical_sand"
+    ],
+    "grassland": [
+      "world_current_terrain_soft_meadow_grass",
+      "world_current_terrain_highland_grass_stone_flecks",
+      "world_current_terrain_dry_yellow_green_grass"
+    ],
+    "sand": [
+      "world_current_terrain_warm_dry_beach_sand",
+      "world_current_terrain_coral_white_tropical_sand",
+      "world_current_terrain_red_desert_sand"
+    ],
+    "ash": [
+      "world_current_terrain_dark_basalt_ground",
+      "world_current_terrain_scorched_dirt",
+      "world_current_terrain_lava_crust"
+    ],
+    "ice": [
+      "world_current_terrain_snow",
+      "world_current_terrain_fine_gravel_ground",
+      "world_current_terrain_mountain_scree_ground"
+    ]
+  },
   "routeMappings": {
     "dockHorizontal": "world_current_object_dock_wooden_small_02",
     "dockVertical": "world_current_object_dock_wooden_t_shape_01",

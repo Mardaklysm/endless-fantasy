@@ -260,6 +260,8 @@ export interface SemanticWorldLayers {
   distanceToWater: Int16Array;
   waterClass: Uint8Array;
   biome: Uint8Array;
+  terrainVariant: Uint8Array;
+  terrainPatchStrength: Float32Array;
   moisture: Float32Array;
   temperature: Float32Array;
   coldness: Float32Array;

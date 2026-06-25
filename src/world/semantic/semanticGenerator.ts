@@ -121,6 +121,7 @@ export function generateSemanticWorld(options: {
   const ridge = createRidgeField(width, height, seed, landMask, distanceToWater, islandId, islands);
   const elevation = finalizeElevation(width, height, seed, landMask, distanceToWater, ridge);
   const biome = classifyBiomes(width, height, landMask, distanceToWater, islandId, islands, elevation, moisture, coldness);
+  const { terrainVariant, terrainPatchStrength } = createTerrainPatchFields(width, height, seed, landMask, waterClass, biome, islandId, islands, moisture, elevation, ridge, distanceToWater);
   const mountainMap = new Uint8Array(width * height);
   const mountainCandidateScore = new Float32Array(width * height);
   let { mountains, mountainRanges, mountainDebug } = placeMountains(width, height, seed, landMask, distanceToWater, islandId, islands, biome, elevation, ridge, coldness, mountainCandidateScore, mountainMap);
@@ -150,6 +151,8 @@ export function generateSemanticWorld(options: {
     distanceToWater,
     waterClass,
     biome,
+    terrainVariant,
+    terrainPatchStrength,
     moisture,
     temperature,
     coldness,
@@ -685,6 +688,308 @@ function smoothBiomes(
     current = next;
   }
   return current;
+}
+
+function createTerrainPatchFields(
+  width: number,
+  height: number,
+  seed: string,
+  landMask: Uint8Array,
+  waterClass: Uint8Array,
+  biome: Uint8Array,
+  islandId: Int16Array,
+  islands: SemanticIslandRecord[],
+  moisture: Float32Array,
+  elevation: Float32Array,
+  ridge: Float32Array,
+  distanceToWater: Int16Array
+): { terrainVariant: Uint8Array; terrainPatchStrength: Float32Array } {
+  const terrainVariant = new Uint8Array(width * height);
+  const terrainPatchStrength = new Float32Array(width * height);
+  const islandByOrder = new Map(islands.map((island) => [island.order + 1, island]));
+
+  forEachCell(width, height, (x, y, i) => {
+    if (!landMask[i] || waterClass[i] !== SEMANTIC_WATER.NONE) return;
+    const island = islandByOrder.get(islandId[i]);
+    const choice = terrainPatchChoiceForCell(seed, x, y, i, island, biome, moisture, elevation, ridge, distanceToWater);
+    if (!choice) return;
+    terrainVariant[i] = choice.variant;
+    terrainPatchStrength[i] = choice.strength;
+  });
+
+  removeTinyTerrainPatchComponents(width, height, terrainVariant, terrainPatchStrength);
+  softenTerrainPatchEdges(width, height, terrainVariant, terrainPatchStrength);
+  return { terrainVariant, terrainPatchStrength };
+}
+
+function terrainPatchChoiceForCell(
+  seed: string,
+  x: number,
+  y: number,
+  i: number,
+  island: SemanticIslandRecord | undefined,
+  biome: Uint8Array,
+  moisture: Float32Array,
+  elevation: Float32Array,
+  ridge: Float32Array,
+  distanceToWater: Int16Array
+): { variant: 1 | 2 | 3; strength: number } | undefined {
+  if (biome[i] === SEMANTIC_BIOME.BEACH) return beachPatchChoice(seed, x, y, i, island, moisture, elevation, distanceToWater);
+  if (island?.theme === "ashfall" && biome[i] === SEMANTIC_BIOME.SAND) return ashPatchChoice(seed, x, y, i, moisture, elevation, ridge, distanceToWater);
+  if (biome[i] === SEMANTIC_BIOME.ICE) return icePatchChoice(seed, x, y, i, island, moisture, elevation, ridge, distanceToWater);
+  if (biome[i] === SEMANTIC_BIOME.SAND) return sandPatchChoice(seed, x, y, i, island, moisture, elevation, ridge, distanceToWater);
+  if (biome[i] === SEMANTIC_BIOME.GRASS) return grassPatchChoice(seed, x, y, i, island, moisture, elevation, ridge, distanceToWater);
+  return undefined;
+}
+
+function grassPatchChoice(
+  seed: string,
+  x: number,
+  y: number,
+  i: number,
+  island: SemanticIslandRecord | undefined,
+  moisture: Float32Array,
+  elevation: Float32Array,
+  ridge: Float32Array,
+  distanceToWater: Int16Array
+): { variant: 1 | 2 | 3; strength: number } | undefined {
+  const theme = island?.theme ?? "minor";
+  const role = island?.role;
+  const midMoisture = 1 - Math.abs(moisture[i] - 0.54) * 2;
+  const inland = clamp01(distanceToWater[i] / 12);
+  const flat = 1 - Math.abs(elevation[i] - 0.34) * 2.2;
+  let meadow =
+    patchBlob(seed, "meadow", x, y, theme === "grassland" ? 13.5 : 11.5, 0.61, 0.2) +
+    clamp01(midMoisture) * 0.11 +
+    clamp01(flat) * 0.06 -
+    ridge[i] * 0.05;
+  let rocky =
+    patchBlob(seed, "rock", x, y, theme === "mixed_highland" ? 10.5 : 12.5, 0.62, 0.2) +
+    ridge[i] * (theme === "mixed_highland" ? 0.28 : 0.18) +
+    elevation[i] * 0.1 -
+    moisture[i] * 0.06;
+  let dry =
+    patchBlob(seed, "dry", x, y, theme === "grassland" ? 14.5 : 12, 0.64, 0.2) +
+    (1 - moisture[i]) * 0.13 +
+    inland * 0.06 +
+    elevation[i] * 0.06;
+
+  if (theme === "mixed_highland") {
+    rocky += 0.04;
+    meadow += moisture[i] * 0.03;
+  } else if (theme === "grassland") {
+    meadow += 0.1;
+    rocky -= 0.04;
+  } else if (role === "treasure" || role === "resource" || role === "shrine") {
+    meadow += 0.12;
+    dry -= 0.04;
+  } else if (role === "cave") {
+    rocky += 0.14;
+  } else if (role === "harbor") {
+    meadow += clamp01(1 - distanceToWater[i] / 5) * 0.1;
+  }
+
+  return strongestTerrainPatch([
+    { variant: 1, strength: meadow },
+    { variant: 2, strength: rocky },
+    { variant: 3, strength: dry }
+  ], theme === "mixed_highland" ? 0.48 : theme === "grassland" ? 0.24 : 0.36);
+}
+
+function sandPatchChoice(
+  seed: string,
+  x: number,
+  y: number,
+  i: number,
+  island: SemanticIslandRecord | undefined,
+  moisture: Float32Array,
+  elevation: Float32Array,
+  ridge: Float32Array,
+  distanceToWater: Int16Array
+): { variant: 1 | 2 | 3; strength: number } | undefined {
+  const nearWater = clamp01(1 - distanceToWater[i] / 4);
+  const inland = clamp01(distanceToWater[i] / 14);
+  const dune =
+    patchBlob(seed, "dry", x, y, 13, 0.63, 0.21) +
+    inland * 0.16 +
+    (1 - moisture[i]) * 0.08;
+  const tropical =
+    patchBlob(seed, "meadow", x, y, 12, 0.64, 0.19) +
+    nearWater * (island?.theme === "sand_coast" || island?.role === "harbor" ? 0.18 : 0.1) -
+    elevation[i] * 0.04;
+  const redRock =
+    patchBlob(seed, "rock", x, y, 11, 0.66, 0.18) +
+    ridge[i] * 0.16 +
+    elevation[i] * 0.09 -
+    nearWater * 0.08;
+
+  return strongestTerrainPatch([
+    { variant: 1, strength: dune + (island?.theme === "sand_coast" ? 0.06 : 0) },
+    { variant: 2, strength: tropical },
+    { variant: 3, strength: redRock }
+  ], island?.theme === "sand_coast" ? 0.34 : 0.38);
+}
+
+function beachPatchChoice(
+  seed: string,
+  x: number,
+  y: number,
+  i: number,
+  island: SemanticIslandRecord | undefined,
+  moisture: Float32Array,
+  elevation: Float32Array,
+  distanceToWater: Int16Array
+): { variant: 1 | 2 | 3; strength: number } | undefined {
+  const wetEdge = clamp01(1 - distanceToWater[i] / 2.4);
+  const warm =
+    patchBlob(seed, "dry", x, y, 10, 0.66, 0.18) +
+    (1 - moisture[i]) * 0.08 +
+    elevation[i] * 0.04;
+  const coral =
+    patchBlob(seed, "meadow", x, y, 12, 0.64, 0.18) +
+    wetEdge * (island?.theme === "sand_coast" || island?.role === "harbor" ? 0.18 : 0.08);
+  return strongestTerrainPatch([
+    { variant: 1, strength: warm },
+    { variant: 2, strength: coral }
+  ], 0.38);
+}
+
+function icePatchChoice(
+  seed: string,
+  x: number,
+  y: number,
+  i: number,
+  island: SemanticIslandRecord | undefined,
+  moisture: Float32Array,
+  elevation: Float32Array,
+  ridge: Float32Array,
+  distanceToWater: Int16Array
+): { variant: 1 | 2 | 3; strength: number } | undefined {
+  const lowFlat = clamp01(1 - elevation[i] * 1.8) * clamp01(1 - ridge[i] * 2.2);
+  const inland = clamp01(distanceToWater[i] / 10);
+  const snowdrift =
+    patchBlob(seed, "snowdrift", x, y, 14, 0.65, 0.2) +
+    lowFlat * 0.16 +
+    moisture[i] * 0.05;
+  const ice =
+    patchBlob(seed, "moss", x, y, 12, 0.66, 0.19) +
+    clamp01(moisture[i] + inland * 0.4) * 0.08;
+  const exposedRock =
+    patchBlob(seed, "rock", x, y, 10.5, 0.68, 0.18) +
+    ridge[i] * 0.24 +
+    elevation[i] * 0.13 -
+    lowFlat * 0.06;
+
+  return strongestTerrainPatch([
+    { variant: 1, strength: snowdrift + (island?.theme === "ice" ? 0.08 : 0) },
+    { variant: 2, strength: ice },
+    { variant: 3, strength: exposedRock }
+  ], 0.44);
+}
+
+function ashPatchChoice(
+  seed: string,
+  x: number,
+  y: number,
+  i: number,
+  moisture: Float32Array,
+  elevation: Float32Array,
+  ridge: Float32Array,
+  distanceToWater: Int16Array
+): { variant: 1 | 2 | 3; strength: number } | undefined {
+  const inland = clamp01(distanceToWater[i] / 9);
+  const cinder =
+    patchBlob(seed, "cinder", x, y, 12.5, 0.6, 0.22) +
+    inland * 0.1 +
+    (1 - moisture[i]) * 0.06;
+  const scorched =
+    patchBlob(seed, "dry", x, y, 11, 0.62, 0.2) +
+    (1 - moisture[i]) * 0.12 +
+    elevation[i] * 0.04;
+  const crust =
+    patchBlob(seed, "rock", x, y, 9.5, 0.7, 0.16) +
+    ridge[i] * 0.18 +
+    elevation[i] * 0.12;
+  return strongestTerrainPatch([
+    { variant: 1, strength: cinder + 0.08 },
+    { variant: 2, strength: scorched },
+    { variant: 3, strength: crust }
+  ], 0.5);
+}
+
+function strongestTerrainPatch(candidates: Array<{ variant: 1 | 2 | 3; strength: number }>, minStrength = 0.28): { variant: 1 | 2 | 3; strength: number } | undefined {
+  let best: { variant: 1 | 2 | 3; strength: number } | undefined;
+  for (const candidate of candidates) {
+    if (!best || candidate.strength > best.strength) best = candidate;
+  }
+  if (!best || best.strength < minStrength) return undefined;
+  return { variant: best.variant, strength: clamp(best.strength, 0.22, 0.88) };
+}
+
+function patchBlob(seed: string, family: "meadow" | "moss" | "dry" | "rock" | "snowdrift" | "cinder", x: number, y: number, scale: number, threshold: number, feather: number): number {
+  const familySeed = `${seed}:terrain-patch:${family}`;
+  const warpX = fbm(`${familySeed}:warp-x`, x / 31, y / 31, 3) - 0.5;
+  const warpY = fbm(`${familySeed}:warp-y`, x / 29, y / 29, 3) - 0.5;
+  const body = fbm(familySeed, (x + warpX * 7) / scale, (y + warpY * 7) / scale, 4);
+  return smoothstepRange(threshold, threshold + feather, body);
+}
+
+function removeTinyTerrainPatchComponents(width: number, height: number, terrainVariant: Uint8Array, terrainPatchStrength: Float32Array): void {
+  const seen = new Uint8Array(width * height);
+  forEachCell(width, height, (x, y, i) => {
+    if (!terrainVariant[i] || seen[i]) return;
+    const variant = terrainVariant[i];
+    const component: number[] = [];
+    const queue: SemanticVec[] = [{ x, y }];
+    seen[i] = 1;
+    let maxStrength = terrainPatchStrength[i];
+    for (let head = 0; head < queue.length; head += 1) {
+      const cell = queue[head];
+      const ci = index(width, cell.x, cell.y);
+      component.push(ci);
+      maxStrength = Math.max(maxStrength, terrainPatchStrength[ci]);
+      for (let yy = cell.y - 1; yy <= cell.y + 1; yy += 1) {
+        for (let xx = cell.x - 1; xx <= cell.x + 1; xx += 1) {
+          if (xx === cell.x && yy === cell.y) continue;
+          if (!inBounds(width, height, xx, yy)) continue;
+          const ni = index(width, xx, yy);
+          if (seen[ni] || terrainVariant[ni] !== variant) continue;
+          seen[ni] = 1;
+          queue.push({ x: xx, y: yy });
+        }
+      }
+    }
+    if (component.length >= 3 || maxStrength >= 0.84) return;
+    for (const ci of component) {
+      terrainVariant[ci] = 0;
+      terrainPatchStrength[ci] = 0;
+    }
+  });
+}
+
+function softenTerrainPatchEdges(width: number, height: number, terrainVariant: Uint8Array, terrainPatchStrength: Float32Array): void {
+  const nextStrength = new Float32Array(terrainPatchStrength);
+  forEachCell(width, height, (x, y, i) => {
+    const variant = terrainVariant[i];
+    if (!variant) return;
+    let matchingNeighbors = 0;
+    for (let yy = y - 1; yy <= y + 1; yy += 1) {
+      for (let xx = x - 1; xx <= x + 1; xx += 1) {
+        if (xx === x && yy === y) continue;
+        if (!inBounds(width, height, xx, yy)) continue;
+        if (terrainVariant[index(width, xx, yy)] === variant) matchingNeighbors += 1;
+      }
+    }
+    if (matchingNeighbors < 2 && terrainPatchStrength[i] < 0.84) {
+      terrainVariant[i] = 0;
+      nextStrength[i] = 0;
+    } else if (matchingNeighbors < 4) {
+      nextStrength[i] *= 0.58;
+    } else if (matchingNeighbors < 6) {
+      nextStrength[i] *= 0.76;
+    }
+  });
+  terrainPatchStrength.set(nextStrength);
 }
 
 function placeMountains(
@@ -2875,6 +3180,11 @@ function clamp(value: number, min: number, max: number): number {
 
 function clamp01(value: number): number {
   return clamp(value, 0, 1);
+}
+
+function smoothstepRange(edge0: number, edge1: number, value: number): number {
+  const t = clamp01((value - edge0) / Math.max(0.0001, edge1 - edge0));
+  return t * t * (3 - 2 * t);
 }
 
 function round(value: number): number {

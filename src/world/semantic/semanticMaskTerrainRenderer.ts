@@ -5,12 +5,15 @@ import { SEMANTIC_BIOME, SEMANTIC_WATER, type IslandRoadProfile, type IslandRoad
 
 export type SemanticMaskTerrainClass = "deepOcean" | "shallowWater" | "freshWater" | "road" | "beach" | "grassland" | "sand" | "ash" | "ice";
 export type SemanticMaskTerrainSources = Partial<Record<SemanticMaskTerrainClass, CanvasImageSource & { width: number; height: number }>>;
+export type SemanticMaskTerrainVariantSources = Partial<Record<SemanticMaskTerrainClass, Array<CanvasImageSource & { width: number; height: number }>>>;
 
 export interface SemanticMaskTerrainRenderOptions {
   tileSize: number;
   textureKey?: string;
   terrainSources?: SemanticMaskTerrainSources;
   terrainSourceLabels?: Partial<Record<SemanticMaskTerrainClass, string>>;
+  terrainVariantSources?: SemanticMaskTerrainVariantSources;
+  terrainVariantSourceLabels?: Partial<Record<SemanticMaskTerrainClass, string[]>>;
   maskPixelsPerCell?: number;
   collectStats?: boolean;
   renderArea?: { x: number; y: number; width: number; height: number };
@@ -111,6 +114,7 @@ export function createSemanticMaskTerrainCanvas(world: SemanticWorld, options: S
     if (terrainClass === "road") drawRoadMaskedTerrainClass(ctx, world, plan, classGrid);
     else drawMaskedTerrainClass(ctx, plan, classGrid, TERRAIN_CLASS_IDS[terrainClass], fillStyles[terrainClass]);
   }
+  drawTerrainVariantLayers(ctx, world, plan, classGrid, options.terrainVariantSources);
   drawMaskBoundaryAccents(ctx, world, plan, classGrid);
 
   return canvas;
@@ -545,6 +549,78 @@ function drawMaskedTerrainClass(
   ctx.drawImage(layerCanvas, 0, 0);
 }
 
+function drawTerrainVariantLayers(
+  ctx: CanvasRenderingContext2D,
+  world: SemanticWorld,
+  plan: SemanticMaskTerrainRenderPlan,
+  classGrid: Uint8Array,
+  terrainVariantSources: SemanticMaskTerrainVariantSources | undefined
+) {
+  if (!terrainVariantSources || !world.layers.terrainVariant || !world.layers.terrainPatchStrength) return;
+  for (const terrainClass of TERRAIN_CLASSES) {
+    if (terrainClass === "road" || terrainClass === "deepOcean" || terrainClass === "shallowWater" || terrainClass === "freshWater") continue;
+    const sources = terrainVariantSources[terrainClass];
+    if (!sources?.length || plan.classSamples[terrainClass] <= 0) continue;
+    const terrainClassId = TERRAIN_CLASS_IDS[terrainClass];
+    for (let slotIndex = 0; slotIndex < Math.min(3, sources.length); slotIndex += 1) {
+      const fillStyle = createTerrainPattern(ctx, sources[slotIndex], plan.tileSize, COLORS.grassEdge);
+      drawTerrainVariantLayer(ctx, world, plan, classGrid, terrainClassId, terrainClass, slotIndex + 1, fillStyle);
+    }
+  }
+}
+
+function drawTerrainVariantLayer(
+  ctx: CanvasRenderingContext2D,
+  world: SemanticWorld,
+  plan: SemanticMaskTerrainRenderPlan,
+  classGrid: Uint8Array,
+  terrainClassId: TerrainClassId,
+  terrainClass: SemanticMaskTerrainClass,
+  variantSlot: number,
+  fillStyle: CanvasPattern | string
+) {
+  const maskCanvas = document.createElement("canvas");
+  maskCanvas.width = plan.maskWidth;
+  maskCanvas.height = plan.maskHeight;
+  const maskCtx = maskCanvas.getContext("2d");
+  if (!maskCtx) throw new Error("Unable to create semantic terrain variant mask canvas.");
+  maskCtx.imageSmoothingEnabled = false;
+  const globalMaskOriginX = Math.floor(plan.originX * plan.maskPixelsPerCell);
+  const globalMaskOriginY = Math.floor(plan.originY * plan.maskPixelsPerCell);
+
+  for (let my = 0; my < plan.maskHeight; my += 1) {
+    for (let mx = 0; mx < plan.maskWidth; mx += 1) {
+      if (terrainClassAt(classGrid, my * plan.maskWidth + mx) !== terrainClassId) continue;
+      const sampleX = plan.originX + (mx + 0.5) / plan.maskPixelsPerCell;
+      const sampleY = plan.originY + (my + 0.5) / plan.maskPixelsPerCell;
+      const cellX = clampInt(Math.floor(sampleX), 0, world.width - 1);
+      const cellY = clampInt(Math.floor(sampleY), 0, world.height - 1);
+      const cellIndex = cellY * world.width + cellX;
+      if (world.layers.terrainVariant[cellIndex] !== variantSlot) continue;
+      const baseStrength = sampleNumeric(world, world.layers.terrainPatchStrength, sampleX, sampleY);
+      if (baseStrength <= 0.05) continue;
+      const noise = hashNoise(`${world.seed}:mask-terrain-variant:${terrainClass}:${variantSlot}`, globalMaskOriginX + mx, globalMaskOriginY + my);
+      const brokenAlpha = clamp01(baseStrength * (0.72 + noise * 0.42) - (noise < 0.1 && baseStrength < 0.55 ? 0.16 : 0));
+      if (brokenAlpha <= 0.04) continue;
+      maskCtx.fillStyle = `rgba(255, 255, 255, ${brokenAlpha.toFixed(3)})`;
+      maskCtx.fillRect(mx, my, 1, 1);
+    }
+  }
+
+  const layerCanvas = document.createElement("canvas");
+  layerCanvas.width = plan.width;
+  layerCanvas.height = plan.height;
+  const layerCtx = layerCanvas.getContext("2d");
+  if (!layerCtx) throw new Error("Unable to create semantic terrain variant layer canvas.");
+  layerCtx.imageSmoothingEnabled = false;
+  layerCtx.fillStyle = fillStyle;
+  layerCtx.fillRect(0, 0, plan.width, plan.height);
+  layerCtx.globalCompositeOperation = "destination-in";
+  layerCtx.drawImage(maskCanvas, 0, 0, plan.width, plan.height);
+  layerCtx.globalCompositeOperation = "source-over";
+  ctx.drawImage(layerCanvas, 0, 0);
+}
+
 function drawRoadMaskedTerrainClass(ctx: CanvasRenderingContext2D, world: SemanticWorld, plan: SemanticMaskTerrainRenderPlan, classGrid: Uint8Array) {
   for (let my = 0; my < plan.maskHeight; my += 1) {
     for (let mx = 0; mx < plan.maskWidth; mx += 1) {
@@ -765,6 +841,10 @@ function emptyClassSamples(): Record<SemanticMaskTerrainClass, number> {
 
 function clampInt(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
 }
 
 function lerp(a: number, b: number, t: number): number {
