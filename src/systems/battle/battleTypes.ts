@@ -6,6 +6,7 @@ export interface BattleAction {
   actorId: string;
   type: "attack" | "skill" | "spell" | "item" | "defend" | "run" | "skip";
   targetIndex?: number;
+  targetAll?: boolean;
   skillId?: string;
   spellId?: string;
   itemId?: string;

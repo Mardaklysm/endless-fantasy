@@ -119,6 +119,10 @@ export function confirmBattleSelection(this: CrystalOathSceneContext) {
     return;
   }
   if (this.battle.phase === "target") {
+    if (this.battle.pendingAction?.targetAll) {
+      this.executePlayerAction({ ...(this.battle.pendingAction as BattleAction), targetAll: true });
+      return;
+    }
     const living = this.battle.enemies.filter((e) => e.hp > 0);
     const target = living[this.battle.selected];
     const targetIndex = this.battle.enemies.indexOf(target);
@@ -162,6 +166,10 @@ export function confirmBattleSelection(this: CrystalOathSceneContext) {
     return;
   }
   if (this.battle.phase === "allyTarget") {
+    if (this.battle.pendingAction?.targetAll) {
+      this.executePlayerAction({ ...(this.battle.pendingAction as BattleAction), targetAll: true });
+      return;
+    }
     this.executePlayerAction({ ...(this.battle.pendingAction as BattleAction), targetIndex: this.battle.selected });
   }
 }
@@ -198,6 +206,7 @@ export function battleAnimationTarget(this: CrystalOathSceneContext, action: Bat
     return target ? { targetSide: "enemy", targetActorId: target.uid } : {};
   }
   if (action.type === "skill" && action.skillId) {
+    if (action.targetAll) return {};
     const skill = PLAYER_SKILLS[action.skillId];
     if (skill.target === "enemy") {
       const target = this.battle.enemies[action.targetIndex ?? -1] ?? this.battle.enemies.find((enemy) => enemy.hp > 0);
@@ -207,6 +216,7 @@ export function battleAnimationTarget(this: CrystalOathSceneContext, action: Bat
     return target ? { targetSide: "party", targetActorId: target.id } : {};
   }
   if (action.type === "spell" && action.spellId) {
+    if (action.targetAll) return {};
     const spell = SPELLS[action.spellId];
     if (spell.target === "enemy") {
       const target = this.battle.enemies[action.targetIndex ?? -1] ?? this.battle.enemies.find((enemy) => enemy.hp > 0);
@@ -301,10 +311,10 @@ export function resolvePartyAction(this: CrystalOathSceneContext, action: Battle
     return true;
   }
   if (action.type === "skill" && action.skillId) {
-    return this.usePlayerSkill(actor, action.skillId, action.targetIndex);
+    return this.usePlayerSkill(actor, action.skillId, action.targetIndex, action.targetAll);
   }
   if (action.type === "spell" && action.spellId) {
-    return this.castSpell(actor, action.spellId, action.targetIndex);
+    return this.castSpell(actor, action.spellId, action.targetIndex, action.targetAll);
   }
   if (action.type === "item" && action.itemId) {
     return this.useBattleItem(actor, action.itemId, action.targetIndex);
@@ -388,7 +398,7 @@ export function resolveEnemyAction(this: CrystalOathSceneContext, action: Battle
   return true;
 }
 
-export function usePlayerSkill(this: CrystalOathSceneContext, actor: CharacterState, skillId: string, targetIndex?: number): boolean {
+export function usePlayerSkill(this: CrystalOathSceneContext, actor: CharacterState, skillId: string, targetIndex?: number, targetAll = false): boolean {
   if (!this.battle) return false;
   const skill = PLAYER_SKILLS[skillId];
   if (!skill) return false;
@@ -432,33 +442,40 @@ export function usePlayerSkill(this: CrystalOathSceneContext, actor: CharacterSt
     return true;
   }
   if (skill.id === "fireSpark") {
-    const target = this.getLivingEnemy(targetIndex);
-    if (!target) return false;
-    let amount = 22 + actor.level * 4 + Phaser.Math.Between(0, 7) - Math.floor(target.defense / 2);
-    if (target.weak.includes("fire")) amount = Math.floor(amount * 1.45);
-    if (target.resist.includes("fire")) amount = Math.floor(amount * 0.55);
-    amount = Math.max(3, amount);
-    target.hp = Math.max(0, target.hp - amount);
-    this.queueBattleFloatingText("enemy", target.uid, -amount, target.maxHp, "damage");
-    if (Phaser.Math.Between(1, 100) <= 45) target.statuses.burn = 3;
-    this.battle.log.push(`${actor.name} casts Fire Spark. ${target.name} takes ${amount}${target.statuses.burn ? " and burns" : ""}.`);
+    const targets = targetAll ? this.battle.enemies.filter((e) => e.hp > 0) : [this.getLivingEnemy(targetIndex)].filter(Boolean) as EnemyState[];
+    if (!targets.length) return false;
+    const spreadCount = targetAll ? targets.length : 1;
+    for (const target of targets) {
+      let amount = 22 + actor.level * 4 + Phaser.Math.Between(0, 7) - Math.floor(target.defense / 2);
+      if (target.weak.includes("fire")) amount = Math.floor(amount * 1.45);
+      if (target.resist.includes("fire")) amount = Math.floor(amount * 0.55);
+      amount = Math.max(3, Math.floor(amount / spreadCount));
+      target.hp = Math.max(0, target.hp - amount);
+      this.queueBattleFloatingText("enemy", target.uid, -amount, target.maxHp, "damage");
+      if (Phaser.Math.Between(1, 100) <= 45) target.statuses.burn = 3;
+      this.battle.log.push(`${actor.name} casts Fire Spark. ${target.name} takes ${amount}${target.statuses.burn ? " and burns" : ""}.`);
+    }
     this.setSkillCooldown(actor, skill);
     this.audio.blip("spell");
     return true;
   }
   if (skill.id === "firstAid") {
-    const target = this.party[targetIndex ?? this.party.indexOf(actor)];
-    if (!target || target.hp <= 0) {
+    const targets = targetAll ? this.party.filter((c) => c.hp > 0) : [this.party[targetIndex ?? this.party.indexOf(actor)]].filter(Boolean);
+    if (!targets.some((target) => target.hp > 0)) {
       this.battle.log.push("First Aid needs a standing ally.");
       return false;
     }
-    const amount = 22 + actor.level * 3;
-    const before = target.hp;
-    target.hp = Math.min(target.maxHp, target.hp + amount);
-    const recovered = target.hp - before;
-    if (recovered > 0) this.queueBattleFloatingText("party", target.id, recovered, target.maxHp, "heal");
-    delete target.statuses.bleed;
-    this.battle.log.push(`${actor.name} uses First Aid. ${target.name} recovers ${amount}.`);
+    const spreadCount = targetAll ? targets.length : 1;
+    for (const target of targets) {
+      if (target.hp <= 0) continue;
+      const amount = Math.max(1, Math.floor((22 + actor.level * 3) / spreadCount));
+      const before = target.hp;
+      target.hp = Math.min(target.maxHp, target.hp + amount);
+      const recovered = target.hp - before;
+      if (recovered > 0) this.queueBattleFloatingText("party", target.id, recovered, target.maxHp, "heal");
+      delete target.statuses.bleed;
+      this.battle.log.push(`${actor.name} uses First Aid. ${target.name} recovers ${amount}.`);
+    }
     this.setSkillCooldown(actor, skill);
     this.audio.blip("spell");
     return true;
@@ -485,7 +502,7 @@ export function setSkillCooldown(this: CrystalOathSceneContext, actor: Character
   actor.skillCooldowns[skill.id] = skill.cooldown;
 }
 
-export function castSpell(this: CrystalOathSceneContext, actor: CharacterState, spellId: string, targetIndex?: number): boolean {
+export function castSpell(this: CrystalOathSceneContext, actor: CharacterState, spellId: string, targetIndex?: number, targetAll = false): boolean {
   if (!this.battle) return false;
   const spell = SPELLS[spellId];
   const mpCost = this.battleSpellMpCost(spellId);
@@ -494,16 +511,17 @@ export function castSpell(this: CrystalOathSceneContext, actor: CharacterState, 
     return false;
   }
   if (spell.kind === "heal") {
-    const targets = spell.target === "allAllies" ? this.party.filter((c) => c.hp > 0) : [this.party[targetIndex ?? 0]].filter(Boolean);
+    const targets = targetAll || spell.target === "allAllies" ? this.party.filter((c) => c.hp > 0) : [this.party[targetIndex ?? 0]].filter(Boolean);
     if (!targets.some((target) => target.hp > 0)) {
       this.battle.log.push(`${spell.name} needs a standing ally.`);
       return false;
     }
     actor.mp = Math.max(0, actor.mp - mpCost);
     this.audio.blip("spell");
+    const spreadCount = targetAll || spell.target === "allAllies" ? targets.length : 1;
     for (const target of targets) {
       if (target.hp <= 0) continue;
-      const amount = spell.power + actor.level * 4 + Phaser.Math.Between(0, 8);
+      const amount = Math.max(1, Math.floor((spell.power + actor.level * 4 + Phaser.Math.Between(0, 8)) / spreadCount));
       const before = target.hp;
       target.hp = Math.min(target.maxHp, target.hp + amount);
       const recovered = target.hp - before;
@@ -541,17 +559,18 @@ export function castSpell(this: CrystalOathSceneContext, actor: CharacterState, 
     this.battle.log.push(`${actor.name} casts ${spell.name}. A guard of starlight rises.`);
     return true;
   }
-  const targets = spell.target === "allEnemies" ? this.battle.enemies.filter((e) => e.hp > 0) : [this.getLivingEnemy(targetIndex)].filter(Boolean) as EnemyState[];
+  const targets = targetAll || spell.target === "allEnemies" ? this.battle.enemies.filter((e) => e.hp > 0) : [this.getLivingEnemy(targetIndex)].filter(Boolean) as EnemyState[];
   if (!targets.length) return false;
   actor.mp = Math.max(0, actor.mp - mpCost);
   this.audio.blip("spell");
+  const spreadCount = targetAll || spell.target === "allEnemies" ? targets.length : 1;
   for (const target of targets) {
     let amount = spell.power + actor.level * 5 + Phaser.Math.Between(0, 8) - Math.floor(this.effectiveEnemyDefense(target) / 2);
     if (target.weak.includes(spell.element)) amount = Math.floor(amount * 1.45);
     if (target.resist.includes(spell.element)) amount = Math.floor(amount * 0.55);
     if (target.statuses.weakness) amount = Math.floor(amount * 1.2);
     if (target.statuses.guarded) amount = Math.ceil(amount * 0.7);
-    amount = Math.max(2, amount);
+    amount = Math.max(2, Math.floor(amount / spreadCount));
     target.hp = Math.max(0, target.hp - amount);
     this.queueBattleFloatingText("enemy", target.uid, -amount, target.maxHp, "damage");
     this.battle.log.push(`${actor.name} casts ${spell.name}. ${target.name} takes ${amount}.`);

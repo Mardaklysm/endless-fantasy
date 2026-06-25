@@ -63,10 +63,11 @@ export function drawBattle(this: CrystalOathSceneContext) {
   const selectedAlly = this.selectedBattleAlly();
   const targetingEnemies = this.battle.phase === "target";
   const targetingAllies = this.battle.phase === "allyTarget";
+  const targetingAll = !!this.battle.pendingAction?.targetAll;
   this.battle.enemies.forEach((enemy, idx) => {
     if (enemy.hp <= 0) return;
     const slot = this.enemyBattleSlot(enemy, idx);
-    const targeted = selectedEnemy?.uid === enemy.uid;
+    const targeted = targetingEnemies && targetingAll ? enemy.hp > 0 : selectedEnemy?.uid === enemy.uid;
     const offset = this.battleActorOffset("enemy", enemy.uid);
     this.drawBattleEnemy(enemy, slot.x + offset.x, slot.y + offset.y, slot.size, targeted, targetingEnemies);
   });
@@ -78,7 +79,8 @@ export function drawBattle(this: CrystalOathSceneContext) {
       this.currentBattleEntry()?.actorId === member.id &&
       !this.battle?.animation &&
       this.battle?.phase !== "resolving";
-    this.drawPartyBattler(member, slot.x + offset.x, slot.y + offset.y, idx, active, slot.facing, selectedAlly?.id === member.id, targetingAllies);
+    const targeted = targetingAllies && targetingAll ? member.hp > 0 : selectedAlly?.id === member.id;
+    this.drawPartyBattler(member, slot.x + offset.x, slot.y + offset.y, idx, active, slot.facing, targeted, targetingAllies);
   });
   this.drawBattleFloatingTexts();
   this.drawBattleTurnCarousel();
@@ -174,11 +176,13 @@ export function battleActorOffset(this: CrystalOathSceneContext, side: "party" |
 
 export function selectedBattleEnemy(this: CrystalOathSceneContext): EnemyState | undefined {
   if (!this.battle || this.battle.phase !== "target") return undefined;
+  if (this.battle.pendingAction?.targetAll) return undefined;
   return this.battle.enemies.filter((enemy) => enemy.hp > 0)[this.battle.selected];
 }
 
 export function selectedBattleAlly(this: CrystalOathSceneContext): CharacterState | undefined {
   if (!this.battle || this.battle.phase !== "allyTarget") return undefined;
+  if (this.battle.pendingAction?.targetAll) return undefined;
   return this.party[this.battle.selected] ?? this.party[0];
 }
 

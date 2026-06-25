@@ -366,10 +366,44 @@ export function adjustBattleSelection(this: CrystalOathSceneContext, move: Battl
     return;
   }
   if ((this.battle.phase === "target" || this.battle.phase === "allyTarget") && (move === "left" || move === "right")) {
+    if (move === "left") {
+      if (canPendingActionTargetAll.call(this)) {
+        this.battle.pendingAction = { ...this.battle.pendingAction, targetAll: true };
+        this.audio.blip("confirm");
+      } else {
+        this.audio.blip("error");
+      }
+      return;
+    }
+    if (this.battle.pendingAction?.targetAll) {
+      this.battle.pendingAction = { ...this.battle.pendingAction, targetAll: false };
+      this.audio.blip("confirm");
+      return;
+    }
     const step = move === "right" ? 1 : -1;
     this.battle.selected = wrap(this.battle.selected + step, options.length);
   } else {
     this.battle.selected = wrap(this.battle.selected + (move === "down" || move === "right" ? 1 : -1), options.length);
   }
   this.audio.blip("confirm");
+}
+
+function canPendingActionTargetAll(this: CrystalOathSceneContext): boolean {
+  if (!this.battle?.pendingAction) return false;
+  const action = this.battle.pendingAction;
+  if (this.battle.phase === "target") {
+    if (action.type === "spell" && action.spellId) {
+      const spell = SPELLS[action.spellId];
+      return spell?.caster === "mage" && spell.kind === "damage";
+    }
+    if (action.type === "skill" && action.skillId) return action.skillId === "fireSpark";
+  }
+  if (this.battle.phase === "allyTarget") {
+    if (action.type === "spell" && action.spellId) {
+      const spell = SPELLS[action.spellId];
+      return spell?.caster === "priest" && spell.kind === "heal";
+    }
+    if (action.type === "skill" && action.skillId) return action.skillId === "firstAid";
+  }
+  return false;
 }

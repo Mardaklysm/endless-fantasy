@@ -343,7 +343,7 @@ export function handleBattle(this: CrystalOathSceneContext, event: KeyboardEvent
     this.markDirty();
     return;
   }
-  if (isBattleBack(event, this.battle.phase)) {
+  if (isBattleBack(event)) {
     this.cancelBattleSubmenu();
     this.markDirty();
     return;
@@ -357,7 +357,6 @@ export function handleBattle(this: CrystalOathSceneContext, event: KeyboardEvent
   this.markDirty();
 }
 
-function isBattleBack(event: KeyboardEvent, phase: string) {
-  if (isCancel(event) || event.code === "Backspace" || event.code === "Delete" || event.key === "Backspace" || event.key === "Delete") return true;
-  return phase !== "command" && (event.code === "ArrowLeft" || event.key === "ArrowLeft");
+function isBattleBack(event: KeyboardEvent) {
+  return isCancel(event);
 }
