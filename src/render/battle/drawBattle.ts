@@ -648,18 +648,39 @@ function drawVictoryLevelUpCard(this: CrystalOathSceneContext, level: BattleLeve
   const portraitX = x + 8;
   const portraitY = y + 7;
   const portraitSize = 40;
+  const portraitInset = 2;
   this.ui.fillStyle(0x020714, 0.96).fillRect(portraitX - 2, portraitY - 2, portraitSize + 4, portraitSize + 4);
   this.ui.lineStyle(1, BATTLE_UI.goldBright, 0.76).strokeRect(portraitX - 2, portraitY - 2, portraitSize + 4, portraitSize + 4);
   const member = this.party.find((candidate) => candidate.id === level.characterId);
   if (member) {
     const texture = PORTRAIT_TEXTURES[member.id];
     if (texture && this.hasTexture(texture)) {
-      this.drawCoveredTexture(texture, portraitX, portraitY, portraitSize, portraitSize, LAYER_UI_IMAGE + 4, 1);
+      this.drawContainedTexture(
+        texture,
+        portraitX + portraitInset,
+        portraitY + portraitInset,
+        portraitSize - portraitInset * 2,
+        portraitSize - portraitInset * 2,
+        LAYER_UI_IMAGE + 4,
+        1
+      );
     } else {
-      drawVictoryPortraitFallback.call(this, member, portraitX, portraitY, portraitSize, portraitSize);
+      drawVictoryPortraitFallback.call(
+        this,
+        member,
+        portraitX + portraitInset,
+        portraitY + portraitInset,
+        portraitSize - portraitInset * 2,
+        portraitSize - portraitInset * 2
+      );
     }
   } else {
-    this.ui.fillStyle(0x0b1525, 1).fillRect(portraitX, portraitY, portraitSize, portraitSize);
+    this.ui.fillStyle(0x0b1525, 1).fillRect(
+      portraitX + portraitInset,
+      portraitY + portraitInset,
+      portraitSize - portraitInset * 2,
+      portraitSize - portraitInset * 2
+    );
   }
   this.text(x + 58, y + 9, level.name, 11, "#ffd98a", "left", {
     wordWrapWidth: 62,
