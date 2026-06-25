@@ -20,8 +20,8 @@ export function drawMenuScreen(this: CrystalOathSceneContext) {
     stroke: "#040712",
     strokeThickness: 2
   });
-  this.drawFantasyDialogDivider(x + dialogW / 2 - 58, y + 51, 116, "mini", 0.58);
-  const startY = y + 66;
+  this.ui.fillStyle(0xc69a4b, 0.44).fillRect(x + 30, y + 52, dialogW - 60, 1);
+  const startY = y + 68;
   const optionX = x + 26;
   const optionW = dialogW - 52;
   this.menu.options.forEach((option, idx) => {
@@ -60,7 +60,6 @@ export function drawDialogue(this: CrystalOathSceneContext) {
     stroke: "#030712",
     strokeThickness: 2
   });
-  this.drawFantasyDialogDivider(x + w - 178, y + h - 31, 78, "mini", 0.58);
   this.text(x + w - 90, y + h - 37, "Enter / Z", 12, "#bdc8df", "center", { strokeThickness: 1 });
 }
 

@@ -124,12 +124,12 @@ export function drawFantasyDialogOption(
   options: FantasyDialogOptionOptions = {}
 ) {
   const disabled = options.disabled ?? false;
-  const fillAlpha = disabled ? 0.34 : selected ? 0.78 : 0.52;
-  this.ui.fillStyle(selected ? 0x102447 : 0x071225, fillAlpha).fillRect(x, y, w, h);
-  this.ui.fillStyle(0xffffff, selected ? 0.05 : 0.025).fillRect(x + 2, y + 2, w - 4, Math.max(4, Math.floor(h * 0.35)));
-  this.ui.lineStyle(1, selected ? FANTASY_DIALOG_GOLD_BRIGHT : FANTASY_DIALOG_GOLD, selected ? 0.95 : 0.46).strokeRect(x, y, w, h);
+  const fillAlpha = disabled ? 0.28 : selected ? 0.76 : 0.42;
+  this.ui.fillStyle(selected ? 0x102244 : 0x071225, fillAlpha).fillRect(x, y, w, h);
+  this.ui.fillStyle(0xffffff, selected ? 0.045 : 0.018).fillRect(x + 2, y + 2, w - 4, Math.max(4, Math.floor(h * 0.32)));
+  this.ui.lineStyle(1, selected ? FANTASY_DIALOG_GOLD_BRIGHT : FANTASY_DIALOG_GOLD, selected ? 0.96 : 0.36).strokeRect(x, y, w, h);
   if (selected) {
-    this.ui.lineStyle(1, FANTASY_DIALOG_GOLD, 0.52).strokeRect(x + 3, y + 3, w - 6, h - 6);
+    this.ui.fillStyle(FANTASY_DIALOG_GOLD_BRIGHT, 0.9).fillRect(x + 3, y + 4, 2, h - 8);
   }
 }
 

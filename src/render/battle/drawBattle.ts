@@ -535,111 +535,137 @@ export function drawBattleVictoryDialog(this: CrystalOathSceneContext) {
   if (!this.battle || this.battle.phase !== "victory") return;
   const rewards = this.battle.victoryRewards;
   const levelUps = rewards?.levelUps ?? [];
-  const w = 840;
-  const h = 270;
+  const w = 800;
+  const h = 257;
   const x = Math.round(WIDTH / 2 - w / 2);
   const y = Math.round(HEIGHT / 2 - h / 2);
   this.ui.fillStyle(0x000000, 0.42).fillRect(0, 0, WIDTH, HEIGHT);
   this.drawFantasyDialogFrame(x, y, w, h, { variant: "fancyResult", showCrest: true, alpha: 0.98 });
-  this.text(x + w / 2, y + 28, "Victory!", 34, "#ffd98a", "center", {
+  this.text(x + w / 2, y + 25, "Victory!", 34, "#ffd98a", "center", {
     wordWrapWidth: w - 96,
     stroke: "#050812",
     strokeThickness: 4
   });
-  this.drawFantasyDialogDivider(x + 250, y + 68, w - 500, "short", 0.78);
-  this.text(x + w / 2, y + 78, "The party stands triumphant.", 12, "#ffffff", "center", {
+  this.drawFantasyDialogDivider(x + 248, y + 64, w - 496, "short", 0.78);
+  this.text(x + w / 2, y + 73, "The party stands triumphant.", 12, "#ffffff", "center", {
     wordWrapWidth: w - 84,
     stroke: "#050812",
     strokeThickness: 2
   });
 
-  this.text(x + w / 2, y + 101, "Rewards", 13, "#ffd98a", "center", {
+  this.text(x + w / 2, y + 94, "Rewards", 12, "#ffd98a", "center", {
     wordWrapWidth: w - 96,
     stroke: "#050812",
     strokeThickness: 2
   });
-  const cardY = y + 119;
-  const cardGap = 10;
-  const cardW = Math.floor((w - 120 - cardGap * 2) / 3);
-  drawVictoryRewardCard.call(this, x + 50, cardY, cardW, "ui_battle_result_icon_exp", rewards ? `${rewards.xp} EXP` : "Tallying EXP");
+  const cardY = y + 111;
+  const cardGap = 12;
+  const cardW = 170;
+  const rewardsX = x + Math.round((w - cardW * 3 - cardGap * 2) / 2);
+  drawVictoryRewardCard.call(this, rewardsX, cardY, cardW, "ui_battle_result_icon_exp", "EXP", rewards ? String(rewards.xp) : "Tallying");
   drawVictoryRewardCard.call(
     this,
-    x + 50 + cardW + cardGap,
+    rewardsX + cardW + cardGap,
     cardY,
     cardW,
     "ui_battle_result_icon_gold",
-    rewards ? `${rewards.gold} Gold` : "Tallying Gold"
+    "Gold",
+    rewards ? String(rewards.gold) : "Tallying"
   );
+  const loot = lootDisplay(rewards);
   drawVictoryRewardCard.call(
     this,
-    x + 50 + (cardW + cardGap) * 2,
+    rewardsX + (cardW + cardGap) * 2,
     cardY,
     cardW,
     "ui_battle_result_icon_potion",
-    lootSummary(rewards)
+    "Loot",
+    loot.text,
+    loot.muted
   );
 
   if (levelUps.length) {
-    const sectionY = y + 169;
-    this.drawFantasyDialogDivider(x + 260, sectionY - 8, w - 520, "mini", 0.68);
-    this.text(x + w / 2, sectionY - 18, "Level Up", 13, "#ffd98a", "center", {
+    const sectionY = y + 159;
+    this.drawFantasyDialogDivider(x + 306, sectionY, w - 612, "mini", 0.62);
+    this.text(x + w / 2, sectionY - 13, "Level Up", 12, "#ffd98a", "center", {
       wordWrapWidth: w - 92,
       stroke: "#050812",
       strokeThickness: 2
     });
-    levelUps.forEach((level, idx) => {
-      drawVictoryLevelUpRow.call(this, level, x + 52, sectionY + idx * 26, w - 104, 23);
+    const visibleLevelUps = levelUps.slice(0, 3);
+    const levelGap = 12;
+    const levelCardW = visibleLevelUps.length === 1 ? 312 : visibleLevelUps.length === 2 ? 256 : 230;
+    const totalLevelW = visibleLevelUps.length * levelCardW + Math.max(0, visibleLevelUps.length - 1) * levelGap;
+    const levelStartX = x + Math.round((w - totalLevelW) / 2);
+    visibleLevelUps.forEach((level, idx) => {
+      drawVictoryLevelUpCard.call(this, level, levelStartX + idx * (levelCardW + levelGap), y + 176, levelCardW, 48);
     });
   } else {
-    this.text(x + w / 2, y + 171, "No level-ups this time.", 11, "#dce9ff", "center", {
+    this.text(x + w / 2, y + 174, "No level-ups this time.", 10, "#b7c6df", "center", {
       wordWrapWidth: w - 92,
       strokeThickness: 1
     });
   }
 
-  this.drawFantasyDialogDivider(x + w / 2 - 42, y + h - 34, 84, "mini", 0.58);
-  this.text(x + w / 2, y + h - 25, "Press Enter to continue", 11, "#fff4c8", "center", {
+  this.ui.fillStyle(0xc69a4b, 0.38).fillRect(x + w / 2 - 68, y + h - 36, 136, 1);
+  this.text(x + w / 2, y + h - 27, "Press Enter to continue", 11, "#fff4c8", "center", {
     wordWrapWidth: w - 90,
     stroke: "#050812",
     strokeThickness: 2
   });
 }
 
-function lootSummary(rewards: BattleVictoryRewards | undefined) {
-  if (!rewards) return "Tallying Loot";
-  if (!rewards.loot.length) return "No Loot";
-  if (rewards.loot.length === 1) return `${rewards.loot[0].name} x${rewards.loot[0].quantity}`;
+function lootDisplay(rewards: BattleVictoryRewards | undefined) {
+  if (!rewards) return { text: "Tallying", muted: false };
+  if (!rewards.loot.length) return { text: "None", muted: true };
+  if (rewards.loot.length === 1) return { text: `${rewards.loot[0].name} x${rewards.loot[0].quantity}`, muted: false };
   const totalQuantity = rewards.loot.reduce((sum, item) => sum + item.quantity, 0);
-  return `${totalQuantity} Items`;
+  return { text: `${totalQuantity} items`, muted: false };
 }
 
-function drawVictoryRewardCard(this: CrystalOathSceneContext, x: number, y: number, w: number, iconKey: string, label: string) {
-  this.drawFantasyDialogOption(x, y, w, 33, false);
-  this.drawFantasyDialogIcon(iconKey, x + 15, y + 7, 19);
-  this.text(x + 43, y + 9, label, 12, "#fff4c8", "left", {
-    wordWrapWidth: w - 56,
+function drawVictoryRewardCard(
+  this: CrystalOathSceneContext,
+  x: number,
+  y: number,
+  w: number,
+  iconKey: string,
+  title: string,
+  value: string,
+  muted = false
+) {
+  this.ui.fillStyle(0x071225, 0.68).fillRect(x, y, w, 38);
+  this.ui.fillStyle(0xffffff, 0.035).fillRect(x + 2, y + 2, w - 4, 11);
+  this.ui.lineStyle(1, BATTLE_UI.gold, 0.62).strokeRect(x, y, w, 38);
+  this.drawFantasyDialogIcon(iconKey, x + 14, y + 8, 22, muted ? 0.42 : 1);
+  this.text(x + 44, y + 6, title, 8, "#ffd98a", "left", {
+    wordWrapWidth: w - 54,
+    stroke: "#050812",
+    strokeThickness: 1
+  });
+  this.text(x + 44, y + 19, value, 12, muted ? "#8794aa" : "#fff4c8", "left", {
+    wordWrapWidth: w - 54,
     stroke: "#050812",
     strokeThickness: 2
   });
 }
 
-function drawVictoryLevelUpRow(this: CrystalOathSceneContext, level: BattleLevelUpReward, x: number, y: number, w: number, h: number) {
+function drawVictoryLevelUpCard(this: CrystalOathSceneContext, level: BattleLevelUpReward, x: number, y: number, w: number, h: number) {
   this.ui.fillStyle(0x071225, 0.72).fillRect(x, y, w, h);
-  this.ui.fillStyle(0xffffff, 0.035).fillRect(x + 2, y + 2, w - 4, 8);
+  this.ui.fillStyle(0xffffff, 0.035).fillRect(x + 2, y + 2, w - 4, 12);
   this.ui.lineStyle(1, BATTLE_UI.gold, 0.7).strokeRect(x, y, w, h);
   const member = this.party.find((candidate) => candidate.id === level.characterId);
   if (member) {
-    drawPartyCardPortrait.call(this, member, x + 4, y + 3, 18, 18);
+    drawPartyCardPortrait.call(this, member, x + 8, y + 8, 32, 32);
   } else {
-    this.ui.fillStyle(0x030711, 0.92).fillRect(x + 4, y + 3, 18, 18);
-    this.ui.lineStyle(1, BATTLE_UI.gold, 0.72).strokeRect(x + 4, y + 3, 18, 18);
+    this.ui.fillStyle(0x030711, 0.92).fillRect(x + 8, y + 8, 32, 32);
+    this.ui.lineStyle(1, BATTLE_UI.gold, 0.72).strokeRect(x + 8, y + 8, 32, 32);
   }
-  this.text(x + 29, y + 3, level.name, 10, "#ffd98a", "left", {
-    wordWrapWidth: 74,
+  this.text(x + 48, y + 8, level.name, 11, "#ffd98a", "left", {
+    wordWrapWidth: 54,
     stroke: "#050812",
-    strokeThickness: 1
+    strokeThickness: 2
   });
-  this.text(x + 108, y + 4, `Lv. ${level.newLevel}`, 9, "#ffffff", "left", { wordWrapWidth: 42, strokeThickness: 1 });
+  this.text(x + 48, y + 25, `Lv. ${level.newLevel}`, 9, "#ffffff", "left", { wordWrapWidth: 48, strokeThickness: 1 });
 
   const stats = [
     ["ui_battle_result_icon_hp", "HP", level.hpGain],
@@ -648,18 +674,20 @@ function drawVictoryLevelUpRow(this: CrystalOathSceneContext, level: BattleLevel
     ["ui_battle_result_icon_def", "DEF", level.defenseGain],
     ["ui_battle_result_icon_spd", "SPD", level.speedGain]
   ] as const;
-  let statX = x + 160;
-  const statY = y + 5;
-  stats.forEach(([iconKey, label, gain]) => {
+  const gains = stats.filter(([, , gain]) => !!gain);
+  const statStartX = x + 102;
+  gains.forEach(([iconKey, label, gain], idx) => {
     if (!gain) return;
-    drawVictoryStatGain.call(this, statX, statY, iconKey, `+${gain} ${label}`);
-    statX += 70;
+    const col = idx % 3;
+    const row = Math.floor(idx / 3);
+    drawVictoryStatChip.call(this, statStartX + col * 42, y + 9 + row * 16, iconKey, `+${gain} ${label}`);
   });
 }
 
-function drawVictoryStatGain(this: CrystalOathSceneContext, x: number, y: number, iconKey: string, label: string) {
-  this.drawFantasyDialogIcon(iconKey, x, y, 14);
-  this.text(x + 16, y + 2, label, 8, "#eff7ff", "left", { wordWrapWidth: 50, strokeThickness: 1 });
+function drawVictoryStatChip(this: CrystalOathSceneContext, x: number, y: number, iconKey: string, label: string) {
+  this.ui.fillStyle(0x030711, 0.38).fillRect(x - 2, y - 1, 39, 14);
+  this.drawFantasyDialogIcon(iconKey, x, y + 1, 10);
+  this.text(x + 11, y + 1, label, 7, "#eff7ff", "left", { wordWrapWidth: 28, strokeThickness: 1 });
 }
 
 export function drawThinBar(this: CrystalOathSceneContext, x: number, y: number, w: number, h: number, value: number, max: number, color: number) {
