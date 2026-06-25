@@ -185,10 +185,6 @@ export function selectedBattleAlly(this: CrystalOathSceneContext): CharacterStat
 export function drawBattleEnemy(this: CrystalOathSceneContext, enemy: EnemyState, x: number, y: number, size: number, targeted: boolean, targetable = false) {
   const alive = enemy.hp > 0;
   this.drawActorShadow(x + size / 2, y + size - 3, size * 0.76, Math.max(10, size * 0.13), alive ? 0.3 : 0.14);
-  if (targetable) {
-    this.ui.fillStyle(0xfff0a8, targeted ? 0.13 : 0.05).fillEllipse(x + size / 2, y + size - 2, size * 0.92, Math.max(20, size * 0.22));
-    drawTargetBrackets.call(this, x - 6, y - 6, size + 12, size + 12, targeted ? 0.95 : 0.36);
-  }
   this.drawEnemySprite(enemy, x, y, enemy.boss ? 5 : 4, size);
   if (targeted) {
     this.drawActiveTurnMarker(x + size / 2, y - 11);
