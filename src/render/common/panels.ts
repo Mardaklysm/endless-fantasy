@@ -17,7 +17,7 @@ const WORLD_MINIMAP_FRAME_WIDTH = 112;
 const WORLD_MINIMAP_MAP_WIDTH = 104;
 const WORLD_MINIMAP_TOP = 10;
 
-export type FantasyDialogVariant = "standard" | "fancy";
+export type FantasyDialogVariant = "standard" | "fancyResult";
 
 export interface FantasyDialogFrameOptions {
   variant?: FantasyDialogVariant;
@@ -77,33 +77,23 @@ export function drawFantasyDialogFrame(
 ) {
   const variant = options.variant ?? "standard";
   const alpha = options.alpha ?? 0.96;
-  const border = variant === "fancy" ? 34 : 24;
-  const corner = variant === "fancy" ? 44 : 30;
-  const edge = variant === "fancy" ? 11 : 8;
 
   this.ui.fillStyle(0x010309, 0.58).fillRect(x + 5, y + 6, w, h);
+  if (variant === "fancyResult" && this.hasTexture("ui_dialog_panel_full")) {
+    this.drawContainedTexture("ui_dialog_panel_full", x, y, w, h, LAYER_UI_IMAGE + 1, alpha);
+    if (options.showCrest !== false && this.hasTexture("ui_dialog_crest")) {
+      this.drawContainedTexture("ui_dialog_crest", x + w / 2 - 40, y - 14, 80, 38, LAYER_UI_IMAGE + 3);
+    }
+    return;
+  }
+
   this.ui.fillStyle(FANTASY_DIALOG_BG, alpha).fillRect(x, y, w, h);
   this.ui.fillStyle(FANTASY_DIALOG_INNER, Math.min(0.9, alpha + 0.03)).fillRect(x + 8, y + 8, w - 16, h - 16);
-  this.ui.fillStyle(0x0f2547, 0.38).fillRect(x + 10, y + 10, w - 20, Math.min(28, Math.max(8, h - 20)));
-  this.ui.fillStyle(0x020714, 0.22).fillRect(x + 10, y + h - 18, w - 20, 8);
-  this.ui.lineStyle(2, 0x160e06, 0.88).strokeRect(x - 1, y - 1, w + 2, h + 2);
-  this.ui.lineStyle(1, FANTASY_DIALOG_GOLD_BRIGHT, 0.92).strokeRect(x + 2, y + 2, w - 4, h - 4);
-  this.ui.lineStyle(1, FANTASY_DIALOG_GOLD, 0.78).strokeRect(x + 7, y + 7, w - 14, h - 14);
-
-  if (this.hasTexture("ui_dialog_frame_edge_top")) {
-    this.drawTexture("ui_dialog_frame_edge_top", x + border, y + 3, Math.max(1, w - border * 2), edge, LAYER_UI_IMAGE + 1);
-    this.drawTexture("ui_dialog_frame_edge_bottom", x + border, y + h - edge - 3, Math.max(1, w - border * 2), edge, LAYER_UI_IMAGE + 1);
-    this.drawTexture("ui_dialog_frame_edge_left", x + 3, y + border, edge, Math.max(1, h - border * 2), LAYER_UI_IMAGE + 1);
-    this.drawTexture("ui_dialog_frame_edge_right", x + w - edge - 3, y + border, edge, Math.max(1, h - border * 2), LAYER_UI_IMAGE + 1);
-    this.drawContainedTexture("ui_dialog_frame_corner_tl", x + 1, y + 1, corner, corner, LAYER_UI_IMAGE + 2);
-    this.drawContainedTexture("ui_dialog_frame_corner_tr", x + w - corner - 1, y + 1, corner, corner, LAYER_UI_IMAGE + 2);
-    this.drawContainedTexture("ui_dialog_frame_corner_bl", x + 1, y + h - corner - 1, corner, corner, LAYER_UI_IMAGE + 2);
-    this.drawContainedTexture("ui_dialog_frame_corner_br", x + w - corner - 1, y + h - corner - 1, corner, corner, LAYER_UI_IMAGE + 2);
-  }
-
-  if (variant === "fancy" && options.showCrest !== false && this.hasTexture("ui_dialog_crest")) {
-    this.drawContainedTexture("ui_dialog_crest", x + w / 2 - 58, y - 21, 116, 56, LAYER_UI_IMAGE + 3);
-  }
+  this.ui.fillStyle(0xffffff, 0.035).fillRect(x + 10, y + 10, w - 20, Math.min(20, Math.max(6, h - 20)));
+  this.ui.fillStyle(0x020714, 0.18).fillRect(x + 10, y + h - 15, w - 20, 5);
+  this.ui.lineStyle(2, 0x02040a, 0.86).strokeRect(x - 1, y - 1, w + 2, h + 2);
+  this.ui.lineStyle(1, FANTASY_DIALOG_GOLD_BRIGHT, 0.9).strokeRect(x, y, w, h);
+  this.ui.lineStyle(1, FANTASY_DIALOG_GOLD, 0.56).strokeRect(x + 5, y + 5, w - 10, h - 10);
 }
 
 export function drawFantasyDialogDivider(
