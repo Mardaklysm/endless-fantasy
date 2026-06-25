@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import {
+  HEIGHT,
   PIXEL_ART_SCALE,
   SAVE_KEY,
   TITLE_MENU_ROW_HEIGHT,
@@ -18,6 +19,8 @@ import {
 } from "./keyboard";
 import type { DirectionName, Vec } from "../scene/sceneTypes";
 import type { CrystalOathSceneContext } from "../scene/sceneContext";
+import { ITEMS } from "../data/items";
+import { SPELLS } from "../data/spells";
 
 export function handleKey(this: CrystalOathSceneContext, event: KeyboardEvent) {
   this.audio.start();
@@ -117,6 +120,7 @@ export function handlePointer(this: CrystalOathSceneContext, pointer: Phaser.Inp
   if (this.worldControlLockReason === "boatTravel") return;
   const point = this.pointerToLayout(pointer);
   if (this.mode === "title" && this.handleTitlePointer(point)) return;
+  if (this.mode === "battle" && this.handleBattlePointer(point)) return;
   this.audio.blip("confirm");
 }
 
@@ -140,6 +144,97 @@ export function handleTitlePointer(this: CrystalOathSceneContext, point: Vec): b
   this.confirmTitleSelection();
   this.markDirty();
   return true;
+}
+
+export function handleBattlePointer(this: CrystalOathSceneContext, point: Vec): boolean {
+  if (!this.battle) return false;
+  if (this.battle.phase === "resolving") return false;
+  if (this.battle.phase === "victory") {
+    this.finishBattle(true);
+    this.markDirty();
+    return true;
+  }
+  if (this.battle.phase === "log") {
+    this.advanceBattleLog();
+    this.markDirty();
+    return true;
+  }
+
+  const commandIndex = battleCommandIndexAt(point);
+  if (commandIndex >= 0) {
+    this.battle.phase = "command";
+    this.battle.pendingAction = undefined;
+    this.battle.menuReturnSelected = undefined;
+    this.battle.selected = commandIndex;
+    this.confirmBattleSelection();
+    this.markDirty();
+    return true;
+  }
+
+  const submenuIndex = battleSubmenuIndexAt(point, battleVisibleSubmenuOptionCount.call(this));
+  if (submenuIndex >= 0) {
+    if (this.battle.phase === "target" || this.battle.phase === "allyTarget") {
+      const source = this.battle.pendingAction?.type;
+      if (source === "skill" || source === "spell" || source === "item") {
+        this.battle.phase = source;
+        this.battle.pendingAction = undefined;
+        this.battle.menuReturnSelected = undefined;
+      } else {
+        return false;
+      }
+    }
+    if (!["skill", "spell", "item"].includes(this.battle.phase)) return false;
+    const options = this.battleOptions();
+    if (submenuIndex >= options.length) return false;
+    this.battle.selected = submenuIndex;
+    this.confirmBattleSelection();
+    this.markDirty();
+    return true;
+  }
+
+  return false;
+}
+
+function battleCommandIndexAt(point: Vec): number {
+  const optionW = 74;
+  const h = 36;
+  const x = 70;
+  const y = HEIGHT - h - 5;
+  const commands = 6;
+  for (let idx = 0; idx < commands; idx += 1) {
+    const optionX = x + 5 + idx * optionW;
+    const optionY = y + 5;
+    if (point.x >= optionX && point.x <= optionX + optionW - 2 && point.y >= optionY && point.y <= optionY + 26) return idx;
+  }
+  return -1;
+}
+
+function battleSubmenuIndexAt(point: Vec, optionCount: number): number {
+  if (optionCount <= 0) return -1;
+  const commandOptionW = 74;
+  const commandW = commandOptionW * 6 + 10;
+  const commandX = 70;
+  const rowH = 26;
+  const w = 170;
+  const h = 24 + optionCount * rowH + 8;
+  const x = commandX + commandW + 28;
+  const y = HEIGHT - h - 5;
+  for (let idx = 0; idx < optionCount; idx += 1) {
+    const rowY = y + 24 + idx * rowH;
+    if (point.x >= x + 7 && point.x <= x + w - 7 && point.y >= rowY && point.y <= rowY + 22) return idx;
+  }
+  return -1;
+}
+
+function battleVisibleSubmenuOptionCount(this: CrystalOathSceneContext): number {
+  if (!this.battle) return 0;
+  const actor = this.currentBattleActor();
+  if (!actor) return 0;
+  const source = this.battle.phase === "target" || this.battle.phase === "allyTarget" ? this.battle.pendingAction?.type : this.battle.phase;
+  if (source === "skill") return this.skillsForActor(actor).length;
+  if (source === "spell") return actor.spells.filter((id) => actor.level >= SPELLS[id].minLevel).length;
+  if (source === "item") return Object.keys(ITEMS).filter((id) => ITEMS[id].battle && (this.inventory[id] ?? 0) > 0).length;
+  return 0;
 }
 
 export function confirmTitleSelection(this: CrystalOathSceneContext) {
