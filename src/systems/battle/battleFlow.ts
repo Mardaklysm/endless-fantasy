@@ -418,11 +418,12 @@ function adjustEnemyTargetSelection(this: CrystalOathSceneContext, move: "left" 
       );
 
   if (move === "left") {
+    if (this.battle.pendingAction?.targetAll) return true;
     if (currentOrderIndex >= orderedTargets.length - 1) {
       if (canPendingActionTargetAll.call(this)) {
         this.battle.pendingAction = { ...this.battle.pendingAction, targetAll: true };
       } else {
-        this.battle.selected = orderedTargets[0].livingIndex;
+        this.battle.selected = orderedTargets[orderedTargets.length - 1].livingIndex;
       }
       return true;
     }
@@ -432,7 +433,7 @@ function adjustEnemyTargetSelection(this: CrystalOathSceneContext, move: "left" 
   }
 
   this.battle.pendingAction = { ...this.battle.pendingAction, targetAll: false };
-  const nextOrderIndex = currentOrderIndex <= 0 ? orderedTargets.length - 1 : currentOrderIndex - 1;
+  const nextOrderIndex = Math.max(0, currentOrderIndex - 1);
   this.battle.selected = orderedTargets[nextOrderIndex].livingIndex;
   return true;
 }
@@ -448,11 +449,12 @@ function adjustAllyTargetSelection(this: CrystalOathSceneContext, move: "left" |
     : Math.max(0, targetIndexes.indexOf(this.battle.selected));
 
   if (move === "right") {
+    if (this.battle.pendingAction?.targetAll) return true;
     if (currentTargetIndex >= targetIndexes.length - 1) {
       if (canPendingActionTargetAll.call(this)) {
         this.battle.pendingAction = { ...this.battle.pendingAction, targetAll: true };
       } else {
-        this.battle.selected = targetIndexes[0];
+        this.battle.selected = targetIndexes[targetIndexes.length - 1];
       }
       return true;
     }
@@ -462,7 +464,7 @@ function adjustAllyTargetSelection(this: CrystalOathSceneContext, move: "left" |
   }
 
   this.battle.pendingAction = { ...this.battle.pendingAction, targetAll: false };
-  const nextTargetIndex = currentTargetIndex <= 0 ? targetIndexes.length - 1 : currentTargetIndex - 1;
+  const nextTargetIndex = Math.max(0, currentTargetIndex - 1);
   this.battle.selected = targetIndexes[nextTargetIndex];
   return true;
 }

@@ -101,9 +101,7 @@ export function drawBattle(this: CrystalOathSceneContext) {
     const feedback = this.battleActorVisualFeedback("party", member.id);
     const active =
       this.currentBattleEntry()?.side === "party" &&
-      this.currentBattleEntry()?.actorId === member.id &&
-      !this.battle?.animation &&
-      this.battle?.phase !== "resolving";
+      this.currentBattleEntry()?.actorId === member.id;
     const targeted = targetingAllies && targetingAll ? member.hp > 0 : selectedAlly?.id === member.id;
     this.drawPartyBattler(member, slot.x + offset.x + feedback.offset.x, slot.y + offset.y + feedback.offset.y, idx, active, slot.facing, targeted, feedback);
   });
