@@ -4,7 +4,6 @@ import type { IslandId } from "../world/worldGenerator";
 export type Mode =
   | "title"
   | "world"
-  | "town"
   | "poi"
   | "dungeon"
   | "dialogue"
@@ -13,12 +12,12 @@ export type Mode =
   | "gameOver"
   | "ending";
 
-export type ExploreMode = "world" | "town" | "poi" | "dungeon";
+export type ExploreMode = "world" | "poi" | "dungeon";
 export type DirectionName = "up" | "down" | "left" | "right";
 export type Terrain = WorldTileId;
 
 export function isExploreModeValue(mode: Mode): mode is ExploreMode {
-  return mode === "world" || mode === "town" || mode === "poi" || mode === "dungeon";
+  return mode === "world" || mode === "poi" || mode === "dungeon";
 }
 
 export interface Vec {

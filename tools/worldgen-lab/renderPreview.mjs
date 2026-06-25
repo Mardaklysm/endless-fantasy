@@ -512,11 +512,11 @@ function renderPois(image, world, scale) {
     else if (poi.type === "ice_shrine") drawShrine(image, drawX, drawY, drawScale, [172, 224, 238, 255]);
     else if (poi.type === "desert_ruin") drawShrine(image, drawX, drawY, drawScale, [187, 143, 77, 255]);
     else if (poi.type === "tower") drawTower(image, drawX, drawY, drawScale);
-    else drawTown(image, drawX, drawY, drawScale);
+    else drawSettlement(image, drawX, drawY, drawScale);
   }
 }
 
-function drawTown(image, x, y, scale) {
+function drawSettlement(image, x, y, scale) {
   const px = x * scale;
   const py = y * scale;
   fillRect(image, px + 1, py + 2, scale - 1, scale - 1, COLORS.poi);
@@ -525,7 +525,7 @@ function drawTown(image, x, y, scale) {
 }
 
 function drawPort(image, x, y, scale) {
-  drawTown(image, x, y, scale);
+  drawSettlement(image, x, y, scale);
   const px = x * scale;
   const py = y * scale;
   drawLine(image, px + Math.floor(scale / 2), py + scale, px + Math.floor(scale / 2), py + scale + Math.floor(scale * 1.5), COLORS.port);

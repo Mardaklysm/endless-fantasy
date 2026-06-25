@@ -42,7 +42,6 @@ import * as renderCore from "../render/common/renderCore";
 import * as drawTitle from "../render/title/drawTitle";
 import * as drawWorld from "../render/world/drawWorld";
 import * as drawWorldTerrain from "../render/world/drawWorldTerrain";
-import * as drawTown from "../render/town/drawTown";
 import * as drawPoi from "../render/poi/drawPoi";
 import * as drawDungeon from "../render/dungeon/drawDungeon";
 import * as drawBattle from "../render/battle/drawBattle";
@@ -80,7 +79,6 @@ export interface CrystalOathScene
     SceneModuleMethods<typeof drawTitle>,
     SceneModuleMethods<typeof drawWorld>,
     SceneModuleMethods<typeof drawWorldTerrain>,
-    SceneModuleMethods<typeof drawTown>,
     SceneModuleMethods<typeof drawPoi>,
     SceneModuleMethods<typeof drawDungeon>,
     SceneModuleMethods<typeof drawBattle>,
@@ -149,20 +147,16 @@ export class CrystalOathScene extends Phaser.Scene {
   gearBag: Record<string, number> = {};
   gold = 0;
   worldPos: Vec = { x: 10, y: 22 };
-  townPos: Vec = { x: 10, y: 12 };
   poiPos: Vec = { x: 1440, y: 1115 };
   dungeonPos: Vec = { x: 1, y: 1 };
   visualWorldPos: Vec = { x: 10, y: 22 };
-  visualTownPos: Vec = { x: 10, y: 12 };
   visualPoiPos: Vec = { x: 1440, y: 1115 };
   visualDungeonPos: Vec = { x: 1, y: 1 };
-  currentTown = "dawnford";
   currentPoiId = "starting_grassland_village";
   currentDungeon = "mossCave";
   currentIslandId: IslandId = "greenhaven";
   dungeonFloor = 0;
   previousMode: Mode = "world";
-  pendingTownReturn: Vec = { x: 10, y: 22 };
   poiReturn?: PoiVisitReturn;
   suppressedPoiExitIds = new Set<string>();
   encounterCounter = 10;
@@ -237,7 +231,6 @@ Object.assign(
   drawTitle,
   drawWorld,
   drawWorldTerrain,
-  drawTown,
   drawPoi,
   drawDungeon,
   drawBattle,

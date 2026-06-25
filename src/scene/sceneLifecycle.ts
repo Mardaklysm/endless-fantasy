@@ -6,10 +6,11 @@ import {
   CHARTER_BOAT_8DIR_FRAME_HEIGHT,
   CHARTER_BOAT_8DIR_FRAME_WIDTH,
   CHARTER_BOAT_8DIR_TEXTURE_KEY,
+  DUNGEON_TILE_ASSET_MODULES,
   WORLD_CURRENT_ASSET_MODULES
 } from "../assets/assetPaths";
 import type { AssetKey } from "../assets/assetTypes";
-import { DUNGEON_ATLAS, DUNGEON_ATLAS_SOURCE_INSET, DUNGEON_TILE_ID_SET } from "../data/dungeonTiles";
+import { DUNGEON_TILESET, DUNGEON_TILE_ASSETS, DUNGEON_TILE_ID_SET } from "../data/dungeonTiles";
 import { WORLD_CLOUD_ASSETS, WORLD_CLOUD_MANIFEST } from "../data/worldCloudAssets";
 import { WORLD_CURRENT_ASSET_MANIFEST, WORLD_CURRENT_ASSETS, WORLD_CURRENT_TERRAIN_TEXTURE_KEYS } from "../data/worldCurrentAssets";
 import { perfAutoMode, perfEndCreate, perfEndFrame, perfEndPreload, perfStartCreate, perfStartFrame, perfStartPreload } from "../debug/perf";
@@ -27,6 +28,11 @@ export function preload(this: CrystalOathSceneContext) {
     const url = WORLD_CURRENT_ASSET_MODULES[`./world/current/${asset.filename}`];
     if (url) this.load.image(asset.textureKey, url);
     else console.warn(`Missing current world asset module for ${asset.filename}`);
+  }
+  for (const tile of DUNGEON_TILE_ASSETS) {
+    const url = DUNGEON_TILE_ASSET_MODULES[`./world/${tile.filename}`];
+    if (url) this.load.image(tile.textureKey, url);
+    else console.warn(`Missing dungeon tile asset module for ${tile.filename}`);
   }
   for (const cloud of WORLD_CLOUD_ASSETS) {
     const url = WORLD_CURRENT_ASSET_MODULES[`./world/current/${cloud.filename}`];
@@ -99,9 +105,9 @@ export function logActiveWorldTileset(this: CrystalOathSceneContext) {
       "Deprecated overworld atlases active: false",
       "Random base terrain variants active: false",
       "Roads, rivers, and lakes render through the semantic terrain mask; mountain sprites, forests, and POIs remain overlays",
-      `Dungeon atlas: ${DUNGEON_ATLAS.image}`,
-      `Dungeon atlas source inset: ${DUNGEON_ATLAS_SOURCE_INSET}`,
-      `Dungeon atlas entries: ${DUNGEON_TILE_ID_SET.size}`
+      `Dungeon tile folder: ${DUNGEON_TILESET.runtimeFolder}`,
+      `Dungeon tile source inset baked into PNGs: ${DUNGEON_TILESET.sourceInsetAppliedToRuntimeTiles}`,
+      `Dungeon tile entries: ${DUNGEON_TILE_ID_SET.size}`
     ].join("\n")
   );
 }
@@ -128,9 +134,7 @@ function schedulePerfAutoRun(this: CrystalOathSceneContext) {
       this.dialogue = undefined;
       done();
     }
-    this.townPos = { x: 10, y: 13 };
-    this.syncAllVisualPositions();
-    this.exitTownToWorld();
+    this.leavePoiVisit();
     if (autoMode === "chunkSweep") runPerfChunkSweep.call(this);
   });
 }

@@ -5,7 +5,7 @@ export const CHARACTER_SPRITES = {
     "textureKey": "hero_fighter_sprite",
     "source": {
       "originalFile": "D:/Tools/rembg/bg_output/fighter.png",
-      "copiedFile": "assets_v2/source_sheets/class_sprites/fighter.png",
+      "copiedFile": "src/assets/source/art_import/source_sheets/class_sprites/fighter.png",
       "sheetWidth": 1983,
       "sheetHeight": 793,
       "sourceColumns": 5,
@@ -374,7 +374,7 @@ export const CHARACTER_SPRITES = {
     "textureKey": "hero_priest_sprite",
     "source": {
       "originalFile": "D:/Tools/rembg/bg_output/priest.png",
-      "copiedFile": "assets_v2/source_sheets/class_sprites/priest.png",
+      "copiedFile": "src/assets/source/art_import/source_sheets/class_sprites/priest.png",
       "sheetWidth": 1983,
       "sheetHeight": 793,
       "sourceColumns": 5,
@@ -739,7 +739,7 @@ export const CHARACTER_SPRITES = {
     "textureKey": "hero_mage_sprite",
     "source": {
       "originalFile": "D:/Tools/rembg/bg_output/mage.png",
-      "copiedFile": "assets_v2/source_sheets/class_sprites/mage.png",
+      "copiedFile": "src/assets/source/art_import/source_sheets/class_sprites/mage.png",
       "sheetWidth": 1983,
       "sheetHeight": 793,
       "sourceColumns": 5,

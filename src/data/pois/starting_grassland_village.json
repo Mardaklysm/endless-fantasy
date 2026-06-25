@@ -3,10 +3,10 @@
   "displayName": "Grassland Village",
   "type": "village",
   "sourceLocationId": "dawnford",
-  "serviceTownId": "dawnford",
+  "serviceProfileId": "dawnford",
   "background": {
     "key": "poi_starting_grassland_village",
-    "path": "assets/poi/starting_grassland_village.jpeg",
+    "path": "src/assets/poi/starting_grassland_village.jpeg",
     "width": 2752,
     "height": 1536
   },
@@ -316,7 +316,7 @@
       "activation": "interact",
       "action": {
         "kind": "openChurch",
-        "townId": "dawnford"
+        "serviceProfileId": "dawnford"
       }
     },
     {
@@ -335,7 +335,7 @@
       "action": {
         "kind": "openShop",
         "shopId": "weapons",
-        "townId": "dawnford"
+        "serviceProfileId": "dawnford"
       }
     },
     {
@@ -354,7 +354,7 @@
       "action": {
         "kind": "openShop",
         "shopId": "armor",
-        "townId": "dawnford"
+        "serviceProfileId": "dawnford"
       }
     },
     {
@@ -373,7 +373,7 @@
       "action": {
         "kind": "openShop",
         "shopId": "items",
-        "townId": "dawnford"
+        "serviceProfileId": "dawnford"
       }
     },
     {
@@ -391,7 +391,7 @@
       "activation": "interact",
       "action": {
         "kind": "openInn",
-        "townId": "dawnford"
+        "serviceProfileId": "dawnford"
       }
     },
     {

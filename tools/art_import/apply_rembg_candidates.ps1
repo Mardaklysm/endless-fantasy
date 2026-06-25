@@ -1,7 +1,7 @@
 param(
   [string]$SourceRoot = "D:\Projects\new_artwork",
   [string]$ProjectRoot = "D:\Projects\Endless Fantasy",
-  [string]$OutRoot = "D:\Projects\Endless Fantasy\assets_v2",
+  [string]$OutRoot = "D:\Projects\Endless Fantasy\src\assets",
   [string]$Rembg = "D:\tools\rembg\venv_rembg\Scripts\rembg.exe",
   [string]$RembgPython = "D:\tools\rembg\venv_rembg\Scripts\python.exe",
   [string]$RembgInput = "D:\tools\rembg\bg_input\endless_fantasy",
@@ -138,7 +138,6 @@ function Invoke-SmokeTest($Jobs, $SheetJobs, [string]$Model, [string[]]$Provider
   $selected = @()
   $selected += $Jobs | Where-Object { $_.asset.output -like "characters/*battle.png" } | Select-Object -First 1
   $selected += $Jobs | Where-Object { $_.asset.output -like "enemies/common/*" } | Select-Object -First 1
-  $selected += $Jobs | Where-Object { $_.asset.output -like "tiles/town/prop_*" } | Select-Object -First 1
   $selected = @($selected | Where-Object { $_ } | Select-Object -First 3)
   if ($selected.Count -eq 0 -and $SheetJobs.Count -gt 0) {
     $selected += $SheetJobs | Select-Object -First 1
@@ -199,7 +198,7 @@ if ($amdTools.Count -gt 0) {
   Write-Host "No AMD command-line monitor found on PATH; provider availability is the local acceleration check."
 }
 
-$candidateRoot = Join-Path $OutRoot "previews\rembg_candidates"
+$candidateRoot = Join-Path $OutRoot "source\art_import\previews\rembg_candidates"
 New-Item -ItemType Directory -Force -Path $RembgInput | Out-Null
 New-Item -ItemType Directory -Force -Path $RembgOutput | Out-Null
 New-Item -ItemType Directory -Force -Path $candidateRoot | Out-Null

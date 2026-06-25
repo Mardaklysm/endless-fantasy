@@ -4,7 +4,7 @@ This backlog is practical project memory, not a full design document. Keep it sh
 
 ## Art Pipeline Next Steps
 
-- Keep Batch 001 assets under root `assets/`; do not nest a second `assets/` folder inside it.
+- Root `assets/` and `assets_v2/` are retired; runtime assets belong under `src/assets/`.
 - Consider splitting the v2 asset import scripts into shared helpers if more batches arrive.
 - Improve UI panel skinning further only if it preserves current live text space and readability. Exploration HUD and battle panels now have compact layouts, but the v2 panel art still has strong decorative lines that may deserve a future dedicated HUD frame.
 - Add item/equipment/relic icons to inventory, shops, equipment menus, and HUD when there is a clean layout slot.
@@ -27,9 +27,9 @@ This backlog is practical project memory, not a full design document. Keep it sh
 - `chest_open.png` is wired for opened chest state; keep testing it during dungeon pass-throughs.
 - `tile_water_b` and `tile_deep_water_b` are loaded but not animated yet.
 - Harbor POI visuals may include dock art as part of the harbor sprite, but random standalone bridge/dock decoration is disabled. Road-river crossing candidates are semantic records for walkability and controlled bridge/ford overlays; avoid reintroducing visible bridge spam unless a future approved bridge pass clearly improves these intentional crossings.
-- Reference-only UI window crops in `assets_v2/ui` are intentionally not loaded at runtime because they contain sample text.
+- Reference-only UI window crops live under `src/assets/source/art_import/ui_samples/` and are intentionally not loaded at runtime because they contain sample text.
 - Normalized fighter/priest/wizard class sheets are wired; keep standalone party map/battle PNGs out of runtime glob loading unless intentionally reintroduced.
-- Dungeon/city tiles are wired through the active `src/assets/world/dungeon_atlas.png` sheet; individual dungeon PNGs remain fallback only.
+- Dungeon/city tiles are wired through individual PNGs under `src/assets/world/dungeon_tiles/`; atlas cropping is retired.
 - Dungeon/city atlas rendering now uses weighted base/accent selection; future dungeon polish should focus on room dressing and clearer wall/floor transition art rather than adding more evenly random tile variants.
 - Before replacing any remaining generated fallback visuals, iterate in `npm run worldgen:lab` and define final fill/brush/object assets from `worldgen_asset_requirements.md`. Premium assets from `D:\Tools\rembg\bg_output` are imported by `tools/world_assets/import_premium_world_objects.py`; do not promote rejected or needs-manual-cleanup object candidates from older curation outputs into runtime.
 - Review and regenerate missing entries from `D:\atlas\output\terrain_materials_v2_missing_materials.md` before considering the external terrain material pack complete. Do not promote rejected/debug crops into runtime assets; only approved `approved_materials/*.png` should be candidates for future renderer experiments.
@@ -56,7 +56,7 @@ This backlog is practical project memory, not a full design document. Keep it sh
 - Battle enemies use PNGs now; future larger boss art still needs overlap checks when progression reaches each boss.
 - Battle actions now have short lunge/step movement; future effect-sheet rendering can layer spell/item VFX on top of the timing path.
 - Battle backdrops now use v2 region panels; later tuning can reduce bundle weight with dynamic loading/code splitting.
-- Town service blocks now use v2 icon signs in one unlabeled five-marker row, with atlas-backed shop pads from `dungeon_atlas`.
+- Generated town service blocks are removed; authored POIs provide services through metadata and service profiles.
 - Title screen now uses full-screen image art. Future title polish should preserve live menu text, aspect-preserving letterboxing, and the simplified `Continue` / `New Game` title menu.
 - Audio is simple oscillator loops; no composed music assets are planned unless approved.
 

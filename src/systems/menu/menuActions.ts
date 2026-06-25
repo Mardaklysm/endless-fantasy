@@ -1,9 +1,8 @@
 import { WORLD_TABLES } from "../../data/battleTables";
-import type { CharacterState, GearDef, ServiceKind, TownDef } from "../../data/gameDataTypes";
+import type { CharacterState, GearDef, PoiServiceProfile } from "../../data/gameDataTypes";
 import { ARMORS, GEAR, WEAPONS } from "../../data/gear";
 import { ITEMS } from "../../data/items";
 import { SPELLS } from "../../data/spells";
-import { TOWN_SERVICES } from "../../data/towns";
 import type { MenuOption, Mode } from "../../scene/sceneTypes";
 import { wrap } from "../world/worldMath";
 import type { CrystalOathSceneContext } from "../../scene/sceneContext";
@@ -89,10 +88,6 @@ export function openFieldItemTargets(this: CrystalOathSceneContext, itemId: stri
     return;
   }
   if (itemId === "tent") {
-    if (this.previousMode === "town") {
-      this.flashMessage("Use tents on the road or in safe dungeon rooms.");
-      return;
-    }
     this.inventory.tent -= 1;
     for (const c of this.party) {
       if (c.hp > 0) c.hp = Math.min(c.maxHp, c.hp + Math.floor(c.maxHp * 0.55));
@@ -303,7 +298,7 @@ export function openDebugMenu(this: CrystalOathSceneContext) {
   );
 }
 
-export function openInn(this: CrystalOathSceneContext, town: TownDef) {
+export function openInn(this: CrystalOathSceneContext, town: PoiServiceProfile) {
   const returnMode = this.serviceReturnMode();
   this.openMenu(
     `${town.name} Inn`,
@@ -325,31 +320,6 @@ export function openInn(this: CrystalOathSceneContext, town: TownDef) {
       },
       { label: "Leave", action: () => this.closeMenuTo(returnMode) }
     ],
-    () => this.closeMenuTo(returnMode)
-  );
-}
-
-export function openClinic(this: CrystalOathSceneContext, town: TownDef) {
-  const returnMode = this.serviceReturnMode();
-  this.openMenu(
-    `${town.name} Clinic`,
-    this.party.map((c) => ({
-      label: `${c.name} ${c.hp > 0 ? "standing" : "fallen"} (${town.clinicPrice} gold)`,
-      action: () => {
-        if (c.hp > 0) {
-          this.flashMessage("They are already standing.");
-          return;
-        }
-        if (this.gold < town.clinicPrice) {
-          this.flashMessage("Not enough gold.");
-          return;
-        }
-        this.gold -= town.clinicPrice;
-        c.hp = Math.floor(c.maxHp * 0.5);
-        c.statuses = {};
-        this.openClinic(town);
-      }
-    })).concat([{ label: "Leave", action: () => this.closeMenuTo(returnMode) }]),
     () => this.closeMenuTo(returnMode)
   );
 }
@@ -380,7 +350,7 @@ export function openShop(this: CrystalOathSceneContext, title: string, stock: { 
   );
 }
 
-export function openMagicShop(this: CrystalOathSceneContext, town: TownDef) {
+export function openMagicShop(this: CrystalOathSceneContext, town: PoiServiceProfile) {
   const returnMode = this.serviceReturnMode();
   this.openMenu(
     `${town.name} Magic`,
@@ -498,10 +468,6 @@ export function adjustMenu(this: CrystalOathSceneContext, delta: number) {
 export function adjustTitle(this: CrystalOathSceneContext, delta: number) {
   this.titleSelected = wrap(this.titleSelected + delta, this.titleOptions.length);
   this.audio.blip("confirm");
-}
-
-export function serviceAt(this: CrystalOathSceneContext, x: number, y: number): ServiceKind | undefined {
-  return TOWN_SERVICES.find((z) => Math.abs(z.x - x) + Math.abs(z.y - y) <= 1)?.kind;
 }
 
 export function relicCount(this: CrystalOathSceneContext): number {

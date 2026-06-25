@@ -154,18 +154,15 @@ export interface LocationDef {
   lockedText?: string;
 }
 
-export interface TownDef {
+export interface PoiServiceProfile {
   id: string;
   name: string;
-  palette: string[];
-  npcs: { x: number; y: number; lines: string[] }[];
   itemStock: string[];
   weaponStock: string[];
   armorStock: string[];
   spellStock: string[];
   innPrice: number;
   clinicPrice: number;
-  arrival?: () => void;
 }
 
 export interface DungeonDef {
@@ -193,15 +190,4 @@ export interface TravelDestination {
   displayName: string;
   costGold: number;
   requiredUnlockFlag?: "unlockedIsland2" | "unlockedIsland3" | "unlockedFrostmere" | "unlockedHighspire" | "unlockedAshfall";
-}
-
-export type ServiceKind = "inn" | "item" | "arms" | "magic" | "clinic";
-
-export interface TownServiceDef {
-  kind: ServiceKind;
-  label: string;
-  x: number;
-  y: number;
-  color: number;
-  accent: number;
 }

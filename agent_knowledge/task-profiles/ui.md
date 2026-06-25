@@ -8,19 +8,18 @@ Use this profile for title screen, menus, HUD/panels, town service presentation,
 - `src/render/common/panels.ts`
 - `src/render/title/drawTitle.ts`
 - `src/render/menu/drawMenu.ts`
-- `src/render/town/drawTown.ts`
 - `src/render/battle/drawBattle.ts`
 - `src/input/sceneInput.ts`
 - `src/input/keyboard.ts`
 - `src/systems/menu/menuActions.ts`
-- `src/data/towns.ts`
+- `src/data/poiServiceProfiles.ts`
 
 Use `rg` for exact labels, menu options, texture keys, or layout constants before opening additional files.
 
 ## Critical Rules
 
 - Runtime UI and gameplay labels should be live Phaser text, not baked into tiny sprites.
-- Title screen uses `assets/title/title_screen.png` as full-screen contain-fit art over black backing.
+- Title screen uses `src/assets/title/title_screen.png` as full-screen contain-fit art over black backing.
 - Title menu remains live text ordered `Continue`, then `New Game`.
 - Do not reintroduce title-screen control/help subtitles.
 - Greenhaven/town service markers are icon-only in a five-marker row; do not add always-visible service labels back onto markers.

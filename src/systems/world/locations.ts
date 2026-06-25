@@ -67,7 +67,7 @@ export function isLocationVisited(this: CrystalOathSceneContext, locationId: str
 }
 
 export function markCurrentLocationVisited(this: CrystalOathSceneContext): boolean {
-  const current = this.locationAt(this.worldPos.x, this.worldPos.y) ?? this.locations().find((loc) => loc.id === this.currentTown || loc.id === this.currentDungeon);
+  const current = this.locationAt(this.worldPos.x, this.worldPos.y) ?? this.locations().find((loc) => loc.id === this.currentDungeon);
   return this.markLocationVisited(current?.id);
 }
 

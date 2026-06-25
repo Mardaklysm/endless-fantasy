@@ -18,12 +18,12 @@ const eventDialog = document.querySelector("#eventDialog");
 const eventForm = document.querySelector("#eventForm");
 
 const presets = {
-  church: { id: "church", label: "Church", prompt: "Visit Church?", activation: "interact", actionKind: "openChurch", actionId: "", townId: "dawnford" },
-  weapons: { id: "weapons", label: "Weapons", prompt: "Enter Weapons?", activation: "interact", actionKind: "openShop", actionId: "weapons", townId: "dawnford" },
-  armor: { id: "armor", label: "Armor", prompt: "Enter Armor?", activation: "interact", actionKind: "openShop", actionId: "armor", townId: "dawnford" },
-  items: { id: "items", label: "Items", prompt: "Browse Items?", activation: "interact", actionKind: "openShop", actionId: "items", townId: "dawnford" },
-  inn: { id: "inn", label: "Inn", prompt: "Enter Inn?", activation: "interact", actionKind: "openInn", actionId: "", townId: "dawnford" },
-  exit: { id: "exit_path", label: "Exit", prompt: "Leave this area?", activation: "confirm", actionKind: "exitPoi", actionId: "", townId: "" }
+  church: { id: "church", label: "Church", prompt: "Visit Church?", activation: "interact", actionKind: "openChurch", actionId: "", serviceProfileId: "dawnford" },
+  weapons: { id: "weapons", label: "Weapons", prompt: "Enter Weapons?", activation: "interact", actionKind: "openShop", actionId: "weapons", serviceProfileId: "dawnford" },
+  armor: { id: "armor", label: "Armor", prompt: "Enter Armor?", activation: "interact", actionKind: "openShop", actionId: "armor", serviceProfileId: "dawnford" },
+  items: { id: "items", label: "Items", prompt: "Browse Items?", activation: "interact", actionKind: "openShop", actionId: "items", serviceProfileId: "dawnford" },
+  inn: { id: "inn", label: "Inn", prompt: "Enter Inn?", activation: "interact", actionKind: "openInn", actionId: "", serviceProfileId: "dawnford" },
+  exit: { id: "exit_path", label: "Exit", prompt: "Leave this area?", activation: "confirm", actionKind: "exitPoi", actionId: "", serviceProfileId: "" }
 };
 
 let pois = [];
@@ -270,7 +270,7 @@ function openEventForm(eventZone, index) {
   document.querySelector("#eventActivation").value = pendingEvent.activation;
   document.querySelector("#eventActionKind").value = pendingEvent.action.kind;
   document.querySelector("#eventActionId").value = actionIdFor(pendingEvent.action);
-  document.querySelector("#eventTownId").value = pendingEvent.action.townId ?? "";
+  document.querySelector("#eventServiceProfileId").value = pendingEvent.action.serviceProfileId ?? "";
   eventDialog.showModal();
 }
 
@@ -305,15 +305,15 @@ function applyPreset(name) {
   document.querySelector("#eventActivation").value = preset.activation;
   document.querySelector("#eventActionKind").value = preset.actionKind;
   document.querySelector("#eventActionId").value = preset.actionId;
-  document.querySelector("#eventTownId").value = preset.townId;
+  document.querySelector("#eventServiceProfileId").value = preset.serviceProfileId;
 }
 
 function actionFromForm() {
   const kind = document.querySelector("#eventActionKind").value;
   const actionId = document.querySelector("#eventActionId").value.trim();
-  const townId = document.querySelector("#eventTownId").value.trim();
-  if (kind === "openShop") return withoutEmpty({ kind, shopId: actionId || "items", townId });
-  if (kind === "openInn" || kind === "openChurch") return withoutEmpty({ kind, townId });
+  const serviceProfileId = document.querySelector("#eventServiceProfileId").value.trim();
+  if (kind === "openShop") return withoutEmpty({ kind, shopId: actionId || "items", serviceProfileId });
+  if (kind === "openInn" || kind === "openChurch") return withoutEmpty({ kind, serviceProfileId });
   if (kind === "exitPoi") return { kind, destination: { kind: "returnToOverworld" } };
   if (kind === "triggerEvent") return { kind, eventId: actionId || "todo_event" };
   if (kind === "inspect") return { kind, lines: [actionId || "TODO: Configure inspection text."] };

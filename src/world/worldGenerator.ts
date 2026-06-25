@@ -100,7 +100,7 @@ export interface GeneratedIsland {
   major: boolean;
   bounds: { x: number; y: number; width: number; height: number };
   tileMap: WorldTileId[][];
-  townPosition: WorldVec;
+  settlementPosition: WorldVec;
   harborPosition: WorldVec;
   dungeonPositions: WorldVec[];
   specialLandmarkPositions: WorldVec[];
@@ -452,7 +452,7 @@ function adaptIsland(semantic: SemanticWorld, tiles: WorldTileId[][], pois: Worl
       height: island.bounds.maxY - island.bounds.minY + 1
     },
     tileMap,
-    townPosition: town ? { x: town.x, y: town.y } : { x: Math.round(island.center.x), y: Math.round(island.center.y) },
+    settlementPosition: town ? { x: town.x, y: town.y } : { x: Math.round(island.center.x), y: Math.round(island.center.y) },
     harborPosition: harbor ? { x: harbor.x, y: harbor.y } : { x: Math.round(island.center.x), y: Math.round(island.center.y) },
     dungeonPositions: islandPois.filter((poi) => poi.kind === "dungeon" || poi.kind === "gate" || poi.kind === "final").map((poi) => ({ x: poi.x, y: poi.y })),
     specialLandmarkPositions: islandPois.filter((poi) => poi.kind === "landmark").map((poi) => ({ x: poi.x, y: poi.y }))

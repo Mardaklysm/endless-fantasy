@@ -1,27 +1,7 @@
 import { LANDMARK_FOOTPRINT } from "../../app/config";
 import type { LocationDef } from "../../data/gameDataTypes";
-import { perfStartEnterOverworld } from "../../debug/perf";
 import type { Vec } from "../../scene/sceneTypes";
 import type { CrystalOathSceneContext } from "../../scene/sceneContext";
-
-export function isTownExitTile(this: CrystalOathSceneContext, tile: Vec): boolean {
-  return tile.y >= 13 && tile.x >= 9 && tile.x <= 11;
-}
-
-export function exitTownToWorld(this: CrystalOathSceneContext) {
-  perfStartEnterOverworld(this, "townExit");
-  this.clearHeldMovement();
-  const loc = this.locations().find((candidate) => candidate.id === this.currentTown);
-  if (loc) {
-    this.worldPos = this.worldReturnTileForLocation(loc);
-  }
-  this.mode = "world";
-  this.syncAllVisualPositions();
-  this.prewarmWorldTerrainChunksForCurrentView(1);
-  this.audio.setMode("world");
-  this.saveGame();
-  this.markDirty();
-}
 
 export function interact(this: CrystalOathSceneContext) {
   if (this.worldControlLockReason === "boatTravel") return;
@@ -30,10 +10,6 @@ export function interact(this: CrystalOathSceneContext) {
     if (loc) {
       this.activateWorldLocation(loc);
     }
-    return;
-  }
-  if (this.mode === "town") {
-    this.interactTown();
     return;
   }
   if (this.mode === "poi") {
@@ -73,35 +49,6 @@ export function worldReturnTileForLocation(this: CrystalOathSceneContext, loc: L
   return { x: loc.x, y: loc.y };
 }
 
-export function interactTown(this: CrystalOathSceneContext) {
-  const town = this.towns()[this.currentTown];
-  const p = this.townPos;
-  const facing = { x: p.x + this.lastMoveDir.x, y: p.y + this.lastMoveDir.y };
-  const facedNpc = town.npcs.find((npc) => npc.x === facing.x && npc.y === facing.y);
-  if (facedNpc) {
-    this.say(facedNpc.lines);
-    return;
-  }
-  for (const npc of town.npcs) {
-    if (Math.abs(npc.x - p.x) + Math.abs(npc.y - p.y) <= 1) {
-      this.say(npc.lines);
-      return;
-    }
-  }
-  const service = this.serviceAt(facing.x, facing.y) ?? this.serviceAt(p.x, p.y);
-  if (service === "inn") this.openInn(town);
-  else if (service === "clinic") this.openClinic(town);
-  else if (service === "item") this.openShop(`${town.name} Item Shop`, town.itemStock.map((id) => ({ id, type: "item" as const })));
-  else if (service === "arms") {
-    const stock = [
-      ...town.weaponStock.map((id) => ({ id, type: "gear" as const })),
-      ...town.armorStock.map((id) => ({ id, type: "gear" as const }))
-    ];
-    this.openShop(`${town.name} Arms`, stock);
-  } else if (service === "magic") this.openMagicShop(town);
-  else this.say([`${town.name}: The road waits outside the south gate.`]);
-}
-
 export function enterLocation(this: CrystalOathSceneContext, loc: LocationDef) {
   this.clearHeldMovement();
   if (loc.islandId) this.currentIslandId = loc.islandId;
@@ -122,28 +69,27 @@ export function enterLocation(this: CrystalOathSceneContext, loc: LocationDef) {
   }
   const poiId = this.poiIdForWorldLocation(loc.id);
   if (poiId) {
-    if (loc.kind === "town" || loc.kind === "gate") this.currentTown = loc.id;
     this.enterPoiVisit(poiId, { mode: "world", locationId: loc.id });
     if (newlyVisited) this.saveGame();
     return;
   }
   if (loc.kind === "gate") {
-    this.currentTown = "starfallGate";
-    this.townPos = { x: 10, y: 12 };
-    this.mode = "town";
-    this.syncAllVisualPositions();
-    this.audio.setMode("world");
-    this.towns().starfallGate.arrival?.();
+    if (this.hasAllRelics() && !this.flags.gateOpen) {
+      this.flags.gateOpen = true;
+      this.flags.skyship = true;
+      this.say([
+        "The four Star Relics rise into a single dawn-colored ring.",
+        "A sky-vessel of glass and cedar descends without a sound.",
+        "Starfall Gate opens. The Eclipse Spire can now be reached."
+      ]);
+    } else {
+      this.say([loc.name]);
+    }
     this.saveGame();
     return;
   }
   if (loc.kind === "town") {
-    this.currentTown = loc.id;
-    this.townPos = { x: 10, y: 12 };
-    this.mode = "town";
-    this.syncAllVisualPositions();
-    this.audio.setMode("world");
-    this.towns()[loc.id].arrival?.();
+    this.say([`${loc.name}: This settlement is available through authored POI scenes only.`]);
     this.saveGame();
     return;
   }

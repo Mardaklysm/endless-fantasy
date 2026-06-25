@@ -5,7 +5,7 @@
   "type": "fortress",
   "background": {
     "key": "battle_bg_ashen_keep",
-    "path": "assets_v2/battle/backgrounds/ashen_keep.jpeg"
+    "path": "src/assets/battle/backgrounds/ashen_keep.jpeg"
   },
   "dimensions": {
     "width": 2752,

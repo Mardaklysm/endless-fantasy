@@ -5,7 +5,7 @@
   "type": "forest",
   "background": {
     "key": "battle_bg_forest_path",
-    "path": "assets_v2/battle/backgrounds/forest_path.jpeg"
+    "path": "src/assets/battle/backgrounds/forest_path.jpeg"
   },
   "dimensions": {
     "width": 2752,

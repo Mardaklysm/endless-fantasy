@@ -5,7 +5,7 @@
   "type": "cave",
   "background": {
     "key": "battle_bg_moss_cave",
-    "path": "assets_v2/battle/backgrounds/moss_cave.jpeg"
+    "path": "src/assets/battle/backgrounds/moss_cave.jpeg"
   },
   "dimensions": {
     "width": 2752,

@@ -73,21 +73,24 @@ export function drawDungeonTile(this: CrystalOathSceneContext, tile: string, sx:
       return;
     }
     const theme = this.dungeonThemeTiles(dungeon);
-    const wallTile = this.pickDungeonAtlasTile(theme.walls, dungeon, tileX, tileY, 19);
-    if (this.drawDungeonAtlasTile(wallTile, sx, sy)) return;
+    const wallTile = this.pickDungeonTile(theme.walls, dungeon, tileX, tileY, 19);
+    if (this.drawDungeonTileImage(wallTile, sx, sy)) return;
     if (this.drawTileTexture("dungeon_wall_base", sx, sy)) return;
     this.g.fillStyle(dungeon.palette.wall, 1).fillRect(sx, sy, TILE, TILE);
     this.g.fillStyle(dungeon.palette.accent, 0.25).fillRect(sx + 4, sy + 4, 7, 7);
     return;
   }
+  const theme = this.dungeonThemeTiles(dungeon);
+  const floorTile = this.pickDungeonTile(theme.floors, dungeon, tileX, tileY);
   const drewFloor =
+    this.drawDungeonTileImage(floorTile, sx, sy) ||
     this.drawTileTexture(DUNGEON_FLOOR_TEXTURES[dungeon.id] ?? "dungeon_floor_moss", sx, sy);
   if (!drewFloor) {
     this.g.fillStyle(dungeon.palette.floor, 1).fillRect(sx, sy, TILE, TILE);
     this.g.fillStyle(0xffffff, 0.05).fillRect(sx + 4, sy + 4, TILE - 8, TILE - 8);
   }
-  const atlasObjectTile = this.dungeonAtlasObjectTile(tile, dungeon, tileX, tileY);
-  if (this.drawDungeonAtlasTile(atlasObjectTile, sx, sy, LAYER_OBJECT_IMAGE)) return;
+  const dungeonObjectTile = this.dungeonObjectTile(tile, dungeon, tileX, tileY);
+  if (this.drawDungeonTileImage(dungeonObjectTile, sx, sy, LAYER_OBJECT_IMAGE)) return;
   const objectKey = this.dungeonObjectTexture(tile, dungeon, tileX, tileY);
   if (this.drawTileTexture(objectKey, sx, sy, LAYER_OBJECT_IMAGE, false, tile === "S")) return;
   if (tile === "C") {

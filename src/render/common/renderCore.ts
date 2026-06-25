@@ -18,7 +18,7 @@ import { CHARACTER_CLASS_TEXTURES, DEFAULT_DUNGEON_THEME_TILES, DUNGEON_THEME_TI
 import type { DungeonThemeTiles } from "../../assets/textureKeys";
 import { CHARACTER_SPRITES } from "../../data/characterSprites";
 import type { CharacterSpriteClass, CharacterSpriteFrameName } from "../../data/characterSprites";
-import { DUNGEON_ATLAS, dungeonAtlasSourceRectWithInset, dungeonTileById } from "../../data/dungeonTiles";
+import { DUNGEON_TILE_ASSETS, dungeonTileById, dungeonTileTextureKey } from "../../data/dungeonTiles";
 import type { DungeonTileId } from "../../data/dungeonTiles";
 import type { CharacterState, DungeonDef } from "../../data/gameDataTypes";
 import { WORLD_CLOUD_ASSETS } from "../../data/worldCloudAssets";
@@ -50,7 +50,6 @@ export function draw(this: CrystalOathSceneContext) {
 export function drawBaseSceneForMode(this: CrystalOathSceneContext, mode: Mode) {
   if (mode === "title") this.drawTitle();
   else if (mode === "world") this.drawWorld();
-  else if (mode === "town") this.drawTown();
   else if (mode === "poi") this.drawPoiVisit();
   else if (mode === "dungeon") this.drawDungeon();
   else if (mode === "battle") this.drawBattle();
@@ -123,6 +122,9 @@ export function configureTextureFiltering(this: CrystalOathSceneContext) {
   }
   for (const cloud of WORLD_CLOUD_ASSETS) {
     if (this.textures.exists(cloud.textureKey)) this.textures.get(cloud.textureKey).setFilter(Phaser.Textures.FilterMode.LINEAR);
+  }
+  for (const tile of DUNGEON_TILE_ASSETS) {
+    if (this.textures.exists(tile.textureKey)) this.textures.get(tile.textureKey).setFilter(Phaser.Textures.FilterMode.NEAREST);
   }
   if (this.textures.exists(CHARTER_BOAT_8DIR_TEXTURE_KEY)) {
     this.textures.get(CHARTER_BOAT_8DIR_TEXTURE_KEY).setFilter(Phaser.Textures.FilterMode.NEAREST);
@@ -338,24 +340,13 @@ export function drawTileTexture(this: CrystalOathSceneContext, key: AssetKey | u
   return true;
 }
 
-export function drawDungeonAtlasTile(this: CrystalOathSceneContext, tileId: DungeonTileId | undefined, x: number, y: number, depth = LAYER_WORLD_IMAGE, alpha = 1): boolean {
-  if (!tileId || !this.hasTexture(DUNGEON_ATLAS.textureKey)) return false;
+export function drawDungeonTileImage(this: CrystalOathSceneContext, tileId: DungeonTileId | undefined, x: number, y: number, depth = LAYER_WORLD_IMAGE, alpha = 1): boolean {
+  if (!tileId) return false;
   const tile = dungeonTileById(tileId);
   if (!tile) return false;
-  const rect = dungeonAtlasSourceRectWithInset(tile.source);
-  this.drawCroppedTexture(
-    DUNGEON_ATLAS.textureKey,
-    x,
-    y,
-    rect.x,
-    rect.y,
-    rect.width,
-    rect.height,
-    TILE,
-    TILE,
-    depth,
-    alpha
-  );
+  const textureKey = dungeonTileTextureKey(tile.id);
+  if (!this.hasTexture(textureKey)) return false;
+  this.drawTexture(textureKey, x, y, TILE, TILE, depth, alpha);
   return true;
 }
 
@@ -363,12 +354,12 @@ export function dungeonThemeTiles(this: CrystalOathSceneContext, dungeon: Dungeo
   return DUNGEON_THEME_TILES[dungeon.id] ?? DEFAULT_DUNGEON_THEME_TILES;
 }
 
-export function pickDungeonAtlasTile(this: CrystalOathSceneContext, ids: DungeonTileId[], dungeon: DungeonDef, tileX: number, tileY: number, salt = 0): DungeonTileId {
+export function pickDungeonTile(this: CrystalOathSceneContext, ids: DungeonTileId[], dungeon: DungeonDef, tileX: number, tileY: number, salt = 0): DungeonTileId {
   const hash = this.dungeonTileHash(dungeon.id, tileX, tileY, this.dungeonFloor + salt);
-  return this.pickWeightedDungeonAtlasTile(ids, hash);
+  return this.pickWeightedDungeonTile(ids, hash);
 }
 
-export function pickWeightedDungeonAtlasTile(this: CrystalOathSceneContext, ids: DungeonTileId[], hash: number): DungeonTileId {
+export function pickWeightedDungeonTile(this: CrystalOathSceneContext, ids: DungeonTileId[], hash: number): DungeonTileId {
   if (ids.length <= 1) return ids[0];
   const roll = (hash % 1000) / 1000;
   if (roll < 0.72) return ids[0];
@@ -385,7 +376,7 @@ export function dungeonTileHash(this: CrystalOathSceneContext, dungeonId: string
   return hash >>> 0;
 }
 
-export function dungeonAtlasObjectTile(this: CrystalOathSceneContext, tile: string, dungeon: DungeonDef, tileX: number, tileY: number): DungeonTileId | undefined {
+export function dungeonObjectTile(this: CrystalOathSceneContext, tile: string, dungeon: DungeonDef, tileX: number, tileY: number): DungeonTileId | undefined {
   const theme = this.dungeonThemeTiles(dungeon);
   if (tile === "C") return this.isDungeonChestOpen(dungeon, this.dungeonFloor, tileX, tileY) ? theme.chestOpen : theme.chestClosed;
   if (tile === "K") return theme.switch;

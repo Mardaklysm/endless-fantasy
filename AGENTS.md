@@ -38,6 +38,15 @@ If more than 2 knowledge docs or more than 6 source files seem necessary, pause 
 - Do not use `agent_knowledge/` for temporary plans, raw logs, or speculation. Mark uncertainty clearly.
 - Validate after edits using the smallest check that covers the change; for most code changes start with `npm run build`.
 
+## Asset Structure
+
+- Runtime image/audio assets belong under `src/assets/`.
+- Source sheets, previews, and reference-only images belong under `src/assets/source/` and must not be runtime-preloaded.
+- Root-level `assets/` and `assets_v2/` are retired and should not be recreated.
+- Overworld restored `src/assets/world/current/terrain_v1/terrain_v1_atlas_*.png` files are valid individual terrain textures and should not be removed merely because of their name.
+- Dungeon terrain uses individual tile PNGs under `src/assets/world/dungeon_tiles/`; do not reintroduce runtime dungeon atlas cropping.
+- Generated town interiors are removed. Settlement gameplay should enter authored POIs and use POI service profiles for shops, inns, and churches.
+
 ## Current Commit Policy
 
 - Every completed code, docs, or asset change must be committed and pushed to the configured remote before the task is considered done.

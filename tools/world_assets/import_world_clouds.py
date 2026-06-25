@@ -81,7 +81,7 @@ def main() -> None:
                 "id": target.stem,
                 "textureKey": f"world_{target.stem}",
                 "filename": f"clouds/{filename}",
-                "path": f"assets/world/current/clouds/{filename}",
+                "path": f"src/assets/world/current/clouds/{filename}",
                 "sourceFile": relative_source(source_root, source_file),
                 "cleanupMethod": cleanup_method,
                 "topBand": True,

@@ -38,13 +38,13 @@ src/
     worldCloudAssets.ts
     worldObjects.ts
   assets/
-    assetPaths.ts                 # root assets/assets_v2/src asset glob and URL resolution
+    assetPaths.ts                 # src/assets runtime asset glob and URL resolution
     assetTypes.ts
     textureKeys.ts                # texture-key maps for gameplay renderers
     world/
       current/
-      dungeon_atlas.png
-      dungeonAtlas.manifest.json
+      dungeon_tiles/
+      dungeonTiles.manifest.json
   render/
     common/
       renderCore.ts               # immediate draw loop helpers, text/images, texture filtering
@@ -55,7 +55,6 @@ src/
       drawWorld.ts                # overworld draw loop, semantic cache, overlays, F6 debug
       drawWorldTerrain.ts         # raw/fallback terrain tile drawing
       drawLocationIcon.ts         # POI/location icon rendering
-    town/drawTown.ts
     dungeon/drawDungeon.ts
     battle/drawBattle.ts
     menu/drawMenu.ts
@@ -136,7 +135,7 @@ Static gameplay tables moved out of the scene:
 - `src/data/enemies.ts`
 - `src/data/playerSkills.ts`
 - `src/data/battleTables.ts`
-- `src/data/towns.ts`
+- `src/data/poiServiceProfiles.ts`
 
 World, cloud, object, character sprite, and dungeon atlas manifest helpers remain in their specialized `src/data/*` files.
 
@@ -146,17 +145,16 @@ Town and dungeon definitions still live in `src/scene/sceneState.ts` because the
 
 Asset loading is split into:
 
-- `src/assets/assetPaths.ts`: root `assets/`, `assets_v2/`, and `src/assets/world/` glob URL resolution.
+- `src/assets/assetPaths.ts`: runtime `src/assets/` URL resolution; `src/assets/source/` is excluded.
 - `src/assets/textureKeys.ts`: stable texture-key maps for locations, town services/props, party classes, enemies, portraits, dungeon atlas themes, and town/dungeon atlas picks.
 - `src/scene/sceneLifecycle.ts`: Phaser preload loop for resolved URLs, current world assets, and cloud assets.
 
 Rules retained:
 
-- `assets_v2` overrides root `assets/` when a mapped v2 asset exists.
 - `src/assets/world/current/` manifest behavior remains active.
 - Generated fallback art remains available for missing textures.
 - Deleted generic placeholder PNGs should not be restored.
-- Dungeon/city atlas crops preserve `DUNGEON_ATLAS_SOURCE_INSET = 3`.
+- Dungeon tile PNGs under `src/assets/world/dungeon_tiles/` have the old 3px source inset baked in.
 
 ## World Generation
 
@@ -177,7 +175,6 @@ Rendering is immediate-mode Phaser graphics/images/live text, split by surface:
 - Common rendering: `src/render/common/renderCore.ts`, `panels.ts`, `drawActors.ts`
 - Title: `src/render/title/drawTitle.ts`
 - World: `src/render/world/drawWorld.ts`, `drawWorldTerrain.ts`, `drawLocationIcon.ts`
-- Town: `src/render/town/drawTown.ts`
 - Dungeon: `src/render/dungeon/drawDungeon.ts`
 - Battle: `src/render/battle/drawBattle.ts`
 - Menu/dialogue/game over/ending: `src/render/menu/drawMenu.ts`

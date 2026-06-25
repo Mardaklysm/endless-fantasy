@@ -1,4 +1,5 @@
-import dungeonAtlasManifestJson from "../assets/world/dungeonAtlas.manifest.json" with { type: "json" };
+import dungeonTilesManifestJson from "../assets/world/dungeonTiles.manifest.json" with { type: "json" };
+import type { AssetKey } from "../assets/assetTypes";
 
 export type DungeonTileId = string;
 export type DungeonTileCategory = "floor" | "wall" | "object" | "exit" | "gate" | "stairs" | "seal";
@@ -19,15 +20,17 @@ export interface DungeonTileCell {
   category: DungeonTileCategory;
   theme: DungeonTheme;
   tags: string[];
+  filename?: string;
   notes?: string;
 }
 
-interface DungeonAtlasManifest {
+interface DungeonTilesManifest {
   schemaVersion: number;
-  id: "dungeon_atlas";
+  id: "dungeon_tiles";
   sourceImage: string;
   sourceSha256: string;
-  runtimeImage: string;
+  runtimeFolder: string;
+  runtimeTextureKeyPrefix: string;
   columns: 8;
   rows: 8;
   tileWidth: number;
@@ -39,27 +42,33 @@ interface DungeonAtlasManifest {
     sourceFormat: string;
   };
   sourceInset: number;
+  sourceInsetAppliedToRuntimeTiles: number;
+  tileImage: {
+    width: number;
+    height: number;
+    runtimeFormat: string;
+  };
   cells: DungeonTileCell[];
   tiles: Record<string, DungeonTileCell>;
 }
 
-export const DUNGEON_ATLAS_SOURCE_INSET = 3;
+export const DUNGEON_TILE_TEXTURE_KEY_PREFIX = "dungeon_tile_";
 
-export const DUNGEON_ATLAS_MANIFEST = dungeonAtlasManifestJson as DungeonAtlasManifest;
+export const DUNGEON_TILES_MANIFEST = dungeonTilesManifestJson as DungeonTilesManifest;
 
-export const DUNGEON_ATLAS = {
-  id: DUNGEON_ATLAS_MANIFEST.id,
-  textureKey: "dungeon_atlas",
-  image: DUNGEON_ATLAS_MANIFEST.runtimeImage,
-  manifest: "src/assets/world/dungeonAtlas.manifest.json",
-  sourceImage: DUNGEON_ATLAS_MANIFEST.sourceImage,
-  sourceInset: DUNGEON_ATLAS_SOURCE_INSET,
-  columns: DUNGEON_ATLAS_MANIFEST.columns,
-  rows: DUNGEON_ATLAS_MANIFEST.rows,
-  tileWidth: DUNGEON_ATLAS_MANIFEST.tileWidth,
-  tileHeight: DUNGEON_ATLAS_MANIFEST.tileHeight,
-  sheetWidth: DUNGEON_ATLAS_MANIFEST.image.width,
-  sheetHeight: DUNGEON_ATLAS_MANIFEST.image.height
+export const DUNGEON_TILESET = {
+  id: DUNGEON_TILES_MANIFEST.id,
+  manifest: "src/assets/world/dungeonTiles.manifest.json",
+  runtimeFolder: DUNGEON_TILES_MANIFEST.runtimeFolder,
+  textureKeyPrefix: DUNGEON_TILE_TEXTURE_KEY_PREFIX,
+  sourceImage: DUNGEON_TILES_MANIFEST.sourceImage,
+  sourceInsetAppliedToRuntimeTiles: DUNGEON_TILES_MANIFEST.sourceInsetAppliedToRuntimeTiles,
+  columns: DUNGEON_TILES_MANIFEST.columns,
+  rows: DUNGEON_TILES_MANIFEST.rows,
+  tileWidth: DUNGEON_TILES_MANIFEST.tileImage.width,
+  tileHeight: DUNGEON_TILES_MANIFEST.tileImage.height,
+  sourceTileWidth: DUNGEON_TILES_MANIFEST.tileWidth,
+  sourceTileHeight: DUNGEON_TILES_MANIFEST.tileHeight
 } as const;
 
 export const DUNGEON_TILE_IDS = {
@@ -129,26 +138,20 @@ export const DUNGEON_TILE_IDS = {
   ornateBossDoorGate: "ornate_boss_door_gate"
 } as const satisfies Record<string, DungeonTileId>;
 
-export const DUNGEON_TILE_CELLS = DUNGEON_ATLAS_MANIFEST.cells;
-export const DUNGEON_TILES = DUNGEON_ATLAS_MANIFEST.tiles;
+export const DUNGEON_TILE_CELLS = DUNGEON_TILES_MANIFEST.cells;
+export const DUNGEON_TILES = DUNGEON_TILES_MANIFEST.tiles;
 export const DUNGEON_TILE_ID_SET = new Set(Object.keys(DUNGEON_TILES));
+export const DUNGEON_TILE_ASSETS = DUNGEON_TILE_CELLS.map((tile) => ({
+  id: tile.id,
+  textureKey: dungeonTileTextureKey(tile.id),
+  filename: tile.filename ?? `dungeon_tiles/${tile.id}.png`
+}));
 
 export function dungeonTileById(id: DungeonTileId | undefined): DungeonTileCell | undefined {
   if (!id) return undefined;
   return DUNGEON_TILES[id];
 }
 
-export function dungeonAtlasSourceRectWithInset(sourceRect: DungeonSourceRect, inset = DUNGEON_ATLAS_SOURCE_INSET): DungeonSourceRect {
-  if (!Number.isInteger(inset) || inset < 0) {
-    throw new Error(`dungeon_atlas source inset must be a non-negative integer; got ${inset}.`);
-  }
-  if (inset * 2 >= sourceRect.width || inset * 2 >= sourceRect.height) {
-    throw new Error(`dungeon_atlas source inset ${inset} is too large for source rect ${sourceRect.width}x${sourceRect.height}.`);
-  }
-  return {
-    x: sourceRect.x + inset,
-    y: sourceRect.y + inset,
-    width: sourceRect.width - inset * 2,
-    height: sourceRect.height - inset * 2
-  };
+export function dungeonTileTextureKey(id: DungeonTileId): AssetKey {
+  return `${DUNGEON_TILE_TEXTURE_KEY_PREFIX}${id}`;
 }

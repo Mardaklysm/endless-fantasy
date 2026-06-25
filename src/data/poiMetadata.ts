@@ -39,9 +39,9 @@ export type PoiExitDestination =
   | { kind: "transitionToPoi"; poiId: string; entryPointId?: string };
 
 export type PoiAction =
-  | { kind: "openShop"; shopId: "weapons" | "armor" | "items" | string; townId?: string }
-  | { kind: "openInn"; townId?: string }
-  | { kind: "openChurch"; townId?: string }
+  | { kind: "openShop"; shopId: "weapons" | "armor" | "items" | string; serviceProfileId?: string }
+  | { kind: "openInn"; serviceProfileId?: string }
+  | { kind: "openChurch"; serviceProfileId?: string }
   | { kind: "openDialog"; lines: string[] }
   | { kind: "inspect"; lines: string[] }
   | { kind: "transitionToPoi"; poiId: string; entryPointId?: string }
@@ -74,7 +74,7 @@ export interface PoiMetadata {
   displayName: string;
   type: PoiCategory;
   sourceLocationId?: string;
-  serviceTownId?: string;
+  serviceProfileId?: string;
   background: {
     key: AssetKey;
     path: string;

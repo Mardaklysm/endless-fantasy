@@ -9,7 +9,8 @@ import {
   type PoiRectShape,
   type PoiShape
 } from "../../data/poiMetadata";
-import type { TownDef } from "../../data/gameDataTypes";
+import { poiServiceProfileById } from "../../data/poiServiceProfiles";
+import type { PoiServiceProfile } from "../../data/gameDataTypes";
 import type { ExploreMode, Vec } from "../../scene/sceneTypes";
 import type { CrystalOathSceneContext } from "../../scene/sceneContext";
 
@@ -41,7 +42,7 @@ export function enterPoiVisit(this: CrystalOathSceneContext, poiId: string, retu
   this.visualPoiPos = { ...this.poiPos };
   const currentMode = this.mode;
   const fallbackReturnMode: ExploreMode =
-    currentMode === "world" || currentMode === "town" || currentMode === "poi" || currentMode === "dungeon" ? currentMode : "world";
+    currentMode === "world" || currentMode === "poi" || currentMode === "dungeon" ? currentMode : "world";
   this.poiReturn = returnState ?? { mode: fallbackReturnMode };
   this.suppressedPoiExitIds = new Set();
   this.lastMoveDir = facingToVector(poi.spawn.facing);
@@ -123,7 +124,7 @@ export function interactPoi(this: CrystalOathSceneContext) {
 
 export function activatePoiAction(this: CrystalOathSceneContext, action: PoiAction, label: string) {
   if (action.kind === "openShop") {
-    const town = this.poiServiceTown(action.townId);
+    const town = this.poiServiceProfile(action.serviceProfileId);
     if (!town) {
       this.say([`${label}: Shop stock is not configured yet.`]);
       return;
@@ -144,13 +145,13 @@ export function activatePoiAction(this: CrystalOathSceneContext, action: PoiActi
     return;
   }
   if (action.kind === "openInn") {
-    const town = this.poiServiceTown(action.townId);
+    const town = this.poiServiceProfile(action.serviceProfileId);
     if (town) this.openInn(town);
     else this.say([`${label}: Inn service is not configured yet.`]);
     return;
   }
   if (action.kind === "openChurch") {
-    const town = this.poiServiceTown(action.townId);
+    const town = this.poiServiceProfile(action.serviceProfileId);
     if (town) this.openPoiChurch(town);
     else this.say([`${label}: Church service is not configured yet.`]);
     return;
@@ -178,13 +179,12 @@ export function activatePoiAction(this: CrystalOathSceneContext, action: PoiActi
   this.say([`${label}: Event hook ${action.eventId} is TODO.`]);
 }
 
-export function poiServiceTown(this: CrystalOathSceneContext, townId?: string): TownDef | undefined {
+export function poiServiceProfile(this: CrystalOathSceneContext, serviceProfileId?: string): PoiServiceProfile | undefined {
   const poi = this.currentPoi();
-  const id = townId ?? poi?.serviceTownId ?? this.currentTown;
-  return this.towns()[id];
+  return poiServiceProfileById(serviceProfileId ?? poi?.serviceProfileId);
 }
 
-export function openPoiChurch(this: CrystalOathSceneContext, town: TownDef) {
+export function openPoiChurch(this: CrystalOathSceneContext, town: PoiServiceProfile) {
   const returnMode = this.serviceReturnMode();
   const revivePrice = town.clinicPrice;
   const blessingPrice = Math.max(1, Math.floor(town.clinicPrice / 2));

@@ -6,7 +6,7 @@ An original retro 2D top-down turn-based fantasy RPG set in Asterra. Three trave
 
 This project uses Phaser 3 with TypeScript and Vite. Phaser handles the browser game loop, canvas rendering, keyboard input, scaling, and pixel-art presentation cleanly, while TypeScript keeps the RPG data tables and battle state safer to evolve. Vite provides a small local dev/build workflow.
 
-Final/generated-first art assets now live under `assets/`, `assets_v2/`, and checked-in runtime atlases under `src/assets/world/`, and are loaded by Phaser at startup. The game renders a crisp semantic mask overworld background using atlas terrain crops as repeating texture sources, PNG/JPEG world object overlays, dungeon tiles/objects, city/town floors and shop pads, town props, markers, battle backgrounds, portraits, enemies, title screen art, title decoration/logo fallbacks, UI cursors, HP bars, and normalized fighter/priest/wizard class sprite sheets. Code-generated fallback art remains in place so the game stays playable if an image is missing or fails to load.
+Runtime art assets live under `src/assets/` and are loaded by Phaser at startup. Source/reference-only material lives under `src/assets/source/` and is excluded from runtime preloading. The game renders a crisp semantic mask overworld background using individual PNG terrain fills, PNG/JPEG world object overlays, individual dungeon tile images, authored POI scenes, markers, battle backgrounds, portraits, enemies, title screen art, UI, effects, icons, and normalized fighter/priest/wizard class sprite sheets. Code-generated fallback art remains in place so the game stays playable if an image is missing or fails to load.
 
 No external sound, fonts, maps, music, asset packs, or copyrighted material are used. Audio is still synthesized in code.
 
@@ -55,17 +55,17 @@ npm test
 
 ## Saving
 
-The game saves to `localStorage`. You can save from the menu on the overworld or in towns, at inns, with tents, and through autosaves when entering major locations and after boss progress.
+The game saves to `localStorage`. You can save from the menu on the overworld, at POI inns, with tents, and through autosaves when entering major locations and after boss progress.
 
 ## Gameplay Summary
 
 - Three-character party: Arlen, Mira, and Kael
-- Seeded semantic archipelago overworld using generated land/water masks, island IDs, coast bands, grass/sand/ice biomes, walkability, overlay collision policy, road/river data, and POIs. Normal gameplay renders a crisp mask-based terrain background from the semantic fields, using existing atlas terrain crops as repeating texture sources with pixel-step coast and biome boundary accents. Objects stay separate, while road/river graph strokes are debug-only until they have proper art.
-- Atlas-backed city/town interiors and dungeons using `dungeon_atlas` for medieval stone, cave, ice, ruin, volcanic, cursed, chest, gate, switch, stair, and boss-seal tiles
+- Seeded semantic archipelago overworld using generated land/water masks, island IDs, coast bands, grass/sand/ice biomes, walkability, overlay collision policy, road/river data, and POIs. Normal gameplay renders a crisp mask-based terrain background from the semantic fields, using individual PNG terrain fills with pixel-step coast and biome boundary accents. Objects stay separate, while road/river graph strokes are debug-only until they have proper art.
+- Individual dungeon tile PNGs under `src/assets/world/dungeon_tiles/` for medieval stone, cave, ice, ruin, volcanic, cursed, chest, gate, switch, stair, and boss-seal tiles
 - Four major themed islands: Greenhaven, Coralreach, Frostmere, and Highspire, with deterministic world seeds and harbor travel between charted routes
 - Procedural room-and-corridor dungeons derived from the world seed and dungeon id
 - Turn-based battles with Attack, Skill, Magic, Item, Defend, and Run commands
-- Individual initiative turns, visible enemy intents, cooldown skills, status effects, elemental weaknesses, boss fights, XP/gold, drops, level-ups, equipment, shops, inns, clinics, and magic shops
+- Individual initiative turns, visible enemy intents, cooldown skills, status effects, elemental weaknesses, boss fights, XP/gold, drops, level-ups, equipment, authored POI shops, inns, churches, and magic shops
 - Quality-of-life settings for encounter toggle, XP multiplier, fast text, mute, and debug testing
 
 ## Credits
@@ -82,14 +82,14 @@ All code, art, and audio are procedurally generated or created inside this proje
 
 - Title screen appears and New Game starts in Greenhaven.
 - Intro dialogue advances with Enter/Z.
-- Player moves smoothly with keyboard, can exit town through the south gate, and sees an ocean-based archipelago on the overworld.
+- Player moves smoothly with keyboard, starts inside the authored Greenhaven POI, and can return to the ocean-based archipelago overworld.
 - Normal overworld terrain is mask-rendered, not square atlas tiles; coast and biome boundaries should read as pixel-crisp organic masks rather than a hard tile grid. F6 `rawTiles` shows the square atlas debug view, and F6 `roads` / `rivers` show the semantic graph lines.
 - Menu opens with Escape and Settings can toggle encounters and XP multiplier.
 - Random or debug encounters enter battle.
 - Battle shows one current actor at a time, enemy intent, and the Skill command; party actions resolve immediately and enemies act on initiative turns.
 - Magic and items consume resources and affect valid targets.
-- Inn restores HP/spell charges and saves.
-- Shops can buy items, gear, and spells.
+- POI inn restores HP/spell charges and saves.
+- POI shops can buy items, gear, and spells.
 - Dungeons are procedurally generated and contain rooms, corridors, chests, a switch gate, stairs, random encounters, and bosses.
 - Harbor travel deducts gold correctly and can return between charted islands.
 - Boss victory sets relic flags, cleared dungeon state, and later travel/progression rewards.

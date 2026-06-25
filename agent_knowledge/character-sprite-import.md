@@ -9,8 +9,8 @@ C:\Users\Marku\.codex\skills\endless-fantasy-character-sprite-import\SKILL.md
 The current implementation source of truth is:
 
 - Import script: `tools/art_import/import_character_sprites.mjs`
-- Runtime sheets: `assets_v2/characters/classes/*_normalized.png`
-- Source copies: `assets_v2/source_sheets/class_sprites/*.png`
+- Runtime sheets: `src/assets/heroes/sprite_hero_*.png`
+- Source copies: `src/assets/source/art_import/source_sheets/class_sprites/*.png`
 - Manifest/metadata: `src/data/characterSprites.ts`
 - Debug previews/reports: `docs/debug/sprite-import/`
 - Runtime renderer: `src/render/common/renderCore.ts` (`drawCharacterSpriteFrame`), `src/render/common/drawActors.ts` (`drawLeader`), and `src/render/battle/drawBattle.ts` (`drawPartyBattler`)

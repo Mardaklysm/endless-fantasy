@@ -27,9 +27,7 @@ export function loadGame(this: CrystalOathSceneContext): boolean {
     this.gold = data.gold ?? 0;
     this.currentIslandId = data.currentIslandId ?? getIslandAt(this.generatedWorld!, data.worldPos?.x ?? 0, data.worldPos?.y ?? 0)?.id ?? "greenhaven";
     this.worldPos = data.worldPos ?? this.generatedWorld?.startPosition ?? { x: 10, y: 22 };
-    this.townPos = data.townPos ?? { x: 10, y: 12 };
     this.dungeonPos = data.dungeonPos ?? { x: 1, y: 1 };
-    this.currentTown = data.currentTown ?? "dawnford";
     this.currentDungeon = data.currentDungeon ?? "mossCave";
     this.dungeonFloor = data.dungeonFloor ?? 0;
     this.flags = this.normalizeFlags(data.flags);

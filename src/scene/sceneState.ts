@@ -1,5 +1,5 @@
 import { WORLD_H, WORLD_W } from "../app/config";
-import type { CharacterState, DungeonDef, LocationDef, TownDef } from "../data/gameDataTypes";
+import type { CharacterState, DungeonDef, LocationDef } from "../data/gameDataTypes";
 import { perfNow, perfRecordWorldgen } from "../debug/perf";
 import { isExploreModeValue, type ExploreMode, type Mode } from "./sceneTypes";
 import { generateDungeonFloors } from "../world/dungeonGenerator";
@@ -38,9 +38,7 @@ export function newGame(this: CrystalOathSceneContext) {
   this.buildWorldFromSeed(createWorldSeed());
   this.setWorldTimeTicks(0);
   this.worldPos = { ...(this.generatedWorld?.startPosition ?? { x: 10, y: 22 }) };
-  this.townPos = { x: 10, y: 12 };
   this.dungeonPos = { x: 1, y: 1 };
-  this.currentTown = "dawnford";
   this.currentDungeon = "mossCave";
   this.currentIslandId = "greenhaven";
   this.dungeonFloor = 0;
@@ -56,9 +54,8 @@ export function newGame(this: CrystalOathSceneContext) {
   this.settings.xpMultiplier = 1;
   this.settings.fastText = false;
   this.clearHeldMovement();
-  this.currentTown = "dawnford";
-  this.markLocationVisited(this.currentTown);
-  this.enterPoiVisit(STARTING_POI_ID, { mode: "world", locationId: this.currentTown });
+  this.markLocationVisited("dawnford");
+  this.enterPoiVisit(STARTING_POI_ID, { mode: "world", locationId: "dawnford" });
   this.audio.setMode("world");
   this.dialogue = {
     lines: [
@@ -69,7 +66,7 @@ export function newGame(this: CrystalOathSceneContext) {
     ],
     index: 0,
     done: () => {
-      this.enterPoiVisit(STARTING_POI_ID, { mode: "world", locationId: this.currentTown });
+      this.enterPoiVisit(STARTING_POI_ID, { mode: "world", locationId: "dawnford" });
       this.saveGame();
     }
   };
@@ -221,108 +218,6 @@ export function locationProgressionRules(this: CrystalOathSceneContext, id: stri
     };
   }
   return {};
-}
-
-export function towns(this: CrystalOathSceneContext): Record<string, TownDef> {
-  return {
-    dawnford: {
-      id: "dawnford",
-      name: "Greenhaven",
-      palette: ["#23314f", "#4b6a9b", "#d9e6ff"],
-      innPrice: 18,
-      clinicPrice: 35,
-      itemStock: ["potion", "antidote", "tent"],
-      weaponStock: ["ironSaber"],
-      armorStock: ["ringMail", "sageMantle"],
-      spellStock: ["glow", "frost"],
-      npcs: [
-        { x: 5, y: 7, lines: ["Guard: Mossy Cave shifts every season, but its deepest room always hoards trouble."] },
-        { x: 14, y: 8, lines: ["Archivist: The map seed is written in the stars. Same seed, same islands."] },
-        { x: 9, y: 5, lines: ["Harbor Master: Passage to Coralreach is 10 gold from the dock outside town."] }
-      ]
-    },
-    brinewick: {
-      id: "brinewick",
-      name: "Coralreach",
-      palette: ["#183e5b", "#2f9ac0", "#d2fbff"],
-      innPrice: 26,
-      clinicPrice: 45,
-      itemStock: ["potion", "antidote", "phoenixAsh", "smokeBomb"],
-      weaponStock: ["glassWand"],
-      armorStock: ["ringMail", "sageMantle"],
-      spellStock: ["mendall", "quakelet"],
-      arrival: () => {
-        if (!this.flags.travel.visitedIsland2) {
-          this.flags.travel.visitedIsland2 = true;
-          this.say(["Coralreach smells of rain, spice, and old stone. Pirates watch the ruins from the trees."]);
-        }
-      },
-      npcs: [
-        { x: 6, y: 7, lines: ["Sailor: Jungle ruins lie inland. Pirates found something there and stopped laughing."] },
-        { x: 15, y: 7, lines: ["Fisher: I saw a wreck south of the harbor. It might still have cargo."] },
-        { x: 11, y: 4, lines: ["Harbor Master: Frostmere and Highspire passages open once your charts are worthy."] }
-      ]
-    },
-    elderleaf: {
-      id: "elderleaf",
-      name: "Elderleaf",
-      palette: ["#14351f", "#4d8b43", "#d7f2a4"],
-      innPrice: 24,
-      clinicPrice: 42,
-      itemStock: ["potion", "antidote", "etherleaf", "tent"],
-      weaponStock: ["glassWand"],
-      armorStock: ["sageMantle"],
-      spellStock: ["revive", "storm"],
-      npcs: [
-        { x: 5, y: 8, lines: ["Druid: Poison lingers after battle. Carry antidotes or rest at an inn."] },
-        { x: 14, y: 6, lines: ["Scout: Stonefall Keep opened when Rootlight returned. Ice cools proud flame."] },
-        { x: 11, y: 10, lines: ["Child: I saw a hidden chest sparkle behind the cave's switch stone."] }
-      ]
-    },
-    sunbarrow: {
-      id: "sunbarrow",
-      name: "Highspire Camp",
-      palette: ["#6c4c22", "#d29a44", "#fff0ae"],
-      innPrice: 32,
-      clinicPrice: 55,
-      itemStock: ["potion", "phoenixAsh", "etherleaf", "smokeBomb", "tent"],
-      weaponStock: ["glassWand"],
-      armorStock: ["ringMail", "sageMantle"],
-      spellStock: ["starveil", "nova"],
-      npcs: [
-        { x: 7, y: 7, lines: ["Miner: Highspire's cliffs move like they are thinking. Stay on the paths."] },
-        { x: 13, y: 9, lines: ["Trader: Starveil wins long fights. Nova ends short ones."] },
-        { x: 10, y: 5, lines: ["Outrider: Four relics point to Starfall Gate, not the spire itself."] }
-      ]
-    },
-    starfallGate: {
-      id: "starfallGate",
-      name: "Starfall Gate",
-      palette: ["#1b1733", "#7065a8", "#fff4bd"],
-      innPrice: 0,
-      clinicPrice: 0,
-      itemStock: ["potion", "phoenixAsh", "etherleaf", "smokeBomb"],
-      weaponStock: [],
-      armorStock: [],
-      spellStock: [],
-      arrival: () => {
-        if (this.hasAllRelics() && !this.flags.gateOpen) {
-          this.flags.gateOpen = true;
-          this.flags.skyship = true;
-          this.say([
-            "The four Star Relics rise into a single dawn-colored ring.",
-            "A sky-vessel of glass and cedar descends without a sound.",
-            "Starfall Gate opens. The Eclipse Spire can now be reached."
-          ]);
-          this.saveGame();
-        }
-      },
-      npcs: [
-        { x: 10, y: 6, lines: ["Gatekeeper: Root, Flame, Tide, and Gale must sing together."] },
-        { x: 7, y: 9, lines: ["Pilgrim: Past this gate waits the Crown that dimmed the morning."] }
-      ]
-    }
-  };
 }
 
 export function generatedDungeonFloors(this: CrystalOathSceneContext, dungeonId: string, tier: number, final = false): string[][] {

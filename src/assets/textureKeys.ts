@@ -1,6 +1,6 @@
 import type { CharacterSpriteClass } from "../data/characterSprites";
 import { DUNGEON_TILE_IDS, type DungeonTileId } from "../data/dungeonTiles";
-import type { CharacterState, ServiceKind } from "../data/gameDataTypes";
+import type { CharacterState } from "../data/gameDataTypes";
 import type { AssetKey } from "./assetTypes";
 
 export interface DungeonThemeTiles {
@@ -156,29 +156,6 @@ export const DUNGEON_THEME_TILES: Record<string, DungeonThemeTiles> = {
 
 export const DEFAULT_DUNGEON_THEME_TILES: DungeonThemeTiles = DUNGEON_THEME_TILES.mossCave;
 
-export const TOWN_ATLAS_FLOOR_TILES: DungeonTileId[] = [
-  DUNGEON_TILE_IDS.plainGrayStoneFloor,
-  DUNGEON_TILE_IDS.crackedGrayStoneFloor,
-  DUNGEON_TILE_IDS.mossyStoneFloor,
-  DUNGEON_TILE_IDS.stoneFloorDebris,
-  DUNGEON_TILE_IDS.stoneFloorDrainageCracks
-];
-
-export const TOWN_ATLAS_WALL_TILES: DungeonTileId[] = [
-  DUNGEON_TILE_IDS.grayStoneWall,
-  DUNGEON_TILE_IDS.crackedStoneWall,
-  DUNGEON_TILE_IDS.mossyStoneWall,
-  DUNGEON_TILE_IDS.torchStoneWall
-];
-
-export const TOWN_SHOP_PAD_TILES: Record<ServiceKind, DungeonTileId> = {
-  inn: DUNGEON_TILE_IDS.mossyStoneFloor,
-  item: DUNGEON_TILE_IDS.stoneFloorDebris,
-  arms: DUNGEON_TILE_IDS.stoneFloorDrainageCracks,
-  magic: DUNGEON_TILE_IDS.stoneFloorMagicMarks,
-  clinic: DUNGEON_TILE_IDS.plainGrayStoneFloor
-};
-
 export const LOCATION_TEXTURES: Record<string, AssetKey> = {
   dawnford: "marker_castle",
   brinewick: "marker_port",
@@ -191,22 +168,6 @@ export const LOCATION_TEXTURES: Record<string, AssetKey> = {
   skyglassTower: "marker_tower",
   eclipseSpire: "marker_final_spire"
 };
-
-export const TOWN_SERVICE_TEXTURES: Record<ServiceKind, AssetKey> = {
-  inn: "town_service_inn",
-  item: "town_service_items",
-  arms: "town_service_arms",
-  magic: "town_service_magic",
-  clinic: "town_service_clinic"
-};
-
-export const TOWN_PROP_TEXTURES = {
-  table: "town_prop_table",
-  crate: "town_prop_crate",
-  barrel: "town_prop_barrel",
-  lamp: "town_prop_lamp",
-  rug: "town_prop_rug"
-} as const satisfies Record<string, AssetKey>;
 
 export const CHARACTER_CLASS_TEXTURES: Record<CharacterSpriteClass, AssetKey> = {
   fighter: "hero_fighter_sprite",

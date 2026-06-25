@@ -271,11 +271,7 @@ function parseEnemies(source) {
 
 function resolveAssetPath(assetPath) {
   if (!assetPath) return "";
-  const candidates = [
-    path.join("assets_v2", assetPath),
-    path.join("src", "assets", assetPath),
-    path.join("assets", assetPath)
-  ];
+  const candidates = [path.join("src", "assets", assetPath)];
   for (const candidate of candidates) {
     if (pathIsFile(path.join(repoRoot, candidate))) return candidate.replaceAll("\\", "/");
   }

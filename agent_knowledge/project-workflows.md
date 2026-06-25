@@ -105,7 +105,7 @@ For normal asset work, start with `agent_knowledge/task-profiles/assets.md`. Ope
 
 Current high-level rules:
 
-- Copy files into the existing asset structure without creating `assets/assets/...`.
+- Copy files into the existing `src/assets` structure without nesting duplicate asset roots.
 - Add or update manifest-style texture keys in the asset map.
 - Use image-first fallback rendering.
 - Keep generated placeholders until the replacement path is verified.

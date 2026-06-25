@@ -52,7 +52,7 @@ This runs `tools/worldgen/test_worldgen.mjs`. It validates the active semantic r
 
 ## Asset Import Validation
 
-After changing `tools/art_import/`, crop maps, or files under `assets_v2/`, regenerate previews:
+After changing `tools/art_import/`, crop maps, or imported files under `src/assets/`, regenerate previews when relevant:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools\art_import\generate_asset_previews.ps1
@@ -60,12 +60,11 @@ powershell -ExecutionPolicy Bypass -File tools\art_import\generate_asset_preview
 
 Check:
 
-- `assets_v2/previews/world_tiles_preview.png` has no source-sheet border/grid pixels.
-- `assets_v2/previews/markers_preview.png` has transparent markers without adjacent fragments.
-- `assets_v2/previews/town_props_preview.png` has clean service signs/props.
-- `assets_v2/previews/characters_preview.png`, `portraits_preview.png`, `enemies_preview.png`, and `bosses_preview.png` have transparent backgrounds and no cut-off neighboring sprites.
-- `assets_v2/previews/battle_backgrounds_preview.png`, if regenerated, should show the opaque 16:9 JPEG battle backgrounds without cropping artifacts.
-- `assets_v2/previews/QUALITY_REPORT.md` documents rembg/color-key choices.
+- `src/assets/source/art_import/previews/world_tiles_preview.png` has no source-sheet border/grid pixels.
+- `src/assets/source/art_import/previews/markers_preview.png` has transparent markers without adjacent fragments.
+- `src/assets/source/art_import/previews/characters_preview.png`, `portraits_preview.png`, `enemies_preview.png`, and `bosses_preview.png` have transparent backgrounds and no cut-off neighboring sprites.
+- `src/assets/source/art_import/previews/battle_backgrounds_preview.png`, if regenerated, should show the opaque 16:9 JPEG battle backgrounds without cropping artifacts.
+- `src/assets/source/art_import/previews/QUALITY_REPORT.md` documents rembg/color-key choices.
 
 For fighter/priest/wizard class sheets, run:
 
@@ -73,7 +72,7 @@ For fighter/priest/wizard class sheets, run:
 node tools\art_import\import_character_sprites.mjs
 ```
 
-Check `assets_v2/characters/classes/*_normalized.png`, `src/data/characterSprites.ts`, and `docs/debug/sprite-import/*.debug.png` / `*.import-report.md`. The normalized runtime sheets should be transparent 5x2 sheets with identical 704x512 cells; debug previews are the only files with labels, grid boxes, anchor crosses, and baseline lines.
+Check `src/assets/heroes/sprite_hero_*.png`, `src/data/characterSprites.ts`, and `docs/debug/sprite-import/*.debug.png` / `*.import-report.md`. The normalized runtime sheets should be transparent 5x2 sheets with identical 704x512 cells; debug previews are the only files with labels, grid boxes, anchor crosses, and baseline lines.
 
 For the active current overworld selected terrain fills, do not use the legacy terrain-only importer because it is disabled and does not represent the full current object set:
 
@@ -99,13 +98,14 @@ python tools\world-object-curator\curate_world_objects_relaxed.py --integrate
 
 Check `D:\new_items\output_relaxed\world_objects_v2_game_ready_contactsheet.png`, `world_objects_v2_touchup_needed_contactsheet.png`, `world_objects_v2_alpha_preview.png`, `world_objects_v2_fit_preview.png`, and `world_objects_v2_runtime_mapping.json`. Only `game_ready` objects should be copied into runtime; `touchup_needed` objects must stay external. Compact settlements, cities, harbor towns, forts, castles, monasteries, academies, and similar miniature location compositions are valid POI sprites if readable and clean.
 
-For the active `dungeon_atlas` dungeon/city tile atlas, run after changing `D:\Projects\new_artwork\dungeon_atlas.jpeg` or the classification rules:
+For active dungeon/city tiles, check the individual tile PNGs and manifest:
 
 ```powershell
-npm run import:dungeon-atlas
+npm run build
+npm test
 ```
 
-Check `src/assets/world/dungeon_atlas.png`, `src/assets/world/dungeonAtlas.manifest.json`, and `docs/debug/dungeon-atlas/dungeon-atlas-import-report.md`. The current importer uses ImageMagick resize only and keeps the sheet opaque. Do not run rembg or transparency removal on this atlas.
+Check `src/assets/world/dungeon_tiles/*.png` and `src/assets/world/dungeonTiles.manifest.json`. Runtime dungeon atlas cropping is retired.
 
 For the reset semantic overworld direction, use World Generator Lab:
 
@@ -228,7 +228,7 @@ Expected:
 
 - Enter a dungeon.
 - Confirm dungeon layout is room-and-corridor procedural and deterministic for a seed.
-- Confirm dungeon floors, walls, chests, switches, gates, stairs, exits, and boss seals render from the active `dungeon_atlas`.
+- Confirm dungeon floors, walls, chests, switches, gates, stairs, exits, and boss seals render from individual dungeon tile PNGs.
 - Confirm random encounters occur.
 - Open chest.
 - Activate switch.

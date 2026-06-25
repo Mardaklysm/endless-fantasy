@@ -5,7 +5,7 @@
   "type": "field",
   "background": {
     "key": "battle_bg_plains",
-    "path": "assets_v2/battle/backgrounds/plains.jpeg"
+    "path": "src/assets/battle/backgrounds/plains.jpeg"
   },
   "dimensions": {
     "width": 2752,

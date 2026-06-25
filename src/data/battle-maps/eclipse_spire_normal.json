@@ -5,7 +5,7 @@
   "type": "final",
   "background": {
     "key": "battle_bg_eclipse_spire",
-    "path": "assets_v2/battle/backgrounds/eclipse_spire.jpeg"
+    "path": "src/assets/battle/backgrounds/eclipse_spire.jpeg"
   },
   "dimensions": {
     "width": 2752,

@@ -15,7 +15,7 @@ import {
   worldCurrentPoiTextureKeyFor
 } from "../../src/data/worldCurrentAssets.ts";
 import { WORLD_CLOUD_ASSET_BY_TEXTURE_KEY, WORLD_CLOUD_ASSETS, WORLD_CLOUD_MANIFEST, worldCloudPoolForContext, worldCloudThemeForContext } from "../../src/data/worldCloudAssets.ts";
-import { DUNGEON_ATLAS } from "../../src/data/dungeonTiles.ts";
+import { DUNGEON_TILE_ASSETS, DUNGEON_TILESET } from "../../src/data/dungeonTiles.ts";
 import { generateDungeonFloors, validateDungeonFloorsConnectivity } from "../../src/world/dungeonGenerator.ts";
 import { SEMANTIC_BIOME, SEMANTIC_WATER } from "../../src/world/semantic/semanticTypes.ts";
 import { SEMANTIC_MASK_TERRAIN_CLASSES, describeSemanticMaskTerrainRenderPlan } from "../../src/world/semantic/semanticMaskTerrainRenderer.ts";
@@ -34,7 +34,7 @@ validateDungeonGeneration();
 console.log("semantic worldgen runtime validation passed.");
 
 function validateRuntimeAssets() {
-  assertPng(DUNGEON_ATLAS.image, 1024, 1024, "active dungeon atlas");
+  validateDungeonTileAssets();
   validateCurrentWorldAssetManifest();
   validateWorldCloudManifest();
   validateNoDeprecatedRuntimeAtlasReferences();
@@ -50,6 +50,18 @@ function validateRuntimeAssets() {
   assert(WORLD_OBJECT_ID_SET.has("small_mountain_peak"), "world object registry lacks mountain overlay ID.");
   assert(WORLD_OBJECT_ID_SET.has("broadleaf_tree"), "world object registry lacks forest overlay ID.");
   assert(WORLD_OBJECT_ID_SET.has("harbor_signpost"), "world object registry lacks harbor overlay ID.");
+}
+
+function validateDungeonTileAssets() {
+  assert(DUNGEON_TILE_ASSETS.length === 64, `Expected 64 dungeon tile images, got ${DUNGEON_TILE_ASSETS.length}.`);
+  for (const tile of DUNGEON_TILE_ASSETS) {
+    assertPng(
+      path.join("src", "assets", "world", tile.filename),
+      DUNGEON_TILESET.tileWidth,
+      DUNGEON_TILESET.tileHeight,
+      `dungeon tile ${tile.id}`
+    );
+  }
 }
 
 function validateDungeonGeneration() {
@@ -674,7 +686,7 @@ function stableSummary(world) {
   return JSON.stringify({
     seed: world.seed,
     tiles: world.tiles,
-    islands: world.islands.map((island) => ({ id: island.id, bounds: island.bounds, town: island.townPosition, harbor: island.harborPosition })),
+    islands: world.islands.map((island) => ({ id: island.id, bounds: island.bounds, settlement: island.settlementPosition, harbor: island.harborPosition })),
     pois: world.pois.map((poi) => ({ id: poi.id, kind: poi.kind, islandId: poi.islandId, x: poi.x, y: poi.y })),
     mountainRanges: world.semantic.mountainRanges.map((range) => ({ id: range.id, islandId: range.islandId, kind: range.kind, cells: range.cells.length, smallOutcrop: !!range.smallOutcrop })),
     roads: world.roads,

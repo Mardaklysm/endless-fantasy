@@ -4,13 +4,13 @@ Use this profile for asset import, asset manifests, runtime texture mapping, art
 
 ## Asset Roots And Manifests
 
-- Root fallback/Batch 001 assets: `assets/`
-- Improved extracted assets: `assets_v2/`
+- Runtime assets: `src/assets/`
+- Reference-only/source/provenance assets: `src/assets/source/`
 - Active overworld current asset set: `src/assets/world/current/`
 - Active common/boss enemy battle art: `src/assets/enemies/`
 - Active overworld manifest: `src/assets/world/current/world_asset_manifest.json`
 - Active cloud manifest: `src/assets/world/current/clouds/cloud_manifest.json`
-- Active dungeon atlas manifest: `src/assets/world/dungeonAtlas.manifest.json`
+- Active dungeon tile manifest: `src/assets/world/dungeonTiles.manifest.json`
 
 Runtime loading and lookups:
 
@@ -24,10 +24,12 @@ Runtime loading and lookups:
 ## Core Rules
 
 - Runtime asset resolution is premium-first, backup-second, generated-fallback-last.
-- For assets that have been promoted into `src/assets/`, prefer `src/assets` over `assets_v2`/root fallback paths.
+- Root-level `assets/` and `assets_v2/` are retired. Do not add runtime references or fallback globs to them.
+- Dungeon tiles are individual PNGs under `src/assets/world/dungeon_tiles/`; do not reintroduce runtime dungeon atlas cropping.
+- Generated town interiors are removed. Use authored POIs plus `src/data/poiServiceProfiles.ts` for shop/inn/church services.
 - Keep image-first rendering with generated fallback behavior.
 - Do not restore deleted generic overworld overlay/POI/route placeholder PNGs.
-- Do not run rembg on terrain, the opaque dungeon atlas, opaque battle backgrounds, or alpha character sheets.
+- Do not run rembg on terrain, opaque battle backgrounds, or alpha character sheets.
 - Do not use raw collages or preview sheets as runtime sprites.
 - Keep UI text live unless an image is purely decorative/title art.
 - Keep battle backgrounds opaque.
@@ -36,7 +38,6 @@ Runtime loading and lookups:
 ## Relevant Scripts
 
 - `tools/art_import/import_character_sprites.mjs`
-- `tools/art_import/import_dungeon_atlas.mjs`
 - `tools/art_import/generate_asset_previews.ps1`
 - `tools/world_assets/import_premium_world_objects.py`
 - `tools/world-object-curator/curate_world_objects.py`
@@ -54,7 +55,6 @@ npm run build
 npm test
 powershell -ExecutionPolicy Bypass -File tools\art_import\generate_asset_previews.ps1
 node tools\art_import\import_character_sprites.mjs
-npm run import:dungeon-atlas
 python tools\world_assets\import_premium_world_objects.py
 python tools\world-object-curator\curate_world_objects.py --integrate
 python tools\world-object-curator\curate_world_objects_relaxed.py --integrate

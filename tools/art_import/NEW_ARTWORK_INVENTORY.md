@@ -2,7 +2,7 @@
 
 Source root: `D:\Projects\new_artwork`
 
-Extraction output: `D:\Projects\Endless Fantasy\assets_v2`
+Extraction output: `D:\Projects\Endless Fantasy\src\assets`
 
 Tools:
 
@@ -42,7 +42,7 @@ No ZIP files were present in `D:\Projects\new_artwork`, so nothing was extracted
 | `01_tilesets/location_town.png` | 147x155 | Pre-separated town marker | Source only | Medium | Pre-cut had visible remnant risk; master crop used instead |
 | `01_tilesets/world_terrain_sheet.png` | 1448x520 | Terrain tile sheet | Extracted world terrain and bridge | Medium | Labels excluded by manual crops; terrain kept opaque rectangular |
 | `01_tilesets/world_tileset_master.png` | 1448x1086 | Full world tileset plus markers | Extracted clean marker crops | Medium | Labels excluded; neutral background color-keyed for markers |
-| `02_props/interior_props_master.png` | 1448x1086 | Town/interior floors, walls, props, service signs | Extracted floor, wall, exit, signs, table, crate, barrel, lamp, rug | Medium | Neutral background; color-key mostly used, rembg promoted for simple props |
+| `02_props/interior_props_master.png` | 1448x1086 | Removed generated-town interior source | Obsolete; generated town interiors were removed | Medium | Neutral background; no runtime extraction |
 | `03_ui/battle_ui_master.png` | 1448x1086 | Battle UI windows, bars, cursors, buttons, icons | Extracted panel source, cursor, bars, buttons, reference windows | Medium | Labels and sample text excluded where possible; sample-window crops are source/reference only in code |
 | `04_characters/cleric/battle_sprite.png` | 468x501 | Pre-separated cleric battle sprite | Source only | High | Contains label/background issues; master crop used instead |
 | `04_characters/cleric/cleric_master_sheet.png` | 1254x1254 | Cleric/Mira map frames, portrait, battle sprite | Extracted Mira portrait and battle sprite | Medium | Labels avoided by manual crops |
@@ -85,6 +85,6 @@ No ZIP files were present in `D:\Projects\new_artwork`, so nothing was extracted
 
 ## rembg Result Summary
 
-- rembg candidates were generated for characters, portraits, battle sprites, enemies, bosses, markers, town props, and selected UI pieces.
-- rembg was promoted only for `prop_crate.png`, `prop_barrel.png`, `prop_lamp.png`, and `prop_rug.png`.
-- Color-key was kept for terrain, markers, characters, portraits, battle sprites, enemies, bosses, service signs, cursors, buttons, and UI bars because those outputs kept crisper pixel edges and fewer holes/halos.
+- rembg candidates were generated for characters, portraits, battle sprites, enemies, bosses, markers, and selected UI pieces.
+- Town prop/service-sign outputs were removed with the generated-town interior system.
+- Color-key was kept for terrain, markers, characters, portraits, battle sprites, enemies, bosses, cursors, buttons, and UI bars because those outputs kept crisper pixel edges and fewer holes/halos.

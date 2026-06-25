@@ -5,7 +5,7 @@
   "type": "water",
   "background": {
     "key": "battle_bg_tide_shrine",
-    "path": "assets_v2/battle/backgrounds/tide_shrine.jpeg"
+    "path": "src/assets/battle/backgrounds/tide_shrine.jpeg"
   },
   "dimensions": {
     "width": 2752,

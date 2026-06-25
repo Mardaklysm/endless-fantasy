@@ -1,7 +1,8 @@
 param(
   [string]$SourceRoot = "D:\Projects\new_artwork",
   [string]$ProjectRoot = "D:\Projects\Endless Fantasy",
-  [string]$OutRoot = "D:\Projects\Endless Fantasy\assets_v2"
+  [string]$OutRoot = "D:\Projects\Endless Fantasy\src\assets",
+  [string]$SourceArchiveRoot = "D:\Projects\Endless Fantasy\src\assets\source\art_import\source_sheets"
 )
 
 $ErrorActionPreference = "Stop"
@@ -162,13 +163,14 @@ $mapsRoot = Join-Path $ProjectRoot "tools\art_import\crop_maps"
 if (!(Test-Path $mapsRoot)) { throw "Crop map folder not found: $mapsRoot" }
 
 $folders = @(
-  "tiles\world", "tiles\markers", "tiles\town", "tiles\dungeons",
+  "tiles\world", "tiles\markers", "tiles\dungeons",
   "objects", "characters", "portraits", "enemies\common", "enemies\bosses",
-  "battle\backgrounds", "ui", "icons", "effects", "previews", "source_sheets"
+  "battle\backgrounds", "ui", "icons", "effects"
 )
 foreach ($folder in $folders) {
   New-Item -ItemType Directory -Force -Path (Join-Path $OutRoot $folder) | Out-Null
 }
+New-Item -ItemType Directory -Force -Path $SourceArchiveRoot | Out-Null
 
 $tempRoot = Join-Path $OutRoot ".tmp_art_import"
 if (Test-Path $tempRoot) { Remove-Item -Path $tempRoot -Recurse -Force }
@@ -207,7 +209,7 @@ foreach ($mapFile in $mapFiles) {
 foreach ($rel in $usedSources) {
   $src = Join-Path $SourceRoot $rel
   $safe = ($rel -replace "[:\\/]+", "_")
-  Copy-Item -Path $src -Destination (Join-Path $OutRoot ("source_sheets\" + $safe)) -Force
+  Copy-Item -Path $src -Destination (Join-Path $SourceArchiveRoot $safe) -Force
 }
 
 Remove-Item -Path $tempRoot -Recurse -Force

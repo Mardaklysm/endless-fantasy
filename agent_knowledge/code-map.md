@@ -23,17 +23,17 @@ Use this map to jump to the right source before reading broad code.
 - Enemies and boss definitions: `src/data/enemies.ts`
 - Player skill definitions: `src/data/playerSkills.ts`
 - Encounter table IDs: `src/data/battleTables.ts`
-- Town service marker layout: `src/data/towns.ts`
+- POI service stock/prices for authored shop/inn/church interactions: `src/data/poiServiceProfiles.ts`
 
 ## Assets
 
-- Root `assets/`, legacy `assets_v2/`, and runtime-preferred `src/assets/` asset path/glob resolution: `src/assets/assetPaths.ts`
-- Texture-key lookup maps for locations, enemies, portraits, party classes, towns, and dungeon atlas themes: `src/assets/textureKeys.ts`
+- Runtime `src/assets/` asset path/glob resolution: `src/assets/assetPaths.ts`
+- Texture-key lookup maps for locations, enemies, portraits, party classes, and dungeon tile themes: `src/assets/textureKeys.ts`
 - Active current overworld asset manifest helpers: `src/data/worldCurrentAssets.ts`
 - Active common/boss enemy battle art: `src/assets/enemies/`
 - Cloud manifest helpers: `src/data/worldCloudAssets.ts`
 - Character class sprite manifest: `src/data/characterSprites.ts`
-- Dungeon atlas manifest helpers and `DUNGEON_ATLAS_SOURCE_INSET`: `src/data/dungeonTiles.ts`
+- Individual dungeon tile manifest helpers and texture-key generation: `src/data/dungeonTiles.ts`
 
 ## World And Exploration
 
@@ -46,7 +46,7 @@ Use this map to jump to the right source before reading broad code.
 - Debug-only road/river graph renderer: `src/world/semantic/semanticRouteRenderer.ts`
 - Tile-step movement, visual/logical position syncing, and collision checks: `src/systems/movement/exploreMovement.ts`
 - Dungeon movement helpers, floor markers, stairs, and chests: `src/systems/movement/dungeonMovement.ts`
-- Town/world/dungeon entry and location footprint helpers: `src/systems/movement/locationEntry.ts`
+- World/POI/dungeon entry and location footprint helpers: `src/systems/movement/locationEntry.ts`
 - Image-driven handcrafted POI metadata, action dispatch, collision, exits, and rendering: `src/data/poiMetadata.ts`, `src/systems/poi/poiVisit.ts`, `src/render/poi/drawPoi.ts`
 - World location interactions, terrain encounter keys, and island naming/theme helpers: `src/systems/world/locations.ts`
 - Harbor destination menu and island travel: `src/systems/world/harborTravel.ts`
@@ -64,8 +64,7 @@ Use this map to jump to the right source before reading broad code.
 - Overworld main draw loop, semantic terrain cache, overlays, and F6 debug overlays: `src/render/world/drawWorld.ts`
 - Overworld raw/fallback terrain tile drawing: `src/render/world/drawWorldTerrain.ts`
 - Overworld POI/location icons and manifest scaling/lift rules: `src/render/world/drawLocationIcon.ts`
-- Town rendering and service/prop fallback drawing: `src/render/town/drawTown.ts`
-- Dungeon rendering, atlas object tiles, chests, gates, stairs, boss seals, and void filler: `src/render/dungeon/drawDungeon.ts`
+- Dungeon rendering, individual dungeon tile images, chests, gates, stairs, boss seals, and void filler: `src/render/dungeon/drawDungeon.ts`
 - Battle backdrop, enemy/party battlers, target/command/status panels: `src/render/battle/drawBattle.ts`
 - Menu/dialogue/game-over/ending rendering: `src/render/menu/drawMenu.ts`
 
@@ -85,10 +84,10 @@ Use this map to jump to the right source before reading broad code.
 - Changing battle flow or rewards: read `src/systems/battle/*` and `src/render/battle/drawBattle.ts`.
 - Changing overworld geography, mountains, forests, roads, rivers, or POIs: read `src/world/semantic/*`, `src/world/worldGenerator.ts`, then `src/render/world/*`.
 - Changing movement/collision: read `src/systems/movement/exploreMovement.ts`.
-- Changing location entry/town exits/POI footprints: read `src/systems/movement/locationEntry.ts`.
+- Changing location entry/POI footprints: read `src/systems/movement/locationEntry.ts` and `src/systems/poi/poiVisit.ts`.
 - Changing harbor travel/island arrival: read `src/systems/world/harborTravel.ts`, `src/systems/world/boatTravel.ts`, and `src/world/semantic/boatNavigation.ts`.
 - Changing random encounter triggers or terrain encounter keys: read `src/systems/world/encounters.ts` and `src/systems/world/locations.ts`.
-- Changing towns: read `src/render/town/drawTown.ts`, `src/data/towns.ts`, and town definitions in `src/scene/sceneState.ts`.
+- Changing authored POI services: read `src/data/pois/*.json`, `src/data/poiServiceProfiles.ts`, and `src/systems/poi/poiVisit.ts`.
 - Changing dungeons: read `src/world/dungeonGenerator.ts`, dungeon definitions in `src/scene/sceneState.ts`, `src/data/dungeonTiles.ts`, and `src/render/dungeon/drawDungeon.ts`.
 - Changing save/load: read `src/systems/save/saveGame.ts`, `src/systems/save/loadGame.ts`, and the relevant state fields in `src/scene/CrystalOathScene.ts`.
 - Changing asset loading or texture keys: read `src/assets/assetPaths.ts`, `src/assets/textureKeys.ts`, and any active manifest helper under `src/data/`.
