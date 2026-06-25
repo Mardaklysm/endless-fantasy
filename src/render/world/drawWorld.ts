@@ -32,7 +32,7 @@ import type { WorldObjectId } from "../../data/worldObjects";
 import { WORLD_TILES, worldTileHasTag } from "../../data/worldTiles";
 import type { WorldTileId } from "../../data/worldTiles";
 import type { Terrain, Vec } from "../../scene/sceneTypes";
-import { createSemanticMaskTerrainTexture, roadSplatAt, terrainVariantWeightsAt } from "../../world/semantic/semanticMaskTerrainRenderer";
+import { createSemanticMaskTerrainTexture, roadRibbonDebugSegments, roadRibbonSampleAt, terrainVariantWeightsAt } from "../../world/semantic/semanticMaskTerrainRenderer";
 import type { SemanticMaskTerrainClass, SemanticMaskTerrainSources, SemanticMaskTerrainVariantSources } from "../../world/semantic/semanticMaskTerrainRenderer";
 import { createSemanticRouteOverlayTexture } from "../../world/semantic/semanticRouteRenderer";
 import { SEMANTIC_BIOME, SEMANTIC_WATER } from "../../world/semantic/semanticTypes";
@@ -242,25 +242,37 @@ export function drawSemanticDebugOverlay(this: CrystalOathSceneContext, startX: 
       }
     }
   }
-  if (this.semanticDebugOverlay === "roadSplat") {
+  if (this.semanticDebugOverlay === "roadRibbon") {
     const samplesPerCell = 4;
     const sampleSize = TILE / samplesPerCell;
     for (let y = startY; y <= endY; y += 1) {
       for (let x = startX; x <= endX; x += 1) {
+        const i = y * semantic.width + x;
+        if (semantic.layers.roadMap[i]) debugGraphics.fillStyle(0x66ffff, 0.08).fillRect(x * TILE - tileCam.x, y * TILE - tileCam.y, TILE, TILE);
         for (let sy = 0; sy < samplesPerCell; sy += 1) {
           for (let sx = 0; sx < samplesPerCell; sx += 1) {
             const sampleX = x + (sx + 0.5) / samplesPerCell;
             const sampleY = y + (sy + 0.5) / samplesPerCell;
-            const road = roadSplatAt(semantic, sampleX, sampleY);
+            const road = roadRibbonSampleAt(semantic, sampleX, sampleY);
             const px = x * TILE - tileCam.x + sx * sampleSize;
             const py = y * TILE - tileCam.y + sy * sampleSize;
-            if (road.fringe > 0.02) debugGraphics.fillStyle(0x62d4ff, Math.min(0.48, road.fringe * 1.5)).fillRect(px, py, sampleSize, sampleSize);
-            if (road.shoulder > 0.02) debugGraphics.fillStyle(0xff9f35, Math.min(0.56, road.shoulder * 1.4)).fillRect(px, py, sampleSize, sampleSize);
-            if (road.center > 0.02) debugGraphics.fillStyle(0xfff2a8, Math.min(0.7, road.center)).fillRect(px, py, sampleSize, sampleSize);
-            if (road.crossing && (road.center > 0.02 || road.shoulder > 0.02)) debugGraphics.fillStyle(0xbb6dff, 0.58).fillRect(px, py, sampleSize, sampleSize);
+            if (road.shadowAlpha > 0.02) debugGraphics.fillStyle(0xbb6dff, Math.min(0.42, road.shadowAlpha * 1.8)).fillRect(px, py, sampleSize, sampleSize);
+            if (road.edgeAlpha > 0.02) debugGraphics.fillStyle(0xff9f35, Math.min(0.58, road.edgeAlpha * 1.7)).fillRect(px, py, sampleSize, sampleSize);
+            if (road.bodyAlpha > 0.02) debugGraphics.fillStyle(0xfff2a8, Math.min(0.72, road.bodyAlpha)).fillRect(px, py, sampleSize, sampleSize);
+            if (road.centerAlpha > 0.02) debugGraphics.fillStyle(0xffffff, Math.min(0.78, road.centerAlpha)).fillRect(px, py, sampleSize, sampleSize);
+            if (road.crossing && (road.bodyAlpha > 0.02 || road.edgeAlpha > 0.02)) debugGraphics.fillStyle(0xbb6dff, 0.58).fillRect(px, py, sampleSize, sampleSize);
           }
         }
       }
+    }
+    debugGraphics.lineStyle(1, 0x5fffff, 0.62);
+    for (const segment of roadRibbonDebugSegments(semantic)) {
+      const minX = Math.min(segment.ax, segment.bx);
+      const maxX = Math.max(segment.ax, segment.bx);
+      const minY = Math.min(segment.ay, segment.by);
+      const maxY = Math.max(segment.ay, segment.by);
+      if (maxX < startX - 1 || minX > endX + 1 || maxY < startY - 1 || minY > endY + 1) continue;
+      debugGraphics.lineBetween(segment.ax * TILE - tileCam.x, segment.ay * TILE - tileCam.y, segment.bx * TILE - tileCam.x, segment.by * TILE - tileCam.y);
     }
   }
   if (this.semanticDebugOverlay === "distance") {

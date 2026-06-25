@@ -19,7 +19,7 @@ import { WORLD_CLOUD_ASSET_BY_TEXTURE_KEY, WORLD_CLOUD_ASSETS, WORLD_CLOUD_MANIF
 import { DUNGEON_TILE_ASSETS, DUNGEON_TILESET } from "../../src/data/dungeonTiles.ts";
 import { generateDungeonFloors, validateDungeonFloorsConnectivity } from "../../src/world/dungeonGenerator.ts";
 import { SEMANTIC_BIOME, SEMANTIC_WATER } from "../../src/world/semantic/semanticTypes.ts";
-import { SEMANTIC_MASK_TERRAIN_CLASSES, describeSemanticMaskTerrainRenderPlan, roadSplatAt, terrainVariantWeightsAt } from "../../src/world/semantic/semanticMaskTerrainRenderer.ts";
+import { SEMANTIC_MASK_TERRAIN_CLASSES, describeSemanticMaskTerrainRenderPlan, roadRibbonDebugSegments, roadRibbonSampleAt, terrainVariantWeightsAt } from "../../src/world/semantic/semanticMaskTerrainRenderer.ts";
 import { describeSemanticRouteRenderPlan } from "../../src/world/semantic/semanticRouteRenderer.ts";
 import { REQUIRED_MAJOR_HARBOR_ROUTE_PAIRS, isBoatNavigableTile, validateBoatPath } from "../../src/world/semantic/boatNavigation.ts";
 
@@ -314,7 +314,12 @@ function validateSemanticWorldgen() {
   const worldB = generateWorld({ seed });
   const worldC = generateWorld({ seed: "semantic-runtime-test-different" });
   const transitionWorlds = [worldA, generateWorld({ seed: "semantic-mqjk1ki9-2jsaw" }), generateWorld({ seed: "title-preview" })];
-  const roadSplatWorlds = [worldA, generateWorld({ seed: "semantic-mqtnl25e-l37iye" }), generateWorld({ seed: "semantic-mqjk1ki9-2jsaw" })];
+  const roadRibbonWorlds = [
+    worldA,
+    generateWorld({ seed: "semantic-mqppkkk6-1o7hs8" }),
+    generateWorld({ seed: "semantic-mqyyhhs2-sfpp5" }),
+    generateWorld({ seed: "semantic-mqjk1ki9-2jsaw" })
+  ];
 
   assert(worldA.width === DEFAULT_WORLD_WIDTH && worldA.height === DEFAULT_WORLD_HEIGHT, `Default world size should be ${DEFAULT_WORLD_WIDTH}x${DEFAULT_WORLD_HEIGHT}, got ${worldA.width}x${worldA.height}.`);
   assert(worldA.validation.valid, `Semantic validation failed: ${worldA.validation.errors.join("; ")}`);
@@ -432,7 +437,7 @@ function validateSemanticWorldgen() {
   validateSemanticMaskTerrainRendererPlan(worldA);
   validateSemanticRouteRendererPlan(worldA);
   for (const world of transitionWorlds) validateTerrainVariantTransitionInvariant(world);
-  for (const world of roadSplatWorlds) validateRoadSplatTransitionInvariant(world);
+  for (const world of roadRibbonWorlds) validateRoadRibbonVisualInvariant(world);
 }
 
 function validateMountainCollisionInvariant(world) {
@@ -839,13 +844,19 @@ function semanticTerrainClassAtCell(semantic, x, y) {
   return "grassland";
 }
 
-function validateRoadSplatTransitionInvariant(world) {
+function validateRoadRibbonVisualInvariant(world) {
   const semantic = world.semantic;
-  const stats = roadSplatBoundaryStats(world);
-  assert(stats.total > 0, `${world.seed}: no road edges were available for road splat validation.`);
-  assert(stats.intermediate / stats.total >= 0.72, `${world.seed}: expected at least 72% blended road edges, got ${stats.intermediate}/${stats.total}.`);
+  const stats = roadRibbonBoundaryStats(world);
+  const visualEdgeStats = roadRibbonNormalEdgeStats(semantic);
+  assert(stats.total > 0, `${world.seed}: no road edges were available for road ribbon validation.`);
+  assert(visualEdgeStats.total > 0, `${world.seed}: no road ribbon segments were available for visual edge validation.`);
+  assert(stats.strongCenter / stats.total >= 0.78, `${world.seed}: expected most road centers to have strong body alpha, got ${stats.strongCenter}/${stats.total}.`);
+  assert(stats.narrowEdges / stats.total >= 0.58, `${world.seed}: expected semantic road edges to stay mostly compact, got ${stats.narrowEdges}/${stats.total}.`);
+  assert(visualEdgeStats.compact / visualEdgeStats.total >= 0.86, `${world.seed}: expected compact visual ribbon edges, got ${visualEdgeStats.compact}/${visualEdgeStats.total}.`);
+  assert(visualEdgeStats.strongCenter / visualEdgeStats.total >= 0.92, `${world.seed}: expected visual road centers to stay strong, got ${visualEdgeStats.strongCenter}/${visualEdgeStats.total}.`);
   assert(stats.maxHardRun <= 3, `${world.seed}: found ${stats.maxHardRun} consecutive hard road edge cells.`);
-  assert(stats.centerDominates >= Math.ceil(stats.total * 0.82), `${world.seed}: road center samples were not consistently stronger than fringe samples.`);
+  assert(stats.centerDominates >= Math.ceil(stats.total * 0.86), `${world.seed}: road center samples were not consistently stronger than edge samples.`);
+  assert(maxLongDiagonalRibbonSegmentRun(semantic) <= 8, `${world.seed}: road ribbon contains a long unsmoothed 45-degree visual segment run.`);
 
   let roadCells = 0;
   let visibleRoadCells = 0;
@@ -856,13 +867,13 @@ function validateRoadSplatTransitionInvariant(world) {
       const road = semantic.layers.roadMap[i] > 0;
       if (road) {
         roadCells += 1;
-        const sample = roadSplatAt(semantic, x + 0.5, y + 0.5);
-        if (sample.center + sample.shoulder >= 0.16 || sample.crossing) visibleRoadCells += 1;
+        const sample = roadRibbonSampleAt(semantic, x + 0.5, y + 0.5);
+        if (sample.bodyAlpha + sample.edgeAlpha >= 0.26 || sample.crossing) visibleRoadCells += 1;
       }
       const blockedWater = (semantic.layers.riverMap[i] > 0 || semantic.layers.lakeMap[i] > 0) && !semantic.layers.riverCrossingMap[i];
       if (blockedWater) {
-        const sample = roadSplatAt(semantic, x + 0.5, y + 0.5);
-        if (sample.center + sample.shoulder + sample.fringe > 0.04) waterLeakCells += 1;
+        const sample = roadRibbonSampleAt(semantic, x + 0.5, y + 0.5);
+        if (sample.bodyAlpha + sample.edgeAlpha + sample.shadowAlpha > 0.04) waterLeakCells += 1;
       }
     }
   }
@@ -873,20 +884,29 @@ function validateRoadSplatTransitionInvariant(world) {
   for (const poi of semantic.poiList) {
     const apron = roadApronCoverageAtPoi(semantic, poi);
     if (apron.hasNearbyRoad) {
-      assert(apron.coverage >= 0.18, `${world.seed}: POI ${poi.id} approach lacks visible road apron coverage (${apron.coverage.toFixed(3)}).`);
+      assert(apron.coverage >= 0.34, `${world.seed}: POI ${poi.id} approach lacks visible road ribbon apron coverage (${apron.coverage.toFixed(3)}).`);
     }
   }
 
   for (const bridge of semantic.bridgeCandidates) {
-    const sample = roadSplatAt(semantic, bridge.x + 0.5, bridge.y + 0.5);
-    assert(sample.crossing, `${world.seed}: bridge ${bridge.id} is not marked as a road splat crossing.`);
-    assert(sample.center + sample.shoulder >= 0.12, `${world.seed}: bridge ${bridge.id} lacks visible road taper coverage.`);
+    const sample = roadRibbonSampleAt(semantic, bridge.x + 0.5, bridge.y + 0.5);
+    assert(sample.crossing, `${world.seed}: bridge ${bridge.id} is not marked as a road ribbon crossing.`);
+    assert(sample.bodyAlpha + sample.edgeAlpha >= 0.2, `${world.seed}: bridge ${bridge.id} lacks visible road taper coverage.`);
+  }
+
+  const roundedJunctions = roundedRoadJunctionStats(semantic);
+  if (roundedJunctions.total > 0) {
+    assert(roundedJunctions.rounded / roundedJunctions.total >= 0.7, `${world.seed}: expected rounded road junction coverage, got ${roundedJunctions.rounded}/${roundedJunctions.total}.`);
+  }
+  const widthStats = roadRibbonOrientationWidthStats(semantic);
+  if (widthStats.horizontal > 0 && widthStats.vertical > 0) {
+    assert(widthStats.vertical >= widthStats.horizontal * 0.85, `${world.seed}: vertical road width ${widthStats.vertical.toFixed(2)} is too thin compared with horizontal ${widthStats.horizontal.toFixed(2)}.`);
   }
 }
 
-function roadSplatBoundaryStats(world) {
+function roadRibbonBoundaryStats(world) {
   const semantic = world.semantic;
-  const stats = { total: 0, intermediate: 0, centerDominates: 0, maxHardRun: 0 };
+  const stats = { total: 0, strongCenter: 0, narrowEdges: 0, centerDominates: 0, maxHardRun: 0 };
   const hardHorizontal = new Map();
   const hardVertical = new Map();
   for (let y = 0; y < semantic.height; y += 1) {
@@ -904,11 +924,12 @@ function roadSplatBoundaryStats(world) {
         if (nx < 0 || ny < 0 || nx >= semantic.width || ny >= semantic.height) continue;
         const ni = ny * semantic.width + nx;
         if (semantic.layers.roadMap[ni] || !semantic.layers.landMask[ni] || semantic.layers.riverMap[ni] || semantic.layers.lakeMap[ni]) continue;
-        const result = roadSplatEdgeHasTransition(semantic, x, y, edge.dx, edge.dy);
+        const result = roadRibbonEdgeSampleStats(semantic, x, y, edge.dx, edge.dy);
         stats.total += 1;
-        if (result.intermediate) stats.intermediate += 1;
+        if (result.strongCenter) stats.strongCenter += 1;
+        if (result.narrowEdge) stats.narrowEdges += 1;
         if (result.centerDominates) stats.centerDominates += 1;
-        if (!result.intermediate && result.hardJump) {
+        if (!result.narrowEdge && result.hardJump) {
           const key = edge.orientation === "v" ? y : x;
           const position = edge.orientation === "v" ? x : y;
           const runs = edge.orientation === "v" ? hardVertical : hardHorizontal;
@@ -923,41 +944,107 @@ function roadSplatBoundaryStats(world) {
   return stats;
 }
 
-function roadSplatEdgeHasTransition(semantic, x, y, dx, dy) {
-  const offsets = [0, 0.16, 0.3, 0.46, 0.62, 0.82, 1.05, 1.28];
+function roadRibbonEdgeSampleStats(semantic, x, y, dx, dy) {
+  const offsets = [0, 0.18, 0.34, 0.52, 0.7, 0.92, 1.16];
   const alongOffsets = [-0.28, 0, 0.28];
   const values = [];
   const centerValues = [];
-  const fringeValues = [];
+  const edgeValues = [];
   for (const offset of offsets) {
     let total = 0;
     let center = 0;
-    let fringe = 0;
+    let edge = 0;
     for (const along of alongOffsets) {
       const sampleX = x + 0.5 + dx * offset + (dy !== 0 ? along : 0);
       const sampleY = y + 0.5 + dy * offset + (dx !== 0 ? along : 0);
-      const sample = roadSplatAt(semantic, sampleX, sampleY);
-      total += Math.min(1, sample.center + sample.shoulder + sample.fringe);
-      center += sample.center + sample.shoulder * 0.35;
-      fringe += sample.fringe;
+      const sample = roadRibbonSampleAt(semantic, sampleX, sampleY);
+      total += Math.min(1, sample.bodyAlpha + sample.edgeAlpha + sample.shadowAlpha);
+      center += sample.bodyAlpha + sample.centerAlpha * 0.35;
+      edge += sample.edgeAlpha + sample.shadowAlpha;
     }
     values.push(total / alongOffsets.length);
     centerValues.push(center / alongOffsets.length);
-    fringeValues.push(fringe / alongOffsets.length);
+    edgeValues.push(edge / alongOffsets.length);
   }
   const high = Math.max(...values);
   const low = Math.min(...values);
-  const intermediate = high < 0.18 || values.some((value) => value >= 0.12 && value <= Math.min(0.88, high - 0.05));
+  const strongCenter = values[0] >= 0.7 || values[1] >= 0.7;
+  const narrowEdge = high < 0.18 || (strongCenter && values.some((value, index) => index >= 3 && value <= 0.24) && values[values.length - 1] <= 0.12);
   let hardJump = false;
   for (let i = 1; i < values.length; i += 1) {
     if (values[i - 1] >= 0.9 && values[i] <= 0.05) hardJump = true;
-    if (Math.abs(values[i] - values[i - 1]) > 0.42 && low <= 0.05 && high >= 0.62) hardJump = true;
+    if (Math.abs(values[i] - values[i - 1]) > 0.68 && low <= 0.05 && high >= 0.72) hardJump = true;
   }
   return {
-    intermediate,
+    strongCenter,
+    narrowEdge,
     hardJump,
-    centerDominates: centerValues[0] > fringeValues[fringeValues.length - 1] + 0.08
+    centerDominates: centerValues[0] > edgeValues[edgeValues.length - 1] + 0.24
   };
+}
+
+function roadRibbonNormalEdgeStats(semantic) {
+  const stats = { total: 0, compact: 0, strongCenter: 0 };
+  for (const segment of roadRibbonDebugSegments(semantic)) {
+    const dx = segment.bx - segment.ax;
+    const dy = segment.by - segment.ay;
+    const length = Math.hypot(dx, dy);
+    if (length < 0.35) continue;
+    const midX = (segment.ax + segment.bx) / 2;
+    const midY = (segment.ay + segment.by) / 2;
+    if (nearRoadRibbonApronOrJunction(semantic, midX, midY)) continue;
+    const nx = -dy / length;
+    const ny = dx / length;
+    for (const side of [-1, 1]) {
+      const values = [0, 0.32, 0.52, 0.68, 0.84, 1.0].map((offset) => {
+        const sample = roadRibbonSampleAt(semantic, midX + nx * side * offset, midY + ny * side * offset);
+        return Math.min(1, sample.bodyAlpha + sample.edgeAlpha + sample.shadowAlpha);
+      });
+      const centerStrong = values[0] >= 0.7;
+      const compact = centerStrong && values[4] <= 0.18 && values[5] <= 0.12;
+      stats.total += 1;
+      if (centerStrong) stats.strongCenter += 1;
+      if (compact) stats.compact += 1;
+    }
+  }
+  return stats;
+}
+
+function nearRoadRibbonApronOrJunction(semantic, sampleX, sampleY) {
+  for (const poi of semantic.poiList) {
+    if (Math.hypot(sampleX - (poi.approachTile.x + 0.5), sampleY - (poi.approachTile.y + 0.5)) <= 1.5) return true;
+  }
+  for (const bridge of semantic.bridgeCandidates) {
+    if (Math.hypot(sampleX - (bridge.x + 0.5), sampleY - (bridge.y + 0.5)) <= 1.35) return true;
+  }
+  const minX = Math.max(0, Math.floor(sampleX) - 2);
+  const minY = Math.max(0, Math.floor(sampleY) - 2);
+  const maxX = Math.min(semantic.width - 1, Math.floor(sampleX) + 2);
+  const maxY = Math.min(semantic.height - 1, Math.floor(sampleY) + 2);
+  for (let y = minY; y <= maxY; y += 1) {
+    for (let x = minX; x <= maxX; x += 1) {
+      const i = y * semantic.width + x;
+      if (!semantic.layers.roadMap[i]) continue;
+      const neighbors = [
+        [0, -1],
+        [1, 0],
+        [0, 1],
+        [-1, 0],
+        [1, -1],
+        [1, 1],
+        [-1, 1],
+        [-1, -1]
+      ].filter(([dx, dy]) => {
+        const nx = x + dx;
+        const ny = y + dy;
+        return nx >= 0 && ny >= 0 && nx < semantic.width && ny < semantic.height && semantic.layers.roadMap[ny * semantic.width + nx] > 0;
+      });
+      const cardinal = neighbors.filter(([dx, dy]) => dx === 0 || dy === 0).length;
+      const important = neighbors.length <= 1 || cardinal >= 3 || neighbors.length >= 4 || neighbors.length > cardinal;
+      if (important && Math.hypot(sampleX - (x + 0.5), sampleY - (y + 0.5)) <= 1.35) return true;
+    }
+  }
+  return false;
 }
 
 function roadApronCoverageAtPoi(semantic, poi) {
@@ -975,10 +1062,100 @@ function roadApronCoverageAtPoi(semantic, poi) {
   }
   let best = 0;
   for (const [ox, oy] of samples) {
-    const sample = roadSplatAt(semantic, poi.approachTile.x + ox, poi.approachTile.y + oy);
-    best = Math.max(best, sample.center + sample.shoulder + sample.fringe);
+    const sample = roadRibbonSampleAt(semantic, poi.approachTile.x + ox, poi.approachTile.y + oy);
+    best = Math.max(best, sample.bodyAlpha + sample.edgeAlpha);
   }
   return { coverage: best, hasNearbyRoad };
+}
+
+function roundedRoadJunctionStats(semantic) {
+  const stats = { total: 0, rounded: 0 };
+  for (let y = 1; y < semantic.height - 1; y += 1) {
+    for (let x = 1; x < semantic.width - 1; x += 1) {
+      const i = y * semantic.width + x;
+      if (!semantic.layers.roadMap[i]) continue;
+      const cardinal = [
+        semantic.layers.roadMap[(y - 1) * semantic.width + x],
+        semantic.layers.roadMap[y * semantic.width + x + 1],
+        semantic.layers.roadMap[(y + 1) * semantic.width + x],
+        semantic.layers.roadMap[y * semantic.width + x - 1]
+      ].filter(Boolean).length;
+      if (cardinal < 3) continue;
+      stats.total += 1;
+      const samples = [
+        [0.5, -0.42],
+        [0.92, 0.5],
+        [0.5, 0.92],
+        [-0.42, 0.5],
+        [0.84, 0.16],
+        [0.84, 0.84],
+        [0.16, 0.84],
+        [0.16, 0.16]
+      ];
+      const covered = samples.filter(([ox, oy]) => {
+        const sample = roadRibbonSampleAt(semantic, x + ox, y + oy);
+        return sample.bodyAlpha + sample.edgeAlpha >= 0.22;
+      }).length;
+      if (covered >= 6) stats.rounded += 1;
+    }
+  }
+  return stats;
+}
+
+function roadRibbonOrientationWidthStats(semantic) {
+  const verticalWidths = [];
+  const horizontalWidths = [];
+  for (let y = 2; y < semantic.height - 2; y += 1) {
+    for (let x = 2; x < semantic.width - 2; x += 1) {
+      const i = y * semantic.width + x;
+      if (!semantic.layers.roadMap[i]) continue;
+      const north = semantic.layers.roadMap[(y - 1) * semantic.width + x];
+      const south = semantic.layers.roadMap[(y + 1) * semantic.width + x];
+      const east = semantic.layers.roadMap[y * semantic.width + x + 1];
+      const west = semantic.layers.roadMap[y * semantic.width + x - 1];
+      if (north && south && !east && !west && verticalWidths.length < 24) verticalWidths.push(visibleRoadWidthAt(semantic, x, y, "vertical"));
+      if (east && west && !north && !south && horizontalWidths.length < 24) horizontalWidths.push(visibleRoadWidthAt(semantic, x, y, "horizontal"));
+    }
+  }
+  return {
+    vertical: averagePositive(verticalWidths),
+    horizontal: averagePositive(horizontalWidths)
+  };
+}
+
+function visibleRoadWidthAt(semantic, x, y, orientation) {
+  const offsets = [];
+  for (let offset = -1.2; offset <= 1.2001; offset += 0.08) offsets.push(offset);
+  const visible = offsets.filter((offset) => {
+    const sampleX = orientation === "vertical" ? x + 0.5 + offset : x + 0.5;
+    const sampleY = orientation === "horizontal" ? y + 0.5 + offset : y + 0.5;
+    const sample = roadRibbonSampleAt(semantic, sampleX, sampleY);
+    return sample.bodyAlpha + sample.edgeAlpha >= 0.18;
+  });
+  return visible.length * 0.08;
+}
+
+function averagePositive(values) {
+  const positive = values.filter((value) => value > 0);
+  if (positive.length === 0) return 0;
+  return positive.reduce((sum, value) => sum + value, 0) / positive.length;
+}
+
+function maxLongDiagonalRibbonSegmentRun(semantic) {
+  let longest = 0;
+  let currentSlope = "";
+  let currentRun = 0;
+  for (const segment of roadRibbonDebugSegments(semantic)) {
+    const dx = segment.bx - segment.ax;
+    const dy = segment.by - segment.ay;
+    const diagonal = Math.abs(dx) > 0.35 && Math.abs(dy) > 0.35;
+    const slope = diagonal ? `${Math.round((dy / dx) * 10) / 10}` : "";
+    if (diagonal && slope === currentSlope) currentRun += Math.hypot(dx, dy);
+    else currentRun = diagonal ? Math.hypot(dx, dy) : 0;
+    currentSlope = slope;
+    longest = Math.max(longest, currentRun);
+  }
+  return longest;
 }
 
 function validateSemanticRouteRendererPlan(world) {

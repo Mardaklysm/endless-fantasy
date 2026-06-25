@@ -109,7 +109,7 @@ export class CrystalOathScene extends Phaser.Scene {
   generatedWorld?: GeneratedWorld;
   roadVisualsByKey = new Map<string, WorldRoadVisual>();
   dungeonCache?: { seed: string; dungeons: Record<string, DungeonDef> };
-  semanticDebugOverlay: "off" | "edgeDebug" | "rawTiles" | "masks" | "terrainVariants" | "roadSplat" | "distance" | "grid" | "walkability" | "policy" | "mountains" | "forests" | "islands" | "pois" | "roads" | "rivers" = "off";
+  semanticDebugOverlay: "off" | "edgeDebug" | "rawTiles" | "masks" | "terrainVariants" | "roadRibbon" | "distance" | "grid" | "walkability" | "policy" | "mountains" | "forests" | "islands" | "pois" | "roads" | "rivers" = "off";
   worldSeed = "title-preview";
   world: Terrain[][] = [];
   worldTerrainCacheKey = "world_terrain_cache";

@@ -26,6 +26,31 @@ export interface SemanticTerrainVariantWeight {
   weight: number;
 }
 
+export type SemanticRoadRibbonTheme = "grassDirt" | "desertSand" | "snowPack" | "highlandGravel" | "ashCinder";
+
+export interface SemanticRoadRibbonSample {
+  distance: number;
+  centerAlpha: number;
+  bodyAlpha: number;
+  edgeAlpha: number;
+  shadowAlpha: number;
+  highlightAlpha: number;
+  rutAlpha: number;
+  pebbleAlpha: number;
+  terrainFleckAlpha: number;
+  tangentX: number;
+  tangentY: number;
+  roadTheme: SemanticRoadRibbonTheme;
+  crossing: boolean;
+}
+
+export interface SemanticRoadRibbonDebugSegment {
+  ax: number;
+  ay: number;
+  bx: number;
+  by: number;
+}
+
 export interface SemanticRoadSplatSample {
   center: number;
   shoulder: number;
@@ -132,7 +157,7 @@ export function createSemanticMaskTerrainCanvas(world: SemanticWorld, options: S
     drawTerrainVariantSplatsForClass(ctx, world, plan, classGrid, terrainClass, options.terrainVariantSources?.[terrainClass]);
   }
   drawMaskBoundaryAccents(ctx, world, plan, classGrid);
-  drawRoadSplatLayer(ctx, world, plan, fillStyles);
+  drawRoadRibbonLayer(ctx, world, plan, fillStyles);
 
   return canvas;
 }
@@ -632,42 +657,44 @@ export function terrainVariantWeightsAt(
   return weights;
 }
 
-function drawRoadSplatLayer(
+function drawRoadRibbonLayer(
   ctx: CanvasRenderingContext2D,
   world: SemanticWorld,
   plan: SemanticMaskTerrainRenderPlan,
   fillStyles: Record<SemanticMaskTerrainClass, CanvasPattern | string>
 ) {
+  const bodyMask = createMaskCanvas(plan);
   const centerMask = createMaskCanvas(plan);
-  const shoulderMask = createMaskCanvas(plan);
-  const fringeMask = createMaskCanvas(plan);
+  const bodyCtx = bodyMask.getContext("2d");
   const centerCtx = centerMask.getContext("2d");
-  const shoulderCtx = shoulderMask.getContext("2d");
-  const fringeCtx = fringeMask.getContext("2d");
-  if (!centerCtx || !shoulderCtx || !fringeCtx) throw new Error("Unable to create semantic road splat mask canvases.");
+  if (!bodyCtx || !centerCtx) throw new Error("Unable to create semantic road ribbon mask canvases.");
+  bodyCtx.imageSmoothingEnabled = false;
   centerCtx.imageSmoothingEnabled = false;
-  shoulderCtx.imageSmoothingEnabled = false;
-  fringeCtx.imageSmoothingEnabled = false;
 
-  const detailsCanvas = document.createElement("canvas");
-  detailsCanvas.width = plan.width;
-  detailsCanvas.height = plan.height;
+  const shadowCanvas = createLayerCanvas(plan);
+  const edgeCanvas = createLayerCanvas(plan);
+  const highlightCanvas = createLayerCanvas(plan);
+  const detailsCanvas = createLayerCanvas(plan);
+  const shadowCtx = shadowCanvas.getContext("2d");
+  const edgeCtx = edgeCanvas.getContext("2d");
+  const highlightCtx = highlightCanvas.getContext("2d");
   const detailsCtx = detailsCanvas.getContext("2d");
-  if (!detailsCtx) throw new Error("Unable to create semantic road detail canvas.");
-  detailsCtx.imageSmoothingEnabled = false;
+  if (!shadowCtx || !edgeCtx || !highlightCtx || !detailsCtx) throw new Error("Unable to create semantic road ribbon canvases.");
+  for (const layerCtx of [shadowCtx, edgeCtx, highlightCtx, detailsCtx]) layerCtx.imageSmoothingEnabled = false;
 
   const visited = new Uint8Array(plan.maskWidth * plan.maskHeight);
+  const cache = roadRibbonCacheFor(world);
   const minCellX = clampInt(Math.floor(plan.originX) - 3, 0, world.width - 1);
   const minCellY = clampInt(Math.floor(plan.originY) - 3, 0, world.height - 1);
   const maxCellX = clampInt(Math.ceil(plan.originX + plan.maskWidth / plan.maskPixelsPerCell) + 3, 0, world.width - 1);
   const maxCellY = clampInt(Math.ceil(plan.originY + plan.maskHeight / plan.maskPixelsPerCell) + 3, 0, world.height - 1);
   for (let cellY = minCellY; cellY <= maxCellY; cellY += 1) {
     for (let cellX = minCellX; cellX <= maxCellX; cellX += 1) {
-      if (!world.layers.roadMap[cellY * world.width + cellX]) continue;
-      const minMx = clampInt(Math.floor((cellX - plan.originX - 1.2) * plan.maskPixelsPerCell), 0, plan.maskWidth - 1);
-      const maxMx = clampInt(Math.ceil((cellX - plan.originX + 2.2) * plan.maskPixelsPerCell), 0, plan.maskWidth - 1);
-      const minMy = clampInt(Math.floor((cellY - plan.originY - 1.2) * plan.maskPixelsPerCell), 0, plan.maskHeight - 1);
-      const maxMy = clampInt(Math.ceil((cellY - plan.originY + 2.2) * plan.maskPixelsPerCell), 0, plan.maskHeight - 1);
+      if (!world.layers.roadMap[cellY * world.width + cellX] && !nearRoadNode(cache, cellX + 0.5, cellY + 0.5, 1.2)) continue;
+      const minMx = clampInt(Math.floor((cellX - plan.originX - 1.45) * plan.maskPixelsPerCell), 0, plan.maskWidth - 1);
+      const maxMx = clampInt(Math.ceil((cellX - plan.originX + 2.45) * plan.maskPixelsPerCell), 0, plan.maskWidth - 1);
+      const minMy = clampInt(Math.floor((cellY - plan.originY - 1.45) * plan.maskPixelsPerCell), 0, plan.maskHeight - 1);
+      const maxMy = clampInt(Math.ceil((cellY - plan.originY + 2.45) * plan.maskPixelsPerCell), 0, plan.maskHeight - 1);
       for (let my = minMy; my <= maxMy; my += 1) {
         for (let mx = minMx; mx <= maxMx; mx += 1) {
           const maskIndex = my * plan.maskWidth + mx;
@@ -675,33 +702,41 @@ function drawRoadSplatLayer(
           visited[maskIndex] = 1;
           const sampleX = plan.originX + (mx + 0.5) / plan.maskPixelsPerCell;
           const sampleY = plan.originY + (my + 0.5) / plan.maskPixelsPerCell;
-          const sample = roadSplatAt(world, sampleX, sampleY);
-          if (sample.center <= 0 && sample.shoulder <= 0 && sample.fringe <= 0 && sample.rut <= 0 && sample.pebble <= 0 && sample.terrainFleck <= 0) continue;
+          const sample = roadRibbonSampleAt(world, sampleX, sampleY);
+          if (sample.bodyAlpha <= 0 && sample.edgeAlpha <= 0 && sample.shadowAlpha <= 0 && sample.rutAlpha <= 0 && sample.pebbleAlpha <= 0 && sample.terrainFleckAlpha <= 0) continue;
           const profile = roadProfileAt(world, sampleX, sampleY);
-          const visual = profile.visual;
-          if (sample.fringe > 0) {
-            fringeCtx.fillStyle = `rgba(255, 255, 255, ${sample.fringe.toFixed(3)})`;
-            fringeCtx.fillRect(mx, my, 1, 1);
+          const palette = roadRibbonPalette(sample.roadTheme, profile.visual);
+          if (sample.shadowAlpha > 0) {
+            shadowCtx.fillStyle = rgbaCss(palette.shadow, sample.shadowAlpha);
+            shadowCtx.fillRect(mx * plan.pixelBlock, my * plan.pixelBlock, plan.pixelBlock, plan.pixelBlock);
           }
-          if (sample.shoulder > 0) {
-            shoulderCtx.fillStyle = `rgba(255, 255, 255, ${sample.shoulder.toFixed(3)})`;
-            shoulderCtx.fillRect(mx, my, 1, 1);
+          if (sample.edgeAlpha > 0) {
+            edgeCtx.fillStyle = rgbaCss(palette.edge, sample.edgeAlpha);
+            edgeCtx.fillRect(mx * plan.pixelBlock, my * plan.pixelBlock, plan.pixelBlock, plan.pixelBlock);
           }
-          if (sample.center > 0) {
-            centerCtx.fillStyle = `rgba(255, 255, 255, ${sample.center.toFixed(3)})`;
+          if (sample.bodyAlpha > 0) {
+            bodyCtx.fillStyle = `rgba(255, 255, 255, ${sample.bodyAlpha.toFixed(3)})`;
+            bodyCtx.fillRect(mx, my, 1, 1);
+          }
+          if (sample.centerAlpha > 0) {
+            centerCtx.fillStyle = `rgba(255, 255, 255, ${sample.centerAlpha.toFixed(3)})`;
             centerCtx.fillRect(mx, my, 1, 1);
           }
-          drawRoadSplatDetails(detailsCtx, plan, mx, my, sample, visual);
+          if (sample.highlightAlpha > 0) {
+            highlightCtx.fillStyle = rgbaCss(palette.highlight, sample.highlightAlpha);
+            highlightCtx.fillRect(mx * plan.pixelBlock, my * plan.pixelBlock, plan.pixelBlock, plan.pixelBlock);
+          }
+          drawRoadRibbonDetails(detailsCtx, plan, mx, my, sample, palette);
         }
       }
     }
   }
 
-  drawMaskedPatternLayer(ctx, plan, fillStyles.road, fringeMask, 0.42);
-  drawMaskedPatternLayer(ctx, plan, fillStyles.road, shoulderMask, 0.72);
-  drawRoadProfileTintLayer(ctx, world, plan, shoulderMask, "edge");
-  drawMaskedPatternLayer(ctx, plan, fillStyles.road, centerMask, 1);
-  drawRoadProfileTintLayer(ctx, world, plan, centerMask, "center");
+  ctx.drawImage(shadowCanvas, 0, 0);
+  ctx.drawImage(edgeCanvas, 0, 0);
+  drawMaskedPatternLayer(ctx, plan, fillStyles.road, bodyMask, 0.96);
+  drawMaskedPatternLayer(ctx, plan, fillStyles.road, centerMask, 0.72);
+  ctx.drawImage(highlightCanvas, 0, 0);
   ctx.drawImage(detailsCanvas, 0, 0);
 }
 
@@ -709,6 +744,13 @@ function createMaskCanvas(plan: SemanticMaskTerrainRenderPlan): HTMLCanvasElemen
   const canvas = document.createElement("canvas");
   canvas.width = plan.maskWidth;
   canvas.height = plan.maskHeight;
+  return canvas;
+}
+
+function createLayerCanvas(plan: SemanticMaskTerrainRenderPlan): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.width = plan.width;
+  canvas.height = plan.height;
   return canvas;
 }
 
@@ -735,136 +777,377 @@ function drawMaskedPatternLayer(
   ctx.drawImage(layerCanvas, 0, 0);
 }
 
-function drawRoadProfileTintLayer(
-  ctx: CanvasRenderingContext2D,
-  world: SemanticWorld,
-  plan: SemanticMaskTerrainRenderPlan,
-  maskCanvas: HTMLCanvasElement,
-  tint: "center" | "edge"
-) {
-  const tintCanvas = document.createElement("canvas");
-  tintCanvas.width = plan.width;
-  tintCanvas.height = plan.height;
-  const tintCtx = tintCanvas.getContext("2d");
-  if (!tintCtx) throw new Error("Unable to create semantic road tint canvas.");
-  tintCtx.imageSmoothingEnabled = false;
-  for (let my = 0; my < plan.maskHeight; my += 1) {
-    for (let mx = 0; mx < plan.maskWidth; mx += 1) {
-      const sampleX = plan.originX + (mx + 0.5) / plan.maskPixelsPerCell;
-      const sampleY = plan.originY + (my + 0.5) / plan.maskPixelsPerCell;
-      const visual = roadProfileAt(world, sampleX, sampleY).visual;
-      const color = tint === "center" ? hexRgb(visual.centerColor, COLORS.roadDust) : hexRgb(visual.edgeColor, COLORS.roadEdge);
-      tintCtx.fillStyle = rgbaCss(color, tint === "center" ? 0.28 : 0.22);
-      tintCtx.fillRect(mx * plan.pixelBlock, my * plan.pixelBlock, plan.pixelBlock, plan.pixelBlock);
-    }
-  }
-  tintCtx.globalCompositeOperation = "destination-in";
-  tintCtx.drawImage(maskCanvas, 0, 0, plan.width, plan.height);
-  tintCtx.globalCompositeOperation = "source-over";
-  ctx.drawImage(tintCanvas, 0, 0);
-}
-
-function drawRoadSplatDetails(
+function drawRoadRibbonDetails(
   ctx: CanvasRenderingContext2D,
   plan: SemanticMaskTerrainRenderPlan,
   mx: number,
   my: number,
-  sample: SemanticRoadSplatSample,
-  visual: IslandRoadVisualConfig
+  sample: SemanticRoadRibbonSample,
+  palette: RoadRibbonPalette
 ) {
   const x = mx * plan.pixelBlock;
   const y = my * plan.pixelBlock;
   const width = Math.max(1, plan.pixelBlock);
-  if (sample.terrainFleck > 0 && visual.terrainFleckColor) {
-    ctx.fillStyle = rgbaCss(hexRgb(visual.terrainFleckColor, COLORS.roadGrassFleck), sample.terrainFleck);
+  if (sample.terrainFleckAlpha > 0) {
+    ctx.fillStyle = rgbaCss(palette.fleck, sample.terrainFleckAlpha);
     ctx.fillRect(x, y, width, width);
   }
-  if (sample.rut > 0) {
-    ctx.fillStyle = rgbaCss(hexRgb(visual.darkNoiseColor, COLORS.roadPebble), sample.rut);
+  if (sample.rutAlpha > 0) {
+    ctx.fillStyle = rgbaCss(palette.rut, sample.rutAlpha);
     ctx.fillRect(x, y, width, width);
   }
-  if (sample.pebble > 0) {
-    ctx.fillStyle = rgbaCss(hexRgb(visual.lightNoiseColor, COLORS.roadDust), sample.pebble * 0.55);
+  if (sample.pebbleAlpha > 0) {
+    ctx.fillStyle = rgbaCss(palette.highlight, sample.pebbleAlpha * 0.45);
     ctx.fillRect(x, y, width, width);
-    ctx.fillStyle = rgbaCss(hexRgb(visual.darkNoiseColor, COLORS.roadPebble), sample.pebble);
+    ctx.fillStyle = rgbaCss(palette.pebble, sample.pebbleAlpha);
     ctx.fillRect(x + Math.floor(width / 2), y + Math.floor(width / 2), Math.max(1, Math.ceil(width / 2)), Math.max(1, Math.ceil(width / 2)));
   }
 }
 
-export function roadSplatAt(world: SemanticWorld, sampleX: number, sampleY: number): SemanticRoadSplatSample {
-  const empty: SemanticRoadSplatSample = { center: 0, shoulder: 0, fringe: 0, rut: 0, pebble: 0, terrainFleck: 0, crossing: false };
+export function roadRibbonSampleAt(world: SemanticWorld, sampleX: number, sampleY: number): SemanticRoadRibbonSample {
+  const empty = emptyRoadRibbonSample(world, sampleX, sampleY);
   if (sampleX < 0 || sampleY < 0 || sampleX >= world.width || sampleY >= world.height) return empty;
   const cellX = clampInt(Math.floor(sampleX), 0, world.width - 1);
   const cellY = clampInt(Math.floor(sampleY), 0, world.height - 1);
   const cellIndex = cellY * world.width + cellX;
-  const crossing = roadCrossingSplatAt(world, sampleX, sampleY) > 0;
+  const crossing = roadCrossingRibbonAt(world, sampleX, sampleY) > 0;
   if ((world.layers.riverMap[cellIndex] || world.layers.lakeMap[cellIndex] || !world.layers.landMask[cellIndex]) && !crossing) return { ...empty, crossing };
 
-  const route = roadRouteDistanceAt(world, sampleX, sampleY);
-  if (!route) return { ...empty, crossing };
-  const profile = roadProfileAt(world, route.cellX + 0.5, route.cellY + 0.5);
-  const visual = profile.visual;
-  const centerHalfWidth = clamp(0.1 * visual.widthScale * visual.centerContinuity, 0.08, 0.18);
-  const shoulderHalfWidth = clamp(0.27 * visual.widthScale, 0.2, 0.36);
-  const fringeHalfWidth = clamp(0.56 * visual.widthScale, 0.38, 0.76);
-  const globalNoiseX = Math.floor(sampleX * 19);
-  const globalNoiseY = Math.floor(sampleY * 19);
-  const edgeNoise = hashNoise(`${world.seed}:road-splat-edge:${profile.profileId}`, globalNoiseX, globalNoiseY);
-  const fleckNoise = hashNoise(`${world.seed}:road-splat-fleck:${profile.profileId}`, Math.floor(sampleX * 23), Math.floor(sampleY * 23));
-  const pebbleNoise = hashNoise(`${world.seed}:road-splat-pebble:${profile.profileId}`, Math.floor(sampleX * 31), Math.floor(sampleY * 31));
-  const apron = roadApronWeightAt(world, sampleX, sampleY, route);
-  const brokenDistance = Math.max(0, route.distance + (edgeNoise - 0.5) * 0.16 * visual.edgeBreakup);
-  const centerRaw = Math.max(1 - smoothstepRange(centerHalfWidth * 0.62, centerHalfWidth, route.distance), apron * 0.62);
-  const shoulderRaw = Math.max(1 - smoothstepRange(centerHalfWidth, shoulderHalfWidth, route.distance), apron * 0.82);
-  let fringeRaw = Math.max(1 - smoothstepRange(shoulderHalfWidth * 0.82, fringeHalfWidth, brokenDistance), apron * 0.72);
-  if (fringeRaw < 0.48) fringeRaw *= 0.72 + edgeNoise * 0.42;
-  if (fleckNoise < 0.16 && fringeRaw < 0.54) fringeRaw *= 0.7;
-  const center = clamp01(centerRaw * visual.alpha * (crossing ? 0.72 : 0.92));
-  const shoulder = clamp01(Math.max(0, shoulderRaw - centerRaw * 0.34) * visual.alpha * (crossing ? 0.34 : 0.48));
-  const fringe = clamp01(Math.max(0, fringeRaw - shoulderRaw * 0.28) * visual.alpha * 0.28);
-  const rutBand = Math.max(
-    0,
-    1 - smoothstepRange(centerHalfWidth * 0.34, centerHalfWidth * 0.72, Math.abs(route.distance - centerHalfWidth * 0.48))
-  );
-  const rut = clamp01(center * rutBand * (0.18 + edgeNoise * 0.12));
-  const pebble = pebbleNoise < visual.pebbleNoise * 1.45 && center > 0.38 ? clamp01(center * 0.34) : 0;
-  const terrainFleck = fleckNoise > 0.72 && (fringe > 0.04 || shoulder > 0.04) ? clamp01(Math.max(fringe, shoulder * 0.35) * 0.62) : 0;
-  return { center, shoulder, fringe, rut, pebble, terrainFleck, crossing };
+  const sample = roadRibbonDistanceAt(world, sampleX, sampleY);
+  if (!sample) return { ...empty, crossing };
+  const visual = sample.profile.visual;
+  const signedDistance = sample.distance - sample.halfWidth;
+  const edgeBand = sample.edgeBand;
+  const bodyAlpha = clamp01((1 - smoothstepRange(sample.bodyHalfWidth, sample.bodyHalfWidth + edgeBand, sample.distance)) * Math.max(0.88, visual.alpha));
+  const centerAlpha = clamp01((1 - smoothstepRange(sample.centerHalfWidth * 0.72, sample.centerHalfWidth, sample.distance)) * 0.92);
+  const edgeAlpha = clamp01((1 - smoothstepRange(sample.halfWidth, sample.halfWidth + edgeBand * 1.15, sample.distance)) * (1 - bodyAlpha * 0.22) * 0.3);
+  const shadowAlpha = clamp01((1 - smoothstepRange(sample.halfWidth + 0.015, sample.halfWidth + edgeBand * 1.35, sample.distance)) * 0.18);
+  const highlightAlpha = clamp01(centerAlpha * (0.12 + 0.08 * hashNoise(`${world.seed}:road-ribbon-highlight:${sample.profile.profileId}`, Math.floor(sampleX * 11), Math.floor(sampleY * 11))));
+  const lateral = roadSignedLateral(sampleX, sampleY, sample.closestX, sample.closestY, sample.tangentX, sample.tangentY);
+  const rutBand = Math.max(0, 1 - smoothstepRange(0.035, 0.095, Math.abs(Math.abs(lateral) - sample.centerHalfWidth * 0.52)));
+  const detailNoise = hashNoise(`${world.seed}:road-ribbon-detail:${sample.profile.profileId}`, Math.floor(sampleX * 29), Math.floor(sampleY * 29));
+  const rutAlpha = clamp01(rutBand * bodyAlpha * (0.16 + detailNoise * 0.08));
+  const pebbleAlpha = detailNoise < visual.pebbleNoise * 1.5 && bodyAlpha > 0.68 ? clamp01(bodyAlpha * 0.28) : 0;
+  const fleckNoise = hashNoise(`${world.seed}:road-ribbon-fleck:${sample.profile.profileId}`, Math.floor(sampleX * 19), Math.floor(sampleY * 19));
+  const edgeOnly = clamp01(edgeAlpha * (1 - bodyAlpha) * 1.4);
+  const terrainFleckAlpha = fleckNoise > 0.82 && edgeOnly > 0.04 ? clamp01(edgeOnly * 0.45) : 0;
+  return {
+    distance: signedDistance,
+    centerAlpha,
+    bodyAlpha,
+    edgeAlpha,
+    shadowAlpha,
+    highlightAlpha,
+    rutAlpha,
+    pebbleAlpha,
+    terrainFleckAlpha,
+    tangentX: sample.tangentX,
+    tangentY: sample.tangentY,
+    roadTheme: sample.theme,
+    crossing
+  };
 }
 
-interface RoadRouteDistanceSample {
+export function roadSplatAt(world: SemanticWorld, sampleX: number, sampleY: number): SemanticRoadSplatSample {
+  const ribbon = roadRibbonSampleAt(world, sampleX, sampleY);
+  return {
+    center: ribbon.centerAlpha,
+    shoulder: ribbon.bodyAlpha,
+    fringe: ribbon.edgeAlpha,
+    rut: ribbon.rutAlpha,
+    pebble: ribbon.pebbleAlpha,
+    terrainFleck: ribbon.terrainFleckAlpha,
+    crossing: ribbon.crossing
+  };
+}
+
+export function roadRibbonDebugSegments(world: SemanticWorld): SemanticRoadRibbonDebugSegment[] {
+  return roadRibbonCacheFor(world).segments.map((segment) => ({ ax: segment.ax, ay: segment.ay, bx: segment.bx, by: segment.by }));
+}
+
+interface RoadRibbonDistanceSample {
   distance: number;
-  cellX: number;
-  cellY: number;
-  neighborCount: number;
-  cardinalCount: number;
-  cornerCount: number;
-  bridgeAdjacent: boolean;
+  halfWidth: number;
+  bodyHalfWidth: number;
+  centerHalfWidth: number;
+  edgeBand: number;
+  closestX: number;
+  closestY: number;
+  tangentX: number;
+  tangentY: number;
+  profile: IslandRoadProfile;
+  theme: SemanticRoadRibbonTheme;
 }
 
-function roadRouteDistanceAt(world: SemanticWorld, sampleX: number, sampleY: number): RoadRouteDistanceSample | undefined {
-  const centerX = Math.floor(sampleX);
-  const centerY = Math.floor(sampleY);
-  let best: RoadRouteDistanceSample | undefined;
-  for (let y = centerY - 2; y <= centerY + 2; y += 1) {
-    for (let x = centerX - 2; x <= centerX + 2; x += 1) {
-      if (!routeCellAt(world, world.layers.roadMap, x, y)) continue;
-      const neighborInfo = roadNeighborInfo(world, x, y);
-      const distance = roadRouteDistanceFromCell(x, y, sampleX, sampleY, neighborInfo.neighbors);
-      if (!best || distance < best.distance) {
-        best = {
-          distance,
-          cellX: x,
-          cellY: y,
-          neighborCount: neighborInfo.neighborCount,
-          cardinalCount: neighborInfo.cardinalCount,
-          cornerCount: neighborInfo.cornerCount,
-          bridgeAdjacent: isAdjacentToBridgeCrossing(world, x, y)
-        };
-      }
+interface RoadRibbonPoint {
+  x: number;
+  y: number;
+}
+
+interface RoadRibbonSegment {
+  ax: number;
+  ay: number;
+  bx: number;
+  by: number;
+  halfWidth: number;
+  bodyHalfWidth: number;
+  centerHalfWidth: number;
+  edgeBand: number;
+  tangentX: number;
+  tangentY: number;
+  profile: IslandRoadProfile;
+  theme: SemanticRoadRibbonTheme;
+}
+
+interface RoadRibbonNode {
+  x: number;
+  y: number;
+  radius: number;
+  bodyRadius: number;
+  centerRadius: number;
+  edgeBand: number;
+  profile: IslandRoadProfile;
+  theme: SemanticRoadRibbonTheme;
+}
+
+interface RoadRibbonCache {
+  segments: RoadRibbonSegment[];
+  nodes: RoadRibbonNode[];
+}
+
+const ROAD_RIBBON_CACHE = new WeakMap<SemanticWorld, RoadRibbonCache>();
+
+function emptyRoadRibbonSample(world: SemanticWorld, sampleX: number, sampleY: number): SemanticRoadRibbonSample {
+  const profile = roadProfileAt(world, sampleX, sampleY);
+  return {
+    distance: Number.POSITIVE_INFINITY,
+    centerAlpha: 0,
+    bodyAlpha: 0,
+    edgeAlpha: 0,
+    shadowAlpha: 0,
+    highlightAlpha: 0,
+    rutAlpha: 0,
+    pebbleAlpha: 0,
+    terrainFleckAlpha: 0,
+    tangentX: 1,
+    tangentY: 0,
+    roadTheme: roadThemeForProfile(profile),
+    crossing: false
+  };
+}
+
+function roadRibbonDistanceAt(world: SemanticWorld, sampleX: number, sampleY: number): RoadRibbonDistanceSample | undefined {
+  const cache = roadRibbonCacheFor(world);
+  let best: RoadRibbonDistanceSample | undefined;
+  for (const segment of cache.segments) {
+    if (!segmentNearSample(segment, sampleX, sampleY)) continue;
+    const projection = closestPointOnSegment(sampleX, sampleY, segment.ax, segment.ay, segment.bx, segment.by);
+    if (!best || projection.distance - segment.halfWidth < best.distance - best.halfWidth) {
+      best = {
+        distance: projection.distance,
+        halfWidth: segment.halfWidth,
+        bodyHalfWidth: segment.bodyHalfWidth,
+        centerHalfWidth: segment.centerHalfWidth,
+        edgeBand: segment.edgeBand,
+        closestX: projection.x,
+        closestY: projection.y,
+        tangentX: segment.tangentX,
+        tangentY: segment.tangentY,
+        profile: segment.profile,
+        theme: segment.theme
+      };
+    }
+  }
+  for (const node of cache.nodes) {
+    const distance = Math.hypot(sampleX - node.x, sampleY - node.y);
+    if (distance > node.radius + node.edgeBand * 2) continue;
+    if (!best || distance - node.radius < best.distance - best.halfWidth) {
+      best = {
+        distance,
+        halfWidth: node.radius,
+        bodyHalfWidth: node.bodyRadius,
+        centerHalfWidth: node.centerRadius,
+        edgeBand: node.edgeBand,
+        closestX: node.x,
+        closestY: node.y,
+        tangentX: 1,
+        tangentY: 0,
+        profile: node.profile,
+        theme: node.theme
+      };
     }
   }
   return best;
+}
+
+function roadRibbonCacheFor(world: SemanticWorld): RoadRibbonCache {
+  const cached = ROAD_RIBBON_CACHE.get(world);
+  if (cached) return cached;
+  const cache = buildRoadRibbonCache(world);
+  ROAD_RIBBON_CACHE.set(world, cache);
+  return cache;
+}
+
+function buildRoadRibbonCache(world: SemanticWorld): RoadRibbonCache {
+  const segments: RoadRibbonSegment[] = [];
+  const nodes: RoadRibbonNode[] = [];
+  const segmentKeys = new Set<string>();
+  for (const edge of world.roadGraph.edges) {
+    if (!edge.connected || edge.path.length < 2) continue;
+    const points = smoothedRoadRibbonPoints(world, edge.path);
+    for (let i = 0; i < points.length - 1; i += 1) {
+      addRoadRibbonSegment(world, segments, segmentKeys, points[i], points[i + 1]);
+    }
+  }
+  addRoadRibbonNodes(world, nodes);
+  addUncoveredRoadFallbacks(world, segments, segmentKeys);
+  return { segments, nodes };
+}
+
+function smoothedRoadRibbonPoints(world: SemanticWorld, path: Array<{ x: number; y: number }>): RoadRibbonPoint[] {
+  return path.map((cell, index) => {
+    const base = { x: cell.x + 0.5, y: cell.y + 0.5 };
+    if (index === 0 || index === path.length - 1) return base;
+    const previous = path[index - 1];
+    const next = path[index + 1];
+    const prevPoint = { x: previous.x + 0.5, y: previous.y + 0.5 };
+    const nextPoint = { x: next.x + 0.5, y: next.y + 0.5 };
+    const tangentX = nextPoint.x - prevPoint.x;
+    const tangentY = nextPoint.y - prevPoint.y;
+    const length = Math.hypot(tangentX, tangentY) || 1;
+    const unitX = tangentX / length;
+    const unitY = tangentY / length;
+    const perpX = -unitY;
+    const perpY = unitX;
+    const diagonalRun = Math.abs(unitX) > 0.48 && Math.abs(unitY) > 0.48;
+    const phase = hashNoise(`${world.seed}:road-ribbon-meander-phase`, path[0].x, path[0].y) * Math.PI * 2;
+    const looseWiggle = (hashNoise(`${world.seed}:road-ribbon-meander`, cell.x, cell.y) - 0.5) * (diagonalRun ? 0.22 : 0.16);
+    const runWiggle = Math.sin(index * (diagonalRun ? 1.35 : 0.82) + phase) * (diagonalRun ? 0.24 : 0.06);
+    const wiggle = looseWiggle + runWiggle;
+    const smoothed = {
+      x: base.x * 0.58 + (prevPoint.x + nextPoint.x) * 0.21 + perpX * wiggle,
+      y: base.y * 0.58 + (prevPoint.y + nextPoint.y) * 0.21 + perpY * wiggle
+    };
+    return constrainRoadRibbonPoint(world, smoothed, base, diagonalRun ? 0.4 : 0.3);
+  });
+}
+
+function constrainRoadRibbonPoint(world: SemanticWorld, candidate: RoadRibbonPoint, fallback: RoadRibbonPoint, maxOffset: number): RoadRibbonPoint {
+  const dx = candidate.x - fallback.x;
+  const dy = candidate.y - fallback.y;
+  const distance = Math.hypot(dx, dy);
+  const limited = distance > maxOffset ? { x: fallback.x + (dx / distance) * maxOffset, y: fallback.y + (dy / distance) * maxOffset } : candidate;
+  const x = clampInt(Math.floor(limited.x), 0, world.width - 1);
+  const y = clampInt(Math.floor(limited.y), 0, world.height - 1);
+  const i = y * world.width + x;
+  if ((world.layers.riverMap[i] || world.layers.lakeMap[i] || !world.layers.landMask[i]) && !world.layers.riverCrossingMap[i]) return fallback;
+  return limited;
+}
+
+function addRoadRibbonSegment(
+  world: SemanticWorld,
+  segments: RoadRibbonSegment[],
+  segmentKeys: Set<string>,
+  a: RoadRibbonPoint,
+  b: RoadRibbonPoint
+) {
+  const length = Math.hypot(b.x - a.x, b.y - a.y);
+  if (length < 0.05) return;
+  const key = `${Math.round(a.x * 16)},${Math.round(a.y * 16)}:${Math.round(b.x * 16)},${Math.round(b.y * 16)}`;
+  const reverseKey = `${Math.round(b.x * 16)},${Math.round(b.y * 16)}:${Math.round(a.x * 16)},${Math.round(a.y * 16)}`;
+  if (segmentKeys.has(key) || segmentKeys.has(reverseKey)) return;
+  segmentKeys.add(key);
+  const midX = (a.x + b.x) / 2;
+  const midY = (a.y + b.y) / 2;
+  const profile = roadProfileAt(world, midX, midY);
+  const tangentX = (b.x - a.x) / length;
+  const tangentY = (b.y - a.y) / length;
+  const width = roadRibbonWidthForSegment(profile, tangentX, tangentY);
+  const halfWidth = width / 2;
+  segments.push({
+    ax: a.x,
+    ay: a.y,
+    bx: b.x,
+    by: b.y,
+    halfWidth,
+    bodyHalfWidth: halfWidth * 0.74,
+    centerHalfWidth: halfWidth * 0.42,
+    edgeBand: 0.065,
+    tangentX,
+    tangentY,
+    profile,
+    theme: roadThemeForProfile(profile)
+  });
+}
+
+function addRoadRibbonNodes(world: SemanticWorld, nodes: RoadRibbonNode[]) {
+  const seen = new Set<string>();
+  for (let y = 0; y < world.height; y += 1) {
+    for (let x = 0; x < world.width; x += 1) {
+      const i = y * world.width + x;
+      if (!world.layers.roadMap[i]) continue;
+      const info = roadNeighborInfo(world, x, y);
+      const important = info.neighborCount <= 1 || info.cardinalCount >= 3 || info.neighborCount >= 4 || info.cornerCount > 0 || isAdjacentToBridgeCrossing(world, x, y);
+      if (!important) continue;
+      const key = `${x},${y}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const profile = roadProfileAt(world, x + 0.5, y + 0.5);
+      const width = roadRibbonWidthForSegment(profile, 1, 0);
+      const endpointBoost = info.neighborCount <= 1 ? profile.generation.endpointApronScale * 0.14 : 0;
+      const junctionBoost = info.cardinalCount >= 3 || info.neighborCount >= 4 ? profile.generation.junctionPatchScale * 0.18 : 0;
+      const bridgeBoost = isAdjacentToBridgeCrossing(world, x, y) ? 0.12 : 0;
+      const radius = clamp(width * 0.58 + endpointBoost + junctionBoost + bridgeBoost, 0.46, 0.88);
+      nodes.push({
+        x: x + 0.5,
+        y: y + 0.5,
+        radius,
+        bodyRadius: radius * 0.76,
+        centerRadius: radius * 0.42,
+        edgeBand: 0.065,
+        profile,
+        theme: roadThemeForProfile(profile)
+      });
+    }
+  }
+  for (const poi of world.poiList) {
+    const profile = roadProfileAt(world, poi.approachTile.x + 0.5, poi.approachTile.y + 0.5);
+    const radius = clamp(0.62 * profile.visual.widthScale * profile.generation.endpointApronScale, 0.48, 0.82);
+    nodes.push({
+      x: poi.approachTile.x + 0.5,
+      y: poi.approachTile.y + 0.5,
+      radius,
+      bodyRadius: radius * 0.78,
+      centerRadius: radius * 0.42,
+      edgeBand: 0.065,
+      profile,
+      theme: roadThemeForProfile(profile)
+    });
+  }
+}
+
+function addUncoveredRoadFallbacks(world: SemanticWorld, segments: RoadRibbonSegment[], segmentKeys: Set<string>) {
+  for (let y = 0; y < world.height; y += 1) {
+    for (let x = 0; x < world.width; x += 1) {
+      if (!world.layers.roadMap[y * world.width + x]) continue;
+      const center = { x: x + 0.5, y: y + 0.5 };
+      const covered = segments.some((segment) => {
+        if (Math.abs(((segment.ax + segment.bx) / 2) - center.x) > 2 || Math.abs(((segment.ay + segment.by) / 2) - center.y) > 2) return false;
+        return closestPointOnSegment(center.x, center.y, segment.ax, segment.ay, segment.bx, segment.by).distance <= segment.halfWidth * 0.72;
+      });
+      if (covered) continue;
+      for (const neighbor of roadNeighborInfo(world, x, y).neighbors) {
+        addRoadRibbonSegment(world, segments, segmentKeys, center, { x: x + neighbor.dx + 0.5, y: y + neighbor.dy + 0.5 });
+      }
+    }
+  }
+}
+
+function roadRibbonWidthForSegment(profile: IslandRoadProfile, tangentX: number, tangentY: number): number {
+  const vertical = Math.abs(tangentY) > Math.abs(tangentX) * 1.4;
+  const diagonal = Math.abs(tangentX) > 0.35 && Math.abs(tangentY) > 0.35;
+  const orientationScale = vertical ? 1.28 : diagonal ? 1.12 : 1;
+  return clamp(1.04 * profile.visual.widthScale * orientationScale, 0.82, 1.34);
 }
 
 function roadNeighborInfo(world: SemanticWorld, x: number, y: number) {
@@ -887,42 +1170,61 @@ function roadNeighborInfo(world: SemanticWorld, x: number, y: number) {
   };
 }
 
-function roadRouteDistanceFromCell(
-  x: number,
-  y: number,
-  sampleX: number,
-  sampleY: number,
-  neighbors: Array<{ dx: number; dy: number }>
-): number {
-  const ax = x + 0.5;
-  const ay = y + 0.5;
-  let best = Math.hypot(sampleX - ax, sampleY - ay);
-  for (const neighbor of neighbors) {
-    const bx = x + neighbor.dx + 0.5;
-    const by = y + neighbor.dy + 0.5;
-    best = Math.min(best, distanceToSegment(sampleX, sampleY, ax, ay, bx, by));
+function nearRoadNode(cache: RoadRibbonCache, x: number, y: number, radius: number): boolean {
+  return cache.nodes.some((node) => Math.abs(node.x - x) <= radius && Math.abs(node.y - y) <= radius);
+}
+
+function segmentNearSample(segment: RoadRibbonSegment, sampleX: number, sampleY: number): boolean {
+  const margin = segment.halfWidth + segment.edgeBand * 2 + 0.08;
+  return (
+    sampleX >= Math.min(segment.ax, segment.bx) - margin &&
+    sampleX <= Math.max(segment.ax, segment.bx) + margin &&
+    sampleY >= Math.min(segment.ay, segment.by) - margin &&
+    sampleY <= Math.max(segment.ay, segment.by) + margin
+  );
+}
+
+function roadThemeForProfile(profile: IslandRoadProfile): SemanticRoadRibbonTheme {
+  if (profile.profileId.includes("snow")) return "snowPack";
+  if (profile.profileId.includes("sand") || profile.profileId.includes("coastal")) return "desertSand";
+  if (profile.profileId.includes("ash") || profile.profileId.includes("volcanic")) return "ashCinder";
+  if (profile.profileId.includes("gravel")) return "highlandGravel";
+  return "grassDirt";
+}
+
+interface RoadRibbonPalette {
+  shadow: Rgb;
+  edge: Rgb;
+  highlight: Rgb;
+  rut: Rgb;
+  pebble: Rgb;
+  fleck: Rgb;
+}
+
+function roadRibbonPalette(theme: SemanticRoadRibbonTheme, visual: IslandRoadVisualConfig): RoadRibbonPalette {
+  if (theme === "desertSand") {
+    return { shadow: [133, 101, 58], edge: [191, 154, 85], highlight: [238, 207, 135], rut: [143, 112, 67], pebble: [117, 93, 61], fleck: [222, 190, 117] };
   }
-  return best;
+  if (theme === "snowPack") {
+    return { shadow: [90, 117, 126], edge: [162, 181, 182], highlight: [232, 244, 240], rut: [93, 111, 117], pebble: [119, 135, 137], fleck: [224, 239, 237] };
+  }
+  if (theme === "ashCinder") {
+    return { shadow: [38, 35, 32], edge: [88, 80, 70], highlight: [132, 116, 94], rut: [34, 32, 31], pebble: [110, 91, 76], fleck: [121, 66, 45] };
+  }
+  if (theme === "highlandGravel") {
+    return { shadow: [74, 65, 52], edge: [137, 120, 84], highlight: [197, 178, 123], rut: [75, 68, 57], pebble: [103, 96, 82], fleck: [99, 117, 75] };
+  }
+  return {
+    shadow: hexRgb(visual.darkNoiseColor, [112, 79, 47]),
+    edge: hexRgb(visual.edgeColor, [159, 120, 67]),
+    highlight: hexRgb(visual.lightNoiseColor, [240, 199, 131]),
+    rut: hexRgb(visual.darkNoiseColor, COLORS.roadPebble),
+    pebble: hexRgb(visual.darkNoiseColor, COLORS.roadPebble),
+    fleck: visual.terrainFleckColor ? hexRgb(visual.terrainFleckColor, COLORS.roadGrassFleck) : COLORS.roadGrassFleck
+  };
 }
 
-function roadApronWeightAt(world: SemanticWorld, sampleX: number, sampleY: number, route: RoadRouteDistanceSample): number {
-  const profile = roadProfileAt(world, route.cellX + 0.5, route.cellY + 0.5);
-  const centerDistance = Math.hypot(sampleX - (route.cellX + 0.5), sampleY - (route.cellY + 0.5));
-  const endpointRadius = 0.52 * profile.generation.endpointApronScale * profile.visual.widthScale;
-  const junctionRadius = 0.64 * profile.generation.junctionPatchScale * profile.visual.widthScale;
-  const bridgeRadius = 0.58 * profile.generation.endpointApronScale * profile.visual.widthScale;
-  let radius = 0;
-  if (route.neighborCount <= 1) radius = Math.max(radius, endpointRadius);
-  if (route.cardinalCount >= 3 || route.neighborCount >= 4) radius = Math.max(radius, junctionRadius);
-  if (route.bridgeAdjacent) radius = Math.max(radius, bridgeRadius);
-  if (route.cardinalCount === 2 && route.cornerCount > 0) radius = Math.max(radius, junctionRadius * 0.76);
-  if (radius <= 0) return 0;
-  const noise = hashNoise(`${world.seed}:road-apron:${profile.profileId}`, Math.floor(sampleX * 17), Math.floor(sampleY * 17));
-  const organicRadius = radius + (noise - 0.5) * 0.12;
-  return clamp01(1 - smoothstepRange(organicRadius * 0.54, organicRadius, centerDistance));
-}
-
-function roadCrossingSplatAt(world: SemanticWorld, sampleX: number, sampleY: number): number {
+function roadCrossingRibbonAt(world: SemanticWorld, sampleX: number, sampleY: number): number {
   const centerX = Math.floor(sampleX);
   const centerY = Math.floor(sampleY);
   let best = 0;
@@ -936,15 +1238,21 @@ function roadCrossingSplatAt(world: SemanticWorld, sampleX: number, sampleY: num
   return best;
 }
 
-function distanceToSegment(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+function closestPointOnSegment(px: number, py: number, ax: number, ay: number, bx: number, by: number): { x: number; y: number; distance: number } {
   const vx = bx - ax;
   const vy = by - ay;
   const lengthSq = vx * vx + vy * vy;
-  if (lengthSq <= 0) return Math.hypot(px - ax, py - ay);
+  if (lengthSq <= 0) return { x: ax, y: ay, distance: Math.hypot(px - ax, py - ay) };
   const t = clamp01(((px - ax) * vx + (py - ay) * vy) / lengthSq);
   const x = ax + vx * t;
   const y = ay + vy * t;
-  return Math.hypot(px - x, py - y);
+  return { x, y, distance: Math.hypot(px - x, py - y) };
+}
+
+function roadSignedLateral(px: number, py: number, cx: number, cy: number, tangentX: number, tangentY: number): number {
+  const nx = -tangentY;
+  const ny = tangentX;
+  return (px - cx) * nx + (py - cy) * ny;
 }
 
 function drawMaskBoundaryAccents(ctx: CanvasRenderingContext2D, world: SemanticWorld, plan: SemanticMaskTerrainRenderPlan, classGrid: Uint8Array) {
