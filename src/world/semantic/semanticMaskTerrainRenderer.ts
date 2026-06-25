@@ -1,5 +1,5 @@
 import type Phaser from "phaser";
-import { hashNoise } from "../seededRng.ts";
+import { fbm, hashNoise } from "../seededRng.ts";
 import { DEFAULT_ROAD_PROFILE } from "./semanticRoadProfiles.ts";
 import { SEMANTIC_BIOME, SEMANTIC_WATER, type IslandRoadProfile, type IslandRoadVisualConfig, type SemanticWorld } from "./semanticTypes.ts";
 
@@ -49,6 +49,15 @@ type BoundaryKind =
   | "sandIce"
   | "grassIce";
 
+interface MaterialPatchAccent {
+  textureClass?: SemanticMaskTerrainClass;
+  textureAlpha?: number;
+  color: Rgb;
+  alpha: number;
+  fleckColor?: Rgb;
+  fleckChance?: number;
+}
+
 const TERRAIN_CLASS_IDS = {
   deepOcean: 0,
   shallowWater: 1,
@@ -74,14 +83,26 @@ const COLORS = {
   wetSand: [178, 146, 86] as Rgb,
   beachEdge: [202, 158, 87] as Rgb,
   grassEdge: [70, 138, 58] as Rgb,
+  grassLush: [72, 166, 73] as Rgb,
+  grassDark: [54, 119, 51] as Rgb,
+  grassFlower: [182, 220, 111] as Rgb,
+  dirtPatch: [139, 111, 67] as Rgb,
+  scrubGreen: [110, 138, 74] as Rgb,
   roadEdge: [159, 120, 67] as Rgb,
   roadDust: [214, 169, 103] as Rgb,
   roadPebble: [119, 103, 84] as Rgb,
   roadGrassFleck: [92, 139, 64] as Rgb,
   sandEdge: [167, 129, 66] as Rgb,
+  duneLight: [224, 186, 100] as Rgb,
+  rockySand: [128, 111, 84] as Rgb,
   ashEdge: [68, 62, 56] as Rgb,
+  cinderDark: [42, 38, 36] as Rgb,
+  emberSoil: [132, 70, 48] as Rgb,
   iceEdge: [134, 190, 207] as Rgb,
-  frost: [231, 251, 252] as Rgb
+  frost: [231, 251, 252] as Rgb,
+  blueIce: [168, 224, 236] as Rgb,
+  coldMoss: [95, 142, 112] as Rgb,
+  snowShadow: [177, 202, 210] as Rgb
 };
 
 const HEX_COLOR_CACHE = new Map<string, Rgb>();
@@ -111,6 +132,7 @@ export function createSemanticMaskTerrainCanvas(world: SemanticWorld, options: S
     if (terrainClass === "road") drawRoadMaskedTerrainClass(ctx, world, plan, classGrid);
     else drawMaskedTerrainClass(ctx, plan, classGrid, TERRAIN_CLASS_IDS[terrainClass], fillStyles[terrainClass]);
   }
+  drawTerrainMaterialPatchAccents(ctx, world, plan, classGrid, fillStyles);
   drawMaskBoundaryAccents(ctx, world, plan, classGrid);
 
   return canvas;
@@ -131,13 +153,17 @@ function prepareSemanticMaskTerrainRender(
   const maskWidth = renderArea.width * maskPixelsPerCell;
   const maskHeight = renderArea.height * maskPixelsPerCell;
   const classSamples = emptyClassSamples();
-  const classGrid = buildMaskClassGrid(world, {
-    originX: renderArea.x,
-    originY: renderArea.y,
-    maskPixelsPerCell,
-    maskWidth,
-    maskHeight
-  }, classSamples);
+  const classGrid = buildMaskClassGrid(
+    world,
+    {
+      originX: renderArea.x,
+      originY: renderArea.y,
+      maskPixelsPerCell,
+      maskWidth,
+      maskHeight
+    },
+    classSamples
+  );
   let waterBeachBoundarySamples = 0;
   let waterGrassBoundarySamples = 0;
   let waterIceBoundarySamples = 0;
@@ -264,6 +290,182 @@ function classifySample(world: SemanticWorld, sampleX: number, sampleY: number):
   if (iceScore >= grassScore && iceScore >= sandScore) return TERRAIN_CLASS_IDS.ice;
   if (sandScore >= grassScore && sandScore >= iceScore) return TERRAIN_CLASS_IDS.sand;
   return TERRAIN_CLASS_IDS.grassland;
+}
+
+function drawTerrainMaterialPatchAccents(
+  ctx: CanvasRenderingContext2D,
+  world: SemanticWorld,
+  plan: SemanticMaskTerrainRenderPlan,
+  classGrid: Uint8Array,
+  fillStyles: Record<SemanticMaskTerrainClass, CanvasPattern | string>
+): void {
+  ctx.save();
+  for (let my = 0; my < plan.maskHeight; my += 1) {
+    for (let mx = 0; mx < plan.maskWidth; mx += 1) {
+      const terrainClass = terrainClassAt(classGrid, my * plan.maskWidth + mx);
+      const sampleX = plan.originX + (mx + 0.5) / plan.maskPixelsPerCell;
+      const sampleY = plan.originY + (my + 0.5) / plan.maskPixelsPerCell;
+      const accent = materialPatchAccentForSample(world, terrainClass, sampleX, sampleY);
+      if (!accent) continue;
+
+      const screenX = mx * plan.pixelBlock;
+      const screenY = my * plan.pixelBlock;
+      const grain = hashNoise(`${world.seed}:terrain-material-grain`, Math.floor(sampleX * 5), Math.floor(sampleY * 5), terrainClass);
+      if (grain < 0.07) continue;
+      if (accent.textureClass && accent.textureAlpha && accent.textureAlpha > 0) {
+        ctx.globalAlpha = accent.textureAlpha * (0.72 + grain * 0.42);
+        ctx.fillStyle = fillStyles[accent.textureClass];
+        ctx.fillRect(screenX, screenY, plan.pixelBlock, plan.pixelBlock);
+      }
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = rgbaCss(accent.color, accent.alpha * (0.74 + grain * 0.38));
+      ctx.fillRect(screenX, screenY, plan.pixelBlock, plan.pixelBlock);
+      if (accent.fleckColor && grain > 1 - (accent.fleckChance ?? 0)) {
+        ctx.fillStyle = rgbaCss(accent.fleckColor, Math.min(0.52, accent.alpha * 1.8));
+        const fleckSize = Math.max(1, plan.pixelBlock * 0.42);
+        ctx.fillRect(screenX + (plan.pixelBlock - fleckSize) * 0.5, screenY + (plan.pixelBlock - fleckSize) * 0.5, fleckSize, fleckSize);
+      }
+    }
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+function materialPatchAccentForSample(world: SemanticWorld, terrainClass: TerrainClassId, sampleX: number, sampleY: number): MaterialPatchAccent | undefined {
+  if (!isMaterialPatchTerrainClass(terrainClass)) return undefined;
+  if (!isMaterialPatchEligible(world, terrainClass, sampleX, sampleY)) return undefined;
+
+  const moisture = sampleNumeric(world, world.layers.moisture, sampleX, sampleY);
+  const coldness = sampleNumeric(world, world.layers.coldness, sampleX, sampleY);
+  const elevation = sampleNumeric(world, world.layers.elevation, sampleX, sampleY);
+  const ridge = sampleNumeric(world, world.layers.ridge, sampleX, sampleY);
+  const distanceToWater = sampleNumeric(world, world.layers.distanceToWater, sampleX, sampleY);
+  const island = islandAtSample(world, sampleX, sampleY);
+  const islandSalt = island?.id ?? "world";
+
+  if (terrainClass === TERRAIN_CLASS_IDS.grassland) {
+    const dryScore = patchScore(world, islandSalt, "grass-dry-meadow", sampleX, sampleY, 15, 3.8) + (0.5 - moisture) * 0.26 + (distanceToWater > 6 ? 0.035 : 0);
+    if (dryScore > 0.735) {
+      return { textureClass: "road", textureAlpha: 0.16, color: COLORS.dirtPatch, alpha: 0.2, fleckColor: COLORS.rockySand, fleckChance: 0.045 };
+    }
+
+    const lushScore = patchScore(world, islandSalt, "grass-lush-clover", sampleX, sampleY, 11.5, 2.9) + (moisture - 0.48) * 0.28 - coldness * 0.09;
+    if (lushScore > 0.72) {
+      return { textureClass: "grassland", textureAlpha: 0.08, color: COLORS.grassLush, alpha: 0.18, fleckColor: COLORS.grassFlower, fleckChance: 0.05 };
+    }
+
+    const meadowScore = patchScore(world, islandSalt, "grass-flower-meadow", sampleX, sampleY, 7.5, 2.4) - Math.max(0, ridge - 0.5) * 0.1;
+    if (meadowScore > 0.765) {
+      return { textureClass: "grassland", textureAlpha: 0.06, color: COLORS.grassFlower, alpha: 0.12, fleckColor: COLORS.frost, fleckChance: 0.032 };
+    }
+  }
+
+  if (terrainClass === TERRAIN_CLASS_IDS.sand) {
+    const duneScore = patchScore(world, islandSalt, "sand-dune-ribs", sampleX, sampleY, 10.5, 2.8) + (0.52 - moisture) * 0.2;
+    if (duneScore > 0.69) {
+      return { textureClass: "beach", textureAlpha: 0.11, color: COLORS.duneLight, alpha: 0.16 };
+    }
+
+    const rockScore = patchScore(world, islandSalt, "sand-rocky-scrub", sampleX, sampleY, 8.5, 2.3) + ridge * 0.16 + elevation * 0.08;
+    if (rockScore > 0.75) {
+      return { textureClass: "road", textureAlpha: 0.11, color: COLORS.rockySand, alpha: 0.15, fleckColor: COLORS.roadPebble, fleckChance: 0.06 };
+    }
+
+    const scrubScore = patchScore(world, islandSalt, "sand-coastal-scrub", sampleX, sampleY, 12, 3.2) + (moisture - 0.44) * 0.24;
+    if (scrubScore > 0.755) {
+      return { textureClass: "grassland", textureAlpha: 0.08, color: COLORS.scrubGreen, alpha: 0.14, fleckColor: COLORS.grassDark, fleckChance: 0.04 };
+    }
+  }
+
+  if (terrainClass === TERRAIN_CLASS_IDS.ice) {
+    const exposedRock = patchScore(world, islandSalt, "ice-rocky-outcrop", sampleX, sampleY, 9.5, 2.4) + ridge * 0.18 + elevation * 0.1 - coldness * 0.07;
+    if (exposedRock > 0.77) {
+      return { textureClass: "road", textureAlpha: 0.12, color: COLORS.snowShadow, alpha: 0.18, fleckColor: COLORS.rockySand, fleckChance: 0.05 };
+    }
+
+    const blueIce = patchScore(world, islandSalt, "ice-blue-windpack", sampleX, sampleY, 12.5, 2.8) + coldness * 0.16;
+    if (blueIce > 0.73) {
+      return { textureClass: "ice", textureAlpha: 0.08, color: COLORS.blueIce, alpha: 0.18, fleckColor: COLORS.frost, fleckChance: 0.04 };
+    }
+
+    const thaw = patchScore(world, islandSalt, "ice-tundra-moss", sampleX, sampleY, 10, 2.6) + moisture * 0.14 - coldness * 0.18;
+    if (thaw > 0.735) {
+      return { textureClass: "grassland", textureAlpha: 0.07, color: COLORS.coldMoss, alpha: 0.13, fleckColor: COLORS.grassDark, fleckChance: 0.035 };
+    }
+  }
+
+  if (terrainClass === TERRAIN_CLASS_IDS.ash) {
+    const cinder = patchScore(world, islandSalt, "ash-cinder-crust", sampleX, sampleY, 9, 2.2) + ridge * 0.12;
+    if (cinder > 0.68) {
+      return { textureClass: "ash", textureAlpha: 0.1, color: COLORS.cinderDark, alpha: 0.2, fleckColor: COLORS.roadPebble, fleckChance: 0.06 };
+    }
+
+    const ember = patchScore(world, islandSalt, "ash-ember-soil", sampleX, sampleY, 13, 3.4) + (0.55 - moisture) * 0.12;
+    if (ember > 0.76) {
+      return { textureClass: "sand", textureAlpha: 0.07, color: COLORS.emberSoil, alpha: 0.14 };
+    }
+  }
+
+  if (terrainClass === TERRAIN_CLASS_IDS.beach) {
+    const wetScore = patchScore(world, islandSalt, "beach-wet-shells", sampleX, sampleY, 8.5, 2.2) + Math.max(0, 1.8 - distanceToWater) * 0.18;
+    if (wetScore > 0.69) {
+      return { textureClass: "freshWater", textureAlpha: 0.05, color: COLORS.wetSand, alpha: 0.18, fleckColor: COLORS.foam, fleckChance: 0.025 };
+    }
+  }
+
+  return undefined;
+}
+
+function isMaterialPatchTerrainClass(value: TerrainClassId): boolean {
+  return value === TERRAIN_CLASS_IDS.grassland || value === TERRAIN_CLASS_IDS.sand || value === TERRAIN_CLASS_IDS.ice || value === TERRAIN_CLASS_IDS.ash || value === TERRAIN_CLASS_IDS.beach;
+}
+
+function isMaterialPatchEligible(world: SemanticWorld, terrainClass: TerrainClassId, sampleX: number, sampleY: number): boolean {
+  const x = clampInt(Math.floor(sampleX), 0, world.width - 1);
+  const y = clampInt(Math.floor(sampleY), 0, world.height - 1);
+  const i = y * world.width + x;
+  if (!world.layers.landMask[i]) return false;
+  if (world.layers.roadMap[i] || world.layers.riverMap[i] || world.layers.lakeMap[i]) return false;
+  if (world.layers.mountainMap[i]) return false;
+  if (terrainClass !== TERRAIN_CLASS_IDS.beach && world.layers.distanceToWater[i] < 2) return false;
+  const margin = terrainClass === TERRAIN_CLASS_IDS.beach ? 1 : 2;
+  return !nearPoiFootprint(world, x, y, margin);
+}
+
+function nearPoiFootprint(world: SemanticWorld, x: number, y: number, margin: number): boolean {
+  for (const poi of world.poiList) {
+    const footprint = poi.footprint;
+    if (x >= footprint.minX - margin && x <= footprint.maxX + margin && y >= footprint.minY - margin && y <= footprint.maxY + margin) return true;
+  }
+  return false;
+}
+
+function patchScore(world: SemanticWorld, islandSalt: string, salt: string, sampleX: number, sampleY: number, macroScale: number, detailScale: number): number {
+  const domainWarpX = fbm(`${world.seed}:terrain-material:${islandSalt}:${salt}:warp-x`, sampleX / 31, sampleY / 31, 3) - 0.5;
+  const domainWarpY = fbm(`${world.seed}:terrain-material:${islandSalt}:${salt}:warp-y`, sampleX / 31, sampleY / 31, 3) - 0.5;
+  const warpedX = sampleX + domainWarpX * macroScale * 0.72;
+  const warpedY = sampleY + domainWarpY * macroScale * 0.72;
+  const macro = fbm(`${world.seed}:terrain-material:${islandSalt}:${salt}:macro`, warpedX / macroScale, warpedY / macroScale, 4);
+  const detail = fbm(`${world.seed}:terrain-material:${islandSalt}:${salt}:detail`, warpedX / detailScale, warpedY / detailScale, 3);
+  const cellular = cellularPatchValue(world, islandSalt, salt, sampleX, sampleY, macroScale * 0.58);
+  return macro * 0.64 + detail * 0.23 + cellular * 0.13;
+}
+
+function cellularPatchValue(world: SemanticWorld, islandSalt: string, salt: string, sampleX: number, sampleY: number, cellSize: number): number {
+  const cx = Math.floor(sampleX / cellSize);
+  const cy = Math.floor(sampleY / cellSize);
+  let best = 0;
+  for (let y = cy - 1; y <= cy + 1; y += 1) {
+    for (let x = cx - 1; x <= cx + 1; x += 1) {
+      const featureX = (x + hashNoise(`${world.seed}:terrain-material:${islandSalt}:${salt}:feature-x`, x, y)) * cellSize;
+      const featureY = (y + hashNoise(`${world.seed}:terrain-material:${islandSalt}:${salt}:feature-y`, x, y)) * cellSize;
+      const distance = Math.hypot(sampleX - featureX, sampleY - featureY) / Math.max(1, cellSize);
+      const seedStrength = hashNoise(`${world.seed}:terrain-material:${islandSalt}:${salt}:feature-strength`, x, y);
+      const strength = seedStrength * Math.max(0, 1 - distance);
+      best = Math.max(best, strength);
+    }
+  }
+  return best;
 }
 
 function roadMaskSample(world: SemanticWorld, sampleX: number, sampleY: number, edgeNoise: number, profile: IslandRoadProfile): boolean {
@@ -437,7 +639,7 @@ function createTerrainFillStyles(
     deepOcean: createTerrainPattern(ctx, terrainSources?.deepOcean, tileSize, COLORS.deepOcean),
     shallowWater: createTerrainPattern(ctx, terrainSources?.shallowWater, tileSize, COLORS.shallowWater),
     freshWater: createTerrainPattern(ctx, terrainSources?.freshWater, tileSize, COLORS.freshWater),
-    road: createRoadTrailPattern(ctx, tileSize),
+    road: createRoadTrailPattern(ctx, terrainSources?.road, tileSize),
     beach: createTerrainPattern(ctx, terrainSources?.beach, tileSize, COLORS.beachEdge),
     grassland: createTerrainPattern(ctx, terrainSources?.grassland, tileSize, COLORS.grassEdge),
     sand: createTerrainPattern(ctx, terrainSources?.sand, tileSize, COLORS.sandEdge),
@@ -463,7 +665,12 @@ function createTerrainPattern(
   return ctx.createPattern(patternCanvas, "repeat") ?? rgbCss(fallbackColor);
 }
 
-function createRoadTrailPattern(ctx: CanvasRenderingContext2D, tileSize: number): CanvasPattern | string {
+function createRoadTrailPattern(
+  ctx: CanvasRenderingContext2D,
+  source: (CanvasImageSource & { width: number; height: number }) | undefined,
+  tileSize: number
+): CanvasPattern | string {
+  if (source) return createTerrainPattern(ctx, source, tileSize, COLORS.roadDust);
   const patternCanvas = document.createElement("canvas");
   patternCanvas.width = tileSize;
   patternCanvas.height = tileSize;
@@ -666,10 +873,7 @@ function drawBoundaryStrip(ctx: CanvasRenderingContext2D, x: number, y: number, 
   else ctx.fillRect(x, y - Math.floor(width / 2), length, width);
 }
 
-function boundaryKind(
-  a: TerrainClassId,
-  b: TerrainClassId
-): BoundaryKind | undefined {
+function boundaryKind(a: TerrainClassId, b: TerrainClassId): BoundaryKind | undefined {
   if ((a === TERRAIN_CLASS_IDS.deepOcean && b === TERRAIN_CLASS_IDS.shallowWater) || (b === TERRAIN_CLASS_IDS.deepOcean && a === TERRAIN_CLASS_IDS.shallowWater)) return "deepShallow";
   if ((isWater(a) && isSandLike(b)) || (isWater(b) && isSandLike(a))) return "waterBeach";
   if ((isWater(a) && b === TERRAIN_CLASS_IDS.grassland) || (isWater(b) && a === TERRAIN_CLASS_IDS.grassland)) return "waterGrass";
