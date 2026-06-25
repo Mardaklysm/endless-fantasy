@@ -542,6 +542,7 @@ export function drawBattleVictoryDialog(this: CrystalOathSceneContext) {
   const y = Math.round(HEIGHT / 2 - h / 2);
   this.ui.fillStyle(0x000000, 0.42).fillRect(0, 0, WIDTH, HEIGHT);
   this.drawFantasyDialogFrame(x, y, w, h, { variant: "fancyResult", showCrest: true, alpha: 0.98 });
+  const resultGraphics = createBattleResultGraphics.call(this);
   this.text(x + w / 2, y + 25, "Victory!", 34, "#ffd98a", "center", {
     wordWrapWidth: w - 96,
     stroke: "#050812",
@@ -564,9 +565,19 @@ export function drawBattleVictoryDialog(this: CrystalOathSceneContext) {
   const cardGap = hasLevelUps ? 12 : 10;
   const cardW = hasLevelUps ? 170 : 150;
   const rewardsX = x + Math.round((w - cardW * 3 - cardGap * 2) / 2);
-  drawVictoryRewardCard.call(this, rewardsX, cardY, cardW, "ui_battle_result_icon_exp", "EXP", rewards ? String(rewards.xp) : "Tallying");
   drawVictoryRewardCard.call(
     this,
+    resultGraphics,
+    rewardsX,
+    cardY,
+    cardW,
+    "ui_battle_result_icon_exp",
+    "EXP",
+    rewards ? String(rewards.xp) : "Tallying"
+  );
+  drawVictoryRewardCard.call(
+    this,
+    resultGraphics,
     rewardsX + cardW + cardGap,
     cardY,
     cardW,
@@ -577,6 +588,7 @@ export function drawBattleVictoryDialog(this: CrystalOathSceneContext) {
   const loot = lootDisplay(rewards);
   drawVictoryRewardCard.call(
     this,
+    resultGraphics,
     rewardsX + (cardW + cardGap) * 2,
     cardY,
     cardW,
@@ -588,7 +600,7 @@ export function drawBattleVictoryDialog(this: CrystalOathSceneContext) {
 
   if (hasLevelUps) {
     const sectionY = y + 162;
-    this.ui.fillStyle(0xc69a4b, 0.36).fillRect(x + w / 2 - 116, sectionY + 1, 232, 1);
+    resultGraphics.fillStyle(0xc69a4b, 0.46).fillRect(x + w / 2 - 116, sectionY + 1, 232, 1);
     this.text(x + w / 2, sectionY - 15, "Level Up", 12, "#ffd98a", "center", {
       wordWrapWidth: w - 92,
       stroke: "#050812",
@@ -600,9 +612,18 @@ export function drawBattleVictoryDialog(this: CrystalOathSceneContext) {
     const totalLevelW = visibleLevelUps.length * levelCardW + Math.max(0, visibleLevelUps.length - 1) * levelGap;
     const levelStartX = x + Math.round((w - totalLevelW) / 2);
     visibleLevelUps.forEach((level, idx) => {
-      drawVictoryLevelUpCard.call(this, level, levelStartX + idx * (levelCardW + levelGap), y + 178, levelCardW, 54);
+      drawVictoryLevelUpCard.call(this, resultGraphics, level, levelStartX + idx * (levelCardW + levelGap), y + 178, levelCardW, 54);
     });
   }
+}
+
+function createBattleResultGraphics(this: CrystalOathSceneContext) {
+  const graphics = this.add.graphics();
+  graphics.setDepth(LAYER_UI_IMAGE + 2);
+  graphics.setScale(PIXEL_ART_SCALE);
+  graphics.setScrollFactor(0);
+  this.images.push(graphics);
+  return graphics;
 }
 
 function lootDisplay(rewards: BattleVictoryRewards | undefined) {
@@ -615,6 +636,7 @@ function lootDisplay(rewards: BattleVictoryRewards | undefined) {
 
 function drawVictoryRewardCard(
   this: CrystalOathSceneContext,
+  graphics: Phaser.GameObjects.Graphics,
   x: number,
   y: number,
   w: number,
@@ -623,9 +645,11 @@ function drawVictoryRewardCard(
   value: string,
   muted = false
 ) {
-  this.ui.fillStyle(0x071225, 0.68).fillRect(x, y, w, 38);
-  this.ui.fillStyle(0xffffff, 0.035).fillRect(x + 2, y + 2, w - 4, 11);
-  this.ui.lineStyle(1, BATTLE_UI.gold, 0.62).strokeRect(x, y, w, 38);
+  graphics.fillStyle(0x030711, 0.48).fillRect(x + 2, y + 3, w, 38);
+  graphics.fillStyle(0x071225, 0.9).fillRect(x, y, w, 38);
+  graphics.fillStyle(0xffffff, 0.055).fillRect(x + 2, y + 2, w - 4, 11);
+  graphics.lineStyle(1, BATTLE_UI.goldBright, 0.82).strokeRect(x, y, w, 38);
+  graphics.lineStyle(1, BATTLE_UI.gold, 0.28).strokeRect(x + 3, y + 3, w - 6, 32);
   this.drawFantasyDialogIcon(iconKey, x + 14, y + 8, 22, muted ? 0.42 : 1);
   this.text(x + 44, y + 6, title, 8, "#ffd98a", "left", {
     wordWrapWidth: w - 54,
@@ -639,18 +663,26 @@ function drawVictoryRewardCard(
   });
 }
 
-function drawVictoryLevelUpCard(this: CrystalOathSceneContext, level: BattleLevelUpReward, x: number, y: number, w: number, h: number) {
-  this.ui.fillStyle(0x030711, 0.42).fillRect(x + 2, y + 3, w, h);
-  this.ui.fillStyle(0x071225, 0.86).fillRect(x, y, w, h);
-  this.ui.fillStyle(0xffffff, 0.045).fillRect(x + 2, y + 2, w - 4, 13);
-  this.ui.lineStyle(1, BATTLE_UI.gold, 0.82).strokeRect(x, y, w, h);
-  this.ui.lineStyle(1, BATTLE_UI.goldBright, 0.26).strokeRect(x + 3, y + 3, w - 6, h - 6);
+function drawVictoryLevelUpCard(
+  this: CrystalOathSceneContext,
+  graphics: Phaser.GameObjects.Graphics,
+  level: BattleLevelUpReward,
+  x: number,
+  y: number,
+  w: number,
+  h: number
+) {
+  graphics.fillStyle(0x030711, 0.5).fillRect(x + 2, y + 3, w, h);
+  graphics.fillStyle(0x071225, 0.92).fillRect(x, y, w, h);
+  graphics.fillStyle(0xffffff, 0.06).fillRect(x + 2, y + 2, w - 4, 13);
+  graphics.lineStyle(1, BATTLE_UI.goldBright, 0.84).strokeRect(x, y, w, h);
+  graphics.lineStyle(1, BATTLE_UI.gold, 0.34).strokeRect(x + 3, y + 3, w - 6, h - 6);
   const portraitX = x + 8;
   const portraitY = y + 7;
   const portraitSize = 40;
   const portraitInset = 2;
-  this.ui.fillStyle(0x020714, 0.96).fillRect(portraitX - 2, portraitY - 2, portraitSize + 4, portraitSize + 4);
-  this.ui.lineStyle(1, BATTLE_UI.goldBright, 0.76).strokeRect(portraitX - 2, portraitY - 2, portraitSize + 4, portraitSize + 4);
+  graphics.fillStyle(0x020714, 0.96).fillRect(portraitX - 2, portraitY - 2, portraitSize + 4, portraitSize + 4);
+  graphics.lineStyle(1, BATTLE_UI.goldBright, 0.8).strokeRect(portraitX - 2, portraitY - 2, portraitSize + 4, portraitSize + 4);
   const member = this.party.find((candidate) => candidate.id === level.characterId);
   if (member) {
     const texture = PORTRAIT_TEXTURES[member.id];
@@ -667,6 +699,7 @@ function drawVictoryLevelUpCard(this: CrystalOathSceneContext, level: BattleLeve
     } else {
       drawVictoryPortraitFallback.call(
         this,
+        graphics,
         member,
         portraitX + portraitInset,
         portraitY + portraitInset,
@@ -675,7 +708,7 @@ function drawVictoryLevelUpCard(this: CrystalOathSceneContext, level: BattleLeve
       );
     }
   } else {
-    this.ui.fillStyle(0x0b1525, 1).fillRect(
+    graphics.fillStyle(0x0b1525, 1).fillRect(
       portraitX + portraitInset,
       portraitY + portraitInset,
       portraitSize - portraitInset * 2,
@@ -702,24 +735,40 @@ function drawVictoryLevelUpCard(this: CrystalOathSceneContext, level: BattleLeve
     if (!gain) return;
     const col = idx % 3;
     const row = Math.floor(idx / 3);
-    drawVictoryStatChip.call(this, statStartX + col * 38, y + 11 + row * 17, iconKey, `+${gain} ${label}`);
+    drawVictoryStatChip.call(this, graphics, statStartX + col * 38, y + 11 + row * 17, iconKey, `+${gain} ${label}`);
   });
 }
 
-function drawVictoryPortraitFallback(this: CrystalOathSceneContext, member: CharacterState, x: number, y: number, w: number, h: number) {
-  this.ui.fillStyle(0x0b1525, 1).fillRect(x, y, w, h);
+function drawVictoryPortraitFallback(
+  this: CrystalOathSceneContext,
+  graphics: Phaser.GameObjects.Graphics,
+  member: CharacterState,
+  x: number,
+  y: number,
+  w: number,
+  h: number
+) {
+  graphics.fillStyle(0x0b1525, 1).fillRect(x, y, w, h);
   const colors = {
     fighter: [0xf1c07f, 0xd8c7a2, 0x7a3b24],
     priest: [0xdfe4ef, 0x8364bc, 0xc9d2ff],
     mage: [0xd18a45, 0x244d88, 0xe9edf7]
   }[member.id];
-  this.ui.fillStyle(colors[0], 1).fillRect(x + 13, y + 7, 14, 14);
-  this.ui.fillStyle(colors[1], 1).fillRect(x + 9, y + 21, 22, 17);
-  this.ui.fillStyle(colors[2], 1).fillRect(x + 16, y + 24, 8, 14);
+  graphics.fillStyle(colors[0], 1).fillRect(x + 13, y + 7, 14, 14);
+  graphics.fillStyle(colors[1], 1).fillRect(x + 9, y + 21, 22, 17);
+  graphics.fillStyle(colors[2], 1).fillRect(x + 16, y + 24, 8, 14);
 }
 
-function drawVictoryStatChip(this: CrystalOathSceneContext, x: number, y: number, iconKey: string, label: string) {
-  this.ui.fillStyle(0x030711, 0.38).fillRect(x - 2, y - 1, 36, 14);
+function drawVictoryStatChip(
+  this: CrystalOathSceneContext,
+  graphics: Phaser.GameObjects.Graphics,
+  x: number,
+  y: number,
+  iconKey: string,
+  label: string
+) {
+  graphics.fillStyle(0x030711, 0.62).fillRect(x - 2, y - 1, 36, 14);
+  graphics.lineStyle(1, BATTLE_UI.gold, 0.2).strokeRect(x - 2, y - 1, 36, 14);
   this.drawFantasyDialogIcon(iconKey, x, y + 1, 10);
   this.text(x + 11, y + 1, label, 7, "#eff7ff", "left", { wordWrapWidth: 24, strokeThickness: 1 });
 }
