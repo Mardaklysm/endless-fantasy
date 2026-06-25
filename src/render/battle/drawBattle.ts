@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { HEIGHT, LAYER_BATTLE_IMAGE, LAYER_UI_IMAGE, LAYER_WORLD_IMAGE, WIDTH } from "../../app/config";
+import { HEIGHT, LAYER_BATTLE_IMAGE, LAYER_UI_IMAGE, LAYER_WORLD_IMAGE, PIXEL_ART_SCALE, WIDTH } from "../../app/config";
 import { ENEMY_TEXTURES, PARTY_CLASS, PORTRAIT_TEXTURES } from "../../assets/textureKeys";
 import {
   HERO_BATTLE_TARGET_HEIGHT,
@@ -293,8 +293,7 @@ export function drawPartyBattler(
   const ringH = Math.max(20, Math.round(visualHeight * 0.2));
   this.drawActorShadow(bodyCenterX, feetBaselineY - 4, Math.round(ringW * 0.92), Math.max(14, Math.round(ringH * 0.62)), 0.32 * alpha);
   if (active) {
-    this.g.fillStyle(0xfff0a8, 0.16).fillEllipse(bodyCenterX, feetBaselineY - 4, ringW, ringH);
-    this.g.lineStyle(2, 0xfff0a8, 0.88).strokeEllipse(bodyCenterX, feetBaselineY - 4, ringW, ringH);
+    this.drawActiveBattleFloorCircle(bodyCenterX, feetBaselineY - 4, ringW, ringH);
   }
   if (!this.drawCharacterSpriteFrame(classId, frame, bodyCenterX, feetBaselineY, displayCellWidth, LAYER_BATTLE_IMAGE, alpha, feedback.tint)) {
     const palettes = {
@@ -313,6 +312,15 @@ export function drawPartyBattler(
     }
   }
   if (targeted) this.drawBattleTargetArrow(bodyCenterX, feetBaselineY - visualHeight - 8);
+}
+
+export function drawActiveBattleFloorCircle(this: CrystalOathSceneContext, cx: number, cy: number, width: number, height: number) {
+  const ring = this.add.graphics();
+  ring.setDepth(LAYER_BATTLE_IMAGE - 0.5);
+  ring.setScale(PIXEL_ART_SCALE);
+  ring.fillStyle(0xfff0a8, 0.2).fillEllipse(cx, cy, width, height);
+  ring.lineStyle(2, 0xfff0a8, 0.95).strokeEllipse(cx, cy, width, height);
+  this.images.push(ring);
 }
 
 export function drawBattleTargetArrow(this: CrystalOathSceneContext, cx: number, y: number) {
