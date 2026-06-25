@@ -45,23 +45,18 @@ export function battlePlayerSlotOrigin() {
 }
 
 export function battleEnemyDisplaySizeForRole(
-  battleMap: { dimensions: { width: number; height: number } },
-  radius: number,
+  _battleMap: { dimensions: { width: number; height: number } },
+  _radius: number,
   role: BattleSpriteRole
 ) {
-  const base = BATTLE_SPRITE_PRESENTATION.enemy.roleDisplaySizes[role] ?? BATTLE_SPRITE_PRESENTATION.enemy.roleDisplaySizes.normal;
-  const radiusSize = battleMapRadiusToScreen(battleMap, radius) * BATTLE_SPRITE_PRESENTATION.enemy.radiusToDisplayScale;
-  return Math.round(clamp(radiusSize, base * BATTLE_SPRITE_PRESENTATION.enemy.minDisplayScale, base * BATTLE_SPRITE_PRESENTATION.enemy.maxDisplayScale));
+  if (role === "boss") return HERO_BATTLE_TARGET_HEIGHT * 2;
+  return HERO_BATTLE_TARGET_HEIGHT;
 }
 
 export function defaultBattleSpriteRadius(side: BattleSpriteSide) {
   if (side === "player") return BATTLE_SPRITE_PRESENTATION.player.defaultRadius;
   if (side === "boss") return BATTLE_SPRITE_PRESENTATION.enemy.bossDefaultRadius;
   return BATTLE_SPRITE_PRESENTATION.enemy.defaultRadius;
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, value));
 }
 
 function battlePlayerSpriteFrameVisualHeight(classId: CharacterSpriteClass, frameName: CharacterSpriteFrameName) {
