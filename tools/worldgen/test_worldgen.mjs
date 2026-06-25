@@ -12,13 +12,14 @@ import {
   WORLD_CURRENT_POI_TEXTURE_KEYS,
   WORLD_CURRENT_ROUTE_TEXTURE_KEYS,
   WORLD_CURRENT_TERRAIN_TEXTURE_KEYS,
+  WORLD_CURRENT_TERRAIN_VARIANT_TEXTURE_KEYS,
   worldCurrentPoiTextureKeyFor
 } from "../../src/data/worldCurrentAssets.ts";
 import { WORLD_CLOUD_ASSET_BY_TEXTURE_KEY, WORLD_CLOUD_ASSETS, WORLD_CLOUD_MANIFEST, worldCloudPoolForContext, worldCloudThemeForContext } from "../../src/data/worldCloudAssets.ts";
 import { DUNGEON_TILE_ASSETS, DUNGEON_TILESET } from "../../src/data/dungeonTiles.ts";
 import { generateDungeonFloors, validateDungeonFloorsConnectivity } from "../../src/world/dungeonGenerator.ts";
 import { SEMANTIC_BIOME, SEMANTIC_WATER } from "../../src/world/semantic/semanticTypes.ts";
-import { SEMANTIC_MASK_TERRAIN_CLASSES, describeSemanticMaskTerrainRenderPlan } from "../../src/world/semantic/semanticMaskTerrainRenderer.ts";
+import { SEMANTIC_MASK_TERRAIN_CLASSES, describeSemanticMaskTerrainRenderPlan, terrainVariantWeightsAt } from "../../src/world/semantic/semanticMaskTerrainRenderer.ts";
 import { describeSemanticRouteRenderPlan } from "../../src/world/semantic/semanticRouteRenderer.ts";
 import { REQUIRED_MAJOR_HARBOR_ROUTE_PAIRS, isBoatNavigableTile, validateBoatPath } from "../../src/world/semantic/boatNavigation.ts";
 
@@ -38,6 +39,7 @@ function validateRuntimeAssets() {
   validateCurrentWorldAssetManifest();
   validateWorldCloudManifest();
   validateNoDeprecatedRuntimeAtlasReferences();
+  validateTerrainVariantRendererSourceGuard();
   assert(worldTileById(WORLD_TILE_IDS.deepWater), "deep water tile is missing.");
   assert(worldTileById(WORLD_TILE_IDS.shallowWater), "shallow water tile is missing.");
   assert(worldTileById(WORLD_TILE_IDS.beachSand), "beach tile is missing.");
@@ -286,11 +288,24 @@ function validateNoDeprecatedRuntimeAtlasReferences() {
   assert(!mainText.includes("drawCachedWorldRiverOverlay"), "Runtime main scene must not draw the old river overlay cache.");
 }
 
+function validateTerrainVariantRendererSourceGuard() {
+  const rendererText = fs.readFileSync(path.join(PROJECT_ROOT, "src/world/semantic/semanticMaskTerrainRenderer.ts"), "utf8");
+  const forbiddenTokens = ["drawHardTerrainVariant", "drawTerrainVariantTile", "variantCtx.fillRect(cell"];
+  for (const token of forbiddenTokens) {
+    assert(!rendererText.includes(token), `Semantic terrain variant renderer contains forbidden hard-edge token ${token}.`);
+  }
+  const variantFunctionMatches = rendererText.match(/function\s+\w*TerrainVariant\w*[\s\S]*?(?=\nfunction\s|\nexport function\s|\nexport interface\s|$)/g) ?? [];
+  for (const body of variantFunctionMatches) {
+    assert(!body.includes("TILE, TILE"), "Terrain variant draw functions must not draw full TILE-sized variant rectangles.");
+  }
+}
+
 function validateSemanticWorldgen() {
   const seed = "semantic-runtime-test-greenhaven";
   const worldA = generateWorld({ seed });
   const worldB = generateWorld({ seed });
   const worldC = generateWorld({ seed: "semantic-runtime-test-different" });
+  const transitionWorlds = [worldA, generateWorld({ seed: "semantic-mqjk1ki9-2jsaw" }), generateWorld({ seed: "title-preview" })];
 
   assert(worldA.width === DEFAULT_WORLD_WIDTH && worldA.height === DEFAULT_WORLD_HEIGHT, `Default world size should be ${DEFAULT_WORLD_WIDTH}x${DEFAULT_WORLD_HEIGHT}, got ${worldA.width}x${worldA.height}.`);
   assert(worldA.validation.valid, `Semantic validation failed: ${worldA.validation.errors.join("; ")}`);
@@ -407,6 +422,7 @@ function validateSemanticWorldgen() {
   validateRoadAndForestPolicies(worldA);
   validateSemanticMaskTerrainRendererPlan(worldA);
   validateSemanticRouteRendererPlan(worldA);
+  for (const world of transitionWorlds) validateTerrainVariantTransitionInvariant(world);
 }
 
 function validateMountainCollisionInvariant(world) {
@@ -664,6 +680,149 @@ function validateSemanticMaskTerrainRendererPlan(world) {
   assert(plan.roadBoundarySamples > 0, "Semantic mask terrain plan found no road terrain boundaries.");
   assert(plan.sandGrassBoundarySamples > 0, "Semantic mask terrain plan found no sand/grass boundaries.");
   assert(before === after, "Semantic mask terrain planning mutated the generated world.");
+}
+
+function validateTerrainVariantTransitionInvariant(world) {
+  const classesWithVariants = new Set(Object.keys(WORLD_CURRENT_TERRAIN_VARIANT_TEXTURE_KEYS));
+  if (classesWithVariants.size === 0) return;
+
+  const greenhavenGrassStats = terrainVariantCoverageFor(world, "greenhaven", "grassland");
+  if (classesWithVariants.has("grassland")) {
+    assert(greenhavenGrassStats.total > 0, `${world.seed}: Greenhaven has no grassland cells for terrain variant validation.`);
+    const coverage = greenhavenGrassStats.variant / greenhavenGrassStats.total;
+    assert(coverage >= 0.08 && coverage <= 0.3, `${world.seed}: Greenhaven grassland variant coverage should stay between 8% and 30%, got ${(coverage * 100).toFixed(1)}%.`);
+  }
+
+  const edgeStats = terrainVariantBoundaryStats(world, classesWithVariants);
+  assert(edgeStats.total > 0, `${world.seed}: no terrain variant boundaries were available for transition validation.`);
+  assert(edgeStats.intermediate / edgeStats.total >= 0.6, `${world.seed}: expected at least 60% blended terrain variant boundaries, got ${edgeStats.intermediate}/${edgeStats.total}.`);
+  assert(edgeStats.maxHardRun <= 3, `${world.seed}: found ${edgeStats.maxHardRun} consecutive hard terrain variant boundary cells.`);
+  if (classesWithVariants.has("grassland")) {
+    assert(edgeStats.greenhavenGrassTotal > 0, `${world.seed}: Greenhaven grassland variants exist but no Greenhaven grassland boundaries were found.`);
+    assert(
+      edgeStats.greenhavenGrassIntermediate / edgeStats.greenhavenGrassTotal >= 0.6,
+      `${world.seed}: expected at least 60% blended Greenhaven grassland boundaries, got ${edgeStats.greenhavenGrassIntermediate}/${edgeStats.greenhavenGrassTotal}.`
+    );
+  }
+}
+
+function terrainVariantCoverageFor(world, islandId, terrainClass) {
+  const semantic = world.semantic;
+  const stats = { total: 0, variant: 0 };
+  for (let y = 0; y < semantic.height; y += 1) {
+    for (let x = 0; x < semantic.width; x += 1) {
+      const i = y * semantic.width + x;
+      if (semantic.islandIndexToId.get(semantic.layers.islandId[i]) !== islandId) continue;
+      if (semanticTerrainClassAtCell(semantic, x, y) !== terrainClass) continue;
+      stats.total += 1;
+      if (semantic.layers.terrainVariant[i] > 0) stats.variant += 1;
+    }
+  }
+  return stats;
+}
+
+function terrainVariantBoundaryStats(world, classesWithVariants) {
+  const semantic = world.semantic;
+  const stats = { total: 0, intermediate: 0, greenhavenGrassTotal: 0, greenhavenGrassIntermediate: 0, maxHardRun: 0 };
+  const hardHorizontal = new Map();
+  const hardVertical = new Map();
+  for (let y = 0; y < semantic.height; y += 1) {
+    for (let x = 0; x < semantic.width; x += 1) {
+      const currentClass = semanticTerrainClassAtCell(semantic, x, y);
+      if (!currentClass || !classesWithVariants.has(currentClass)) continue;
+      const i = y * semantic.width + x;
+      for (const edge of [
+        { dx: 1, dy: 0, orientation: "v" },
+        { dx: 0, dy: 1, orientation: "h" }
+      ]) {
+        const nx = x + edge.dx;
+        const ny = y + edge.dy;
+        if (nx >= semantic.width || ny >= semantic.height) continue;
+        const nextClass = semanticTerrainClassAtCell(semantic, nx, ny);
+        if (nextClass !== currentClass) continue;
+        const ni = ny * semantic.width + nx;
+        const currentVariant = semantic.layers.terrainVariant[i] ?? 0;
+        const nextVariant = semantic.layers.terrainVariant[ni] ?? 0;
+        if (currentVariant === nextVariant || (currentVariant === 0 && nextVariant === 0)) continue;
+        const result = terrainVariantEdgeHasTransition(world, currentClass, x, y, edge.dx, edge.dy, [currentVariant, nextVariant].filter((slot) => slot > 0));
+        stats.total += 1;
+        if (result.intermediate) stats.intermediate += 1;
+        const islandId = semantic.islandIndexToId.get(semantic.layers.islandId[i]);
+        if (islandId === "greenhaven" && currentClass === "grassland") {
+          stats.greenhavenGrassTotal += 1;
+          if (result.intermediate) stats.greenhavenGrassIntermediate += 1;
+        }
+        if (!result.intermediate && result.hardJump) {
+          const key = edge.orientation === "v" ? y : x;
+          const position = edge.orientation === "v" ? x : y;
+          const runs = edge.orientation === "v" ? hardVertical : hardHorizontal;
+          const positions = runs.get(key) ?? [];
+          positions.push(position);
+          runs.set(key, positions);
+        }
+      }
+    }
+  }
+  stats.maxHardRun = Math.max(maxConsecutiveRun(hardHorizontal), maxConsecutiveRun(hardVertical));
+  return stats;
+}
+
+function terrainVariantEdgeHasTransition(world, terrainClass, x, y, dx, dy, variantSlots) {
+  const boundaryX = x + (dx === 1 ? 1 : 0.5);
+  const boundaryY = y + (dy === 1 ? 1 : 0.5);
+  const acrossOffsets = [-0.42, -0.24, -0.12, -0.04, 0.04, 0.12, 0.24, 0.42];
+  const alongOffsets = [-0.3, 0, 0.3];
+  let intermediate = false;
+  let hardJump = false;
+  let visibleBoundary = false;
+  for (const slot of new Set(variantSlots)) {
+    const values = [];
+    for (const across of acrossOffsets) {
+      let sum = 0;
+      for (const along of alongOffsets) {
+        const sampleX = dx === 1 ? boundaryX + across : boundaryX + along;
+        const sampleY = dy === 1 ? boundaryY + across : boundaryY + along;
+        sum += terrainVariantWeightsAt(world.semantic, terrainClass, sampleX, sampleY).find((weight) => weight.variantSlot === slot)?.weight ?? 0;
+      }
+      values.push(sum / alongOffsets.length);
+    }
+    const low = Math.min(...values);
+    const high = Math.max(...values);
+    if (high < 0.18) continue;
+    visibleBoundary = true;
+    if (values.some((value) => value > low + 0.05 && value < high - 0.05)) intermediate = true;
+    for (let i = 1; i < values.length; i += 1) {
+      if (Math.abs(values[i] - values[i - 1]) > 0.32) hardJump = true;
+    }
+  }
+  if (!visibleBoundary) return { intermediate: true, hardJump: false };
+  return { intermediate, hardJump };
+}
+
+function maxConsecutiveRun(lines) {
+  let best = 0;
+  for (const positions of lines.values()) {
+    positions.sort((a, b) => a - b);
+    let run = 0;
+    let previous = Number.NEGATIVE_INFINITY;
+    for (const position of positions) {
+      run = position === previous + 1 ? run + 1 : 1;
+      previous = position;
+      best = Math.max(best, run);
+    }
+  }
+  return best;
+}
+
+function semanticTerrainClassAtCell(semantic, x, y) {
+  if (x < 0 || y < 0 || x >= semantic.width || y >= semantic.height) return undefined;
+  const i = y * semantic.width + x;
+  if (semantic.layers.roadMap[i] || semantic.layers.riverMap[i] || semantic.layers.lakeMap[i]) return undefined;
+  if (!semantic.layers.landMask[i]) return undefined;
+  if (semantic.layers.biome[i] === SEMANTIC_BIOME.BEACH) return "beach";
+  if (semantic.layers.biome[i] === SEMANTIC_BIOME.ICE) return "ice";
+  if (semantic.layers.biome[i] === SEMANTIC_BIOME.SAND) return semantic.islandIndexToId.get(semantic.layers.islandId[i]) === "ashfall" ? "ash" : "sand";
+  return "grassland";
 }
 
 function validateSemanticRouteRendererPlan(world) {

@@ -778,7 +778,7 @@ function grassPatchChoice(
     rocky += 0.04;
     meadow += moisture[i] * 0.03;
   } else if (theme === "grassland") {
-    meadow += 0.1;
+    meadow += 0.06;
     rocky -= 0.04;
   } else if (role === "treasure" || role === "resource" || role === "shrine") {
     meadow += 0.12;
@@ -793,7 +793,7 @@ function grassPatchChoice(
     { variant: 1, strength: meadow },
     { variant: 2, strength: rocky },
     { variant: 3, strength: dry }
-  ], theme === "mixed_highland" ? 0.48 : theme === "grassland" ? 0.24 : 0.36);
+  ], theme === "mixed_highland" ? 0.48 : theme === "grassland" ? 0.38 : 0.36);
 }
 
 function sandPatchChoice(

@@ -32,7 +32,7 @@ import type { WorldObjectId } from "../../data/worldObjects";
 import { WORLD_TILES, worldTileHasTag } from "../../data/worldTiles";
 import type { WorldTileId } from "../../data/worldTiles";
 import type { Terrain, Vec } from "../../scene/sceneTypes";
-import { createSemanticMaskTerrainTexture } from "../../world/semantic/semanticMaskTerrainRenderer";
+import { createSemanticMaskTerrainTexture, terrainVariantWeightsAt } from "../../world/semantic/semanticMaskTerrainRenderer";
 import type { SemanticMaskTerrainClass, SemanticMaskTerrainSources, SemanticMaskTerrainVariantSources } from "../../world/semantic/semanticMaskTerrainRenderer";
 import { createSemanticRouteOverlayTexture } from "../../world/semantic/semanticRouteRenderer";
 import { SEMANTIC_BIOME, SEMANTIC_WATER } from "../../world/semantic/semanticTypes";
@@ -222,13 +222,23 @@ export function drawSemanticDebugOverlay(this: CrystalOathSceneContext, startX: 
   }
   if (this.semanticDebugOverlay === "terrainVariants") {
     const colors = [0x000000, 0xb8f26d, 0x66ccff, 0xff8a43];
+    const samplesPerCell = 4;
+    const sampleSize = TILE / samplesPerCell;
     for (let y = startY; y <= endY; y += 1) {
       for (let x = startX; x <= endX; x += 1) {
-        const i = y * semantic.width + x;
-        const variant = semantic.layers.terrainVariant[i] ?? 0;
-        if (!variant) continue;
-        const alpha = Math.max(0.16, Math.min(0.52, (semantic.layers.terrainPatchStrength[i] ?? 0) * 0.62));
-        debugGraphics.fillStyle(colors[variant] ?? 0xff4f55, alpha).fillRect(x * TILE - tileCam.x, y * TILE - tileCam.y, TILE, TILE);
+        const terrainClass = semanticTerrainDebugClassAt(semantic, x, y);
+        if (!terrainClass || terrainClass === "road" || terrainClass === "deepOcean" || terrainClass === "shallowWater" || terrainClass === "freshWater") continue;
+        for (let sy = 0; sy < samplesPerCell; sy += 1) {
+          for (let sx = 0; sx < samplesPerCell; sx += 1) {
+            const sampleX = x + (sx + 0.5) / samplesPerCell;
+            const sampleY = y + (sy + 0.5) / samplesPerCell;
+            const strongest = terrainVariantWeightsAt(semantic, terrainClass, sampleX, sampleY).sort((a, b) => b.weight - a.weight)[0];
+            if (!strongest) continue;
+            debugGraphics
+              .fillStyle(colors[strongest.variantSlot] ?? 0xff4f55, Math.max(0.08, Math.min(0.62, strongest.weight)))
+              .fillRect(x * TILE - tileCam.x + sx * sampleSize, y * TILE - tileCam.y + sy * sampleSize, sampleSize, sampleSize);
+          }
+        }
       }
     }
   }
@@ -367,6 +377,18 @@ export function drawSemanticDebugOverlay(this: CrystalOathSceneContext, startX: 
       }
     }
   }
+}
+
+function semanticTerrainDebugClassAt(semantic: GeneratedWorld["semantic"], x: number, y: number): SemanticMaskTerrainClass | undefined {
+  if (x < 0 || y < 0 || x >= semantic.width || y >= semantic.height) return undefined;
+  const i = y * semantic.width + x;
+  if (semantic.layers.roadMap[i]) return "road";
+  if (semantic.layers.riverMap[i] || semantic.layers.lakeMap[i]) return "freshWater";
+  if (!semantic.layers.landMask[i]) return semantic.layers.waterClass[i] === SEMANTIC_WATER.SHALLOW ? "shallowWater" : "deepOcean";
+  if (semantic.layers.biome[i] === SEMANTIC_BIOME.BEACH) return "beach";
+  if (semantic.layers.biome[i] === SEMANTIC_BIOME.ICE) return "ice";
+  if (semantic.layers.biome[i] === SEMANTIC_BIOME.SAND) return semantic.islandIndexToId.get(semantic.layers.islandId[i]) === "ashfall" ? "ash" : "sand";
+  return "grassland";
 }
 
 export function drawSemanticEdgeDebugOverlay(this: CrystalOathSceneContext, semantic: GeneratedWorld["semantic"], startX: number, endX: number, startY: number, endY: number, tileCam: Vec) {
