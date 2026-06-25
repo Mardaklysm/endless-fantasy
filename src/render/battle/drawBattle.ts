@@ -741,12 +741,18 @@ function drawVictoryLevelUpCard(
     ["ui_battle_result_icon_spd", "SPD", level.speedGain]
   ] as const;
   const gains = stats.filter(([, , gain]) => !!gain);
-  const statStartX = x + 124;
+  const statItemW = 40;
+  const statAreaX = x + 116;
+  const statAreaRight = x + w - 14;
+  const statAreaW = statAreaRight - statAreaX;
+  const statColumnGap = Math.min(48, Math.max(38, Math.floor((statAreaW - statItemW) / 2)));
+  const statBlockW = statItemW + statColumnGap * 2;
+  const statStartX = statAreaX + Math.max(0, Math.round((statAreaW - statBlockW) / 2));
   gains.forEach(([iconKey, label, gain], idx) => {
     if (!gain) return;
     const col = idx % 3;
     const row = Math.floor(idx / 3);
-    drawVictoryStatGain.call(this, statStartX + col * 42, y + 13 + row * 19, iconKey, `+${gain} ${label}`);
+    drawVictoryStatGain.call(this, statStartX + col * statColumnGap, y + 13 + row * 19, iconKey, `+${gain} ${label}`);
   });
 }
 
