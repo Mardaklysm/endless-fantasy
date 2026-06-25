@@ -793,7 +793,7 @@ function grassPatchChoice(
     { variant: 1, strength: meadow },
     { variant: 2, strength: rocky },
     { variant: 3, strength: dry }
-  ], theme === "mixed_highland" ? 0.48 : theme === "grassland" ? 0.38 : 0.36);
+  ], theme === "mixed_highland" ? 0.48 : theme === "grassland" ? 0.39 : 0.36);
 }
 
 function sandPatchChoice(

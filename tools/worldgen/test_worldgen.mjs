@@ -19,7 +19,7 @@ import { WORLD_CLOUD_ASSET_BY_TEXTURE_KEY, WORLD_CLOUD_ASSETS, WORLD_CLOUD_MANIF
 import { DUNGEON_TILE_ASSETS, DUNGEON_TILESET } from "../../src/data/dungeonTiles.ts";
 import { generateDungeonFloors, validateDungeonFloorsConnectivity } from "../../src/world/dungeonGenerator.ts";
 import { SEMANTIC_BIOME, SEMANTIC_WATER } from "../../src/world/semantic/semanticTypes.ts";
-import { SEMANTIC_MASK_TERRAIN_CLASSES, describeSemanticMaskTerrainRenderPlan, terrainVariantWeightsAt } from "../../src/world/semantic/semanticMaskTerrainRenderer.ts";
+import { SEMANTIC_MASK_TERRAIN_CLASSES, describeSemanticMaskTerrainRenderPlan, roadSplatAt, terrainVariantWeightsAt } from "../../src/world/semantic/semanticMaskTerrainRenderer.ts";
 import { describeSemanticRouteRenderPlan } from "../../src/world/semantic/semanticRouteRenderer.ts";
 import { REQUIRED_MAJOR_HARBOR_ROUTE_PAIRS, isBoatNavigableTile, validateBoatPath } from "../../src/world/semantic/boatNavigation.ts";
 
@@ -298,6 +298,14 @@ function validateTerrainVariantRendererSourceGuard() {
   for (const body of variantFunctionMatches) {
     assert(!body.includes("TILE, TILE"), "Terrain variant draw functions must not draw full TILE-sized variant rectangles.");
   }
+  const forbiddenRoadTokens = ["drawRoadMaskedTerrainClass", "roadCtx.fillRect(cell"];
+  for (const token of forbiddenRoadTokens) {
+    assert(!rendererText.includes(token), `Semantic road renderer contains forbidden hard-edge token ${token}.`);
+  }
+  const roadFunctionMatches = rendererText.match(/function\s+\w*Road\w*[\s\S]*?(?=\nfunction\s|\nexport function\s|\nexport interface\s|$)/g) ?? [];
+  for (const body of roadFunctionMatches) {
+    assert(!body.includes("TILE, TILE"), "Road renderer functions must not draw full TILE-sized road rectangles.");
+  }
 }
 
 function validateSemanticWorldgen() {
@@ -306,6 +314,7 @@ function validateSemanticWorldgen() {
   const worldB = generateWorld({ seed });
   const worldC = generateWorld({ seed: "semantic-runtime-test-different" });
   const transitionWorlds = [worldA, generateWorld({ seed: "semantic-mqjk1ki9-2jsaw" }), generateWorld({ seed: "title-preview" })];
+  const roadSplatWorlds = [worldA, generateWorld({ seed: "semantic-mqtnl25e-l37iye" }), generateWorld({ seed: "semantic-mqjk1ki9-2jsaw" })];
 
   assert(worldA.width === DEFAULT_WORLD_WIDTH && worldA.height === DEFAULT_WORLD_HEIGHT, `Default world size should be ${DEFAULT_WORLD_WIDTH}x${DEFAULT_WORLD_HEIGHT}, got ${worldA.width}x${worldA.height}.`);
   assert(worldA.validation.valid, `Semantic validation failed: ${worldA.validation.errors.join("; ")}`);
@@ -423,6 +432,7 @@ function validateSemanticWorldgen() {
   validateSemanticMaskTerrainRendererPlan(worldA);
   validateSemanticRouteRendererPlan(worldA);
   for (const world of transitionWorlds) validateTerrainVariantTransitionInvariant(world);
+  for (const world of roadSplatWorlds) validateRoadSplatTransitionInvariant(world);
 }
 
 function validateMountainCollisionInvariant(world) {
@@ -673,11 +683,15 @@ function validateSemanticMaskTerrainRendererPlan(world) {
     assert(textureKey, `${terrainClass} mask texture source should be mapped to a current material.`);
     assert(plan.textureSourceLabels[terrainClass] === textureKey, `${terrainClass} mask texture source should match the current material manifest.`);
     assert(SEMANTIC_BASE_TILE_PALETTE[terrainClass], `${terrainClass} should still have a semantic compatibility tile ID.`);
-    assert(plan.classSamples[terrainClass] > 0, `Semantic mask terrain plan found no ${terrainClass} samples.`);
+    if (terrainClass === "road") {
+      assert(plan.classSamples[terrainClass] === 0, "Road must not replace base terrain as an opaque normal gameplay terrain class.");
+    } else {
+      assert(plan.classSamples[terrainClass] > 0, `Semantic mask terrain plan found no ${terrainClass} samples.`);
+    }
   }
   assert(plan.waterBeachBoundarySamples > 0, "Semantic mask terrain plan found no water/beach boundaries.");
   assert(plan.waterGrassBoundarySamples + plan.waterIceBoundarySamples > 0, "Semantic mask terrain plan found no inland water/land boundaries.");
-  assert(plan.roadBoundarySamples > 0, "Semantic mask terrain plan found no road terrain boundaries.");
+  assert(plan.roadBoundarySamples === 0, "Normal terrain plan should not contain hard road terrain boundaries.");
   assert(plan.sandGrassBoundarySamples > 0, "Semantic mask terrain plan found no sand/grass boundaries.");
   assert(before === after, "Semantic mask terrain planning mutated the generated world.");
 }
@@ -817,12 +831,154 @@ function maxConsecutiveRun(lines) {
 function semanticTerrainClassAtCell(semantic, x, y) {
   if (x < 0 || y < 0 || x >= semantic.width || y >= semantic.height) return undefined;
   const i = y * semantic.width + x;
-  if (semantic.layers.roadMap[i] || semantic.layers.riverMap[i] || semantic.layers.lakeMap[i]) return undefined;
+  if (semantic.layers.riverMap[i] || semantic.layers.lakeMap[i]) return undefined;
   if (!semantic.layers.landMask[i]) return undefined;
   if (semantic.layers.biome[i] === SEMANTIC_BIOME.BEACH) return "beach";
   if (semantic.layers.biome[i] === SEMANTIC_BIOME.ICE) return "ice";
   if (semantic.layers.biome[i] === SEMANTIC_BIOME.SAND) return semantic.islandIndexToId.get(semantic.layers.islandId[i]) === "ashfall" ? "ash" : "sand";
   return "grassland";
+}
+
+function validateRoadSplatTransitionInvariant(world) {
+  const semantic = world.semantic;
+  const stats = roadSplatBoundaryStats(world);
+  assert(stats.total > 0, `${world.seed}: no road edges were available for road splat validation.`);
+  assert(stats.intermediate / stats.total >= 0.72, `${world.seed}: expected at least 72% blended road edges, got ${stats.intermediate}/${stats.total}.`);
+  assert(stats.maxHardRun <= 3, `${world.seed}: found ${stats.maxHardRun} consecutive hard road edge cells.`);
+  assert(stats.centerDominates >= Math.ceil(stats.total * 0.82), `${world.seed}: road center samples were not consistently stronger than fringe samples.`);
+
+  let roadCells = 0;
+  let visibleRoadCells = 0;
+  let waterLeakCells = 0;
+  for (let y = 0; y < semantic.height; y += 1) {
+    for (let x = 0; x < semantic.width; x += 1) {
+      const i = y * semantic.width + x;
+      const road = semantic.layers.roadMap[i] > 0;
+      if (road) {
+        roadCells += 1;
+        const sample = roadSplatAt(semantic, x + 0.5, y + 0.5);
+        if (sample.center + sample.shoulder >= 0.16 || sample.crossing) visibleRoadCells += 1;
+      }
+      const blockedWater = (semantic.layers.riverMap[i] > 0 || semantic.layers.lakeMap[i] > 0) && !semantic.layers.riverCrossingMap[i];
+      if (blockedWater) {
+        const sample = roadSplatAt(semantic, x + 0.5, y + 0.5);
+        if (sample.center + sample.shoulder + sample.fringe > 0.04) waterLeakCells += 1;
+      }
+    }
+  }
+  assert(roadCells > 0, `${world.seed}: semantic road map has no road cells.`);
+  assert(visibleRoadCells === roadCells, `${world.seed}: ${roadCells - visibleRoadCells} semantic road cells lack visible center/shoulder road coverage.`);
+  assert(waterLeakCells === 0, `${world.seed}: road splat leaked onto ${waterLeakCells} non-crossing river/lake cells.`);
+
+  for (const poi of semantic.poiList) {
+    const apron = roadApronCoverageAtPoi(semantic, poi);
+    if (apron.hasNearbyRoad) {
+      assert(apron.coverage >= 0.18, `${world.seed}: POI ${poi.id} approach lacks visible road apron coverage (${apron.coverage.toFixed(3)}).`);
+    }
+  }
+
+  for (const bridge of semantic.bridgeCandidates) {
+    const sample = roadSplatAt(semantic, bridge.x + 0.5, bridge.y + 0.5);
+    assert(sample.crossing, `${world.seed}: bridge ${bridge.id} is not marked as a road splat crossing.`);
+    assert(sample.center + sample.shoulder >= 0.12, `${world.seed}: bridge ${bridge.id} lacks visible road taper coverage.`);
+  }
+}
+
+function roadSplatBoundaryStats(world) {
+  const semantic = world.semantic;
+  const stats = { total: 0, intermediate: 0, centerDominates: 0, maxHardRun: 0 };
+  const hardHorizontal = new Map();
+  const hardVertical = new Map();
+  for (let y = 0; y < semantic.height; y += 1) {
+    for (let x = 0; x < semantic.width; x += 1) {
+      const i = y * semantic.width + x;
+      if (!semantic.layers.roadMap[i]) continue;
+      for (const edge of [
+        { dx: 1, dy: 0, orientation: "v" },
+        { dx: -1, dy: 0, orientation: "v" },
+        { dx: 0, dy: 1, orientation: "h" },
+        { dx: 0, dy: -1, orientation: "h" }
+      ]) {
+        const nx = x + edge.dx;
+        const ny = y + edge.dy;
+        if (nx < 0 || ny < 0 || nx >= semantic.width || ny >= semantic.height) continue;
+        const ni = ny * semantic.width + nx;
+        if (semantic.layers.roadMap[ni] || !semantic.layers.landMask[ni] || semantic.layers.riverMap[ni] || semantic.layers.lakeMap[ni]) continue;
+        const result = roadSplatEdgeHasTransition(semantic, x, y, edge.dx, edge.dy);
+        stats.total += 1;
+        if (result.intermediate) stats.intermediate += 1;
+        if (result.centerDominates) stats.centerDominates += 1;
+        if (!result.intermediate && result.hardJump) {
+          const key = edge.orientation === "v" ? y : x;
+          const position = edge.orientation === "v" ? x : y;
+          const runs = edge.orientation === "v" ? hardVertical : hardHorizontal;
+          const positions = runs.get(key) ?? [];
+          positions.push(position);
+          runs.set(key, positions);
+        }
+      }
+    }
+  }
+  stats.maxHardRun = Math.max(maxConsecutiveRun(hardHorizontal), maxConsecutiveRun(hardVertical));
+  return stats;
+}
+
+function roadSplatEdgeHasTransition(semantic, x, y, dx, dy) {
+  const offsets = [0, 0.16, 0.3, 0.46, 0.62, 0.82, 1.05, 1.28];
+  const alongOffsets = [-0.28, 0, 0.28];
+  const values = [];
+  const centerValues = [];
+  const fringeValues = [];
+  for (const offset of offsets) {
+    let total = 0;
+    let center = 0;
+    let fringe = 0;
+    for (const along of alongOffsets) {
+      const sampleX = x + 0.5 + dx * offset + (dy !== 0 ? along : 0);
+      const sampleY = y + 0.5 + dy * offset + (dx !== 0 ? along : 0);
+      const sample = roadSplatAt(semantic, sampleX, sampleY);
+      total += Math.min(1, sample.center + sample.shoulder + sample.fringe);
+      center += sample.center + sample.shoulder * 0.35;
+      fringe += sample.fringe;
+    }
+    values.push(total / alongOffsets.length);
+    centerValues.push(center / alongOffsets.length);
+    fringeValues.push(fringe / alongOffsets.length);
+  }
+  const high = Math.max(...values);
+  const low = Math.min(...values);
+  const intermediate = high < 0.18 || values.some((value) => value >= 0.12 && value <= Math.min(0.88, high - 0.05));
+  let hardJump = false;
+  for (let i = 1; i < values.length; i += 1) {
+    if (values[i - 1] >= 0.9 && values[i] <= 0.05) hardJump = true;
+    if (Math.abs(values[i] - values[i - 1]) > 0.42 && low <= 0.05 && high >= 0.62) hardJump = true;
+  }
+  return {
+    intermediate,
+    hardJump,
+    centerDominates: centerValues[0] > fringeValues[fringeValues.length - 1] + 0.08
+  };
+}
+
+function roadApronCoverageAtPoi(semantic, poi) {
+  const samples = [];
+  let hasNearbyRoad = false;
+  for (let dy = -2; dy <= 2; dy += 1) {
+    for (let dx = -2; dx <= 2; dx += 1) {
+      const x = poi.approachTile.x + dx;
+      const y = poi.approachTile.y + dy;
+      if (x < 0 || y < 0 || x >= semantic.width || y >= semantic.height) continue;
+      const i = y * semantic.width + x;
+      if (semantic.layers.roadMap[i]) hasNearbyRoad = true;
+      samples.push([dx + 0.5, dy + 0.5], [dx + 0.25, dy + 0.5], [dx + 0.75, dy + 0.5], [dx + 0.5, dy + 0.25], [dx + 0.5, dy + 0.75]);
+    }
+  }
+  let best = 0;
+  for (const [ox, oy] of samples) {
+    const sample = roadSplatAt(semantic, poi.approachTile.x + ox, poi.approachTile.y + oy);
+    best = Math.max(best, sample.center + sample.shoulder + sample.fringe);
+  }
+  return { coverage: best, hasNearbyRoad };
 }
 
 function validateSemanticRouteRendererPlan(world) {

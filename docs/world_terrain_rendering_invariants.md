@@ -11,3 +11,9 @@ Every normal gameplay terrain material boundary needs a sub-tile transition mask
 Random per-tile variant spam is forbidden.
 
 Hard tile edges in terrain variants are a blocking regression. Hard edges are only acceptable for debug overlays, UI/minimap/debug views, and intentionally discrete object sprites such as forests, mountains, POIs, and bridges.
+
+Roads are semantic graph and mask data, but normal gameplay renders them as terrain splats. Road placement, connectivity, POI approaches, harbor connections, and bridge candidates are gameplay truth.
+
+Road visuals must never be hard tile replacements. All road edges need sub-tile transition masks, and roads must preserve the underlying biome material at their fringe.
+
+Hard square road edges are a blocking regression.

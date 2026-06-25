@@ -32,7 +32,7 @@ import type { WorldObjectId } from "../../data/worldObjects";
 import { WORLD_TILES, worldTileHasTag } from "../../data/worldTiles";
 import type { WorldTileId } from "../../data/worldTiles";
 import type { Terrain, Vec } from "../../scene/sceneTypes";
-import { createSemanticMaskTerrainTexture, terrainVariantWeightsAt } from "../../world/semantic/semanticMaskTerrainRenderer";
+import { createSemanticMaskTerrainTexture, roadSplatAt, terrainVariantWeightsAt } from "../../world/semantic/semanticMaskTerrainRenderer";
 import type { SemanticMaskTerrainClass, SemanticMaskTerrainSources, SemanticMaskTerrainVariantSources } from "../../world/semantic/semanticMaskTerrainRenderer";
 import { createSemanticRouteOverlayTexture } from "../../world/semantic/semanticRouteRenderer";
 import { SEMANTIC_BIOME, SEMANTIC_WATER } from "../../world/semantic/semanticTypes";
@@ -237,6 +237,27 @@ export function drawSemanticDebugOverlay(this: CrystalOathSceneContext, startX: 
             debugGraphics
               .fillStyle(colors[strongest.variantSlot] ?? 0xff4f55, Math.max(0.08, Math.min(0.62, strongest.weight)))
               .fillRect(x * TILE - tileCam.x + sx * sampleSize, y * TILE - tileCam.y + sy * sampleSize, sampleSize, sampleSize);
+          }
+        }
+      }
+    }
+  }
+  if (this.semanticDebugOverlay === "roadSplat") {
+    const samplesPerCell = 4;
+    const sampleSize = TILE / samplesPerCell;
+    for (let y = startY; y <= endY; y += 1) {
+      for (let x = startX; x <= endX; x += 1) {
+        for (let sy = 0; sy < samplesPerCell; sy += 1) {
+          for (let sx = 0; sx < samplesPerCell; sx += 1) {
+            const sampleX = x + (sx + 0.5) / samplesPerCell;
+            const sampleY = y + (sy + 0.5) / samplesPerCell;
+            const road = roadSplatAt(semantic, sampleX, sampleY);
+            const px = x * TILE - tileCam.x + sx * sampleSize;
+            const py = y * TILE - tileCam.y + sy * sampleSize;
+            if (road.fringe > 0.02) debugGraphics.fillStyle(0x62d4ff, Math.min(0.48, road.fringe * 1.5)).fillRect(px, py, sampleSize, sampleSize);
+            if (road.shoulder > 0.02) debugGraphics.fillStyle(0xff9f35, Math.min(0.56, road.shoulder * 1.4)).fillRect(px, py, sampleSize, sampleSize);
+            if (road.center > 0.02) debugGraphics.fillStyle(0xfff2a8, Math.min(0.7, road.center)).fillRect(px, py, sampleSize, sampleSize);
+            if (road.crossing && (road.center > 0.02 || road.shoulder > 0.02)) debugGraphics.fillStyle(0xbb6dff, 0.58).fillRect(px, py, sampleSize, sampleSize);
           }
         }
       }
