@@ -21,7 +21,14 @@ export function isConfirm(event: KeyboardEvent) {
 }
 
 export function isCancel(event: KeyboardEvent) {
-  return event.code === "Escape" || event.code === "KeyX" || event.key === "Escape" || event.key.toLowerCase() === "x";
+  return (
+    event.code === "Escape" ||
+    event.code === "Backspace" ||
+    event.code === "KeyX" ||
+    event.key === "Escape" ||
+    event.key === "Backspace" ||
+    event.key.toLowerCase() === "x"
+  );
 }
 
 export function directionNameForEvent(event: KeyboardEvent): DirectionName | undefined {

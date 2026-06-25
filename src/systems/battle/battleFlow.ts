@@ -366,17 +366,11 @@ export function adjustBattleSelection(this: CrystalOathSceneContext, move: Battl
     return;
   }
   if ((this.battle.phase === "target" || this.battle.phase === "allyTarget") && (move === "left" || move === "right")) {
-    if (move === "left") {
-      if (canPendingActionTargetAll.call(this)) {
-        this.battle.pendingAction = { ...this.battle.pendingAction, targetAll: true };
-        this.audio.blip("confirm");
-      } else {
-        this.audio.blip("error");
-      }
+    if (this.battle.phase === "target" && adjustEnemyTargetSelection.call(this, move)) {
+      this.audio.blip("confirm");
       return;
     }
-    if (this.battle.pendingAction?.targetAll) {
-      this.battle.pendingAction = { ...this.battle.pendingAction, targetAll: false };
+    if (this.battle.phase === "allyTarget" && adjustAllyTargetSelection.call(this, move)) {
       this.audio.blip("confirm");
       return;
     }
@@ -406,4 +400,104 @@ function canPendingActionTargetAll(this: CrystalOathSceneContext): boolean {
     if (action.type === "skill" && action.skillId) return action.skillId === "firstAid";
   }
   return false;
+}
+
+function adjustEnemyTargetSelection(this: CrystalOathSceneContext, move: "left" | "right"): boolean {
+  if (!this.battle) return false;
+  const orderedTargets = enemyTargetsByDistance.call(this);
+  if (!orderedTargets.length) return false;
+  const currentOrderIndex = this.battle.pendingAction?.targetAll
+    ? move === "left"
+      ? -1
+      : orderedTargets.length
+    : Math.max(
+        0,
+        orderedTargets.findIndex((target) => target.livingIndex === this.battle?.selected)
+      );
+
+  if (move === "left") {
+    if (currentOrderIndex >= orderedTargets.length - 1) {
+      if (canPendingActionTargetAll.call(this)) {
+        this.battle.pendingAction = { ...this.battle.pendingAction, targetAll: true };
+      } else {
+        this.battle.selected = orderedTargets[0].livingIndex;
+      }
+      return true;
+    }
+    this.battle.pendingAction = { ...this.battle.pendingAction, targetAll: false };
+    this.battle.selected = orderedTargets[currentOrderIndex + 1].livingIndex;
+    return true;
+  }
+
+  this.battle.pendingAction = { ...this.battle.pendingAction, targetAll: false };
+  const nextOrderIndex = currentOrderIndex <= 0 ? orderedTargets.length - 1 : currentOrderIndex - 1;
+  this.battle.selected = orderedTargets[nextOrderIndex].livingIndex;
+  return true;
+}
+
+function adjustAllyTargetSelection(this: CrystalOathSceneContext, move: "left" | "right"): boolean {
+  if (!this.battle) return false;
+  const targetIndexes = validAllyTargetIndexes.call(this);
+  if (!targetIndexes.length) return false;
+  const currentTargetIndex = this.battle.pendingAction?.targetAll
+    ? move === "right"
+      ? -1
+      : targetIndexes.length
+    : Math.max(0, targetIndexes.indexOf(this.battle.selected));
+
+  if (move === "right") {
+    if (currentTargetIndex >= targetIndexes.length - 1) {
+      if (canPendingActionTargetAll.call(this)) {
+        this.battle.pendingAction = { ...this.battle.pendingAction, targetAll: true };
+      } else {
+        this.battle.selected = targetIndexes[0];
+      }
+      return true;
+    }
+    this.battle.pendingAction = { ...this.battle.pendingAction, targetAll: false };
+    this.battle.selected = targetIndexes[currentTargetIndex + 1];
+    return true;
+  }
+
+  this.battle.pendingAction = { ...this.battle.pendingAction, targetAll: false };
+  const nextTargetIndex = currentTargetIndex <= 0 ? targetIndexes.length - 1 : currentTargetIndex - 1;
+  this.battle.selected = targetIndexes[nextTargetIndex];
+  return true;
+}
+
+function enemyTargetsByDistance(this: CrystalOathSceneContext): Array<{ livingIndex: number; distance: number }> {
+  if (!this.battle) return [];
+  const actor = this.currentBattleActor();
+  const actorIndex = actor ? this.party.findIndex((member) => member.id === actor.id) : -1;
+  const actorSlot = this.partyBattleSlot(Math.max(0, actorIndex));
+  const actorCenter = { x: actorSlot.x + actorSlot.size / 2, y: actorSlot.y + actorSlot.size / 2 };
+  return this.battle.enemies
+    .map((enemy, enemyIndex) => ({ enemy, enemyIndex }))
+    .filter(({ enemy }) => enemy.hp > 0)
+    .map(({ enemy, enemyIndex }, livingIndex) => {
+      const slot = this.enemyBattleSlot(enemy, enemyIndex);
+      const enemyCenter = { x: slot.x + slot.size / 2, y: slot.y + slot.size / 2 };
+      return { livingIndex, distance: Math.hypot(enemyCenter.x - actorCenter.x, enemyCenter.y - actorCenter.y) };
+    })
+    .sort((a, b) => a.distance - b.distance || a.livingIndex - b.livingIndex);
+}
+
+function validAllyTargetIndexes(this: CrystalOathSceneContext): number[] {
+  if (!this.battle) return [];
+  const action = this.battle.pendingAction;
+  if (action?.type === "spell" && action.spellId) {
+    const spell = SPELLS[action.spellId];
+    if (spell?.caster === "priest" && spell.kind === "heal") return standingPartyIndexes.call(this);
+  }
+  if (action?.type === "skill" && action.skillId === "firstAid") {
+    return standingPartyIndexes.call(this);
+  }
+  return this.party.map((_, index) => index);
+}
+
+function standingPartyIndexes(this: CrystalOathSceneContext): number[] {
+  return this.party
+    .map((member, index) => ({ member, index }))
+    .filter(({ member }) => member.hp > 0)
+    .map(({ index }) => index);
 }

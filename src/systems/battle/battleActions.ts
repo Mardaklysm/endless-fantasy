@@ -109,10 +109,10 @@ export function confirmBattleSelection(this: CrystalOathSceneContext) {
     this.battle.menuReturnSelected = this.battle.selected;
     if (skill.target === "enemy") {
       this.battle.phase = "target";
-      this.battle.selected = 0;
+      this.battle.selected = closestLivingEnemySelectionIndex.call(this, actor);
     } else if (skill.target === "ally") {
       this.battle.phase = "allyTarget";
-      this.battle.selected = 0;
+      this.battle.selected = skill.id === "firstAid" ? firstStandingAllySelectionIndex.call(this) : 0;
     } else {
       this.executePlayerAction(this.battle.pendingAction as BattleAction);
     }
@@ -143,10 +143,10 @@ export function confirmBattleSelection(this: CrystalOathSceneContext) {
     this.battle.menuReturnSelected = this.battle.selected;
     if (spell.target === "enemy") {
       this.battle.phase = "target";
-      this.battle.selected = 0;
+      this.battle.selected = closestLivingEnemySelectionIndex.call(this, actor);
     } else if (spell.target === "ally") {
       this.battle.phase = "allyTarget";
-      this.battle.selected = 0;
+      this.battle.selected = spell.kind === "heal" ? firstStandingAllySelectionIndex.call(this) : 0;
     } else {
       this.executePlayerAction(this.battle.pendingAction as BattleAction);
     }
@@ -259,6 +259,26 @@ export function cancelBattleSubmenu(this: CrystalOathSceneContext) {
   this.battle.menuReturnSelected = undefined;
   this.battle.selected = rootSelected;
   this.audio.blip("cancel");
+}
+
+function closestLivingEnemySelectionIndex(this: CrystalOathSceneContext, actor: CharacterState): number {
+  if (!this.battle) return 0;
+  const actorIndex = this.party.findIndex((member) => member.id === actor.id);
+  const actorSlot = this.partyBattleSlot(Math.max(0, actorIndex));
+  const actorCenter = { x: actorSlot.x + actorSlot.size / 2, y: actorSlot.y + actorSlot.size / 2 };
+  return this.battle.enemies
+    .map((enemy, enemyIndex) => ({ enemy, enemyIndex }))
+    .filter(({ enemy }) => enemy.hp > 0)
+    .map(({ enemy, enemyIndex }, livingIndex) => {
+      const slot = this.enemyBattleSlot(enemy, enemyIndex);
+      const enemyCenter = { x: slot.x + slot.size / 2, y: slot.y + slot.size / 2 };
+      return { livingIndex, distance: Math.hypot(enemyCenter.x - actorCenter.x, enemyCenter.y - actorCenter.y) };
+    })
+    .sort((a, b) => a.distance - b.distance || a.livingIndex - b.livingIndex)[0]?.livingIndex ?? 0;
+}
+
+function firstStandingAllySelectionIndex(this: CrystalOathSceneContext): number {
+  return Math.max(0, this.party.findIndex((member) => member.hp > 0));
 }
 
 export function finishCurrentTurn(this: CrystalOathSceneContext, delay: number) {
