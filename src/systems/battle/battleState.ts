@@ -81,7 +81,7 @@ export function checkBattleEnd(this: CrystalOathSceneContext): boolean {
   if (this.allEnemiesDefeated()) {
     if (!this.battle.victoryAwarded) {
       if (this.battle.victoryPending) {
-        const remaining = this.remainingBattleFloatingTextMs();
+        const remaining = Math.max(this.remainingBattleFloatingTextMs(), this.remainingBattleVisualFeedbackMs());
         if (remaining > 0) {
           this.battle.actionTimer = remaining;
           return true;
@@ -110,7 +110,7 @@ export function beginVictorySequence(this: CrystalOathSceneContext) {
   this.battle.animation = undefined;
   this.battle.selected = 0;
   if (this.battle.carousel) this.battle.carousel.dissolves = [];
-  const remaining = this.remainingBattleFloatingTextMs();
+  const remaining = Math.max(this.remainingBattleFloatingTextMs(), this.remainingBattleVisualFeedbackMs());
   if (remaining > 0) {
     this.battle.phase = "resolving";
     this.battle.actionTimer = remaining;
@@ -136,6 +136,7 @@ export function statusActive(this: CrystalOathSceneContext, actor: CharacterStat
 export function awardVictory(this: CrystalOathSceneContext) {
   if (!this.battle || this.battle.victoryAwarded) return;
   this.cleanupBattleFloatingTexts();
+  this.cleanupBattleVisualFeedback();
   const defeatedEnemies = this.battle.enemies.filter((enemy) => enemy.hp <= 0);
   const xp = Math.max(0, Math.round(defeatedEnemies.reduce((sum, e) => sum + e.xp, 0) * this.settings.xpMultiplier));
   const gold = defeatedEnemies.reduce((sum, enemy) => sum + rollGoldForEnemy.call(this, enemy), 0);
@@ -280,6 +281,7 @@ export function finishBattle(this: CrystalOathSceneContext, won: boolean) {
     this.markDirty();
   };
   this.cleanupBattleFloatingTexts();
+  this.cleanupBattleVisualFeedback();
   if (this.battle.carousel) this.battle.carousel.dissolves = [];
   this.battle = undefined;
   if (!won) {

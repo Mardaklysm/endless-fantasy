@@ -69,6 +69,23 @@ export interface BattleCarouselDissolve {
   particles: BattleCarouselDissolveParticle[];
 }
 
+export interface BattleHitReaction {
+  key: string;
+  side: "party" | "enemy";
+  actorId: string;
+  createdAt: number;
+  duration: number;
+  recoilX: number;
+  recoilY: number;
+}
+
+export interface BattleEnemyDeathDissolve {
+  enemyUid: string;
+  createdAt: number;
+  duration: number;
+  particles: BattleCarouselDissolveParticle[];
+}
+
 export interface BattleCarouselState {
   lastKey?: string;
   animationStartedAt?: number;
@@ -132,6 +149,8 @@ export interface BattleState {
   log: string[];
   debugLogVisible?: boolean;
   floatingTexts?: BattleFloatingText[];
+  hitReactions?: BattleHitReaction[];
+  enemyDeathDissolves?: BattleEnemyDeathDissolve[];
   carousel?: BattleCarouselState;
   actionTimer: number;
   victoryPending?: boolean;

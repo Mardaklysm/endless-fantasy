@@ -3,10 +3,12 @@ import type { CharacterState, EnemyState, PlayerSkillDef } from "../../data/game
 import { ITEMS } from "../../data/items";
 import { PLAYER_SKILLS } from "../../data/playerSkills";
 import { SPELLS } from "../../data/spells";
-import type { BattleAction, BattleAnimation, BattleFloatingTextKind } from "./battleTypes";
+import type { BattleAction, BattleAnimation, BattleCarouselDissolveParticle, BattleFloatingTextKind } from "./battleTypes";
 import type { CrystalOathSceneContext } from "../../scene/sceneContext";
 
 let floatingTextId = 0;
+const HIT_REACTION_MS = 520;
+const ENEMY_DEATH_DISSOLVE_MS = 760;
 
 export function queueBattleFloatingText(
   this: CrystalOathSceneContext,
@@ -37,6 +39,59 @@ export function queueBattleFloatingText(
     duration: options.critical ? 980 : 820,
     jitterX: Phaser.Math.Between(-8, 8)
   });
+  if (kind === "damage" && amount < 0) {
+    this.queueBattleHitReaction(side, actorId);
+    if (side === "enemy") {
+      const enemy = this.battle.enemies.find((candidate) => candidate.uid === actorId);
+      if (enemy?.hp !== undefined && enemy.hp <= 0) this.queueEnemyDeathDissolve(enemy);
+    }
+  }
+}
+
+export function queueBattleHitReaction(this: CrystalOathSceneContext, side: "party" | "enemy", actorId: string) {
+  if (!this.battle) return;
+  if (side === "enemy" && this.battle.enemyDeathDissolves?.some((entry) => entry.enemyUid === actorId)) return;
+  const target = this.battleActorCenter(side, actorId);
+  const source =
+    this.battle.animation?.action.actorId && this.battle.animation.action.side
+      ? this.battleActorCenter(this.battle.animation.action.side, this.battle.animation.action.actorId)
+      : undefined;
+  let vx = (target?.x ?? 0) - (source?.x ?? target?.x ?? 0);
+  let vy = (target?.y ?? 0) - (source?.y ?? target?.y ?? 0);
+  if (!source || Math.hypot(vx, vy) < 1) {
+    vx = side === "party" ? -1 : 1;
+    vy = -0.12;
+  }
+  const length = Math.max(1, Math.hypot(vx, vy));
+  const distance = side === "party" ? 13 : 15;
+  this.battle.hitReactions = (this.battle.hitReactions ?? []).filter((entry) => entry.side !== side || entry.actorId !== actorId);
+  this.battle.hitReactions.push({
+    key: `hit_${side}_${actorId}_${this.time.now}`,
+    side,
+    actorId,
+    createdAt: this.time.now,
+    duration: HIT_REACTION_MS,
+    recoilX: (vx / length) * distance,
+    recoilY: (vy / length) * distance
+  });
+  this.markDirty();
+}
+
+export function queueEnemyDeathDissolve(this: CrystalOathSceneContext, enemy: EnemyState) {
+  if (!this.battle) return;
+  if (this.battle.enemyDeathDissolves?.some((entry) => entry.enemyUid === enemy.uid)) return;
+  this.battle.hitReactions = (this.battle.hitReactions ?? []).filter((entry) => entry.side !== "enemy" || entry.actorId !== enemy.uid);
+  const idx = this.battle.enemies.indexOf(enemy);
+  const slot = this.enemyBattleSlot(enemy, idx);
+  const particles = makeEnemyDeathDissolveParticles(enemy, slot.x, slot.y, slot.size);
+  this.battle.enemyDeathDissolves ??= [];
+  this.battle.enemyDeathDissolves.push({
+    enemyUid: enemy.uid,
+    createdAt: this.time.now,
+    duration: ENEMY_DEATH_DISSOLVE_MS,
+    particles
+  });
+  this.markDirty();
 }
 
 export function remainingBattleFloatingTextMs(this: CrystalOathSceneContext) {
@@ -55,6 +110,56 @@ export function remainingBattleFloatingTextMs(this: CrystalOathSceneContext) {
 export function cleanupBattleFloatingTexts(this: CrystalOathSceneContext) {
   if (!this.battle) return;
   this.battle.floatingTexts = [];
+}
+
+export function remainingBattleVisualFeedbackMs(this: CrystalOathSceneContext) {
+  if (!this.battle) return 0;
+  const now = this.time.now;
+  let remaining = 0;
+  this.battle.hitReactions = (this.battle.hitReactions ?? []).filter((entry) => {
+    const entryRemaining = entry.duration - (now - entry.createdAt);
+    if (entryRemaining <= 0) return false;
+    remaining = Math.max(remaining, entryRemaining);
+    return true;
+  });
+  this.battle.enemyDeathDissolves = (this.battle.enemyDeathDissolves ?? []).filter((entry) => {
+    const entryRemaining = entry.duration - (now - entry.createdAt);
+    if (entryRemaining <= 0) return false;
+    remaining = Math.max(remaining, entryRemaining);
+    return true;
+  });
+  return remaining;
+}
+
+export function cleanupBattleVisualFeedback(this: CrystalOathSceneContext) {
+  if (!this.battle) return;
+  this.battle.hitReactions = [];
+  this.battle.enemyDeathDissolves = [];
+}
+
+function makeEnemyDeathDissolveParticles(enemy: EnemyState, x: number, y: number, size: number): BattleCarouselDissolveParticle[] {
+  const particles: BattleCarouselDissolveParticle[] = [];
+  const palette = enemy.palette.map((color) => parseInt(color.slice(1), 16)).filter(Number.isFinite);
+  const colors = palette.length ? [...palette, 0xffe0a0, 0xff5a5a] : [0xffe0a0, 0xff5a5a, 0x8e98aa];
+  const step = enemy.boss ? 8 : 7;
+  const pixel = enemy.boss ? 7 : 6;
+  for (let py = 0; py < size; py += step) {
+    for (let px = 0; px < size; px += step) {
+      if (Phaser.Math.Between(0, 100) < 18) continue;
+      const centerBias = 1 - Math.min(0.88, Math.hypot(px - size / 2, py - size / 2) / Math.max(1, size * 0.72));
+      if (centerBias < 0.18 && Phaser.Math.Between(0, 100) < 52) continue;
+      particles.push({
+        x: x + px + Phaser.Math.Between(-2, 2),
+        y: y + py + Phaser.Math.Between(-2, 2),
+        size: Phaser.Math.Between(Math.max(3, pixel - 2), pixel + 2),
+        vx: Phaser.Math.Between(-22, 30),
+        vy: Phaser.Math.Between(-34, 16),
+        color: Phaser.Utils.Array.GetRandom(colors),
+        delay: Phaser.Math.Between(0, 150)
+      });
+    }
+  }
+  return particles;
 }
 
 export function confirmBattleSelection(this: CrystalOathSceneContext) {

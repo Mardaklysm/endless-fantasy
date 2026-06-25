@@ -187,12 +187,13 @@ export function drawContainedTexture(this: CrystalOathSceneContext, key: AssetKe
   width: number,
   height: number,
   depth = LAYER_WORLD_IMAGE,
-  alpha = 1) {
+  alpha = 1,
+  tint?: number) {
   const source = this.textures.get(key).getSourceImage() as { width?: number; height?: number } | undefined;
   const sourceWidth = source?.width ?? 0;
   const sourceHeight = source?.height ?? 0;
   if (sourceWidth <= 0 || sourceHeight <= 0) {
-    return this.drawTexture(key, x, y, width, height, depth, alpha);
+    return this.drawTexture(key, x, y, width, height, depth, alpha, tint);
   }
   const scale = Math.min(width / sourceWidth, height / sourceHeight);
   const displayWidth = sourceWidth * scale;
@@ -204,7 +205,8 @@ export function drawContainedTexture(this: CrystalOathSceneContext, key: AssetKe
     displayWidth,
     displayHeight,
     depth,
-    alpha
+    alpha,
+    tint
   );
 }
 
@@ -285,7 +287,8 @@ export function drawCharacterSpriteFrame(this: CrystalOathSceneContext, classId:
   feetBaselineY: number,
   displayCellWidth: number,
   depth = LAYER_CHARACTER_IMAGE,
-  alpha = 1): boolean {
+  alpha = 1,
+  tint?: number): boolean {
   const texture = CHARACTER_CLASS_TEXTURES[classId];
   if (!this.hasTexture(texture)) return false;
   const sprite = CHARACTER_SPRITES[classId];
@@ -306,7 +309,8 @@ export function drawCharacterSpriteFrame(this: CrystalOathSceneContext, classId:
     displayWidth,
     displayHeight,
     depth,
-    alpha
+    alpha,
+    tint
   );
   return true;
 }

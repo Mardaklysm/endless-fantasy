@@ -15,7 +15,13 @@ import { ITEMS } from "../../data/items";
 import { SPELLS } from "../../data/spells";
 import type { CrystalOathSceneContext } from "../../scene/sceneContext";
 import type { Vec } from "../../scene/sceneTypes";
-import type { BattleCarouselCardSnapshot, BattleCarouselDissolveParticle, BattleVictoryRewards, InitiativeEntry } from "../../systems/battle/battleTypes";
+import type {
+  BattleCarouselCardSnapshot,
+  BattleCarouselDissolveParticle,
+  BattleEnemyDeathDissolve,
+  BattleVictoryRewards,
+  InitiativeEntry
+} from "../../systems/battle/battleTypes";
 
 type BattleCarouselCard = {
   key: string;
@@ -24,6 +30,12 @@ type BattleCarouselCard = {
   name: string;
   current: boolean;
   down: boolean;
+};
+
+type BattleActorVisualFeedback = {
+  offset: Vec;
+  flashAlpha: number;
+  tint?: number;
 };
 
 const BATTLE_UI = {
@@ -65,22 +77,35 @@ export function drawBattle(this: CrystalOathSceneContext) {
   const targetingAllies = this.battle.phase === "allyTarget";
   const targetingAll = !!this.battle.pendingAction?.targetAll;
   this.battle.enemies.forEach((enemy, idx) => {
-    if (enemy.hp <= 0) return;
+    const deathDissolve = this.battleEnemyDeathDissolve(enemy.uid);
+    if (enemy.hp <= 0 && !deathDissolve) return;
     const slot = this.enemyBattleSlot(enemy, idx);
+    if (deathDissolve) {
+      const progress = Phaser.Math.Clamp((this.time.now - deathDissolve.createdAt) / deathDissolve.duration, 0, 1);
+      const fadeAlpha = Math.max(0, 1 - progress * 1.35);
+      if (fadeAlpha > 0.04) {
+        this.drawActorShadow(slot.x + slot.size / 2, slot.y + slot.size - 3, slot.size * 0.76, Math.max(10, slot.size * 0.13), 0.22 * fadeAlpha);
+        this.drawEnemySprite(enemy, slot.x, slot.y, enemy.boss ? 5 : 4, slot.size, fadeAlpha, progress < 0.22 ? 0xff4a4a : undefined);
+      }
+      this.drawBattleEnemyDeathDissolve(deathDissolve);
+      return;
+    }
     const targeted = targetingEnemies && targetingAll ? enemy.hp > 0 : selectedEnemy?.uid === enemy.uid;
     const offset = this.battleActorOffset("enemy", enemy.uid);
-    this.drawBattleEnemy(enemy, slot.x + offset.x, slot.y + offset.y, slot.size, targeted);
+    const feedback = this.battleActorVisualFeedback("enemy", enemy.uid);
+    this.drawBattleEnemy(enemy, slot.x + offset.x + feedback.offset.x, slot.y + offset.y + feedback.offset.y, slot.size, targeted, feedback);
   });
   this.party.forEach((member, idx) => {
     const slot = this.partyBattleSlot(idx);
     const offset = this.battleActorOffset("party", member.id);
+    const feedback = this.battleActorVisualFeedback("party", member.id);
     const active =
       this.currentBattleEntry()?.side === "party" &&
       this.currentBattleEntry()?.actorId === member.id &&
       !this.battle?.animation &&
       this.battle?.phase !== "resolving";
     const targeted = targetingAllies && targetingAll ? member.hp > 0 : selectedAlly?.id === member.id;
-    this.drawPartyBattler(member, slot.x + offset.x, slot.y + offset.y, idx, active, slot.facing, targeted);
+    this.drawPartyBattler(member, slot.x + offset.x + feedback.offset.x, slot.y + offset.y + feedback.offset.y, idx, active, slot.facing, targeted, feedback);
   });
   this.drawBattleFloatingTexts();
   this.drawBattleTurnCarousel();
@@ -174,6 +199,32 @@ export function battleActorOffset(this: CrystalOathSceneContext, side: "party" |
   return { x: (vx / length) * distance * phase, y: (vy / length) * distance * phase };
 }
 
+export function battleActorVisualFeedback(this: CrystalOathSceneContext, side: "party" | "enemy", actorId: string): BattleActorVisualFeedback {
+  if (!this.battle?.hitReactions?.length) return { offset: { x: 0, y: 0 }, flashAlpha: 0 };
+  const now = this.time.now;
+  let active = this.battle.hitReactions.find((entry) => entry.side === side && entry.actorId === actorId);
+  this.battle.hitReactions = this.battle.hitReactions.filter((entry) => now - entry.createdAt < entry.duration);
+  if (!active || now - active.createdAt >= active.duration) return { offset: { x: 0, y: 0 }, flashAlpha: 0 };
+  const progress = Phaser.Math.Clamp((now - active.createdAt) / active.duration, 0, 1);
+  const recoilPhase = Math.sin(progress * Math.PI);
+  const flashPulse = 0.74 + 0.26 * Math.sin(progress * Math.PI * 8);
+  const flashAlpha = Phaser.Math.Clamp((1 - progress) * flashPulse, 0, 1);
+  return {
+    offset: { x: active.recoilX * recoilPhase, y: active.recoilY * recoilPhase },
+    flashAlpha,
+    tint: flashAlpha > 0.12 ? 0xff3f3f : undefined
+  };
+}
+
+export function battleEnemyDeathDissolve(this: CrystalOathSceneContext, enemyUid: string): BattleEnemyDeathDissolve | undefined {
+  if (!this.battle?.enemyDeathDissolves?.length) return undefined;
+  const now = this.time.now;
+  let active = this.battle.enemyDeathDissolves.find((entry) => entry.enemyUid === enemyUid);
+  this.battle.enemyDeathDissolves = this.battle.enemyDeathDissolves.filter((entry) => now - entry.createdAt < entry.duration);
+  if (!active || now - active.createdAt >= active.duration) return undefined;
+  return active;
+}
+
 export function selectedBattleEnemy(this: CrystalOathSceneContext): EnemyState | undefined {
   if (!this.battle || this.battle.phase !== "target") return undefined;
   if (this.battle.pendingAction?.targetAll) return undefined;
@@ -186,14 +237,39 @@ export function selectedBattleAlly(this: CrystalOathSceneContext): CharacterStat
   return this.party[this.battle.selected] ?? this.party[0];
 }
 
-export function drawBattleEnemy(this: CrystalOathSceneContext, enemy: EnemyState, x: number, y: number, size: number, targeted: boolean) {
+export function drawBattleEnemy(
+  this: CrystalOathSceneContext,
+  enemy: EnemyState,
+  x: number,
+  y: number,
+  size: number,
+  targeted: boolean,
+  feedback: BattleActorVisualFeedback = { offset: { x: 0, y: 0 }, flashAlpha: 0 }
+) {
   const alive = enemy.hp > 0;
   this.drawActorShadow(x + size / 2, y + size - 3, size * 0.76, Math.max(10, size * 0.13), alive ? 0.3 : 0.14);
-  this.drawEnemySprite(enemy, x, y, enemy.boss ? 5 : 4, size);
+  this.drawEnemySprite(enemy, x, y, enemy.boss ? 5 : 4, size, alive ? 1 : 0.28, feedback.tint);
   if (targeted) {
     this.drawBattleTargetArrow(x + size / 2, y - 11);
     this.text(x + size / 2, y + size + 4, enemy.name, 10, "#fff2a8", "center", { wordWrapWidth: Math.max(86, size + 28), strokeThickness: 2 });
   }
+}
+
+export function drawBattleEnemyDeathDissolve(this: CrystalOathSceneContext, dissolve: BattleEnemyDeathDissolve) {
+  const elapsed = this.time.now - dissolve.createdAt;
+  dissolve.particles.forEach((particle) => {
+    const particleElapsed = elapsed - particle.delay;
+    if (particleElapsed <= 0) return;
+    const duration = Math.max(1, dissolve.duration - particle.delay);
+    const progress = Phaser.Math.Clamp(particleElapsed / duration, 0, 1);
+    const alpha = (1 - progress) * 0.94;
+    if (alpha <= 0) return;
+    const drift = Phaser.Math.Easing.Cubic.Out(progress);
+    const x = particle.x + particle.vx * drift;
+    const y = particle.y + particle.vy * drift + progress * progress * 14;
+    const size = Math.max(1, particle.size * (1 - progress * 0.42));
+    this.ui.fillStyle(particle.color, alpha).fillRect(x, y, size, size);
+  });
 }
 
 export function drawPartyBattler(
@@ -204,7 +280,8 @@ export function drawPartyBattler(
   idx: number,
   active: boolean,
   facing: BattleSpawnFacing = "left",
-  targeted = false
+  targeted = false,
+  feedback: BattleActorVisualFeedback = { offset: { x: 0, y: 0 }, flashAlpha: 0 }
 ) {
   const classId = PARTY_CLASS[member.id];
   const frame = this.battleCharacterFrame(member, facing);
@@ -221,7 +298,7 @@ export function drawPartyBattler(
     this.g.fillStyle(0xfff0a8, 0.16).fillEllipse(bodyCenterX, feetBaselineY - 4, ringW, ringH);
     this.g.lineStyle(2, 0xfff0a8, 0.88).strokeEllipse(bodyCenterX, feetBaselineY - 4, ringW, ringH);
   }
-  if (!this.drawCharacterSpriteFrame(classId, frame, bodyCenterX, feetBaselineY, displayCellWidth, LAYER_BATTLE_IMAGE, alpha)) {
+  if (!this.drawCharacterSpriteFrame(classId, frame, bodyCenterX, feetBaselineY, displayCellWidth, LAYER_BATTLE_IMAGE, alpha, feedback.tint)) {
     const palettes = {
       fighter: [0xf0c18d, 0xc9433f, 0xe9edf7, 0x362a4b],
       priest: [0xf1d0aa, 0xf5f2e8, 0x5fac73, 0x314c33],
@@ -233,6 +310,9 @@ export function drawPartyBattler(
     this.g.fillStyle(palettes[2], alpha).fillRect(x + 17, y + 30, 9, 22);
     this.g.fillStyle(palettes[3], alpha).fillRect(x + 11, y + 53, 8, 10 + (idx % 2));
     this.g.fillRect(x + 28, y + 53, 8, 10 + ((idx + 1) % 2));
+    if (feedback.flashAlpha > 0) {
+      this.g.fillStyle(0xff3030, feedback.flashAlpha * 0.36).fillRect(bodyCenterX - displayCellWidth / 2, feetBaselineY - visualHeight, displayCellWidth, visualHeight);
+    }
   }
   if (targeted) this.drawBattleTargetArrow(bodyCenterX, feetBaselineY - visualHeight - 8);
 }
