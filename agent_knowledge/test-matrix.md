@@ -78,6 +78,34 @@ npm run build
 git diff --check
 ```
 
+### Visual / Worldgen Renderer Tasks
+
+Use for:
+- semantic terrain renderer changes
+- biome material blending
+- terrain mask visual regressions
+- worldgen visual previews
+- screenshot-seed terrain issues
+
+Validation:
+- `npm test`
+- `npm run build`
+- `git diff --check`
+
+Optional:
+- `npm run worldgen:lab -- --seed <seed> --out tmp/worldgen-lab/<name>` only when the task includes a specific seed, screenshot, or visual regression.
+
+Do not run by default:
+- Vite/dev server
+- browser automation
+- temporary runtime smoke pages
+
+Browser smoke limit:
+- Browser smoke gets one attempt only.
+- If there is no supported seed/debug entry path, stop and report the blocker.
+- Do not keep trying localStorage injection, page-global mutation, or `javascript:` URL workarounds.
+- Do not create temporary smoke harnesses/pages unless the user explicitly asks for visual proof or the task cannot be verified any other way.
+
 What not to run by default: browser smoke unless visual/runtime behavior also changed.
 
 ## movement-collision

@@ -15,6 +15,12 @@
 - Do not treat attempted-but-timed-out tests as passed.
 - Use `agent_knowledge/test-matrix.md` to choose the smallest validation.
 
+## Browser Smoke Context Limit
+- For renderer/visual regression tasks, browser smoke may be attempted once after build/tests pass.
+- If there is no supported seed/debug entry path, do not spend more tool calls trying to mutate localStorage or page globals.
+- Do not create temporary smoke pages unless explicitly requested or the task cannot be verified any other way.
+- Prefer reporting the blocker over consuming context.
+
 ## Debug Settings
 
 - Defaults must stay off.
