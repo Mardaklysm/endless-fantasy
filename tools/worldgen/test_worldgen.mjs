@@ -19,7 +19,14 @@ import { WORLD_CLOUD_ASSET_BY_TEXTURE_KEY, WORLD_CLOUD_ASSETS, WORLD_CLOUD_MANIF
 import { DUNGEON_TILE_ASSETS, DUNGEON_TILESET } from "../../src/data/dungeonTiles.ts";
 import { generateDungeonFloors, validateDungeonFloorsConnectivity } from "../../src/world/dungeonGenerator.ts";
 import { SEMANTIC_BIOME, SEMANTIC_WATER } from "../../src/world/semantic/semanticTypes.ts";
-import { SEMANTIC_MASK_TERRAIN_CLASSES, describeSemanticMaskTerrainRenderPlan, roadRibbonDebugSegments, roadRibbonSampleAt, terrainVariantWeightsAt } from "../../src/world/semantic/semanticMaskTerrainRenderer.ts";
+import {
+  SEMANTIC_MASK_TERRAIN_CLASSES,
+  describeSemanticMaskTerrainRenderPlan,
+  roadRibbonDebugSegments,
+  roadRibbonSampleAt,
+  terrainMaterialWeightsAt,
+  terrainVariantWeightsAt
+} from "../../src/world/semantic/semanticMaskTerrainRenderer.ts";
 import { describeSemanticRouteRenderPlan } from "../../src/world/semantic/semanticRouteRenderer.ts";
 import { REQUIRED_MAJOR_HARBOR_ROUTE_PAIRS, isBoatNavigableTile, validateBoatPath } from "../../src/world/semantic/boatNavigation.ts";
 
@@ -290,13 +297,30 @@ function validateNoDeprecatedRuntimeAtlasReferences() {
 
 function validateTerrainVariantRendererSourceGuard() {
   const rendererText = fs.readFileSync(path.join(PROJECT_ROOT, "src/world/semantic/semanticMaskTerrainRenderer.ts"), "utf8");
-  const forbiddenTokens = ["drawHardTerrainVariant", "drawTerrainVariantTile", "variantCtx.fillRect(cell"];
+  const forbiddenTokens = ["drawHardTerrainVariant", "drawTerrainVariantTile", "variantCtx.fillRect(cell", "drawHardAshfall", "drawHardLava"];
   for (const token of forbiddenTokens) {
     assert(!rendererText.includes(token), `Semantic terrain variant renderer contains forbidden hard-edge token ${token}.`);
   }
+  assert(rendererText.includes("terrainVariantWeightsAt"), "Semantic terrain variant renderer must expose the generalized variant splat sampler.");
+  assert(rendererText.includes("terrainMaterialWeightsAt"), "Semantic terrain renderer must expose generalized material-layer weights for regression tests.");
+  assert(rendererText.includes("ashfallTransitionWeightsAt"), "Ashfall material rendering must use the shared transition sampler, not a hard-cell bypass.");
   const variantFunctionMatches = rendererText.match(/function\s+\w*TerrainVariant\w*[\s\S]*?(?=\nfunction\s|\nexport function\s|\nexport interface\s|$)/g) ?? [];
   for (const body of variantFunctionMatches) {
     assert(!body.includes("TILE, TILE"), "Terrain variant draw functions must not draw full TILE-sized variant rectangles.");
+    assert(!/drawImage\([^;]*(?:TILE|tileSize)[^;]*(?:TILE|tileSize)/.test(body), "Terrain variant draw functions must not draw variant textures directly per terrain cell.");
+  }
+  const materialFunctionMatches = rendererText.match(/function\s+\w*(?:Ashfall|Lava|Cinder|Scorched|Material)\w*[\s\S]*?(?=\nfunction\s|\nexport function\s|\nexport interface\s|$)/g) ?? [];
+  for (const body of materialFunctionMatches) {
+    assert(!body.includes("TILE, TILE"), "Biome-specific terrain material functions must not draw full TILE-sized material rectangles.");
+    assert(!/fillRect\([^;]*(?:plan\.tileSize|tileSize)[^;]*(?:plan\.tileSize|tileSize)/.test(body), "Biome-specific material functions must not fill full terrain cells.");
+  }
+  const hardCellPatterns = [
+    /terrainVariant[\s\S]{0,140}\.fillRect\([^;]*(?:TILE|tileSize)[^;]*(?:TILE|tileSize)/,
+    /terrainVariant[\s\S]{0,180}\.drawImage\([^;]*(?:TILE|tileSize)[^;]*(?:TILE|tileSize)/,
+    /(?:ash|lava|cinder|scorched)[\s\S]{0,180}\.drawImage\([^;]*(?:TILE|tileSize)[^;]*(?:TILE|tileSize)/i
+  ];
+  for (const pattern of hardCellPatterns) {
+    assert(!pattern.test(rendererText), `Semantic terrain renderer contains an obvious hard-cell material draw path: ${pattern}.`);
   }
   const forbiddenRoadTokens = ["drawRoadMaskedTerrainClass", "roadCtx.fillRect(cell"];
   for (const token of forbiddenRoadTokens) {
@@ -313,7 +337,14 @@ function validateSemanticWorldgen() {
   const worldA = generateWorld({ seed });
   const worldB = generateWorld({ seed });
   const worldC = generateWorld({ seed: "semantic-runtime-test-different" });
-  const transitionWorlds = [worldA, generateWorld({ seed: "semantic-mqjk1ki9-2jsaw" }), generateWorld({ seed: "title-preview" })];
+  const transitionSeeds = [
+    "semantic-mqvfh3bw-1vel28p",
+    "semantic-runtime-test-greenhaven",
+    "semantic-frostmere-transition-test",
+    "semantic-coralreach-transition-test",
+    "semantic-ashfall-transition-test"
+  ];
+  const transitionWorlds = transitionSeeds.map((transitionSeed) => (transitionSeed === seed ? worldA : generateWorld({ seed: transitionSeed })));
   const roadRibbonWorlds = [
     worldA,
     generateWorld({ seed: "semantic-mqppkkk6-1o7hs8" }),
@@ -436,7 +467,10 @@ function validateSemanticWorldgen() {
   validateRoadAndForestPolicies(worldA);
   validateSemanticMaskTerrainRendererPlan(worldA);
   validateSemanticRouteRendererPlan(worldA);
-  for (const world of transitionWorlds) validateTerrainVariantTransitionInvariant(world);
+  for (const world of transitionWorlds) {
+    validateAllTerrainMaterialTransitionInvariant(world);
+    validateAshfallMaterialTransitions(world);
+  }
   for (const world of roadRibbonWorlds) validateRoadRibbonVisualInvariant(world);
 }
 
@@ -701,12 +735,12 @@ function validateSemanticMaskTerrainRendererPlan(world) {
   assert(before === after, "Semantic mask terrain planning mutated the generated world.");
 }
 
-function validateTerrainVariantTransitionInvariant(world) {
+function validateAllTerrainMaterialTransitionInvariant(world) {
   const classesWithVariants = new Set(Object.keys(WORLD_CURRENT_TERRAIN_VARIANT_TEXTURE_KEYS));
   if (classesWithVariants.size === 0) return;
 
   const greenhavenGrassStats = terrainVariantCoverageFor(world, "greenhaven", "grassland");
-  if (classesWithVariants.has("grassland")) {
+  if (classesWithVariants.has("grassland") && world.seed === "semantic-runtime-test-greenhaven") {
     assert(greenhavenGrassStats.total > 0, `${world.seed}: Greenhaven has no grassland cells for terrain variant validation.`);
     const coverage = greenhavenGrassStats.variant / greenhavenGrassStats.total;
     assert(coverage >= 0.08 && coverage <= 0.3, `${world.seed}: Greenhaven grassland variant coverage should stay between 8% and 30%, got ${(coverage * 100).toFixed(1)}%.`);
@@ -714,15 +748,138 @@ function validateTerrainVariantTransitionInvariant(world) {
 
   const edgeStats = terrainVariantBoundaryStats(world, classesWithVariants);
   assert(edgeStats.total > 0, `${world.seed}: no terrain variant boundaries were available for transition validation.`);
-  assert(edgeStats.intermediate / edgeStats.total >= 0.6, `${world.seed}: expected at least 60% blended terrain variant boundaries, got ${edgeStats.intermediate}/${edgeStats.total}.`);
+  assert(edgeStats.intermediate / edgeStats.total >= 0.68, `${world.seed}: expected at least 68% blended terrain material boundaries, got ${edgeStats.intermediate}/${edgeStats.total}.`);
+  assert(edgeStats.directOpaqueJumps === 0, `${world.seed}: terrain material alpha jumped directly from invisible to opaque on ${edgeStats.directOpaqueJumps} sampled edges.`);
   assert(edgeStats.maxHardRun <= 3, `${world.seed}: found ${edgeStats.maxHardRun} consecutive hard terrain variant boundary cells.`);
-  if (classesWithVariants.has("grassland")) {
+  for (const [terrainClass, classStats] of edgeStats.byClass) {
+    if (classStats.total < 12) continue;
+    assert(
+      classStats.intermediate / classStats.total >= 0.62,
+      `${world.seed}: expected at least 62% blended ${terrainClass} material boundaries, got ${classStats.intermediate}/${classStats.total}.`
+    );
+  }
+  if (classesWithVariants.has("grassland") && world.seed === "semantic-runtime-test-greenhaven") {
     assert(edgeStats.greenhavenGrassTotal > 0, `${world.seed}: Greenhaven grassland variants exist but no Greenhaven grassland boundaries were found.`);
     assert(
       edgeStats.greenhavenGrassIntermediate / edgeStats.greenhavenGrassTotal >= 0.6,
       `${world.seed}: expected at least 60% blended Greenhaven grassland boundaries, got ${edgeStats.greenhavenGrassIntermediate}/${edgeStats.greenhavenGrassTotal}.`
     );
   }
+}
+
+function validateAshfallMaterialTransitions(world) {
+  const semantic = world.semantic;
+  const ashfall = world.islands.find((island) => island.id === "ashfall" || island.theme === "ashfall");
+  assert(ashfall, `${world.seed}: Ashfall island is missing for material transition validation.`);
+
+  const ashfallLayerId = [...semantic.islandIndexToId.entries()].find(([, islandId]) => islandId === "ashfall")?.[0];
+  assert(ashfallLayerId, `${world.seed}: Ashfall semantic island layer is missing.`);
+  const slotCoverage = new Map([
+    [1, 0],
+    [2, 0],
+    [3, 0]
+  ]);
+  let ashCells = 0;
+  for (let y = 0; y < semantic.height; y += 1) {
+    for (let x = 0; x < semantic.width; x += 1) {
+      const i = y * semantic.width + x;
+      if (semantic.layers.islandId[i] !== ashfallLayerId) continue;
+      if (semanticTerrainClassAtCell(semantic, x, y) !== "ash") continue;
+      ashCells += 1;
+      const slot = semantic.layers.terrainVariant[i] ?? 0;
+      if (slot >= 1 && slot <= 3) slotCoverage.set(slot, (slotCoverage.get(slot) ?? 0) + 1);
+    }
+  }
+  const variantCells = [...slotCoverage.values()].reduce((sum, value) => sum + value, 0);
+  assert(ashCells > 0, `${world.seed}: Ashfall has no ash terrain cells for material transition validation.`);
+  if (variantCells <= 0) return;
+
+  const stats = ashfallMaterialBoundaryStats(world, ashfallLayerId);
+  assert(stats.total > 0, `${world.seed}: Ashfall variants exist but no ash/cinder/lava/rock material boundaries were found.`);
+  assert(
+    stats.intermediate / stats.total >= 0.7,
+    `${world.seed}: expected at least 70% blended Ashfall material boundaries, got ${stats.intermediate}/${stats.total}.`
+  );
+  assert(stats.maxHardRun <= 3, `${world.seed}: found ${stats.maxHardRun} consecutive hard Ashfall material boundary cells.`);
+  assert(stats.fullOpaqueTiles === 0, `${world.seed}: ${stats.fullOpaqueTiles} Ashfall variant cells sampled as full opaque TILE x TILE rectangles.`);
+  if ((slotCoverage.get(3) ?? 0) > 0) {
+    assert(stats.lavaBoundaryTotal > 0, `${world.seed}: Ashfall lava/crust variants exist but no lava/crust boundaries were sampled.`);
+    assert(
+      stats.lavaTransitionRing / stats.lavaBoundaryTotal >= 0.7,
+      `${world.seed}: expected lava/crust edges to expose scorch/cinder/ash transition rings, got ${stats.lavaTransitionRing}/${stats.lavaBoundaryTotal}.`
+    );
+  }
+}
+
+function ashfallMaterialBoundaryStats(world, ashfallLayerId) {
+  const semantic = world.semantic;
+  const stats = { total: 0, intermediate: 0, lavaBoundaryTotal: 0, lavaTransitionRing: 0, fullOpaqueTiles: 0, maxHardRun: 0 };
+  const hardHorizontal = new Map();
+  const hardVertical = new Map();
+  for (let y = 0; y < semantic.height; y += 1) {
+    for (let x = 0; x < semantic.width; x += 1) {
+      const i = y * semantic.width + x;
+      if (semantic.layers.islandId[i] !== ashfallLayerId) continue;
+      if (semanticTerrainClassAtCell(semantic, x, y) !== "ash") continue;
+      const currentVariant = semantic.layers.terrainVariant[i] ?? 0;
+      if (currentVariant >= 1 && currentVariant <= 3 && ashfallVariantCellIsFullOpaque(world, x, y, currentVariant)) stats.fullOpaqueTiles += 1;
+      for (const edge of [
+        { dx: 1, dy: 0, orientation: "v" },
+        { dx: 0, dy: 1, orientation: "h" }
+      ]) {
+        const nx = x + edge.dx;
+        const ny = y + edge.dy;
+        if (nx >= semantic.width || ny >= semantic.height) continue;
+        const ni = ny * semantic.width + nx;
+        if (semantic.layers.islandId[ni] !== ashfallLayerId) continue;
+        if (semanticTerrainClassAtCell(semantic, nx, ny) !== "ash") continue;
+        const nextVariant = semantic.layers.terrainVariant[ni] ?? 0;
+        if (currentVariant === nextVariant || (currentVariant === 0 && nextVariant === 0)) continue;
+        const variantSlots = [currentVariant, nextVariant].filter((slot) => slot > 0);
+        const result = terrainVariantEdgeHasTransition(world, "ash", x, y, edge.dx, edge.dy, variantSlots);
+        stats.total += 1;
+        if (result.intermediate) stats.intermediate += 1;
+        if (!result.intermediate && result.hardJump) {
+          const key = edge.orientation === "v" ? y : x;
+          const position = edge.orientation === "v" ? x : y;
+          const runs = edge.orientation === "v" ? hardVertical : hardHorizontal;
+          const positions = runs.get(key) ?? [];
+          positions.push(position);
+          runs.set(key, positions);
+        }
+        if (variantSlots.includes(3)) {
+          stats.lavaBoundaryTotal += 1;
+          if (ashfallLavaBoundaryHasTransitionRing(world, x, y, edge.dx, edge.dy)) stats.lavaTransitionRing += 1;
+        }
+      }
+    }
+  }
+  stats.maxHardRun = Math.max(maxConsecutiveRun(hardHorizontal), maxConsecutiveRun(hardVertical));
+  return stats;
+}
+
+function ashfallVariantCellIsFullOpaque(world, x, y, variantSlot) {
+  for (const offsetY of [0.18, 0.38, 0.62, 0.82]) {
+    for (const offsetX of [0.18, 0.38, 0.62, 0.82]) {
+      const weight = terrainVariantWeightsAt(world.semantic, "ash", x + offsetX, y + offsetY).find((item) => item.variantSlot === variantSlot)?.weight ?? 0;
+      if (weight < 0.9) return false;
+    }
+  }
+  return true;
+}
+
+function ashfallLavaBoundaryHasTransitionRing(world, x, y, dx, dy) {
+  const boundaryX = x + (dx === 1 ? 1 : 0.5);
+  const boundaryY = y + (dy === 1 ? 1 : 0.5);
+  for (const across of [-0.85, -0.62, -0.4, -0.22, -0.08, 0.08, 0.22, 0.4, 0.62, 0.85]) {
+    for (const along of [-0.3, 0, 0.3]) {
+      const sampleX = dx === 1 ? boundaryX + across : boundaryX + along;
+      const sampleY = dy === 1 ? boundaryY + along : boundaryY + across;
+      const transitionWeights = terrainMaterialWeightsAt(world.semantic, "ash", sampleX, sampleY).filter((item) => item.role === "transition" && item.variantSlot === 3);
+      if (transitionWeights.some((item) => ["ash", "cinder", "scorchedEarth", "rock"].includes(item.family) && item.weight >= 0.035)) return true;
+    }
+  }
+  return false;
 }
 
 function terrainVariantCoverageFor(world, islandId, terrainClass) {
@@ -742,7 +899,7 @@ function terrainVariantCoverageFor(world, islandId, terrainClass) {
 
 function terrainVariantBoundaryStats(world, classesWithVariants) {
   const semantic = world.semantic;
-  const stats = { total: 0, intermediate: 0, greenhavenGrassTotal: 0, greenhavenGrassIntermediate: 0, maxHardRun: 0 };
+  const stats = { total: 0, intermediate: 0, directOpaqueJumps: 0, greenhavenGrassTotal: 0, greenhavenGrassIntermediate: 0, maxHardRun: 0, byClass: new Map() };
   const hardHorizontal = new Map();
   const hardVertical = new Map();
   for (let y = 0; y < semantic.height; y += 1) {
@@ -760,12 +917,18 @@ function terrainVariantBoundaryStats(world, classesWithVariants) {
         const nextClass = semanticTerrainClassAtCell(semantic, nx, ny);
         if (nextClass !== currentClass) continue;
         const ni = ny * semantic.width + nx;
+        if (semantic.layers.islandId[i] !== semantic.layers.islandId[ni]) continue;
         const currentVariant = semantic.layers.terrainVariant[i] ?? 0;
         const nextVariant = semantic.layers.terrainVariant[ni] ?? 0;
         if (currentVariant === nextVariant || (currentVariant === 0 && nextVariant === 0)) continue;
         const result = terrainVariantEdgeHasTransition(world, currentClass, x, y, edge.dx, edge.dy, [currentVariant, nextVariant].filter((slot) => slot > 0));
         stats.total += 1;
         if (result.intermediate) stats.intermediate += 1;
+        if (result.directOpaqueJump) stats.directOpaqueJumps += 1;
+        const classStats = stats.byClass.get(currentClass) ?? { total: 0, intermediate: 0 };
+        classStats.total += 1;
+        if (result.intermediate) classStats.intermediate += 1;
+        stats.byClass.set(currentClass, classStats);
         const islandId = semantic.islandIndexToId.get(semantic.layers.islandId[i]);
         if (islandId === "greenhaven" && currentClass === "grassland") {
           stats.greenhavenGrassTotal += 1;
@@ -789,10 +952,11 @@ function terrainVariantBoundaryStats(world, classesWithVariants) {
 function terrainVariantEdgeHasTransition(world, terrainClass, x, y, dx, dy, variantSlots) {
   const boundaryX = x + (dx === 1 ? 1 : 0.5);
   const boundaryY = y + (dy === 1 ? 1 : 0.5);
-  const acrossOffsets = [-0.42, -0.24, -0.12, -0.04, 0.04, 0.12, 0.24, 0.42];
-  const alongOffsets = [-0.3, 0, 0.3];
+  const acrossOffsets = [-0.92, -0.68, -0.46, -0.28, -0.14, -0.05, 0.05, 0.14, 0.28, 0.46, 0.68, 0.92];
+  const alongOffsets = [-0.35, 0, 0.35];
   let intermediate = false;
   let hardJump = false;
+  let directOpaqueJump = false;
   let visibleBoundary = false;
   for (const slot of new Set(variantSlots)) {
     const values = [];
@@ -807,15 +971,21 @@ function terrainVariantEdgeHasTransition(world, terrainClass, x, y, dx, dy, vari
     }
     const low = Math.min(...values);
     const high = Math.max(...values);
-    if (high < 0.18) continue;
+    if (high < 0.14) continue;
     visibleBoundary = true;
-    if (values.some((value) => value > low + 0.05 && value < high - 0.05)) intermediate = true;
+    if (values.some((value) => value > Math.max(0.05, low + 0.04) && value < Math.min(0.9, high - 0.04))) intermediate = true;
     for (let i = 1; i < values.length; i += 1) {
       if (Math.abs(values[i] - values[i - 1]) > 0.32) hardJump = true;
+      if (
+        (values[i - 1] <= 0.05 && values[i] >= 0.9) ||
+        (values[i] <= 0.05 && values[i - 1] >= 0.9)
+      ) {
+        directOpaqueJump = true;
+      }
     }
   }
-  if (!visibleBoundary) return { intermediate: true, hardJump: false };
-  return { intermediate, hardJump };
+  if (!visibleBoundary) return { intermediate: true, hardJump: false, directOpaqueJump: false };
+  return { intermediate, hardJump, directOpaqueJump };
 }
 
 function maxConsecutiveRun(lines) {
