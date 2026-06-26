@@ -16,6 +16,7 @@ import type { GeneratedWorld, IslandId, WorldRoadVisual } from "../world/worldGe
 import type { SemanticRouteOverlayMode } from "../world/semantic/semanticRouteRenderer";
 import { SynthAudio } from "../systems/audio/synthAudio";
 import { OverworldCloudOverlay } from "../world/cloudOverlay";
+import { createDefaultGameSettings, type GameSettings } from "../systems/settings/gameSettings";
 
 import * as sceneLifecycle from "./sceneLifecycle";
 import * as sceneInput from "../input/sceneInput";
@@ -185,12 +186,7 @@ export class CrystalOathScene extends Phaser.Scene {
   puzzleFlags = new Set<string>();
   defeatedBosses = new Set<string>();
   clearedDungeons = new Set<string>();
-  settings = {
-    encounters: true,
-    xpMultiplier: 1,
-    fastText: false,
-    muted: false
-  };
+  settings: GameSettings = createDefaultGameSettings();
   dirty = true;
   lastStepFrame = 0;
   lastMoveDir: Vec = { x: 0, y: 1 };

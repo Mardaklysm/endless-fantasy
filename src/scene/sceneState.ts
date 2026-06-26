@@ -5,6 +5,7 @@ import { isExploreModeValue, type ExploreMode, type Mode } from "./sceneTypes";
 import { generateDungeonFloors } from "../world/dungeonGenerator";
 import { createWorldSeed, generateWorld } from "../world/worldGenerator";
 import type { CrystalOathSceneContext } from "./sceneContext";
+import { loadStoredGameSettings, persistGameSettings, settingsForNewGame } from "../systems/settings/gameSettings";
 
 const STARTING_POI_ID = "starting_grassland_village";
 
@@ -50,9 +51,8 @@ export function newGame(this: CrystalOathSceneContext) {
   this.puzzleFlags = new Set();
   this.defeatedBosses = new Set();
   this.clearedDungeons = new Set();
-  this.settings.encounters = true;
-  this.settings.xpMultiplier = 1;
-  this.settings.fastText = false;
+  this.settings = settingsForNewGame(loadStoredGameSettings() ?? this.settings);
+  persistGameSettings(this.settings);
   this.clearHeldMovement();
   this.markLocationVisited("dawnford");
   this.enterPoiVisit(STARTING_POI_ID, { mode: "world", locationId: "dawnford" });

@@ -6,6 +6,7 @@ import { SPELLS } from "../../data/spells";
 import type { MenuOption, Mode } from "../../scene/sceneTypes";
 import { wrap } from "../world/worldMath";
 import type { CrystalOathSceneContext } from "../../scene/sceneContext";
+import { persistGameSettings, SAILING_SPEED_MULTIPLIERS } from "../settings/gameSettings";
 
 export function rememberMenuReturnMode(this: CrystalOathSceneContext) {
   if (this.mode !== "menu" && this.mode !== "dialogue") this.previousMode = this.mode;
@@ -208,6 +209,10 @@ export function openEquipList(this: CrystalOathSceneContext, member: CharacterSt
 }
 
 export function openSettingsMenu(this: CrystalOathSceneContext) {
+  const persistAndRefresh = () => {
+    persistGameSettings(this.settings);
+    this.openSettingsMenu();
+  };
   this.openMenu(
     "Settings",
     [
@@ -215,21 +220,21 @@ export function openSettingsMenu(this: CrystalOathSceneContext) {
         label: () => `Random Encounters: ${this.settings.encounters ? "ON" : "OFF"}`,
         action: () => {
           this.settings.encounters = !this.settings.encounters;
-          this.openSettingsMenu();
+          persistAndRefresh();
         }
       },
       {
         label: () => `XP Multiplier: ${this.settings.xpMultiplier}x`,
         action: () => {
           this.settings.xpMultiplier = this.settings.xpMultiplier === 1 ? 2 : this.settings.xpMultiplier === 2 ? 4 : 1;
-          this.openSettingsMenu();
+          persistAndRefresh();
         }
       },
       {
         label: () => `Fast Text: ${this.settings.fastText ? "ON" : "OFF"}`,
         action: () => {
           this.settings.fastText = !this.settings.fastText;
-          this.openSettingsMenu();
+          persistAndRefresh();
         }
       },
       {
@@ -237,13 +242,39 @@ export function openSettingsMenu(this: CrystalOathSceneContext) {
         action: () => {
           this.settings.muted = !this.settings.muted;
           this.audio.setMuted(this.settings.muted);
-          this.openSettingsMenu();
+          persistAndRefresh();
+        }
+      },
+      { label: "Debug", action: () => undefined, disabled: () => true },
+      {
+        label: () => `All harbor routes: ${this.settings.debug.allHarborRoutes ? "ON" : "OFF"}`,
+        action: () => {
+          this.settings.debug.allHarborRoutes = !this.settings.debug.allHarborRoutes;
+          persistAndRefresh();
+        }
+      },
+      {
+        label: () => `Sailing speed: ${this.settings.debug.sailingSpeedMultiplier}x`,
+        action: () => {
+          const currentIndex = SAILING_SPEED_MULTIPLIERS.indexOf(this.settings.debug.sailingSpeedMultiplier);
+          this.settings.debug.sailingSpeedMultiplier = SAILING_SPEED_MULTIPLIERS[(currentIndex + 1) % SAILING_SPEED_MULTIPLIERS.length];
+          persistAndRefresh();
         }
       },
       { label: "Back", action: () => this.openMainMenu() }
     ],
-    () => this.openMainMenu()
+    () => this.openMainMenu(),
+    () => settingsFooter.call(this)
   );
+}
+
+function settingsFooter(this: CrystalOathSceneContext): string {
+  const option = this.menu?.options[this.menu.selected];
+  const label = option ? (typeof option.label === "function" ? option.label() : option.label) : "";
+  if (label.startsWith("All harbor routes")) return "Allow every harbor to offer travel to every discovered island/harbor destination.";
+  if (label.startsWith("Sailing speed")) return "Boat travel animation speed only. 1x is normal; 2x, 3x, and 4x are faster.";
+  if (label === "Debug") return "Debug settings are for local testing only.";
+  return "Settings are saved in this browser.";
 }
 
 export function openDebugMenu(this: CrystalOathSceneContext) {

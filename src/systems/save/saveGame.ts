@@ -1,5 +1,6 @@
 import { SAVE_KEY } from "../../app/config";
 import type { CrystalOathSceneContext } from "../../scene/sceneContext";
+import { persistGameSettings } from "../settings/gameSettings";
 
 export function saveGame(this: CrystalOathSceneContext) {
   const payload = {
@@ -25,4 +26,5 @@ export function saveGame(this: CrystalOathSceneContext) {
     encounterCounter: this.encounterCounter
   };
   localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
+  persistGameSettings(this.settings);
 }

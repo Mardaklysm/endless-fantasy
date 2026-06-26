@@ -6,7 +6,7 @@ import type { CrystalOathSceneContext } from "../../scene/sceneContext";
 export function openHarborMenu(this: CrystalOathSceneContext, loc: LocationDef) {
   if (this.worldControlLockReason === "boatTravel") return;
   this.rememberMenuReturnMode();
-  const options: MenuOption[] = this.getAvailableDestinations(loc.islandId ?? this.currentIslandId).map((destination) => ({
+  const options: MenuOption[] = this.getAvailableDestinations(loc.islandId ?? this.currentIslandId, loc).map((destination) => ({
     label: () => {
       const locked = this.isDestinationLocked(destination);
       return `${destination.displayName} - ${destination.costGold}g${locked ? " (locked)" : ""}`;
@@ -23,7 +23,52 @@ export function openHarborMenu(this: CrystalOathSceneContext, loc: LocationDef) 
   this.openMenu(`${loc.name}`, options, () => this.closeMenuTo("world"), () => `Gold ${this.gold} | Seed ${this.worldSeed}`);
 }
 
-export function getAvailableDestinations(this: CrystalOathSceneContext, currentIslandId: IslandId): TravelDestination[] {
+export function getAvailableDestinations(this: CrystalOathSceneContext, currentIslandId: IslandId, sourceHarbor?: LocationDef): TravelDestination[] {
+  if (this.settings.debug.allHarborRoutes) return this.getDebugHarborDestinations(currentIslandId, sourceHarbor);
+  return configuredDestinations(currentIslandId);
+}
+
+export function getDebugHarborDestinations(this: CrystalOathSceneContext, currentIslandId: IslandId, sourceHarbor?: LocationDef): TravelDestination[] {
+  const source = sourceHarbor ?? this.locations().find((loc) => loc.kind === "harbor" && loc.islandId === currentIslandId);
+  if (!source) {
+    console.warn(`Debug harbor routes are enabled, but no source harbor exists for island ${currentIslandId}.`);
+    return [];
+  }
+
+  const directCosts = new Map(configuredDestinations(currentIslandId).map((destination) => [destination.destinationIslandId, destination.costGold]));
+  const islandNames = new Map((this.generatedWorld?.islands ?? []).map((island) => [island.id, island.name]));
+  const harborsByIsland = new Map<IslandId, LocationDef>();
+  for (const harbor of this.locations()) {
+    if (harbor.kind !== "harbor" || !harbor.islandId || harbor.islandId === currentIslandId) continue;
+    if (!harborsByIsland.has(harbor.islandId)) harborsByIsland.set(harbor.islandId, harbor);
+  }
+
+  return [...harborsByIsland.values()]
+    .sort((a, b) => {
+      const islandA = islandNames.get(a.islandId!) ?? a.name;
+      const islandB = islandNames.get(b.islandId!) ?? b.name;
+      return islandA.localeCompare(islandB) || a.name.localeCompare(b.name);
+    })
+    .map((harbor) => {
+      const destinationIslandId = harbor.islandId!;
+      const islandName = islandNames.get(destinationIslandId) ?? harbor.name;
+      const displayName = harbor.name === islandName ? islandName : `${islandName} (${harbor.name})`;
+      const destination: TravelDestination = {
+        destinationIslandId,
+        displayName,
+        costGold: directCosts.get(destinationIslandId) ?? reverseConfiguredRouteCost(destinationIslandId, currentIslandId) ?? fallbackDebugRouteCost.call(this, destinationIslandId)
+      };
+      const route = this.planBoatRoute(source, harbor, destination);
+      if (!route) {
+        console.warn(`Debug harbor route hidden: ${source.name} -> ${displayName} could not be resolved to a safe boat path.`);
+        return undefined;
+      }
+      return destination;
+    })
+    .filter((destination): destination is TravelDestination => !!destination);
+}
+
+function configuredDestinations(currentIslandId: IslandId): TravelDestination[] {
   if (currentIslandId === "greenhaven") {
     return [
       { destinationIslandId: "coralreach", displayName: "Coralreach", costGold: 10, requiredUnlockFlag: "unlockedIsland2" },
@@ -61,6 +106,15 @@ export function getAvailableDestinations(this: CrystalOathSceneContext, currentI
     { destinationIslandId: "coralreach", displayName: "Coralreach", costGold: 18 },
     { destinationIslandId: "greenhaven", displayName: "Greenhaven", costGold: 18 }
   ];
+}
+
+function reverseConfiguredRouteCost(fromIslandId: IslandId, toIslandId: IslandId): number | undefined {
+  return configuredDestinations(fromIslandId).find((destination) => destination.destinationIslandId === toIslandId)?.costGold;
+}
+
+function fallbackDebugRouteCost(this: CrystalOathSceneContext, destinationIslandId: IslandId): number {
+  const destinationIsland = this.generatedWorld?.islands.find((island) => island.id === destinationIslandId);
+  return destinationIsland ? 10 + destinationIsland.difficultyTier * 4 : 0;
 }
 
 export function isDestinationLocked(this: CrystalOathSceneContext, destination: TravelDestination): boolean {

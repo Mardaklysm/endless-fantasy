@@ -21,6 +21,7 @@ import type { DirectionName, Vec } from "../scene/sceneTypes";
 import type { CrystalOathSceneContext } from "../scene/sceneContext";
 import { ITEMS } from "../data/items";
 import { SPELLS } from "../data/spells";
+import { persistGameSettings } from "../systems/settings/gameSettings";
 
 export function handleKey(this: CrystalOathSceneContext, event: KeyboardEvent) {
   this.audio.start();
@@ -33,6 +34,7 @@ export function handleKey(this: CrystalOathSceneContext, event: KeyboardEvent) {
   if (event.code === "KeyM") {
     this.settings.muted = !this.settings.muted;
     this.audio.setMuted(this.settings.muted);
+    persistGameSettings(this.settings);
     this.markDirty();
     return;
   }

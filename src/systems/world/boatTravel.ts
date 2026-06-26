@@ -112,7 +112,7 @@ export function updateBoatTravel(this: CrystalOathSceneContext, deltaMs: number)
   const travel = this.boatTravel;
   if (!travel) return;
   try {
-    travel.progressTiles = Math.min(travel.routeLength, travel.progressTiles + BOAT_TILES_PER_MS * deltaMs);
+    travel.progressTiles = Math.min(travel.routeLength, travel.progressTiles + BOAT_TILES_PER_MS * this.settings.debug.sailingSpeedMultiplier * deltaMs);
     advanceBoatTravelWorldTime.call(this, travel);
     travel.boatPos = boatRoutePointAtDistance(travel, travel.progressTiles);
     travel.direction = boatDirectionFromCurrentSegment(travel, travel.direction);

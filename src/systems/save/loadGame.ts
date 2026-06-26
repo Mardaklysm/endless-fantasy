@@ -3,6 +3,7 @@ import { perfNow, perfRecordSaveLoad } from "../../debug/perf";
 import { createWorldSeed, getIslandAt } from "../../world/worldGenerator";
 import type { CharacterState } from "../../data/gameDataTypes";
 import type { CrystalOathSceneContext } from "../../scene/sceneContext";
+import { loadStoredGameSettings, mergeGameSettings, persistGameSettings } from "../settings/gameSettings";
 
 const LEGACY_HERO_IDS: Partial<Record<string, CharacterState["id"]>> = {
   arlen: "fighter",
@@ -37,8 +38,9 @@ export function loadGame(this: CrystalOathSceneContext): boolean {
     this.puzzleFlags = new Set(data.puzzleFlags ?? []);
     this.defeatedBosses = new Set(data.defeatedBosses ?? []);
     this.clearedDungeons = new Set(data.clearedDungeons ?? []);
-    this.settings = { ...this.settings, ...data.settings };
+    this.settings = mergeGameSettings(data.settings, loadStoredGameSettings());
     this.audio.setMuted(this.settings.muted);
+    persistGameSettings(this.settings);
     this.encounterCounter = data.encounterCounter ?? 10;
     this.setWorldTimeTicks(data.worldTimeTicks ?? 0);
     this.ensureValidDungeonPosition();
