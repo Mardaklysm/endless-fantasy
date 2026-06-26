@@ -25,6 +25,7 @@ import {
   roadRibbonDebugSegments,
   roadRibbonSampleAt,
   terrainMaterialWeightsAt,
+  terrainVariantTextureAlphaAt,
   terrainVariantWeightsAt
 } from "../../src/world/semantic/semanticMaskTerrainRenderer.ts";
 import { describeSemanticRouteRenderPlan } from "../../src/world/semantic/semanticRouteRenderer.ts";
@@ -297,13 +298,20 @@ function validateNoDeprecatedRuntimeAtlasReferences() {
 
 function validateTerrainVariantRendererSourceGuard() {
   const rendererText = fs.readFileSync(path.join(PROJECT_ROOT, "src/world/semantic/semanticMaskTerrainRenderer.ts"), "utf8");
+  const worldRendererText = fs.readFileSync(path.join(PROJECT_ROOT, "src/render/world/drawWorld.ts"), "utf8");
   const forbiddenTokens = ["drawHardTerrainVariant", "drawTerrainVariantTile", "variantCtx.fillRect(cell", "drawHardAshfall", "drawHardLava"];
   for (const token of forbiddenTokens) {
     assert(!rendererText.includes(token), `Semantic terrain variant renderer contains forbidden hard-edge token ${token}.`);
   }
   assert(rendererText.includes("terrainVariantWeightsAt"), "Semantic terrain variant renderer must expose the generalized variant splat sampler.");
+  assert(rendererText.includes("terrainVariantTextureAlphaAt"), "Semantic terrain variant renderer must expose the actual final variant texture alpha sampler.");
   assert(rendererText.includes("terrainMaterialWeightsAt"), "Semantic terrain renderer must expose generalized material-layer weights for regression tests.");
   assert(rendererText.includes("ashfallTransitionWeightsAt"), "Ashfall material rendering must use the shared transition sampler, not a hard-cell bypass.");
+  const splatFunction = rendererText.match(/function\s+drawTerrainVariantSplatLayer[\s\S]*?(?=\nfunction\s|\nexport function\s|\nexport interface\s|$)/)?.[0] ?? "";
+  assert(splatFunction.includes("terrainVariantTextureAlphaAt"), "Runtime terrain variant splats must mask the actual texture pass with terrainVariantTextureAlphaAt.");
+  assert(!splatFunction.includes("terrainVariantWeightsAt"), "Runtime terrain variant splats must not use looser material weights instead of the final texture alpha.");
+  assert(worldRendererText.includes("terrainVariantAlpha"), "World debug overlays must include the actual terrainVariantAlpha mask view.");
+  assert(worldRendererText.includes("terrainVariantTextureAlphaAt"), "terrainVariantAlpha debug overlay must sample the final variant texture alpha helper.");
   const variantFunctionMatches = rendererText.match(/function\s+\w*TerrainVariant\w*[\s\S]*?(?=\nfunction\s|\nexport function\s|\nexport interface\s|$)/g) ?? [];
   for (const body of variantFunctionMatches) {
     assert(!body.includes("TILE, TILE"), "Terrain variant draw functions must not draw full TILE-sized variant rectangles.");
@@ -338,6 +346,7 @@ function validateSemanticWorldgen() {
   const worldB = generateWorld({ seed });
   const worldC = generateWorld({ seed: "semantic-runtime-test-different" });
   const transitionSeeds = [
+    "semantic-mqvfhspe-1jcgzs",
     "semantic-mqvfh3bw-1vel28p",
     "semantic-runtime-test-greenhaven",
     "semantic-frostmere-transition-test",
@@ -802,11 +811,26 @@ function validateAshfallMaterialTransitions(world) {
   );
   assert(stats.maxHardRun <= 3, `${world.seed}: found ${stats.maxHardRun} consecutive hard Ashfall material boundary cells.`);
   assert(stats.fullOpaqueTiles === 0, `${world.seed}: ${stats.fullOpaqueTiles} Ashfall variant cells sampled as full opaque TILE x TILE rectangles.`);
+  const textureStats = ashfallVariantTextureAlphaBoundaryStats(world, ashfallLayerId);
+  assert(textureStats.total > 0, `${world.seed}: Ashfall variants exist but no final variant texture-alpha boundaries were sampled.`);
+  assert(
+    textureStats.intermediate / textureStats.total >= 0.72,
+    `${world.seed}: expected at least 72% of final Ashfall variant texture-alpha boundaries to have intermediate samples, got ${textureStats.intermediate}/${textureStats.total}.`
+  );
+  assert(textureStats.directOpaqueJumps === 0, `${world.seed}: final Ashfall variant texture alpha jumped directly from invisible to opaque on ${textureStats.directOpaqueJumps} sampled edges.`);
+  assert(textureStats.edgeStripTooStrong === 0, `${world.seed}: ${textureStats.edgeStripTooStrong} Ashfall variant texture edge strips stayed too strong at generated cell boundaries.`);
+  assert(textureStats.fullStrengthBoundaryBlocks === 0, `${world.seed}: ${textureStats.fullStrengthBoundaryBlocks} Ashfall variant texture 2x2 high-alpha blocks touched non-variant cells.`);
+  assert(textureStats.maxHardRun <= 3, `${world.seed}: found ${textureStats.maxHardRun} consecutive hard final Ashfall variant texture-alpha boundary cells.`);
   if ((slotCoverage.get(3) ?? 0) > 0) {
     assert(stats.lavaBoundaryTotal > 0, `${world.seed}: Ashfall lava/crust variants exist but no lava/crust boundaries were sampled.`);
     assert(
       stats.lavaTransitionRing / stats.lavaBoundaryTotal >= 0.7,
       `${world.seed}: expected lava/crust edges to expose scorch/cinder/ash transition rings, got ${stats.lavaTransitionRing}/${stats.lavaBoundaryTotal}.`
+    );
+    assert(textureStats.lavaBoundaryTotal > 0, `${world.seed}: Ashfall lava/crust variants exist but no final lava/crust texture-alpha boundaries were sampled.`);
+    assert(
+      textureStats.lavaErodedBoundary / textureStats.lavaBoundaryTotal >= 0.78,
+      `${world.seed}: expected lava/crust core alpha to be eroded away from generated boundaries, got ${textureStats.lavaErodedBoundary}/${textureStats.lavaBoundaryTotal}.`
     );
   }
 }
@@ -858,11 +882,140 @@ function ashfallMaterialBoundaryStats(world, ashfallLayerId) {
   return stats;
 }
 
+function ashfallVariantTextureAlphaBoundaryStats(world, ashfallLayerId) {
+  const semantic = world.semantic;
+  const stats = {
+    total: 0,
+    intermediate: 0,
+    directOpaqueJumps: 0,
+    edgeStripTooStrong: 0,
+    fullStrengthBoundaryBlocks: 0,
+    lavaBoundaryTotal: 0,
+    lavaErodedBoundary: 0,
+    maxHardRun: 0
+  };
+  const hardHorizontal = new Map();
+  const hardVertical = new Map();
+  for (let y = 0; y < semantic.height; y += 1) {
+    for (let x = 0; x < semantic.width; x += 1) {
+      const i = y * semantic.width + x;
+      if (semantic.layers.islandId[i] !== ashfallLayerId) continue;
+      if (semanticTerrainClassAtCell(semantic, x, y) !== "ash") continue;
+      const currentVariant = semantic.layers.terrainVariant[i] ?? 0;
+      for (const edge of [
+        { dx: 1, dy: 0, orientation: "v" },
+        { dx: 0, dy: 1, orientation: "h" }
+      ]) {
+        const nx = x + edge.dx;
+        const ny = y + edge.dy;
+        if (nx >= semantic.width || ny >= semantic.height) continue;
+        const ni = ny * semantic.width + nx;
+        if (semantic.layers.islandId[ni] !== ashfallLayerId) continue;
+        if (semanticTerrainClassAtCell(semantic, nx, ny) !== "ash") continue;
+        const nextVariant = semantic.layers.terrainVariant[ni] ?? 0;
+        if (currentVariant === nextVariant || (currentVariant === 0 && nextVariant === 0)) continue;
+        const variantSlots = new Set([currentVariant, nextVariant].filter((slot) => slot > 0));
+        for (const slot of variantSlots) {
+          const result = terrainVariantTextureAlphaEdgeStats(world, "ash", x, y, edge.dx, edge.dy, currentVariant, nextVariant, slot);
+          if (!result.visible) continue;
+          stats.total += 1;
+          if (result.intermediate) stats.intermediate += 1;
+          if (result.directOpaqueJump) stats.directOpaqueJumps += 1;
+          if (result.edgeStripTooStrong) stats.edgeStripTooStrong += 1;
+          if (result.fullStrengthBoundaryBlock) stats.fullStrengthBoundaryBlocks += 1;
+          if (slot === 3) {
+            stats.lavaBoundaryTotal += 1;
+            if (result.erodedBoundary) stats.lavaErodedBoundary += 1;
+          }
+          if ((!result.intermediate && result.hardJump) || result.edgeStripTooStrong || result.fullStrengthBoundaryBlock) {
+            const key = edge.orientation === "v" ? y : x;
+            const position = edge.orientation === "v" ? x : y;
+            const runs = edge.orientation === "v" ? hardVertical : hardHorizontal;
+            const positions = runs.get(key) ?? [];
+            positions.push(position);
+            runs.set(key, positions);
+          }
+        }
+      }
+    }
+  }
+  stats.maxHardRun = Math.max(maxConsecutiveRun(hardHorizontal), maxConsecutiveRun(hardVertical));
+  return stats;
+}
+
+function terrainVariantTextureAlphaEdgeStats(world, terrainClass, x, y, dx, dy, currentVariant, nextVariant, variantSlot) {
+  const boundaryX = x + (dx === 1 ? 1 : 0.5);
+  const boundaryY = y + (dy === 1 ? 1 : 0.5);
+  const acrossOffsets = [-0.94, -0.72, -0.5, -0.32, -0.18, -0.07, 0.07, 0.18, 0.32, 0.5, 0.72, 0.94];
+  const alongOffsets = [-0.34, 0, 0.34];
+  const values = [];
+  for (const across of acrossOffsets) {
+    let sum = 0;
+    for (const along of alongOffsets) {
+      const sampleX = dx === 1 ? boundaryX + across : boundaryX + along;
+      const sampleY = dy === 1 ? boundaryY + across : boundaryY + along;
+      sum += terrainVariantTextureAlphaAt(world.semantic, terrainClass, variantSlot, sampleX, sampleY);
+    }
+    values.push(sum / alongOffsets.length);
+  }
+
+  const high = Math.max(...values);
+  if (high < 0.1) {
+    return {
+      visible: false,
+      intermediate: true,
+      hardJump: false,
+      directOpaqueJump: false,
+      edgeStripTooStrong: false,
+      fullStrengthBoundaryBlock: false,
+      erodedBoundary: true
+    };
+  }
+
+  let hardJump = false;
+  let directOpaqueJump = false;
+  for (let i = 1; i < values.length; i += 1) {
+    if (Math.abs(values[i] - values[i - 1]) > 0.32) hardJump = true;
+    if (
+      (values[i - 1] <= 0.05 && values[i] >= 0.85) ||
+      (values[i] <= 0.05 && values[i - 1] >= 0.85)
+    ) {
+      directOpaqueJump = true;
+    }
+  }
+
+  const intermediate = values.some((value) => value >= 0.08 && value <= Math.min(0.74, high - 0.035));
+  const edgeStrip = terrainVariantTextureAlphaBoundaryStrip(world, terrainClass, boundaryX, boundaryY, dx, dy, currentVariant, nextVariant, variantSlot);
+  return {
+    visible: true,
+    intermediate,
+    hardJump,
+    directOpaqueJump,
+    edgeStripTooStrong: edgeStrip.max > 0.48,
+    fullStrengthBoundaryBlock: edgeStrip.values.filter((value) => value >= 0.58).length >= 4,
+    erodedBoundary: edgeStrip.max <= (variantSlot === 3 ? 0.45 : 0.48)
+  };
+}
+
+function terrainVariantTextureAlphaBoundaryStrip(world, terrainClass, boundaryX, boundaryY, dx, dy, currentVariant, nextVariant, variantSlot) {
+  const sideSign = currentVariant === variantSlot ? -1 : nextVariant === variantSlot ? 1 : 0;
+  const values = [];
+  if (!sideSign) return { values, max: 0 };
+  for (const inward of [0.07, 0.2]) {
+    for (const along of [-0.24, 0.24]) {
+      const sampleX = dx === 1 ? boundaryX + sideSign * inward : boundaryX + along;
+      const sampleY = dy === 1 ? boundaryY + sideSign * inward : boundaryY + along;
+      values.push(terrainVariantTextureAlphaAt(world.semantic, terrainClass, variantSlot, sampleX, sampleY));
+    }
+  }
+  return { values, max: values.length > 0 ? Math.max(...values) : 0 };
+}
+
 function ashfallVariantCellIsFullOpaque(world, x, y, variantSlot) {
   for (const offsetY of [0.18, 0.38, 0.62, 0.82]) {
     for (const offsetX of [0.18, 0.38, 0.62, 0.82]) {
-      const weight = terrainVariantWeightsAt(world.semantic, "ash", x + offsetX, y + offsetY).find((item) => item.variantSlot === variantSlot)?.weight ?? 0;
-      if (weight < 0.9) return false;
+      const alpha = terrainVariantTextureAlphaAt(world.semantic, "ash", variantSlot, x + offsetX, y + offsetY);
+      if (alpha < 0.95) return false;
     }
   }
   return true;
@@ -965,7 +1118,7 @@ function terrainVariantEdgeHasTransition(world, terrainClass, x, y, dx, dy, vari
       for (const along of alongOffsets) {
         const sampleX = dx === 1 ? boundaryX + across : boundaryX + along;
         const sampleY = dy === 1 ? boundaryY + across : boundaryY + along;
-        sum += terrainVariantWeightsAt(world.semantic, terrainClass, sampleX, sampleY).find((weight) => weight.variantSlot === slot)?.weight ?? 0;
+        sum += terrainVariantTextureAlphaAt(world.semantic, terrainClass, slot, sampleX, sampleY);
       }
       values.push(sum / alongOffsets.length);
     }

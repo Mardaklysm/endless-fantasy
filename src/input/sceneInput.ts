@@ -98,7 +98,7 @@ export function isGameControlKey(this: CrystalOathSceneContext, event: KeyboardE
 }
 
 export function cycleSemanticDebugOverlay(this: CrystalOathSceneContext) {
-  const modes = ["off", "edgeDebug", "rawTiles", "masks", "terrainVariants", "roadRibbon", "distance", "grid", "walkability", "policy", "mountains", "forests", "islands", "pois", "roads", "rivers"] as const;
+  const modes = ["off", "edgeDebug", "rawTiles", "masks", "terrainVariants", "terrainVariantAlpha", "roadRibbon", "distance", "grid", "walkability", "policy", "mountains", "forests", "islands", "pois", "roads", "rivers"] as const;
   const current = modes.indexOf(this.semanticDebugOverlay);
   this.semanticDebugOverlay = modes[(current + 1) % modes.length];
   this.flashMessage(`Semantic debug: ${this.semanticDebugOverlay}`);

@@ -32,7 +32,7 @@ import type { WorldObjectId } from "../../data/worldObjects";
 import { WORLD_TILES, worldTileHasTag } from "../../data/worldTiles";
 import type { WorldTileId } from "../../data/worldTiles";
 import type { Terrain, Vec } from "../../scene/sceneTypes";
-import { createSemanticMaskTerrainTexture, roadRibbonDebugSegments, roadRibbonSampleAt, terrainVariantWeightsAt } from "../../world/semantic/semanticMaskTerrainRenderer";
+import { createSemanticMaskTerrainTexture, roadRibbonDebugSegments, roadRibbonSampleAt, terrainVariantTextureAlphaAt, terrainVariantWeightsAt } from "../../world/semantic/semanticMaskTerrainRenderer";
 import type { SemanticMaskTerrainClass, SemanticMaskTerrainSources, SemanticMaskTerrainVariantSources } from "../../world/semantic/semanticMaskTerrainRenderer";
 import { createSemanticRouteOverlayTexture } from "../../world/semantic/semanticRouteRenderer";
 import { SEMANTIC_BIOME, SEMANTIC_WATER } from "../../world/semantic/semanticTypes";
@@ -42,7 +42,7 @@ import type { CrystalOathSceneContext } from "../../scene/sceneContext";
 const HORIZONTAL_BRIDGE_Y_OFFSET = -2;
 const SEMANTIC_TERRAIN_CHUNK_TILES = 16;
 const SEMANTIC_TERRAIN_CHUNK_PADDING_TILES = 2;
-const SEMANTIC_TERRAIN_CHUNK_MASK_PIXELS_PER_CELL = 8;
+const SEMANTIC_TERRAIN_CHUNK_MASK_PIXELS_PER_CELL = 16;
 const SEMANTIC_TERRAIN_MAX_CACHED_CHUNKS = 96;
 
 export function drawWorld(this: CrystalOathSceneContext) {
@@ -242,6 +242,31 @@ export function drawSemanticDebugOverlay(this: CrystalOathSceneContext, startX: 
       }
     }
   }
+  if (this.semanticDebugOverlay === "terrainVariantAlpha") {
+    const samplesPerCell = 8;
+    const sampleSize = TILE / samplesPerCell;
+    for (let y = startY; y <= endY; y += 1) {
+      for (let x = startX; x <= endX; x += 1) {
+        const terrainClass = semanticTerrainDebugClassAt(semantic, x, y);
+        if (!terrainClass || terrainClass === "road" || terrainClass === "deepOcean" || terrainClass === "shallowWater" || terrainClass === "freshWater") continue;
+        for (let sy = 0; sy < samplesPerCell; sy += 1) {
+          for (let sx = 0; sx < samplesPerCell; sx += 1) {
+            const sampleX = x + (sx + 0.5) / samplesPerCell;
+            const sampleY = y + (sy + 0.5) / samplesPerCell;
+            let strongest: { slot: 1 | 2 | 3; alpha: number } | undefined;
+            for (const slot of [1, 2, 3] as const) {
+              const alpha = terrainVariantTextureAlphaAt(semantic, terrainClass, slot, sampleX, sampleY);
+              if (!strongest || alpha > strongest.alpha) strongest = { slot, alpha };
+            }
+            if (!strongest || strongest.alpha <= 0.015) continue;
+            debugGraphics
+              .fillStyle(terrainVariantAlphaDebugColor(terrainClass, strongest.slot), Math.max(0.08, Math.min(0.78, strongest.alpha)))
+              .fillRect(x * TILE - tileCam.x + sx * sampleSize, y * TILE - tileCam.y + sy * sampleSize, sampleSize, sampleSize);
+          }
+        }
+      }
+    }
+  }
   if (this.semanticDebugOverlay === "roadRibbon") {
     const samplesPerCell = 4;
     const sampleSize = TILE / samplesPerCell;
@@ -422,6 +447,17 @@ function semanticTerrainDebugClassAt(semantic: GeneratedWorld["semantic"], x: nu
   if (semantic.layers.biome[i] === SEMANTIC_BIOME.ICE) return "ice";
   if (semantic.layers.biome[i] === SEMANTIC_BIOME.SAND) return semantic.islandIndexToId.get(semantic.layers.islandId[i]) === "ashfall" ? "ash" : "sand";
   return "grassland";
+}
+
+function terrainVariantAlphaDebugColor(terrainClass: SemanticMaskTerrainClass, variantSlot: 1 | 2 | 3): number {
+  if (terrainClass === "ash") {
+    if (variantSlot === 3) return 0xff7a2f;
+    if (variantSlot === 2) return 0x9b6141;
+    return 0x8c8298;
+  }
+  if (terrainClass === "ice") return variantSlot === 3 ? 0x7e8791 : 0xbdf6ff;
+  if (terrainClass === "sand" || terrainClass === "beach") return variantSlot === 3 ? 0x9b6b45 : 0xffdd91;
+  return variantSlot === 2 ? 0x7d8c6e : 0x8cf26a;
 }
 
 export function drawSemanticEdgeDebugOverlay(this: CrystalOathSceneContext, semantic: GeneratedWorld["semantic"], startX: number, endX: number, startY: number, endY: number, tileCam: Vec) {
