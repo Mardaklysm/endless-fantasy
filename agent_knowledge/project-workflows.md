@@ -14,6 +14,14 @@ Use the context-budget startup from `agent_knowledge/README.md`:
 
 Normal tasks should start from `code-map.md` and a compact task profile, not from broad project overview docs. If more than 2 knowledge docs or more than 6 source files seem necessary, pause and explain why before expanding context.
 
+For compact orientation before broad discovery, use:
+
+```powershell
+python tools\codex_context\endless_context.py repo_summary
+```
+
+Use `agent_knowledge/known-pitfalls.md` when the task risks common mistakes, and `agent_knowledge/test-matrix.md` to choose validation.
+
 ## Inspect Current Behavior
 
 Use source and docs in this order:
@@ -61,6 +69,8 @@ http://127.0.0.1:5173
 Vite is configured to bind to `127.0.0.1` and port `5173`.
 
 ## Validate Changes
+
+Prefer the canonical selection guide in `agent_knowledge/test-matrix.md`. The notes below are a quick summary, not a replacement for the matrix.
 
 For docs-only changes:
 
@@ -123,6 +133,8 @@ Update durable docs only when a task changes durable project facts:
 - Gameplay/system/balance changes: `gameplay-systems.md`
 - Art pipeline/scope changes: `art-and-assets.md` plus root art docs when needed
 - Validation changes: `testing-and-validation.md`
+- Validation selection policy: `test-matrix.md`
+- Common agent pitfalls: `known-pitfalls.md`
 - Durable decisions/rules: `known-decisions-and-rules.md`
 - Follow-up work: `backlog.md`
 

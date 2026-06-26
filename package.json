@@ -7,6 +7,7 @@
     "dev": "vite --host 127.0.0.1",
     "build": "tsc && vite build",
     "preview": "vite preview --host 127.0.0.1",
+    "context:repo": "python tools/codex_context/endless_context.py repo_summary",
     "poi:editor": "node tools/poi-editor-server.mjs",
     "battle-map:editor": "node tools/poi-editor-server.mjs --battle-map",
     "test": "node tools/worldgen/test_worldgen.mjs",

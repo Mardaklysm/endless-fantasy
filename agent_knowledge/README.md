@@ -15,8 +15,10 @@ At the start of a normal task:
 3. Read root `AGENTS.md` only if it is not already loaded by the agent environment.
 4. Read `agent_knowledge/code-map.md`.
 5. Read exactly one relevant task profile from `agent_knowledge/task-profiles/` when one exists.
-6. Use `rg` / search before opening source files.
-7. Open narrow source files or line ranges based on `code-map.md`, the task profile, and the search results.
+6. Use `agent_knowledge/test-matrix.md` to pick the smallest validation that covers the task.
+7. Use `rg` / search before opening source files.
+8. Use `tools/codex_context/endless_context.py` before broad repo discovery.
+9. Open narrow source files or line ranges based on `code-map.md`, the task profile, and the search results.
 
 Do **not** read these by default:
 
@@ -31,6 +33,8 @@ Do **not** read these by default:
 
 Read broader docs only when the task specifically needs them.
 
+Use `agent_knowledge/known-pitfalls.md` when a task risks known mistakes around context budget, validation overreach, debug settings, assets, save/load, or git. Do not read broad docs just because they exist.
+
 If more than 2 knowledge docs or more than 6 source files seem necessary, pause and explain why before expanding context. Do not inspect generated outputs, previews, large asset folders, `dist`, `.vite`, `node_modules`, temporary lab outputs, or other bulky generated files unless the task explicitly requires them.
 
 ## Task Profiles
@@ -40,6 +44,7 @@ Task profiles are compact routing and contract docs for common task types. Prefe
 Use:
 
 - World generation, terrain, roads, rivers, mountains, forests, or POIs: `task-profiles/worldgen.md`
+- Harbor destination menus, boat travel, debug routes, route safety, or sailing speed: `task-profiles/harbor-travel.md`
 - Asset import, manifests, art pipeline, or runtime asset mapping: `task-profiles/assets.md`
 - Battle flow, initiative, enemy intent, rewards, or battle presentation: `task-profiles/battle.md`
 - UI, title, menus, town labels, text rendering, or pixel filtering: `task-profiles/ui.md`
@@ -56,6 +61,8 @@ Read broader docs only for these reasons:
 - Gameplay rules, progression, balance, encounters, or system behavior: `gameplay-systems.md`
 - Durable rules, contentious decisions, or conflict resolution: `known-decisions-and-rules.md`
 - Validation command changes or manual test coverage changes: `testing-and-validation.md`
+- Validation selection for normal tasks: `test-matrix.md`
+- Common mistakes and constraints: `known-pitfalls.md`
 - Follow-up tracking or backlog cleanup: `backlog.md`
 - Project-wide overview or onboarding: `project-overview.md`
 - Process/workflow policy changes: `project-workflows.md`
@@ -74,6 +81,9 @@ Crystal Oath is a compact browser-playable retro 2D top-down turn-based fantasy 
 - Main scene shell: `src/scene/CrystalOathScene.ts`
 - Code navigation: `agent_knowledge/code-map.md`
 - Task profiles: `agent_knowledge/task-profiles/`
+- Validation selection: `agent_knowledge/test-matrix.md`
+- Known pitfalls: `agent_knowledge/known-pitfalls.md`
+- Compact context helper: `tools/codex_context/endless_context.py`
 - Styling: `src/style.css`
 - Vite config: `vite.config.ts`
 - Local dev URL: `http://127.0.0.1:5173`
@@ -87,6 +97,8 @@ Update docs only when durable project facts change:
 - Update `agent_knowledge/architecture.md` when source structure, major classes/functions, state flow, or build/runtime architecture changes.
 - Update `agent_knowledge/code-map.md` when source navigation, module ownership, or common task routing changes.
 - Update the relevant `agent_knowledge/task-profiles/` file when a compact task contract changes.
+- Update `agent_knowledge/test-matrix.md` when validation selection policy changes.
+- Update `agent_knowledge/known-pitfalls.md` when a recurring agent mistake needs a compact durable warning.
 - Update `agent_knowledge/gameplay-systems.md` when gameplay rules, data tables, progression, balance, or save/state behavior changes.
 - Update `agent_knowledge/testing-and-validation.md` when validation commands or manual test coverage changes.
 - Update `agent_knowledge/known-decisions-and-rules.md` for durable decisions.
@@ -126,4 +138,5 @@ Commit and push.
 - Open only the source/docs needed for the task.
 - Keep changes scoped and preserve the playable game.
 - Run the smallest relevant validation; for most code changes start with `npm run build`.
+- Use `agent_knowledge/test-matrix.md` before adding extra validation, and avoid Vite/browser smoke unless needed.
 - Report files changed, validation run, and any knowledge updates.
