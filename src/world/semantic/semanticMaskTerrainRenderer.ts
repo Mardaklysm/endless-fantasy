@@ -1411,7 +1411,7 @@ function drawBoundaryPair(
   const isWaterBoundary = boundary.kind === "waterShoreline" || boundary.kind === "waterLand" || boundary.kind === "waterDeepShallow";
   if (noise < 0.08 && !isWaterBoundary) return;
 
-  drawMetadataBoundary(ctx, world, plan, mx, my, side, x, y, length, lineWidth, accentWidth, boundary);
+  drawMetadataBoundary(ctx, world, plan, mx, my, side, x, y, length, lineWidth, accentWidth, boundary, current, next);
 }
 
 function drawMetadataBoundary(
@@ -1426,7 +1426,9 @@ function drawMetadataBoundary(
   length: number,
   lineWidth: number,
   accentWidth: number,
-  boundary: ReturnType<typeof classifyBoundary>
+  boundary: ReturnType<typeof classifyBoundary>,
+  currentId: TerrainClassId,
+  nextId: TerrainClassId
 ) {
   if (!boundary) return;
 
@@ -1437,10 +1439,12 @@ function drawMetadataBoundary(
   }
 
   if (boundary.kind === "waterShoreline") {
-    const landDefColors = surfaceColors(boundary.landSide ?? "beach");
+    const waterSide = boundary.waterSide ?? "shallowWater";
+    const landSide = boundary.landSide ?? "beach";
+    const landDefColors = surfaceColors(landSide);
+    const shallowEdge = surfaceColors(waterSide)?.shallowEdge ?? FALLBACK_SHALLOW_EDGE;
     const foam = landDefColors?.foam ?? FALLBACK_FOAM;
     const wetBlend = landDefColors?.wetBlend ?? FALLBACK_WET_BLEND;
-    const shallowEdge = landDefColors?.shallowEdge ?? surfaceColors("shallowWater")?.shallowEdge ?? FALLBACK_SHALLOW_EDGE;
     drawBoundaryStrip(ctx, x, y, side, length, accentWidth, shallowEdge, 0.2);
     drawBoundaryStrip(ctx, x, y, side, length, lineWidth, foam, 0.72);
     drawBoundaryStrip(ctx, x, y, side, length, accentWidth, wetBlend, 0.22);
@@ -1468,7 +1472,7 @@ function drawMetadataBoundary(
   }
 
   if (boundary.kind === "genericLand") {
-    drawGenericLandBoundary(ctx, x, y, side, length, lineWidth, accentWidth, boundary);
+    drawGenericLandBoundary(ctx, x, y, side, length, lineWidth, accentWidth, currentId, nextId);
     return;
   }
 }
@@ -1481,12 +1485,17 @@ function drawGenericLandBoundary(
   length: number,
   lineWidth: number,
   accentWidth: number,
-  _boundary: ReturnType<typeof classifyBoundary>
+  currentId: TerrainClassId,
+  nextId: TerrainClassId
 ) {
-  // Generic land ↔ land boundary: subtle edge accent using each side's edge color
-  const classA = _boundary?.landSide ?? "grassland";
-  const color = surfaceEdgeColor(classA);
-  drawBoundaryStrip(ctx, x, y, side, length, accentWidth, color, 0.2);
+  // Generic land ↔ land boundary: accent using both sides' edge colors.
+  // No texture names, paths, or atlas slots are inspected — only surface metadata.
+  const classA = classNameForId(currentId);
+  const classB = classNameForId(nextId);
+  const colorA = surfaceEdgeColor(classA);
+  const colorB = surfaceEdgeColor(classB);
+  drawBoundaryStrip(ctx, x, y, side, length, accentWidth, colorA, 0.2);
+  drawBoundaryStrip(ctx, x, y, side, length, lineWidth, colorB, 0.2);
 }
 
 function drawBoundaryStrip(ctx: CanvasRenderingContext2D, x: number, y: number, side: "e" | "s", length: number, width: number, color: Rgb, alpha: number) {

@@ -75,7 +75,7 @@ export const SURFACE_DEFINITIONS: Record<SemanticMaskTerrainClass, SurfaceDefini
     id: "grassland",
     roles: ["land"],
     transitionClass: "organic",
-    colors: { fill: [70, 138, 58], edge: [70, 138, 58] },
+    colors: { fill: [70, 138, 58], edge: [70, 138, 58], wetBlend: [178, 146, 86] },
     allowVariants: true,
     variantMaxAlpha: 0.68,
     transitionProfile: { noiseStrength: 0.12, edgeSoftness: 0.16 }
@@ -122,7 +122,7 @@ export const SURFACE_DEFINITIONS: Record<SemanticMaskTerrainClass, SurfaceDefini
     id: "ice",
     roles: ["land", "snow"],
     transitionClass: "solid",
-    colors: { fill: [134, 190, 207], edge: [134, 190, 207], accent: [231, 251, 252] },
+    colors: { fill: [134, 190, 207], edge: [134, 190, 207], accent: [231, 251, 252], wetBlend: [231, 251, 252] },
     allowVariants: true,
     variantMaxAlpha: 0.76,
     transitionProfile: { noiseStrength: 0.1, edgeSoftness: 0.14 }
@@ -214,8 +214,6 @@ export function classifyBoundary(a: string | number, b: string | number): Metada
   const bIsWater = defB.roles.includes("water");
   const aIsRoute = defA.transitionClass === "route";
   const bIsRoute = defB.transitionClass === "route";
-  const aIsShoreline = defA.roles.includes("shoreline-capable");
-  const bIsShoreline = defB.roles.includes("shoreline-capable");
 
   // Route boundary: road vs anything non-route
   if (aIsRoute !== bIsRoute) {
@@ -225,21 +223,12 @@ export function classifyBoundary(a: string | number, b: string | number): Metada
     };
   }
 
-  // Water boundaries
+  // Water ↔ land boundaries
   if (aIsWater !== bIsWater) {
     const waterClass = aIsWater ? classA : classB;
     const landClass = aIsWater ? classB : classA;
-    const waterDef = aIsWater ? defA : defB;
     const landDef = aIsWater ? defB : defA;
-    const waterIsDeep = waterDef.roles.includes("deep");
-
-    // Deep ↔ Shallow water internal boundary
-    if (!aIsWater && bIsWater) {
-      // already handled by aIsWater !== bIsWater
-    }
-    if (aIsWater && bIsWater) {
-      // Already caught above — both water, one deep one shallow
-    }
+    const waterIsDeep = (aIsWater ? defA : defB).roles.includes("deep");
 
     // Water ↔ shoreline-capable land → shoreline
     if (landDef.roles.includes("shoreline-capable")) {
@@ -251,14 +240,6 @@ export function classifyBoundary(a: string | number, b: string | number): Metada
       };
     }
 
-    // Deep ↔ Shallow (both water, different sub-classes)
-    if (aIsWater && bIsWater) {
-      if ((defA.roles.includes("deep") && defB.roles.includes("shallow")) ||
-          (defB.roles.includes("deep") && defA.roles.includes("shallow"))) {
-        return { kind: "waterDeepShallow" };
-      }
-    }
-
     // Water ↔ non-shoreline land → generic water-land boundary
     return {
       kind: "waterLand",
@@ -268,11 +249,13 @@ export function classifyBoundary(a: string | number, b: string | number): Metada
     };
   }
 
-  // Water sub-type boundaries (both water, different sub-types)
+  // Water sub-type boundaries (both water, different sub-types).
+  // freshWater flowing into deep/shallow ocean is a continuous water body —
+  // only deep↔shallow creates a visible transition.
   if (aIsWater && bIsWater) {
-    if ((defA.roles.includes("deep") && (defB.roles.includes("shallow") || defB.roles.includes("fresh"))) ||
-        (defB.roles.includes("deep") && (defA.roles.includes("shallow") || defA.roles.includes("fresh")))) {
-      return { kind: "waterDeepShallow" };
+    if ((defA.roles.includes("deep") && defB.roles.includes("shallow")) ||
+        (defB.roles.includes("deep") && defA.roles.includes("shallow"))) {
+      return { kind: "waterDeepShallow", waterSide: defA.roles.includes("shallow") ? classA : classB };
     }
   }
 
