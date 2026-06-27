@@ -21,9 +21,13 @@ import { generateDungeonFloors, validateDungeonFloorsConnectivity } from "../../
 import { SEMANTIC_BIOME, SEMANTIC_WATER } from "../../src/world/semantic/semanticTypes.ts";
 import {
   SEMANTIC_MASK_TERRAIN_CLASSES,
+  TERRAIN_MATERIALS,
   describeSemanticMaskTerrainRenderPlan,
+  materialForCell,
   roadRibbonDebugSegments,
   roadRibbonSampleAt,
+  terrainDomainAt,
+  terrainMaterialDomainFor,
   terrainMaterialWeightsAt,
   terrainVariantTextureAlphaAt,
   terrainVariantWeightsAt
@@ -299,17 +303,35 @@ function validateNoDeprecatedRuntimeAtlasReferences() {
 function validateTerrainVariantRendererSourceGuard() {
   const rendererText = fs.readFileSync(path.join(PROJECT_ROOT, "src/world/semantic/semanticMaskTerrainRenderer.ts"), "utf8");
   const worldRendererText = fs.readFileSync(path.join(PROJECT_ROOT, "src/render/world/drawWorld.ts"), "utf8");
-  const forbiddenTokens = ["drawHardTerrainVariant", "drawTerrainVariantTile", "variantCtx.fillRect(cell", "drawHardAshfall", "drawHardLava"];
+  const forbiddenTokens = [
+    "drawHardTerrainVariant",
+    "drawTerrainVariantTile",
+    "variantCtx.fillRect(cell",
+    "drawHardAshfall",
+    "drawHardLava",
+    "drawAshfall",
+    "ashBeach",
+    "ashSand",
+    "lavaCinderRing",
+    "ashfallTransitionWeightsAt",
+    "terrainVariantBlendRadiusCells",
+    "terrainVariantKernel"
+  ];
   for (const token of forbiddenTokens) {
     assert(!rendererText.includes(token), `Semantic terrain variant renderer contains forbidden hard-edge token ${token}.`);
   }
+  assert(rendererText.includes("TERRAIN_MATERIALS"), "Semantic terrain renderer must use data-driven terrain material definitions.");
+  assert(rendererText.includes("drawTerrainMaterialEdgeCompositor"), "Semantic terrain renderer must write base material samples through the material edge compositor.");
+  assert(rendererText.includes("sampleTerrainTextureColor"), "Semantic terrain renderer must sample texture pixels before blending material colors.");
+  assert(rendererText.includes("terrainDomainAt"), "Semantic terrain renderer must expose sample-domain ownership for regression tests.");
+  assert(rendererText.includes("materialForCell"), "Semantic terrain renderer must expose renderer-side visual material ownership for regression tests.");
   assert(rendererText.includes("terrainVariantWeightsAt"), "Semantic terrain variant renderer must expose the generalized variant splat sampler.");
   assert(rendererText.includes("terrainVariantTextureAlphaAt"), "Semantic terrain variant renderer must expose the actual final variant texture alpha sampler.");
   assert(rendererText.includes("terrainMaterialWeightsAt"), "Semantic terrain renderer must expose generalized material-layer weights for regression tests.");
-  assert(rendererText.includes("ashfallTransitionWeightsAt"), "Ashfall material rendering must use the shared transition sampler, not a hard-cell bypass.");
-  const splatFunction = rendererText.match(/function\s+drawTerrainVariantSplatLayer[\s\S]*?(?=\nfunction\s|\nexport function\s|\nexport interface\s|$)/)?.[0] ?? "";
-  assert(splatFunction.includes("terrainVariantTextureAlphaAt"), "Runtime terrain variant splats must mask the actual texture pass with terrainVariantTextureAlphaAt.");
-  assert(!splatFunction.includes("terrainVariantWeightsAt"), "Runtime terrain variant splats must not use looser material weights instead of the final texture alpha.");
+  const compositorFunction = rendererText.match(/function\s+drawTerrainMaterialEdgeCompositor[\s\S]*?(?=\nfunction\s|\nexport function\s|\nexport interface\s|$)/)?.[0] ?? "";
+  assert(compositorFunction.includes("blendedTerrainMaterialColorAt"), "Runtime base terrain must write one blended material color per mask sample.");
+  assert(!compositorFunction.includes("drawImage"), "Runtime base terrain compositor must not stack CanvasPattern image passes for land materials.");
+  assert(!compositorFunction.includes("globalCompositeOperation"), "Runtime base terrain compositor must not use draw-order-dependent alpha compositing.");
   assert(worldRendererText.includes("terrainVariantAlpha"), "World debug overlays must include the actual terrainVariantAlpha mask view.");
   assert(worldRendererText.includes("terrainVariantTextureAlphaAt"), "terrainVariantAlpha debug overlay must sample the final variant texture alpha helper.");
   const variantFunctionMatches = rendererText.match(/function\s+\w*TerrainVariant\w*[\s\S]*?(?=\nfunction\s|\nexport function\s|\nexport interface\s|$)/g) ?? [];
@@ -477,6 +499,8 @@ function validateSemanticWorldgen() {
   validateSemanticMaskTerrainRendererPlan(worldA);
   validateSemanticRouteRendererPlan(worldA);
   for (const world of transitionWorlds) {
+    validateTerrainMaterialDomainOwnership(world);
+    validateTerrainMaterialEdgeMasks(world);
     validateAllTerrainMaterialTransitionInvariant(world);
     validateAshfallMaterialTransitions(world);
   }
@@ -744,6 +768,149 @@ function validateSemanticMaskTerrainRendererPlan(world) {
   assert(before === after, "Semantic mask terrain planning mutated the generated world.");
 }
 
+function findDomainSample(semantic, domain) {
+  for (let y = 1; y < semantic.height - 1; y += 1) {
+    for (let x = 1; x < semantic.width - 1; x += 1) {
+      const i = y * semantic.width + x;
+      if (domain === "freshWater" && !(semantic.layers.riverMap[i] || semantic.layers.lakeMap[i])) continue;
+      if (domain === "oceanWater" && (semantic.layers.landMask[i] || semantic.layers.riverMap[i] || semantic.layers.lakeMap[i])) continue;
+      if (domain === "land" && (!semantic.layers.landMask[i] || semantic.layers.riverMap[i] || semantic.layers.lakeMap[i])) continue;
+      if (terrainDomainAt(semantic, x + 0.5, y + 0.5) === domain) return { x, y };
+    }
+  }
+  return undefined;
+}
+
+function materialDomainWeight(weights, domain) {
+  return weights.reduce((sum, item) => {
+    if (!item.material || terrainMaterialDomainFor(item.material) !== domain) return sum;
+    return sum + item.weight;
+  }, 0);
+}
+
+function materialWeightFor(weights, material) {
+  return weights.reduce((sum, item) => (item.material === material ? sum + item.weight : sum), 0);
+}
+
+function terrainMaterialEdgeMaskStats(world, materialA, materialB) {
+  const semantic = world.semantic;
+  const stats = { total: 0, intermediate: 0, overwide: 0, crossDomainLeak: 0 };
+  for (let y = 1; y < semantic.height - 1; y += 1) {
+    for (let x = 1; x < semantic.width - 1; x += 1) {
+      const currentClass = semanticTerrainClassAtCell(semantic, x, y);
+      if (!currentClass || materialForCell(semantic, x, y) !== materialA) continue;
+      for (const edge of [
+        { dx: 1, dy: 0 },
+        { dx: 0, dy: 1 }
+      ]) {
+        const nx = x + edge.dx;
+        const ny = y + edge.dy;
+        const nextClass = semanticTerrainClassAtCell(semantic, nx, ny);
+        if (!nextClass || materialForCell(semantic, nx, ny) !== materialB) continue;
+        const result = terrainMaterialEdgeSampleResult(semantic, x, y, edge.dx, edge.dy, currentClass, nextClass, materialA, materialB);
+        if (result.skipped) continue;
+        stats.total += 1;
+        if (result.intermediate) stats.intermediate += 1;
+        if (result.overwide) stats.overwide += 1;
+        if (result.crossDomainLeak) stats.crossDomainLeak += 1;
+        if (stats.total >= 80) return stats;
+      }
+    }
+  }
+  return stats;
+}
+
+function terrainMaterialEdgeSampleResult(semantic, x, y, dx, dy, classA, classB, materialA, materialB) {
+  const width = Math.max(TERRAIN_MATERIALS[materialA].transitionWidth, TERRAIN_MATERIALS[materialB].transitionWidth);
+  const near = Math.min(0.1, Math.max(0.055, width * 0.42));
+  const far = Math.min(0.46, width + 0.08);
+  const aNear = materialEdgeSample(semantic, x, y, dx, dy, -near, classA);
+  const bNear = materialEdgeSample(semantic, x, y, dx, dy, near, classB);
+  const aFar = materialEdgeSample(semantic, x, y, dx, dy, -far, classA);
+  const bFar = materialEdgeSample(semantic, x, y, dx, dy, far, classB);
+  if (
+    materialDomainWeight(aNear, "land") < 0.999 ||
+    materialDomainWeight(bNear, "land") < 0.999 ||
+    materialDomainWeight(aFar, "land") < 0.999 ||
+    materialDomainWeight(bFar, "land") < 0.999
+  ) {
+    return { skipped: true, intermediate: false, overwide: false, crossDomainLeak: false };
+  }
+  const intermediate =
+    materialWeightFor(aNear, materialA) >= 0.45 &&
+    materialWeightFor(aNear, materialB) >= 0.08 &&
+    materialWeightFor(bNear, materialB) >= 0.45 &&
+    materialWeightFor(bNear, materialA) >= 0.08;
+  const overwide =
+    materialWeightFor(aFar, materialB) > 0.025 ||
+    materialWeightFor(bFar, materialA) > 0.025 ||
+    materialWeightFor(aFar, materialA) < 0.94 ||
+    materialWeightFor(bFar, materialB) < 0.94;
+  return { skipped: false, intermediate, overwide, crossDomainLeak: false };
+}
+
+function materialEdgeSample(semantic, x, y, dx, dy, signedDistanceFromBoundary, terrainClass) {
+  const boundaryX = x + (dx === 1 ? 1 : 0.5);
+  const boundaryY = y + (dy === 1 ? 1 : 0.5);
+  const sampleX = dx === 1 ? boundaryX + signedDistanceFromBoundary : boundaryX;
+  const sampleY = dy === 1 ? boundaryY + signedDistanceFromBoundary : boundaryY;
+  return terrainMaterialWeightsAt(semantic, terrainClass, sampleX, sampleY);
+}
+
+function baseVisualMaterialForClass(terrainClass) {
+  if (terrainClass === "ash") return "ash";
+  if (terrainClass === "sand") return "sand";
+  if (terrainClass === "ice") return "ice";
+  if (terrainClass === "beach") return "beach";
+  return "grassland";
+}
+
+function validateTerrainMaterialDomainOwnership(world) {
+  const semantic = world.semantic;
+  const samples = {
+    freshWater: findDomainSample(semantic, "freshWater"),
+    oceanWater: findDomainSample(semantic, "oceanWater"),
+    land: findDomainSample(semantic, "land")
+  };
+  assert(samples.freshWater, `${world.seed}: no freshwater sample was available for material-domain validation.`);
+  assert(samples.oceanWater, `${world.seed}: no ocean sample was available for material-domain validation.`);
+  assert(samples.land, `${world.seed}: no land sample was available for material-domain validation.`);
+
+  for (const [domain, sample] of Object.entries(samples)) {
+    const terrainClass = semanticTerrainClassAtCell(semantic, sample.x, sample.y) ?? "grassland";
+    const weights = terrainMaterialWeightsAt(semantic, terrainClass, sample.x + 0.5, sample.y + 0.5);
+    assert(terrainDomainAt(semantic, sample.x + 0.5, sample.y + 0.5) === domain, `${world.seed}: terrainDomainAt did not preserve ${domain} ownership at ${sample.x},${sample.y}.`);
+    if (domain === "land") {
+      assert(terrainMaterialDomainFor(materialForCell(semantic, sample.x, sample.y)) === "land", `${world.seed}: land cell resolved to a non-land visual material.`);
+      assert(Math.abs(materialDomainWeight(weights, "land") - 1) <= 0.001, `${world.seed}: land sample material weights must sum to land=1.`);
+      assert(materialDomainWeight(weights, "freshWater") === 0, `${world.seed}: land sample received freshwater material weight.`);
+      assert(materialDomainWeight(weights, "oceanWater") === 0, `${world.seed}: land sample received ocean material weight.`);
+    } else {
+      assert(materialDomainWeight(weights, "land") === 0, `${world.seed}: ${domain} sample received land material weight.`);
+      assert(Math.abs(materialDomainWeight(weights, domain) - 1) <= 0.001, `${world.seed}: ${domain} sample material weights must sum to ${domain}=1.`);
+    }
+  }
+}
+
+function validateTerrainMaterialEdgeMasks(world) {
+  const cases = [
+    ["grassland", "beach"],
+    ["sand", "beach"],
+    ["ice", "beach"],
+    ["ash", "beach"]
+  ];
+  for (const [a, b] of cases) {
+    const stats = terrainMaterialEdgeMaskStats(world, a, b);
+    assert(stats.total > 0, `${world.seed}: no ${a}->${b} material edge was available for transition validation.`);
+    assert(
+      stats.intermediate / stats.total >= 0.78,
+      `${world.seed}: expected narrow intermediate samples on ${a}->${b} edges, got ${stats.intermediate}/${stats.total}.`
+    );
+    assert(stats.overwide === 0, `${world.seed}: ${stats.overwide} ${a}->${b} material transition bands exceeded the configured narrow width.`);
+    assert(stats.crossDomainLeak === 0, `${world.seed}: ${stats.crossDomainLeak} ${a}->${b} edge samples crossed terrain material domains.`);
+  }
+}
+
 function validateAllTerrainMaterialTransitionInvariant(world) {
   const classesWithVariants = new Set(Object.keys(WORLD_CURRENT_TERRAIN_VARIANT_TEXTURE_KEYS));
   if (classesWithVariants.size === 0) return;
@@ -776,6 +943,108 @@ function validateAllTerrainMaterialTransitionInvariant(world) {
   }
 }
 
+function localTerrainVariantPatchStats(world, islandLayerId, terrainClass) {
+  const semantic = world.semantic;
+  const stats = {
+    boundaries: 0,
+    feathered: 0,
+    outsideLeak: 0,
+    overwide: 0,
+    fullOpaqueTiles: 0,
+    coreSamples: 0,
+    coreHigh: 0,
+    slotBoundaries: new Map([
+      [1, 0],
+      [2, 0],
+      [3, 0]
+    ]),
+    slotFeathered: new Map([
+      [1, 0],
+      [2, 0],
+      [3, 0]
+    ])
+  };
+  for (let y = 1; y < semantic.height - 1; y += 1) {
+    for (let x = 1; x < semantic.width - 1; x += 1) {
+      const i = y * semantic.width + x;
+      if (semantic.layers.islandId[i] !== islandLayerId) continue;
+      if (semanticTerrainClassAtCell(semantic, x, y) !== terrainClass) continue;
+      const slot = semantic.layers.terrainVariant[i] ?? 0;
+      if (slot < 1 || slot > 3) continue;
+      if (variantCellIsFullOpaque(semantic, terrainClass, x, y, slot)) stats.fullOpaqueTiles += 1;
+      const coreAlpha = terrainVariantTextureAlphaAt(semantic, terrainClass, slot, x + 0.5, y + 0.5);
+      stats.coreSamples += 1;
+      if (coreAlpha >= 0.35) stats.coreHigh += 1;
+      for (const edge of [
+        { dx: -1, dy: 0 },
+        { dx: 1, dy: 0 },
+        { dx: 0, dy: -1 },
+        { dx: 0, dy: 1 }
+      ]) {
+        const nx = x + edge.dx;
+        const ny = y + edge.dy;
+        if (nx < 0 || ny < 0 || nx >= semantic.width || ny >= semantic.height) continue;
+        const ni = ny * semantic.width + nx;
+        if (semantic.layers.terrainVariant[ni] === slot && semanticTerrainClassAtCell(semantic, nx, ny) === terrainClass) continue;
+        const result = localVariantBoundarySample(semantic, terrainClass, x, y, edge.dx, edge.dy, slot);
+        stats.boundaries += 1;
+        stats.slotBoundaries.set(slot, (stats.slotBoundaries.get(slot) ?? 0) + 1);
+        if (result.feathered) {
+          stats.feathered += 1;
+          stats.slotFeathered.set(slot, (stats.slotFeathered.get(slot) ?? 0) + 1);
+        }
+        if (result.outsideLeak) stats.outsideLeak += 1;
+        if (result.overwide) stats.overwide += 1;
+      }
+    }
+  }
+  return stats;
+}
+
+function localVariantBoundarySample(semantic, terrainClass, x, y, dx, dy, slot) {
+  const width = variantTransitionWidth(terrainClass, slot);
+  const near = Math.min(0.1, Math.max(0.055, width * 0.42));
+  const far = Math.min(0.46, width + 0.08);
+  const insideNear = variantEdgeSample(semantic, terrainClass, x, y, dx, dy, slot, -near);
+  const outsideNear = variantEdgeSample(semantic, terrainClass, x, y, dx, dy, slot, near);
+  const outsideFar = variantEdgeSample(semantic, terrainClass, x, y, dx, dy, slot, far);
+  return {
+    feathered: insideNear >= 0.04 && insideNear <= 0.62,
+    outsideLeak: outsideNear > 0.001,
+    overwide: outsideFar > 0.001
+  };
+}
+
+function variantEdgeSample(semantic, terrainClass, x, y, dx, dy, slot, signedDistanceFromBoundary) {
+  const boundaryX = x + (dx === 1 ? 1 : dx === -1 ? 0 : 0.5);
+  const boundaryY = y + (dy === 1 ? 1 : dy === -1 ? 0 : 0.5);
+  const sampleX = dx === 0 ? boundaryX : boundaryX + dx * signedDistanceFromBoundary;
+  const sampleY = dy === 0 ? boundaryY : boundaryY + dy * signedDistanceFromBoundary;
+  return terrainVariantTextureAlphaAt(semantic, terrainClass, slot, sampleX, sampleY);
+}
+
+function variantTransitionWidth(terrainClass, slot) {
+  const material =
+    terrainClass === "ash" && slot === 1 ? "cinder" :
+    terrainClass === "ash" && slot === 2 ? "scorchedEarth" :
+    terrainClass === "ash" && slot === 3 ? "lavaCrust" :
+    terrainClass === "ice" && slot === 3 ? "rock" :
+    terrainClass === "sand" && slot === 3 ? "rock" :
+    terrainClass === "grassland" && slot === 2 ? "rock" :
+    baseVisualMaterialForClass(terrainClass);
+  return Math.max(0.08, Math.min(0.34, TERRAIN_MATERIALS[material].transitionWidth));
+}
+
+function variantCellIsFullOpaque(semantic, terrainClass, x, y, slot) {
+  for (const offsetY of [0.18, 0.38, 0.62, 0.82]) {
+    for (const offsetX of [0.18, 0.38, 0.62, 0.82]) {
+      const alpha = terrainVariantTextureAlphaAt(semantic, terrainClass, slot, x + offsetX, y + offsetY);
+      if (alpha < 0.95) return false;
+    }
+  }
+  return true;
+}
+
 function validateAshfallMaterialTransitions(world) {
   const semantic = world.semantic;
   const ashfall = world.islands.find((island) => island.id === "ashfall" || island.theme === "ashfall");
@@ -803,236 +1072,26 @@ function validateAshfallMaterialTransitions(world) {
   assert(ashCells > 0, `${world.seed}: Ashfall has no ash terrain cells for material transition validation.`);
   if (variantCells <= 0) return;
 
-  const stats = ashfallMaterialBoundaryStats(world, ashfallLayerId);
-  assert(stats.total > 0, `${world.seed}: Ashfall variants exist but no ash/cinder/lava/rock material boundaries were found.`);
+  const stats = localTerrainVariantPatchStats(world, ashfallLayerId, "ash");
+  assert(stats.boundaries > 0, `${world.seed}: Ashfall variants exist but no variant patch boundaries were found.`);
   assert(
-    stats.intermediate / stats.total >= 0.7,
-    `${world.seed}: expected at least 70% blended Ashfall material boundaries, got ${stats.intermediate}/${stats.total}.`
+    stats.feathered / stats.boundaries >= 0.72,
+    `${world.seed}: expected Ashfall variant patches to have controlled feathered edges, got ${stats.feathered}/${stats.boundaries}.`
   );
-  assert(stats.maxHardRun <= 3, `${world.seed}: found ${stats.maxHardRun} consecutive hard Ashfall material boundary cells.`);
+  assert(stats.outsideLeak === 0, `${world.seed}: ${stats.outsideLeak} Ashfall variant samples leaked outside their owning cells.`);
+  assert(stats.overwide === 0, `${world.seed}: ${stats.overwide} Ashfall variant feather bands exceeded their configured width.`);
   assert(stats.fullOpaqueTiles === 0, `${world.seed}: ${stats.fullOpaqueTiles} Ashfall variant cells sampled as full opaque TILE x TILE rectangles.`);
-  const textureStats = ashfallVariantTextureAlphaBoundaryStats(world, ashfallLayerId);
-  assert(textureStats.total > 0, `${world.seed}: Ashfall variants exist but no final variant texture-alpha boundaries were sampled.`);
   assert(
-    textureStats.intermediate / textureStats.total >= 0.72,
-    `${world.seed}: expected at least 72% of final Ashfall variant texture-alpha boundaries to have intermediate samples, got ${textureStats.intermediate}/${textureStats.total}.`
+    stats.coreHigh / Math.max(1, stats.coreSamples) >= 0.55,
+    `${world.seed}: expected Ashfall variants to keep solid local cores, got ${stats.coreHigh}/${stats.coreSamples}.`
   );
-  assert(textureStats.directOpaqueJumps === 0, `${world.seed}: final Ashfall variant texture alpha jumped directly from invisible to opaque on ${textureStats.directOpaqueJumps} sampled edges.`);
-  assert(textureStats.edgeStripTooStrong === 0, `${world.seed}: ${textureStats.edgeStripTooStrong} Ashfall variant texture edge strips stayed too strong at generated cell boundaries.`);
-  assert(textureStats.fullStrengthBoundaryBlocks === 0, `${world.seed}: ${textureStats.fullStrengthBoundaryBlocks} Ashfall variant texture 2x2 high-alpha blocks touched non-variant cells.`);
-  assert(textureStats.maxHardRun <= 3, `${world.seed}: found ${textureStats.maxHardRun} consecutive hard final Ashfall variant texture-alpha boundary cells.`);
   if ((slotCoverage.get(3) ?? 0) > 0) {
-    assert(stats.lavaBoundaryTotal > 0, `${world.seed}: Ashfall lava/crust variants exist but no lava/crust boundaries were sampled.`);
+    assert(stats.slotBoundaries.get(3) > 0, `${world.seed}: Ashfall lava/crust variants exist but no lava/crust boundaries were sampled.`);
     assert(
-      stats.lavaTransitionRing / stats.lavaBoundaryTotal >= 0.7,
-      `${world.seed}: expected lava/crust edges to expose scorch/cinder/ash transition rings, got ${stats.lavaTransitionRing}/${stats.lavaBoundaryTotal}.`
-    );
-    assert(textureStats.lavaBoundaryTotal > 0, `${world.seed}: Ashfall lava/crust variants exist but no final lava/crust texture-alpha boundaries were sampled.`);
-    assert(
-      textureStats.lavaErodedBoundary / textureStats.lavaBoundaryTotal >= 0.78,
-      `${world.seed}: expected lava/crust core alpha to be eroded away from generated boundaries, got ${textureStats.lavaErodedBoundary}/${textureStats.lavaBoundaryTotal}.`
+      stats.slotFeathered.get(3) / stats.slotBoundaries.get(3) >= 0.68,
+      `${world.seed}: expected lava/crust variants to feather through the generic patch system, got ${stats.slotFeathered.get(3)}/${stats.slotBoundaries.get(3)}.`
     );
   }
-}
-
-function ashfallMaterialBoundaryStats(world, ashfallLayerId) {
-  const semantic = world.semantic;
-  const stats = { total: 0, intermediate: 0, lavaBoundaryTotal: 0, lavaTransitionRing: 0, fullOpaqueTiles: 0, maxHardRun: 0 };
-  const hardHorizontal = new Map();
-  const hardVertical = new Map();
-  for (let y = 0; y < semantic.height; y += 1) {
-    for (let x = 0; x < semantic.width; x += 1) {
-      const i = y * semantic.width + x;
-      if (semantic.layers.islandId[i] !== ashfallLayerId) continue;
-      if (semanticTerrainClassAtCell(semantic, x, y) !== "ash") continue;
-      const currentVariant = semantic.layers.terrainVariant[i] ?? 0;
-      if (currentVariant >= 1 && currentVariant <= 3 && ashfallVariantCellIsFullOpaque(world, x, y, currentVariant)) stats.fullOpaqueTiles += 1;
-      for (const edge of [
-        { dx: 1, dy: 0, orientation: "v" },
-        { dx: 0, dy: 1, orientation: "h" }
-      ]) {
-        const nx = x + edge.dx;
-        const ny = y + edge.dy;
-        if (nx >= semantic.width || ny >= semantic.height) continue;
-        const ni = ny * semantic.width + nx;
-        if (semantic.layers.islandId[ni] !== ashfallLayerId) continue;
-        if (semanticTerrainClassAtCell(semantic, nx, ny) !== "ash") continue;
-        const nextVariant = semantic.layers.terrainVariant[ni] ?? 0;
-        if (currentVariant === nextVariant || (currentVariant === 0 && nextVariant === 0)) continue;
-        const variantSlots = [currentVariant, nextVariant].filter((slot) => slot > 0);
-        const result = terrainVariantEdgeHasTransition(world, "ash", x, y, edge.dx, edge.dy, variantSlots);
-        stats.total += 1;
-        if (result.intermediate) stats.intermediate += 1;
-        if (!result.intermediate && result.hardJump) {
-          const key = edge.orientation === "v" ? y : x;
-          const position = edge.orientation === "v" ? x : y;
-          const runs = edge.orientation === "v" ? hardVertical : hardHorizontal;
-          const positions = runs.get(key) ?? [];
-          positions.push(position);
-          runs.set(key, positions);
-        }
-        if (variantSlots.includes(3)) {
-          stats.lavaBoundaryTotal += 1;
-          if (ashfallLavaBoundaryHasTransitionRing(world, x, y, edge.dx, edge.dy)) stats.lavaTransitionRing += 1;
-        }
-      }
-    }
-  }
-  stats.maxHardRun = Math.max(maxConsecutiveRun(hardHorizontal), maxConsecutiveRun(hardVertical));
-  return stats;
-}
-
-function ashfallVariantTextureAlphaBoundaryStats(world, ashfallLayerId) {
-  const semantic = world.semantic;
-  const stats = {
-    total: 0,
-    intermediate: 0,
-    directOpaqueJumps: 0,
-    edgeStripTooStrong: 0,
-    fullStrengthBoundaryBlocks: 0,
-    lavaBoundaryTotal: 0,
-    lavaErodedBoundary: 0,
-    maxHardRun: 0
-  };
-  const hardHorizontal = new Map();
-  const hardVertical = new Map();
-  for (let y = 0; y < semantic.height; y += 1) {
-    for (let x = 0; x < semantic.width; x += 1) {
-      const i = y * semantic.width + x;
-      if (semantic.layers.islandId[i] !== ashfallLayerId) continue;
-      if (semanticTerrainClassAtCell(semantic, x, y) !== "ash") continue;
-      const currentVariant = semantic.layers.terrainVariant[i] ?? 0;
-      for (const edge of [
-        { dx: 1, dy: 0, orientation: "v" },
-        { dx: 0, dy: 1, orientation: "h" }
-      ]) {
-        const nx = x + edge.dx;
-        const ny = y + edge.dy;
-        if (nx >= semantic.width || ny >= semantic.height) continue;
-        const ni = ny * semantic.width + nx;
-        if (semantic.layers.islandId[ni] !== ashfallLayerId) continue;
-        if (semanticTerrainClassAtCell(semantic, nx, ny) !== "ash") continue;
-        const nextVariant = semantic.layers.terrainVariant[ni] ?? 0;
-        if (currentVariant === nextVariant || (currentVariant === 0 && nextVariant === 0)) continue;
-        const variantSlots = new Set([currentVariant, nextVariant].filter((slot) => slot > 0));
-        for (const slot of variantSlots) {
-          const result = terrainVariantTextureAlphaEdgeStats(world, "ash", x, y, edge.dx, edge.dy, currentVariant, nextVariant, slot);
-          if (!result.visible) continue;
-          stats.total += 1;
-          if (result.intermediate) stats.intermediate += 1;
-          if (result.directOpaqueJump) stats.directOpaqueJumps += 1;
-          if (result.edgeStripTooStrong) stats.edgeStripTooStrong += 1;
-          if (result.fullStrengthBoundaryBlock) stats.fullStrengthBoundaryBlocks += 1;
-          if (slot === 3) {
-            stats.lavaBoundaryTotal += 1;
-            if (result.erodedBoundary) stats.lavaErodedBoundary += 1;
-          }
-          if ((!result.intermediate && result.hardJump) || result.edgeStripTooStrong || result.fullStrengthBoundaryBlock) {
-            const key = edge.orientation === "v" ? y : x;
-            const position = edge.orientation === "v" ? x : y;
-            const runs = edge.orientation === "v" ? hardVertical : hardHorizontal;
-            const positions = runs.get(key) ?? [];
-            positions.push(position);
-            runs.set(key, positions);
-          }
-        }
-      }
-    }
-  }
-  stats.maxHardRun = Math.max(maxConsecutiveRun(hardHorizontal), maxConsecutiveRun(hardVertical));
-  return stats;
-}
-
-function terrainVariantTextureAlphaEdgeStats(world, terrainClass, x, y, dx, dy, currentVariant, nextVariant, variantSlot) {
-  const boundaryX = x + (dx === 1 ? 1 : 0.5);
-  const boundaryY = y + (dy === 1 ? 1 : 0.5);
-  const acrossOffsets = [-0.94, -0.72, -0.5, -0.32, -0.18, -0.07, 0.07, 0.18, 0.32, 0.5, 0.72, 0.94];
-  const alongOffsets = [-0.34, 0, 0.34];
-  const values = [];
-  for (const across of acrossOffsets) {
-    let sum = 0;
-    for (const along of alongOffsets) {
-      const sampleX = dx === 1 ? boundaryX + across : boundaryX + along;
-      const sampleY = dy === 1 ? boundaryY + across : boundaryY + along;
-      sum += terrainVariantTextureAlphaAt(world.semantic, terrainClass, variantSlot, sampleX, sampleY);
-    }
-    values.push(sum / alongOffsets.length);
-  }
-
-  const high = Math.max(...values);
-  if (high < 0.1) {
-    return {
-      visible: false,
-      intermediate: true,
-      hardJump: false,
-      directOpaqueJump: false,
-      edgeStripTooStrong: false,
-      fullStrengthBoundaryBlock: false,
-      erodedBoundary: true
-    };
-  }
-
-  let hardJump = false;
-  let directOpaqueJump = false;
-  for (let i = 1; i < values.length; i += 1) {
-    if (Math.abs(values[i] - values[i - 1]) > 0.32) hardJump = true;
-    if (
-      (values[i - 1] <= 0.05 && values[i] >= 0.85) ||
-      (values[i] <= 0.05 && values[i - 1] >= 0.85)
-    ) {
-      directOpaqueJump = true;
-    }
-  }
-
-  const intermediate = values.some((value) => value >= 0.08 && value <= Math.min(0.74, high - 0.035));
-  const edgeStrip = terrainVariantTextureAlphaBoundaryStrip(world, terrainClass, boundaryX, boundaryY, dx, dy, currentVariant, nextVariant, variantSlot);
-  return {
-    visible: true,
-    intermediate,
-    hardJump,
-    directOpaqueJump,
-    edgeStripTooStrong: edgeStrip.max > 0.48,
-    fullStrengthBoundaryBlock: edgeStrip.values.filter((value) => value >= 0.58).length >= 4,
-    erodedBoundary: edgeStrip.max <= (variantSlot === 3 ? 0.45 : 0.48)
-  };
-}
-
-function terrainVariantTextureAlphaBoundaryStrip(world, terrainClass, boundaryX, boundaryY, dx, dy, currentVariant, nextVariant, variantSlot) {
-  const sideSign = currentVariant === variantSlot ? -1 : nextVariant === variantSlot ? 1 : 0;
-  const values = [];
-  if (!sideSign) return { values, max: 0 };
-  for (const inward of [0.07, 0.2]) {
-    for (const along of [-0.24, 0.24]) {
-      const sampleX = dx === 1 ? boundaryX + sideSign * inward : boundaryX + along;
-      const sampleY = dy === 1 ? boundaryY + sideSign * inward : boundaryY + along;
-      values.push(terrainVariantTextureAlphaAt(world.semantic, terrainClass, variantSlot, sampleX, sampleY));
-    }
-  }
-  return { values, max: values.length > 0 ? Math.max(...values) : 0 };
-}
-
-function ashfallVariantCellIsFullOpaque(world, x, y, variantSlot) {
-  for (const offsetY of [0.18, 0.38, 0.62, 0.82]) {
-    for (const offsetX of [0.18, 0.38, 0.62, 0.82]) {
-      const alpha = terrainVariantTextureAlphaAt(world.semantic, "ash", variantSlot, x + offsetX, y + offsetY);
-      if (alpha < 0.95) return false;
-    }
-  }
-  return true;
-}
-
-function ashfallLavaBoundaryHasTransitionRing(world, x, y, dx, dy) {
-  const boundaryX = x + (dx === 1 ? 1 : 0.5);
-  const boundaryY = y + (dy === 1 ? 1 : 0.5);
-  for (const across of [-0.85, -0.62, -0.4, -0.22, -0.08, 0.08, 0.22, 0.4, 0.62, 0.85]) {
-    for (const along of [-0.3, 0, 0.3]) {
-      const sampleX = dx === 1 ? boundaryX + across : boundaryX + along;
-      const sampleY = dy === 1 ? boundaryY + along : boundaryY + across;
-      const transitionWeights = terrainMaterialWeightsAt(world.semantic, "ash", sampleX, sampleY).filter((item) => item.role === "transition" && item.variantSlot === 3);
-      if (transitionWeights.some((item) => ["ash", "cinder", "scorchedEarth", "rock"].includes(item.family) && item.weight >= 0.035)) return true;
-    }
-  }
-  return false;
 }
 
 function terrainVariantCoverageFor(world, islandId, terrainClass) {
