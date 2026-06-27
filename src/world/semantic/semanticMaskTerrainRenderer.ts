@@ -1,7 +1,7 @@
 import type Phaser from "phaser";
 import { hashNoise } from "../seededRng.ts";
 import { DEFAULT_ROAD_PROFILE } from "./semanticRoadProfiles.ts";
-import { SEMANTIC_BIOME, SEMANTIC_WATER, type IslandRoadProfile, type IslandRoadVisualConfig, type SemanticWorld } from "./semanticTypes.ts";
+import { SEMANTIC_BIOME, SEMANTIC_TERRAIN_MATERIAL, SEMANTIC_WATER, type IslandRoadProfile, type IslandRoadVisualConfig, type SemanticWorld } from "./semanticTypes.ts";
 
 export type SemanticMaskTerrainClass = "deepOcean" | "shallowWater" | "freshWater" | "road" | "beach" | "grassland" | "sand" | "ash" | "ice";
 export type SemanticTerrainMaterialFamily =
@@ -45,6 +45,12 @@ export interface SemanticTerrainMaterialWeight {
   weight: number;
   variantSlot?: 1 | 2 | 3;
   role: "base" | "variant" | "transition";
+}
+
+interface TerrainMaterialInfluenceSample {
+  raw: number;
+  nearestMaterialDistance: number;
+  nearestOtherMaterialDistance: number;
 }
 
 interface AshfallTransitionWeights {
@@ -129,6 +135,8 @@ type BoundaryKind =
   | "waterGrass"
   | "waterIce"
   | "roadBoundary"
+  | "ashBeach"
+  | "ashSand"
   | "sandGrass"
   | "sandIce"
   | "grassIce";
@@ -192,7 +200,7 @@ export function createSemanticMaskTerrainCanvas(world: SemanticWorld, options: S
   for (const terrainClass of TERRAIN_CLASSES) {
     if (terrainClass === "deepOcean" || terrainClass === "road") continue;
     if (plan.classSamples[terrainClass] <= 0) continue;
-    drawMaskedTerrainClass(ctx, plan, classGrid, TERRAIN_CLASS_IDS[terrainClass], fillStyles[terrainClass]);
+    drawMaskedTerrainClass(ctx, world, plan, classGrid, terrainClass, TERRAIN_CLASS_IDS[terrainClass], fillStyles[terrainClass]);
     drawTerrainVariantSplatsForClass(ctx, world, plan, classGrid, terrainClass, options.terrainVariantSources?.[terrainClass]);
   }
   drawMaskBoundaryAccents(ctx, world, plan, classGrid);
@@ -331,18 +339,19 @@ function classifySample(world: SemanticWorld, sampleX: number, sampleY: number):
     return shallowScore + boundaryNoise * 0.08 > 0.36 ? TERRAIN_CLASS_IDS.shallowWater : TERRAIN_CLASS_IDS.deepOcean;
   }
 
-  const beachScore = sampleBiome(world, sampleX, sampleY, SEMANTIC_BIOME.BEACH);
-  const grassScore = sampleBiome(world, sampleX, sampleY, SEMANTIC_BIOME.GRASS);
-  const sandScore = sampleBiome(world, sampleX, sampleY, SEMANTIC_BIOME.SAND);
-  const iceScore = sampleBiome(world, sampleX, sampleY, SEMANTIC_BIOME.ICE);
+  const beachScore = sampleTerrainMaterial(world, sampleX, sampleY, SEMANTIC_TERRAIN_MATERIAL.BEACH);
+  const grassScore = sampleTerrainMaterial(world, sampleX, sampleY, SEMANTIC_TERRAIN_MATERIAL.GRASS);
+  const sandScore = sampleTerrainMaterial(world, sampleX, sampleY, SEMANTIC_TERRAIN_MATERIAL.SAND);
+  const ashScore = sampleTerrainMaterial(world, sampleX, sampleY, SEMANTIC_TERRAIN_MATERIAL.ASH);
+  const iceScore = sampleTerrainMaterial(world, sampleX, sampleY, SEMANTIC_TERRAIN_MATERIAL.ICE);
   const distanceToWater = sampleNumeric(world, world.layers.distanceToWater, sampleX, sampleY);
   const coastBoost = Math.max(0, 2.2 - distanceToWater) * 0.13;
   const beachValue = beachScore + coastBoost + boundaryNoise * 0.08;
-  const inlandMax = Math.max(grassScore, sandScore, iceScore);
+  const inlandMax = Math.max(grassScore, sandScore, ashScore, iceScore);
   if (beachValue > 0.28 && beachValue >= inlandMax - 0.14) return TERRAIN_CLASS_IDS.beach;
-  if (islandAtSample(world, sampleX, sampleY)?.theme === "ashfall" && sandScore >= grassScore && sandScore >= iceScore) return TERRAIN_CLASS_IDS.ash;
-  if (iceScore >= grassScore && iceScore >= sandScore) return TERRAIN_CLASS_IDS.ice;
-  if (sandScore >= grassScore && sandScore >= iceScore) return TERRAIN_CLASS_IDS.sand;
+  if (ashScore >= grassScore && ashScore >= sandScore && ashScore >= iceScore) return TERRAIN_CLASS_IDS.ash;
+  if (iceScore >= grassScore && iceScore >= sandScore && iceScore >= ashScore) return TERRAIN_CLASS_IDS.ice;
+  if (sandScore >= grassScore && sandScore >= iceScore && sandScore >= ashScore) return TERRAIN_CLASS_IDS.sand;
   return TERRAIN_CLASS_IDS.grassland;
 }
 
@@ -543,8 +552,10 @@ function fillFullTerrain(ctx: CanvasRenderingContext2D, fillStyle: CanvasPattern
 
 function drawMaskedTerrainClass(
   ctx: CanvasRenderingContext2D,
+  world: SemanticWorld,
   plan: SemanticMaskTerrainRenderPlan,
   classGrid: Uint8Array,
+  terrainClassName: SemanticMaskTerrainClass,
   terrainClass: TerrainClassId,
   fillStyle: CanvasPattern | string
 ) {
@@ -554,10 +565,13 @@ function drawMaskedTerrainClass(
   const maskCtx = maskCanvas.getContext("2d");
   if (!maskCtx) throw new Error("Unable to create semantic terrain mask canvas.");
   maskCtx.imageSmoothingEnabled = false;
-  maskCtx.fillStyle = "#ffffff";
   for (let my = 0; my < plan.maskHeight; my += 1) {
     for (let mx = 0; mx < plan.maskWidth; mx += 1) {
-      if (terrainClassAt(classGrid, my * plan.maskWidth + mx) !== terrainClass) continue;
+      const sampleX = plan.originX + (mx + 0.5) / plan.maskPixelsPerCell;
+      const sampleY = plan.originY + (my + 0.5) / plan.maskPixelsPerCell;
+      const alpha = terrainBaseTextureAlphaAt(world, terrainClassName, sampleX, sampleY, classGrid, my * plan.maskWidth + mx);
+      if (alpha <= 0.01) continue;
+      maskCtx.fillStyle = `rgba(255, 255, 255, ${alpha.toFixed(3)})`;
       maskCtx.fillRect(mx, my, 1, 1);
     }
   }
@@ -614,7 +628,6 @@ function drawTerrainVariantSplatLayer(
 
   for (let my = 0; my < plan.maskHeight; my += 1) {
     for (let mx = 0; mx < plan.maskWidth; mx += 1) {
-      if (terrainClassAt(classGrid, my * plan.maskWidth + mx) !== terrainClassId) continue;
       const sampleX = plan.originX + (mx + 0.5) / plan.maskPixelsPerCell;
       const sampleY = plan.originY + (my + 0.5) / plan.maskPixelsPerCell;
       const weight = terrainVariantTextureAlphaAt(world, terrainClass, variantSlot, sampleX, sampleY);
@@ -675,10 +688,11 @@ function drawAshfallTransitionMaskLayer(
 
   for (let my = 0; my < plan.maskHeight; my += 1) {
     for (let mx = 0; mx < plan.maskWidth; mx += 1) {
-      if (terrainClassAt(classGrid, my * plan.maskWidth + mx) !== terrainClassId) continue;
       const sampleX = plan.originX + (mx + 0.5) / plan.maskPixelsPerCell;
       const sampleY = plan.originY + (my + 0.5) / plan.maskPixelsPerCell;
-      const weight = clamp01(weightForSample(ashfallTransitionWeightsAt(world, sampleX, sampleY)));
+      const baseAlpha = terrainBaseTextureAlphaAt(world, "ash", sampleX, sampleY, classGrid, my * plan.maskWidth + mx);
+      if (baseAlpha <= 0.01) continue;
+      const weight = clamp01(weightForSample(ashfallTransitionWeightsAt(world, sampleX, sampleY)) * baseAlpha);
       if (weight <= 0.01) continue;
       maskCtx.fillStyle = `rgba(255, 255, 255, ${weight.toFixed(3)})`;
       maskCtx.fillRect(mx, my, 1, 1);
@@ -715,11 +729,12 @@ function drawAshfallFleckLayer(
 
   for (let my = 0; my < plan.maskHeight; my += 1) {
     for (let mx = 0; mx < plan.maskWidth; mx += 1) {
-      if (terrainClassAt(classGrid, my * plan.maskWidth + mx) !== terrainClassId) continue;
       const sampleX = plan.originX + (mx + 0.5) / plan.maskPixelsPerCell;
       const sampleY = plan.originY + (my + 0.5) / plan.maskPixelsPerCell;
+      const baseAlpha = terrainBaseTextureAlphaAt(world, "ash", sampleX, sampleY, classGrid, my * plan.maskWidth + mx);
+      if (baseAlpha <= 0.01) continue;
       const transition = ashfallTransitionWeightsAt(world, sampleX, sampleY);
-      const fleckAlpha = clamp01(transition.cinderAshDust * 0.28 + transition.scorchedAshDust * 0.22 + transition.lavaCinderRing * 0.16);
+      const fleckAlpha = clamp01((transition.cinderAshDust * 0.28 + transition.scorchedAshDust * 0.22 + transition.lavaCinderRing * 0.16) * baseAlpha);
       if (fleckAlpha <= 0.015) continue;
       const noise = hashNoise(`${world.seed}:ashfall-transition-flecks`, Math.floor(sampleX * 11), Math.floor(sampleY * 11));
       if (noise < 0.93) continue;
@@ -773,7 +788,8 @@ export function terrainVariantTextureAlphaAt(
 ): number {
   if (terrainClass === "road" || terrainClass === "deepOcean" || terrainClass === "shallowWater" || terrainClass === "freshWater") return 0;
   if (!world.layers.terrainVariant || !world.layers.terrainPatchStrength) return 0;
-  if (!sampleIsLandTerrainClass(world, terrainClass, sampleX, sampleY)) return 0;
+  const baseAlpha = terrainBaseTextureAlphaAt(world, terrainClass, sampleX, sampleY);
+  if (baseAlpha <= 0.01) return 0;
 
   const influence = terrainVariantInfluenceAt(world, terrainClass, variantSlot, sampleX, sampleY);
   if (influence.raw <= 0.006 || !Number.isFinite(influence.nearestVariantDistance)) return 0;
@@ -797,7 +813,29 @@ export function terrainVariantTextureAlphaAt(
   const pressure = smoothstepRange(0.025, 0.42, influence.nonVariantInfluence);
   const distanceCap = lerp(boundaryAlpha, maximumAlpha, erosion);
   const pressureCap = lerp(maximumAlpha, Math.max(boundaryAlpha, maximumAlpha * 0.68), pressure);
-  return clamp01(feathered * Math.min(distanceCap, pressureCap));
+  return clamp01(feathered * Math.min(distanceCap, pressureCap) * baseAlpha);
+}
+
+export function terrainBaseTextureAlphaAt(
+  world: SemanticWorld,
+  terrainClass: SemanticMaskTerrainClass,
+  sampleX: number,
+  sampleY: number,
+  classGrid?: Uint8Array,
+  classGridIndex?: number
+): number {
+  const terrainClassId = TERRAIN_CLASS_IDS[terrainClass];
+  if (terrainClass === "road") return 0;
+  if (terrainClass === "deepOcean" || terrainClass === "shallowWater" || terrainClass === "freshWater") {
+    return classGrid && classGridIndex !== undefined && terrainClassAt(classGrid, classGridIndex) === terrainClassId ? 1 : classifySample(world, sampleX, sampleY) === terrainClassId ? 1 : 0;
+  }
+  const influence = terrainBaseMaterialInfluenceAt(world, terrainClass, sampleX, sampleY);
+  if (influence.raw <= 0.01 || !Number.isFinite(influence.nearestMaterialDistance)) return 0;
+  const [edgeStart, edgeEnd] = terrainBaseMaterialFeatherRange(terrainClass);
+  const inBoundaryBand = influence.nearestOtherMaterialDistance < terrainBaseMaterialBlendRadiusCells(terrainClass) + 0.35 || influence.raw < edgeEnd;
+  const bandNoise = inBoundaryBand ? hashNoise(`${world.seed}:terrain-base-material-alpha:${terrainClass}`, Math.floor(sampleX * 19), Math.floor(sampleY * 19)) : 0.5;
+  const breakup = inBoundaryBand ? (bandNoise - 0.5) * terrainBaseMaterialBreakupScale(terrainClass) : 0;
+  return clamp01(smoothstepRange(edgeStart, edgeEnd, clamp01(influence.raw + breakup)));
 }
 
 export function terrainMaterialWeightsAt(
@@ -1629,6 +1667,16 @@ function drawBoundaryPair(
     if (roadVisual.terrainFleckColor) drawBoundaryStrip(ctx, x, y, side, length, accentWidth, hexRgb(roadVisual.terrainFleckColor, COLORS.roadGrassFleck), 0.08 * roadVisual.alpha);
     return;
   }
+  if (boundary === "ashBeach") {
+    drawBoundaryStrip(ctx, x, y, side, length, accentWidth, COLORS.ashEdge, 0.18);
+    drawBoundaryStrip(ctx, x, y, side, length, lineWidth, COLORS.wetSand, 0.18);
+    return;
+  }
+  if (boundary === "ashSand") {
+    drawBoundaryStrip(ctx, x, y, side, length, accentWidth, COLORS.ashEdge, 0.14);
+    drawBoundaryStrip(ctx, x, y, side, length, lineWidth, COLORS.sandEdge, 0.14);
+    return;
+  }
   if (boundary === "sandGrass") {
     drawBoundaryStrip(ctx, x, y, side, length, accentWidth, COLORS.beachEdge, 0.32);
     drawBoundaryStrip(ctx, x, y, side, length, lineWidth, COLORS.grassEdge, 0.28);
@@ -1661,6 +1709,8 @@ function boundaryKind(
   if ((isWater(a) && b === TERRAIN_CLASS_IDS.grassland) || (isWater(b) && a === TERRAIN_CLASS_IDS.grassland)) return "waterGrass";
   if ((isWater(a) && b === TERRAIN_CLASS_IDS.ice) || (isWater(b) && a === TERRAIN_CLASS_IDS.ice)) return "waterIce";
   if ((a === TERRAIN_CLASS_IDS.road && b !== TERRAIN_CLASS_IDS.road) || (b === TERRAIN_CLASS_IDS.road && a !== TERRAIN_CLASS_IDS.road)) return "roadBoundary";
+  if ((a === TERRAIN_CLASS_IDS.ash && b === TERRAIN_CLASS_IDS.beach) || (b === TERRAIN_CLASS_IDS.ash && a === TERRAIN_CLASS_IDS.beach)) return "ashBeach";
+  if ((a === TERRAIN_CLASS_IDS.ash && b === TERRAIN_CLASS_IDS.sand) || (b === TERRAIN_CLASS_IDS.ash && a === TERRAIN_CLASS_IDS.sand)) return "ashSand";
   if ((isSandLike(a) && b === TERRAIN_CLASS_IDS.grassland) || (isSandLike(b) && a === TERRAIN_CLASS_IDS.grassland)) return "sandGrass";
   if ((isSandLike(a) && b === TERRAIN_CLASS_IDS.ice) || (isSandLike(b) && a === TERRAIN_CLASS_IDS.ice)) return "sandIce";
   if ((a === TERRAIN_CLASS_IDS.grassland && b === TERRAIN_CLASS_IDS.ice) || (b === TERRAIN_CLASS_IDS.grassland && a === TERRAIN_CLASS_IDS.ice)) return "grassIce";
@@ -1714,14 +1764,32 @@ function sampleIsLandTerrainClass(world: SemanticWorld, terrainClass: SemanticMa
 function terrainClassForCell(world: SemanticWorld, x: number, y: number, i = y * world.width + x): SemanticMaskTerrainClass {
   if (world.layers.riverMap[i] || world.layers.lakeMap[i]) return "freshWater";
   if (!world.layers.landMask[i]) return world.layers.waterClass[i] === SEMANTIC_WATER.SHALLOW ? "shallowWater" : "deepOcean";
-  const biome = world.layers.biome[i];
-  if (biome === SEMANTIC_BIOME.BEACH) return "beach";
-  if (biome === SEMANTIC_BIOME.ICE) return "ice";
-  if (biome === SEMANTIC_BIOME.SAND) {
-    const island = islandForLayerId(world, world.layers.islandId[i]);
-    return island?.theme === "ashfall" ? "ash" : "sand";
-  }
+  return terrainClassForMaterial(world.layers.terrainMaterial?.[i] ?? terrainMaterialForLegacyCell(world, i));
+}
+
+function terrainClassForMaterial(material: number): SemanticMaskTerrainClass {
+  if (material === SEMANTIC_TERRAIN_MATERIAL.BEACH) return "beach";
+  if (material === SEMANTIC_TERRAIN_MATERIAL.ICE) return "ice";
+  if (material === SEMANTIC_TERRAIN_MATERIAL.SAND) return "sand";
+  if (material === SEMANTIC_TERRAIN_MATERIAL.ASH) return "ash";
   return "grassland";
+}
+
+function terrainMaterialForLegacyCell(world: SemanticWorld, i: number): number {
+  const biome = world.layers.biome[i];
+  if (biome === SEMANTIC_BIOME.BEACH) return SEMANTIC_TERRAIN_MATERIAL.BEACH;
+  if (biome === SEMANTIC_BIOME.ICE) return SEMANTIC_TERRAIN_MATERIAL.ICE;
+  if (biome === SEMANTIC_BIOME.SAND) return SEMANTIC_TERRAIN_MATERIAL.SAND;
+  return SEMANTIC_TERRAIN_MATERIAL.GRASS;
+}
+
+function terrainMaterialForClass(terrainClass: SemanticMaskTerrainClass): number | undefined {
+  if (terrainClass === "beach") return SEMANTIC_TERRAIN_MATERIAL.BEACH;
+  if (terrainClass === "grassland") return SEMANTIC_TERRAIN_MATERIAL.GRASS;
+  if (terrainClass === "sand") return SEMANTIC_TERRAIN_MATERIAL.SAND;
+  if (terrainClass === "ash") return SEMANTIC_TERRAIN_MATERIAL.ASH;
+  if (terrainClass === "ice") return SEMANTIC_TERRAIN_MATERIAL.ICE;
+  return undefined;
 }
 
 function terrainVariantRawInfluenceAt(
@@ -1732,6 +1800,52 @@ function terrainVariantRawInfluenceAt(
   sampleY: number
 ): number {
   return terrainVariantInfluenceAt(world, terrainClass, variantSlot, sampleX, sampleY).raw;
+}
+
+function terrainBaseMaterialInfluenceAt(
+  world: SemanticWorld,
+  terrainClass: SemanticMaskTerrainClass,
+  sampleX: number,
+  sampleY: number
+): TerrainMaterialInfluenceSample {
+  const material = terrainMaterialForClass(terrainClass);
+  const empty = {
+    raw: 0,
+    nearestMaterialDistance: Number.POSITIVE_INFINITY,
+    nearestOtherMaterialDistance: Number.POSITIVE_INFINITY
+  };
+  if (material === undefined || sampleX < -2 || sampleY < -2 || sampleX >= world.width + 2 || sampleY >= world.height + 2) return empty;
+
+  const radius = terrainBaseMaterialBlendRadiusCells(terrainClass);
+  const centerX = Math.floor(sampleX);
+  const centerY = Math.floor(sampleY);
+  const searchRadius = Math.ceil(radius + 1);
+  let materialTotal = 0;
+  let otherTotal = 0;
+  for (let y = centerY - searchRadius; y <= centerY + searchRadius; y += 1) {
+    for (let x = centerX - searchRadius; x <= centerX + searchRadius; x += 1) {
+      if (x < 0 || y < 0 || x >= world.width || y >= world.height) continue;
+      const cellIndex = y * world.width + x;
+      if (!world.layers.landMask[cellIndex] || world.layers.riverMap[cellIndex] || world.layers.lakeMap[cellIndex]) continue;
+      const distance = Math.hypot(sampleX - (x + 0.5), sampleY - (y + 0.5));
+      const kernel = terrainVariantKernel(distance, radius);
+      if (kernel <= 0) continue;
+      const rectDistance = distanceToCellRect(sampleX, sampleY, x, y);
+      if ((world.layers.terrainMaterial?.[cellIndex] ?? terrainMaterialForLegacyCell(world, cellIndex)) === material) {
+        materialTotal += kernel;
+        empty.nearestMaterialDistance = Math.min(empty.nearestMaterialDistance, rectDistance);
+      } else {
+        otherTotal += kernel;
+        empty.nearestOtherMaterialDistance = Math.min(empty.nearestOtherMaterialDistance, rectDistance);
+      }
+    }
+  }
+  const total = materialTotal + otherTotal;
+  return {
+    raw: total > 0 ? clamp01(materialTotal / total) : 0,
+    nearestMaterialDistance: empty.nearestMaterialDistance,
+    nearestOtherMaterialDistance: empty.nearestOtherMaterialDistance
+  };
 }
 
 function terrainVariantInfluenceAt(
@@ -1749,7 +1863,6 @@ function terrainVariantInfluenceAt(
   };
   if (terrainClass === "road" || terrainClass === "deepOcean" || terrainClass === "shallowWater" || terrainClass === "freshWater") return empty;
   if (!world.layers.terrainVariant || !world.layers.terrainPatchStrength) return empty;
-  if (!sampleIsLandTerrainClass(world, terrainClass, sampleX, sampleY)) return empty;
 
   const radius = terrainVariantBlendRadiusCells(terrainClass, variantSlot);
   const centerX = Math.floor(sampleX);
@@ -1803,6 +1916,28 @@ function distanceToCellRect(sampleX: number, sampleY: number, cellX: number, cel
   const dx = Math.max(cellX - sampleX, 0, sampleX - (cellX + 1));
   const dy = Math.max(cellY - sampleY, 0, sampleY - (cellY + 1));
   return Math.hypot(dx, dy);
+}
+
+function terrainBaseMaterialBlendRadiusCells(terrainClass: SemanticMaskTerrainClass): number {
+  if (terrainClass === "ash") return 1.45;
+  if (terrainClass === "beach") return 1.28;
+  if (terrainClass === "sand") return 1.18;
+  if (terrainClass === "ice") return 1.16;
+  return 1.08;
+}
+
+function terrainBaseMaterialFeatherRange(terrainClass: SemanticMaskTerrainClass): [number, number] {
+  if (terrainClass === "ash") return [0.05, 0.82];
+  if (terrainClass === "beach") return [0.05, 0.76];
+  if (terrainClass === "sand") return [0.06, 0.74];
+  if (terrainClass === "ice") return [0.06, 0.76];
+  return [0.06, 0.72];
+}
+
+function terrainBaseMaterialBreakupScale(terrainClass: SemanticMaskTerrainClass): number {
+  if (terrainClass === "ash") return 0.08;
+  if (terrainClass === "beach") return 0.06;
+  return 0.05;
 }
 
 function terrainVariantBlendRadiusCells(terrainClass: SemanticMaskTerrainClass, variantSlot: 1 | 2 | 3): number {
@@ -1926,6 +2061,10 @@ function ringBand(value: number, start: number, peak: number, end: number): numb
 
 function sampleBiome(world: SemanticWorld, sampleX: number, sampleY: number, biome: number): number {
   return samplePredicate(world, world.layers.biome, sampleX, sampleY, (value) => value === biome);
+}
+
+function sampleTerrainMaterial(world: SemanticWorld, sampleX: number, sampleY: number, material: number): number {
+  return samplePredicate(world, world.layers.terrainMaterial ?? world.layers.biome, sampleX, sampleY, (value) => value === material);
 }
 
 function samplePredicate(world: SemanticWorld, values: ArrayLike<number>, sampleX: number, sampleY: number, predicate: (value: number) => boolean): number {
