@@ -251,12 +251,15 @@ export function classifyBoundary(a: string | number, b: string | number): Metada
 
   // Water sub-type boundaries (both water, different sub-types).
   // freshWater flowing into deep/shallow ocean is a continuous water body —
-  // only deep↔shallow creates a visible transition.
+  // only deep↔shallow creates a visible transition. All other water-water
+  // pairs are seamless.
   if (aIsWater && bIsWater) {
     if ((defA.roles.includes("deep") && defB.roles.includes("shallow")) ||
         (defB.roles.includes("deep") && defA.roles.includes("shallow"))) {
       return { kind: "waterDeepShallow", waterSide: defA.roles.includes("shallow") ? classA : classB };
     }
+    // Both water but no sub-type transition rule — seamless water body, no boundary.
+    return undefined;
   }
 
   // Generic land-land boundary

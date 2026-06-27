@@ -33,7 +33,8 @@ import { WORLD_TILES, worldTileHasTag } from "../../data/worldTiles";
 import type { WorldTileId } from "../../data/worldTiles";
 import type { Terrain, Vec } from "../../scene/sceneTypes";
 import { createSemanticMaskTerrainTexture, roadRibbonDebugSegments, roadRibbonSampleAt, terrainVariantWeightsAt } from "../../world/semantic/semanticMaskTerrainRenderer";
-import type { SemanticMaskTerrainClass, SemanticMaskTerrainSources, SemanticMaskTerrainVariantSources } from "../../world/semantic/semanticMaskTerrainRenderer";
+import type { SemanticMaskTerrainClass, SemanticMaskTerrainSources, SemanticMaskTerrainVariantSources, TerrainRenderLayers } from "../../world/semantic/semanticMaskTerrainRenderer";
+import { classifyBoundary } from "../../world/semantic/semanticSurfaceDefinitions";
 import { createSemanticRouteOverlayTexture } from "../../world/semantic/semanticRouteRenderer";
 import { SEMANTIC_BIOME, SEMANTIC_WATER } from "../../world/semantic/semanticTypes";
 import type { GeneratedWorld, WorldRoadVisual } from "../../world/worldGenerator";
@@ -208,6 +209,10 @@ export function drawSemanticDebugOverlay(this: CrystalOathSceneContext, startX: 
   };
   if (this.semanticDebugOverlay === "edgeDebug") {
     this.drawSemanticEdgeDebugOverlay(semantic, startX, endX, startY, endY, tileCam);
+  }
+  if (this.semanticDebugOverlay === "boundaryDebug") {
+    this.drawBoundaryDebugOverlay(semantic, startX, endX, startY, endY, tileCam);
+    return;
   }
   if (this.semanticDebugOverlay === "masks") {
     for (let y = startY; y <= endY; y += 1) {
@@ -427,6 +432,63 @@ function semanticTerrainDebugClassAt(semantic: GeneratedWorld["semantic"], x: nu
   if (semantic.layers.biome[i] === SEMANTIC_BIOME.ICE) return "ice";
   if (semantic.layers.biome[i] === SEMANTIC_BIOME.SAND) return semantic.islandIndexToId.get(semantic.layers.islandId[i]) === "ashfall" ? "ash" : "sand";
   return "grassland";
+}
+
+function terrainLayerMode(overlay: string): TerrainRenderLayers {
+  if (overlay === "terrainOnly") return "baseOnly";
+  if (overlay === "boundariesOnly") return "boundariesOnly";
+  if (overlay === "variantsOnly") return "variantsOnly";
+  return "all";
+}
+
+function terrainLayerSuffix(overlay: string): string {
+  if (overlay === "terrainOnly" || overlay === "boundariesOnly" || overlay === "variantsOnly") return `_${overlay}`;
+  return "";
+}
+
+export function drawBoundaryDebugOverlay(this: CrystalOathSceneContext, semantic: GeneratedWorld["semantic"], startX: number, endX: number, startY: number, endY: number, tileCam: Vec) {
+  const debugGraphics = this.worldOverlay;
+  // Sample mask-class-grid edges and overlay surface IDs / boundary kinds.
+  const maskPixelsPerCell = 4; // coarse sample for readability
+  for (let cy = startY; cy <= endY; cy += 1) {
+    for (let cx = startX; cx <= endX; cx += 1) {
+      for (let my = 0; my < maskPixelsPerCell; my += 1) {
+        for (let mx = 0; mx < maskPixelsPerCell; mx += 1) {
+          const sx = cx + (mx + 0.5) / maskPixelsPerCell;
+          const sy = cy + (my + 0.5) / maskPixelsPerCell;
+          const classA = semanticTerrainDebugClassAt(semantic, cx, cy);
+          if (!classA) continue;
+          // East neighbour
+          const classE = semanticTerrainDebugClassAt(semantic, cx + 1, cy);
+          if (classE && classE !== classA) {
+            const boundary = classifyBoundary(classA, classE);
+            if (boundary) {
+              const px = (cx + 1) * TILE - tileCam.x;
+              const py = cy * TILE - tileCam.y + my * (TILE / maskPixelsPerCell);
+              debugGraphics.fillStyle(0xff4499, 0.7).fillRect(px - 1, py, 2, 2);
+            }
+          }
+          // South neighbour
+          const classS = semanticTerrainDebugClassAt(semantic, cx, cy + 1);
+          if (classS && classS !== classA) {
+            const boundary = classifyBoundary(classA, classS);
+            if (boundary) {
+              const px = cx * TILE - tileCam.x + mx * (TILE / maskPixelsPerCell);
+              const py = (cy + 1) * TILE - tileCam.y;
+              debugGraphics.fillStyle(0xff4499, 0.7).fillRect(px, py - 1, 2, 2);
+            }
+          }
+        }
+      }
+      // Cell center: surface ID label
+      const labelX = cx * TILE - tileCam.x + TILE / 2;
+      const labelY = cy * TILE - tileCam.y + TILE / 2 - 2;
+      const terrainClass = semanticTerrainDebugClassAt(semantic, cx, cy);
+      if (terrainClass) {
+        this.text(labelX, labelY, terrainClass.slice(0, 4), 7, "#ff8888", "center");
+      }
+    }
+  }
 }
 
 export function drawSemanticEdgeDebugOverlay(this: CrystalOathSceneContext, semantic: GeneratedWorld["semantic"], startX: number, endX: number, startY: number, endY: number, tileCam: Vec) {
@@ -653,7 +715,8 @@ export function prewarmWorldTerrainChunksAroundCamera(this: CrystalOathSceneCont
   let created = 0;
   for (let chunkY = bounds.firstChunkY; chunkY <= bounds.lastChunkY; chunkY += 1) {
     for (let chunkX = bounds.firstChunkX; chunkX <= bounds.lastChunkX; chunkX += 1) {
-      const cacheKey = `${chunkX},${chunkY}`;
+      const layerSuffix = terrainLayerSuffix(this.semanticDebugOverlay);
+      const cacheKey = `${chunkX},${chunkY}${layerSuffix}`;
       const cached = this.worldTerrainChunkCache.get(cacheKey);
       if (cached && this.textures.exists(cached.textureKey)) continue;
       if (!this.getOrCreateWorldTerrainChunk(chunkX, chunkY)) continue;
@@ -700,7 +763,8 @@ export function getOrCreateWorldTerrainChunk(this: CrystalOathSceneContext, chun
   if (chunkX < 0 || chunkY < 0 || chunkX >= world.width || chunkY >= world.height) return undefined;
   const chunkWidth = Math.min(SEMANTIC_TERRAIN_CHUNK_TILES, world.width - chunkX);
   const chunkHeight = Math.min(SEMANTIC_TERRAIN_CHUNK_TILES, world.height - chunkY);
-  const cacheKey = `${chunkColumn},${chunkRow}`;
+  const layerSuffix = terrainLayerSuffix(this.semanticDebugOverlay);
+  const cacheKey = `${chunkColumn},${chunkRow}${layerSuffix}`;
   const cached = this.worldTerrainChunkCache.get(cacheKey);
   if (cached && this.textures.exists(cached.textureKey)) {
     cached.lastUsed = ++this.worldTerrainChunkCacheTick;
@@ -713,7 +777,7 @@ export function getOrCreateWorldTerrainChunk(this: CrystalOathSceneContext, chun
   const areaY = Math.max(0, chunkY - SEMANTIC_TERRAIN_CHUNK_PADDING_TILES);
   const areaMaxX = Math.min(world.width, chunkX + chunkWidth + SEMANTIC_TERRAIN_CHUNK_PADDING_TILES);
   const areaMaxY = Math.min(world.height, chunkY + chunkHeight + SEMANTIC_TERRAIN_CHUNK_PADDING_TILES);
-  const textureKey = `${this.worldTerrainCacheKey}_${chunkColumn}_${chunkRow}`;
+  const textureKey = `${this.worldTerrainCacheKey}${layerSuffix}_${chunkColumn}_${chunkRow}`;
   const frameKey = "content";
   createSemanticMaskTerrainTexture(this, world, {
     tileSize: TILE,
@@ -724,7 +788,8 @@ export function getOrCreateWorldTerrainChunk(this: CrystalOathSceneContext, chun
     terrainSourceLabels: WORLD_CURRENT_TERRAIN_TEXTURE_KEYS,
     terrainVariantSources: this.currentSemanticTerrainVariantSources(),
     terrainVariantSourceLabels: WORLD_CURRENT_TERRAIN_VARIANT_TEXTURE_KEYS,
-    renderArea: { x: areaX, y: areaY, width: areaMaxX - areaX, height: areaMaxY - areaY }
+    renderArea: { x: areaX, y: areaY, width: areaMaxX - areaX, height: areaMaxY - areaY },
+    renderLayers: terrainLayerMode(this.semanticDebugOverlay)
   });
   const texture = this.textures.get(textureKey);
   texture.setFilter(Phaser.Textures.FilterMode.NEAREST);

@@ -18,6 +18,8 @@ export type SemanticMaskTerrainVariantSources = Partial<Record<SemanticMaskTerra
 
 // Normal gameplay terrain material changes must be rendered through mask/splat transitions.
 // Do not draw terrain variants as hard tile rectangles. Hard variant cell edges are a regression.
+export type TerrainRenderLayers = "all" | "baseOnly" | "boundariesOnly" | "variantsOnly";
+
 export interface SemanticMaskTerrainRenderOptions {
   tileSize: number;
   textureKey?: string;
@@ -28,6 +30,7 @@ export interface SemanticMaskTerrainRenderOptions {
   maskPixelsPerCell?: number;
   collectStats?: boolean;
   renderArea?: { x: number; y: number; width: number; height: number };
+  renderLayers?: TerrainRenderLayers;
 }
 
 export interface SemanticTerrainVariantWeight {
@@ -148,15 +151,34 @@ export function createSemanticMaskTerrainCanvas(world: SemanticWorld, options: S
   if (!ctx) throw new Error("Unable to create semantic mask terrain canvas.");
   ctx.imageSmoothingEnabled = false;
 
+  const layers = options.renderLayers ?? "all";
+  const drawBase = layers === "all" || layers === "baseOnly" || layers === "variantsOnly";
+  const drawVariants = layers === "all" || layers === "variantsOnly";
+  const drawBoundaries = layers === "all" || layers === "boundariesOnly";
+
   const fillStyles = createTerrainFillStyles(ctx, options.terrainSources, plan.tileSize);
-  fillFullTerrain(ctx, fillStyles.deepOcean, plan.width, plan.height);
-  for (const terrainClass of TERRAIN_CLASSES) {
-    if (terrainClass === "deepOcean" || terrainClass === "road") continue;
-    if (plan.classSamples[terrainClass] <= 0) continue;
-    drawMaskedTerrainClass(ctx, plan, classGrid, TERRAIN_CLASS_IDS[terrainClass], fillStyles[terrainClass]);
-    drawTerrainVariantSplatsForClass(ctx, world, plan, classGrid, terrainClass, options.terrainVariantSources?.[terrainClass]);
+
+  if (drawBase) {
+    fillFullTerrain(ctx, fillStyles.deepOcean, plan.width, plan.height);
+    for (const terrainClass of TERRAIN_CLASSES) {
+      if (terrainClass === "deepOcean" || terrainClass === "road") continue;
+      if (plan.classSamples[terrainClass] <= 0) continue;
+      drawMaskedTerrainClass(ctx, plan, classGrid, TERRAIN_CLASS_IDS[terrainClass], fillStyles[terrainClass]);
+    }
   }
-  drawMaskBoundaryAccents(ctx, world, plan, classGrid);
+
+  if (drawVariants) {
+    for (const terrainClass of TERRAIN_CLASSES) {
+      if (terrainClass === "deepOcean" || terrainClass === "road") continue;
+      if (plan.classSamples[terrainClass] <= 0) continue;
+      drawTerrainVariantSplatsForClass(ctx, world, plan, classGrid, terrainClass, options.terrainVariantSources?.[terrainClass]);
+    }
+  }
+
+  if (drawBoundaries) {
+    drawMaskBoundaryAccents(ctx, world, plan, classGrid);
+  }
+
   drawRoadRibbonLayer(ctx, world, plan, fillStyles);
 
   return canvas;
