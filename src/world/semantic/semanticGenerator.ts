@@ -10,7 +10,6 @@ import {
 } from "./boatNavigation.ts";
 import {
   SEMANTIC_BIOME,
-  SEMANTIC_TERRAIN_MATERIAL,
   SEMANTIC_WATER,
   type IslandOverlayRules,
   type IslandProfile,
@@ -122,7 +121,6 @@ export function generateSemanticWorld(options: {
   const ridge = createRidgeField(width, height, seed, landMask, distanceToWater, islandId, islands);
   const elevation = finalizeElevation(width, height, seed, landMask, distanceToWater, ridge);
   const biome = classifyBiomes(width, height, landMask, distanceToWater, islandId, islands, elevation, moisture, coldness);
-  const terrainMaterial = classifyTerrainMaterials(width, height, landMask, waterClass, biome, islandId, islands);
   const { terrainVariant, terrainPatchStrength } = createTerrainPatchFields(width, height, seed, landMask, waterClass, biome, islandId, islands, moisture, elevation, ridge, distanceToWater);
   const mountainMap = new Uint8Array(width * height);
   const mountainCandidateScore = new Float32Array(width * height);
@@ -153,7 +151,6 @@ export function generateSemanticWorld(options: {
     distanceToWater,
     waterClass,
     biome,
-    terrainMaterial,
     terrainVariant,
     terrainPatchStrength,
     moisture,
@@ -653,40 +650,6 @@ function classifyBiomes(
     else biome[i] = SEMANTIC_BIOME.GRASS;
   });
   return smoothBiomes(biome, landMask, distanceToWater, islandId, width, height, 2);
-}
-
-function classifyTerrainMaterials(
-  width: number,
-  height: number,
-  landMask: Uint8Array,
-  waterClass: Uint8Array,
-  biome: Uint8Array,
-  islandId: Int16Array,
-  islands: SemanticIslandRecord[]
-) {
-  const terrainMaterial = new Uint8Array(width * height);
-  const islandByOrder = new Map(islands.map((island) => [island.order + 1, island]));
-  forEachCell(width, height, (_x, _y, i) => {
-    if (!landMask[i] || waterClass[i] !== SEMANTIC_WATER.NONE) {
-      terrainMaterial[i] = SEMANTIC_TERRAIN_MATERIAL.WATER;
-      return;
-    }
-    if (biome[i] === SEMANTIC_BIOME.BEACH) {
-      terrainMaterial[i] = SEMANTIC_TERRAIN_MATERIAL.BEACH;
-      return;
-    }
-    if (biome[i] === SEMANTIC_BIOME.ICE) {
-      terrainMaterial[i] = SEMANTIC_TERRAIN_MATERIAL.ICE;
-      return;
-    }
-    if (biome[i] === SEMANTIC_BIOME.SAND) {
-      const island = islandByOrder.get(islandId[i]);
-      terrainMaterial[i] = island?.theme === "ashfall" ? SEMANTIC_TERRAIN_MATERIAL.ASH : SEMANTIC_TERRAIN_MATERIAL.SAND;
-      return;
-    }
-    terrainMaterial[i] = SEMANTIC_TERRAIN_MATERIAL.GRASS;
-  });
-  return terrainMaterial;
 }
 
 function smoothBiomes(

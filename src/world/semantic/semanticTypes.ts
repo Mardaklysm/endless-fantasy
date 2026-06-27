@@ -11,15 +11,6 @@ export const SEMANTIC_BIOME = {
   BEACH: 4
 } as const;
 
-export const SEMANTIC_TERRAIN_MATERIAL = {
-  WATER: 0,
-  GRASS: 1,
-  SAND: 2,
-  ICE: 3,
-  BEACH: 4,
-  ASH: 5
-} as const;
-
 export const SEMANTIC_WATER = {
   NONE: 0,
   DEEP: 1,
@@ -29,7 +20,6 @@ export const SEMANTIC_WATER = {
 } as const;
 
 export type SemanticBiomeValue = (typeof SEMANTIC_BIOME)[keyof typeof SEMANTIC_BIOME];
-export type SemanticTerrainMaterialValue = (typeof SEMANTIC_TERRAIN_MATERIAL)[keyof typeof SEMANTIC_TERRAIN_MATERIAL];
 export type SemanticWaterValue = (typeof SEMANTIC_WATER)[keyof typeof SEMANTIC_WATER];
 
 export type MajorIslandId = "greenhaven" | "coralreach" | "frostmere" | "highspire" | "ashfall";
@@ -270,7 +260,6 @@ export interface SemanticWorldLayers {
   distanceToWater: Int16Array;
   waterClass: Uint8Array;
   biome: Uint8Array;
-  terrainMaterial: Uint8Array;
   terrainVariant: Uint8Array;
   terrainPatchStrength: Float32Array;
   moisture: Float32Array;
