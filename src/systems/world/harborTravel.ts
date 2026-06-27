@@ -71,40 +71,40 @@ export function getDebugHarborDestinations(this: CrystalOathSceneContext, curren
 function configuredDestinations(currentIslandId: IslandId): TravelDestination[] {
   if (currentIslandId === "greenhaven") {
     return [
-      { destinationIslandId: "coralreach", displayName: "Coralreach", costGold: 10, requiredUnlockFlag: "unlockedIsland2" },
-      { destinationIslandId: "highspire", displayName: "Highspire", costGold: 18, requiredUnlockFlag: "unlockedHighspire" },
-      { destinationIslandId: "ashfall", displayName: "Ashfall", costGold: 22, requiredUnlockFlag: "unlockedAshfall" }
+      { destinationIslandId: "coralreach", displayName: "Coralreach", costGold: 0, requiredUnlockFlag: "unlockedIsland2" },
+      { destinationIslandId: "highspire", displayName: "Highspire", costGold: 0, requiredUnlockFlag: "unlockedHighspire" },
+      { destinationIslandId: "ashfall", displayName: "Ashfall", costGold: 0, requiredUnlockFlag: "unlockedAshfall" }
     ];
   }
   if (currentIslandId === "coralreach") {
     return [
-      { destinationIslandId: "greenhaven", displayName: "Greenhaven", costGold: 10 },
-      { destinationIslandId: "frostmere", displayName: "Frostmere", costGold: 14, requiredUnlockFlag: "unlockedFrostmere" },
-      { destinationIslandId: "highspire", displayName: "Highspire", costGold: 18, requiredUnlockFlag: "unlockedHighspire" },
-      { destinationIslandId: "ashfall", displayName: "Ashfall", costGold: 22, requiredUnlockFlag: "unlockedAshfall" }
+      { destinationIslandId: "greenhaven", displayName: "Greenhaven", costGold: 0 },
+      { destinationIslandId: "frostmere", displayName: "Frostmere", costGold: 0, requiredUnlockFlag: "unlockedFrostmere" },
+      { destinationIslandId: "highspire", displayName: "Highspire", costGold: 0, requiredUnlockFlag: "unlockedHighspire" },
+      { destinationIslandId: "ashfall", displayName: "Ashfall", costGold: 0, requiredUnlockFlag: "unlockedAshfall" }
     ];
   }
   if (currentIslandId === "frostmere") {
     return [
-      { destinationIslandId: "coralreach", displayName: "Coralreach", costGold: 14 },
-      { destinationIslandId: "highspire", displayName: "Highspire", costGold: 18, requiredUnlockFlag: "unlockedHighspire" },
-      { destinationIslandId: "ashfall", displayName: "Ashfall", costGold: 22, requiredUnlockFlag: "unlockedAshfall" },
-      { destinationIslandId: "greenhaven", displayName: "Greenhaven", costGold: 14 }
+      { destinationIslandId: "coralreach", displayName: "Coralreach", costGold: 0 },
+      { destinationIslandId: "highspire", displayName: "Highspire", costGold: 0, requiredUnlockFlag: "unlockedHighspire" },
+      { destinationIslandId: "ashfall", displayName: "Ashfall", costGold: 0, requiredUnlockFlag: "unlockedAshfall" },
+      { destinationIslandId: "greenhaven", displayName: "Greenhaven", costGold: 0 }
     ];
   }
   if (currentIslandId === "ashfall") {
     return [
-      { destinationIslandId: "highspire", displayName: "Highspire", costGold: 22 },
-      { destinationIslandId: "frostmere", displayName: "Frostmere", costGold: 22 },
-      { destinationIslandId: "coralreach", displayName: "Coralreach", costGold: 22 },
-      { destinationIslandId: "greenhaven", displayName: "Greenhaven", costGold: 22 }
+      { destinationIslandId: "highspire", displayName: "Highspire", costGold: 0 },
+      { destinationIslandId: "frostmere", displayName: "Frostmere", costGold: 0 },
+      { destinationIslandId: "coralreach", displayName: "Coralreach", costGold: 0 },
+      { destinationIslandId: "greenhaven", displayName: "Greenhaven", costGold: 0 }
     ];
   }
   return [
-    { destinationIslandId: "ashfall", displayName: "Ashfall", costGold: 22, requiredUnlockFlag: "unlockedAshfall" },
-    { destinationIslandId: "frostmere", displayName: "Frostmere", costGold: 18 },
-    { destinationIslandId: "coralreach", displayName: "Coralreach", costGold: 18 },
-    { destinationIslandId: "greenhaven", displayName: "Greenhaven", costGold: 18 }
+    { destinationIslandId: "ashfall", displayName: "Ashfall", costGold: 0, requiredUnlockFlag: "unlockedAshfall" },
+    { destinationIslandId: "frostmere", displayName: "Frostmere", costGold: 0 },
+    { destinationIslandId: "coralreach", displayName: "Coralreach", costGold: 0 },
+    { destinationIslandId: "greenhaven", displayName: "Greenhaven", costGold: 0 }
   ];
 }
 
@@ -112,9 +112,8 @@ function reverseConfiguredRouteCost(fromIslandId: IslandId, toIslandId: IslandId
   return configuredDestinations(fromIslandId).find((destination) => destination.destinationIslandId === toIslandId)?.costGold;
 }
 
-function fallbackDebugRouteCost(this: CrystalOathSceneContext, destinationIslandId: IslandId): number {
-  const destinationIsland = this.generatedWorld?.islands.find((island) => island.id === destinationIslandId);
-  return destinationIsland ? 10 + destinationIsland.difficultyTier * 4 : 0;
+function fallbackDebugRouteCost(_destinationIslandId: IslandId): number {
+  return 0;
 }
 
 export function isDestinationLocked(this: CrystalOathSceneContext, destination: TravelDestination): boolean {
