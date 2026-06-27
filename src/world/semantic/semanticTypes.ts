@@ -313,3 +313,51 @@ export interface SemanticWorld {
   stats: SemanticWorldStats;
   validation: SemanticValidationResult;
 }
+
+// ---------------------------------------------------------------------------
+// Surface & Transition Metadata
+// ---------------------------------------------------------------------------
+// All transition / blending / shoreline behavior is driven by
+// surface-definition metadata. No transition code may inspect texture
+// filenames, paths, atlas slots, or visual-material names directly.
+// ---------------------------------------------------------------------------
+
+export type SurfaceRole = "water" | "land" | "shoreline-capable" | "shallow" | "deep" | "fresh" | "route" | "cliff" | "snow" | "lava" | "dark";
+
+export type SurfaceTransitionClass = "liquid" | "solid" | "loose" | "organic" | "route" | "cliff";
+
+export interface SurfaceColorProfile {
+  fill: Rgb;
+  edge: Rgb;
+  accent?: Rgb;
+  shallowEdge?: Rgb;
+  foam?: Rgb;
+  wetBlend?: Rgb;
+}
+
+export interface SurfaceTransitionProfile {
+  noiseStrength?: number;
+  edgeSoftness?: number;
+  accentAlpha?: number;
+}
+
+export interface SurfaceShorelineProfile {
+  beachWidthCells?: number;
+  wetBlendWidth?: number;
+  foamWidth?: number;
+  noiseStrength?: number;
+  accentColors?: { foam?: Rgb; wetBlend?: Rgb; shallowEdge?: Rgb };
+}
+
+export interface SurfaceDefinition {
+  id: string;
+  roles: SurfaceRole[];
+  transitionClass: SurfaceTransitionClass;
+  colors: SurfaceColorProfile;
+  transitionProfile?: SurfaceTransitionProfile;
+  shorelineProfile?: SurfaceShorelineProfile;
+  variantMaxAlpha?: number;
+  allowVariants?: boolean;
+}
+
+export type Rgb = [number, number, number];

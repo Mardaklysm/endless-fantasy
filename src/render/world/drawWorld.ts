@@ -122,16 +122,21 @@ export function drawWorldTile(this: CrystalOathSceneContext, terrain: Terrain, s
   this.drawWorldCoastEdges(terrain, sx, sy, x, y);
 }
 
-export function currentTerrainTextureForTile(this: CrystalOathSceneContext, tileId: WorldTileId | undefined): string | undefined {
+/**
+ * Map a gameplay tile to its current-world texture key using tile metadata
+ * (biome, blendGroup, tags) — never by inspecting the texture asset itself.
+ */
+export function currentTerrainTextureForTile(this: CrystalOathSceneContext, tileId: WorldTileId | undefined): string | undefined { 
   const tile = tileId ? WORLD_TILES[tileId] : undefined;
   if (!tile) return undefined;
-  if (tile.biome === "water") return worldTileHasTag(tileId, "deep") ? WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.deepOcean : WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.shallowWater;
+  if (worldTileHasTag(tileId, "water")) return worldTileHasTag(tileId, "deep") ? WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.deepOcean : WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.shallowWater;
+  if (worldTileHasTag(tileId, "beach")) return WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.beach;
   if (tile.blendGroup === "snow" || tile.blendGroup === "ice") return WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.ice;
-  if (tile.blendGroup === "desert") return tileId === "beach_sand" || tileId === "wet_beach_sand" ? WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.beach : WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.sand;
+  if (tile.blendGroup === "desert") return WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.sand;
   if (tile.blendGroup === "rock") return undefined;
   if (tile.blendGroup === "lava") return "world_current_terrain_lava_crust";
   if (tile.blendGroup === "dark") return "world_current_terrain_black_ash_ground";
-  if (tile.id.includes("road") || tile.id.includes("trail")) return "world_current_terrain_packed_dirt_surface";
+  if (worldTileHasTag(tileId, "road")) return "world_current_terrain_packed_dirt_surface";
   return WORLD_CURRENT_TERRAIN_TEXTURE_KEYS.grassland;
 }
 

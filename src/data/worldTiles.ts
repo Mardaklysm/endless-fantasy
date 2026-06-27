@@ -324,5 +324,6 @@ function tagsForTile(tileId: WorldTileId, biome: WorldBiome, blendGroup: WorldBl
   if (tileId.includes("snow") || blendGroup === "snow" || blendGroup === "ice") tags.push("snow");
   if (blendGroup === "lava") tags.push("lava");
   if (tileId.includes("coast") || tileId.includes("edge") || tileId.includes("corner")) tags.push("legacy_transition_id");
+  if (tileId === WORLD_TILE_IDS.beachSand || tileId === WORLD_TILE_IDS.wetBeachSand) tags.push("beach");
   return [...new Set(tags)];
 }

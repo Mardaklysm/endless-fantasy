@@ -1,7 +1,16 @@
 import type Phaser from "phaser";
 import { hashNoise } from "../seededRng.ts";
 import { DEFAULT_ROAD_PROFILE } from "./semanticRoadProfiles.ts";
-import { SEMANTIC_BIOME, SEMANTIC_WATER, type IslandRoadProfile, type IslandRoadVisualConfig, type SemanticWorld } from "./semanticTypes.ts";
+import { SEMANTIC_BIOME, SEMANTIC_WATER, type IslandRoadProfile, type IslandRoadVisualConfig, type Rgb, type SemanticWorld } from "./semanticTypes.ts";
+import {
+  surfaceHasRole,
+  surfaceColors,
+  surfaceAllowsVariants,
+  surfaceVariantMaxAlpha,
+  surfaceShorelineProfile,
+  classifyBoundary,
+  type MetadataBoundaryKind
+} from "./semanticSurfaceDefinitions.ts";
 
 export type SemanticMaskTerrainClass = "deepOcean" | "shallowWater" | "freshWater" | "road" | "beach" | "grassland" | "sand" | "ash" | "ice";
 export type SemanticMaskTerrainSources = Partial<Record<SemanticMaskTerrainClass, CanvasImageSource & { width: number; height: number }>>;
@@ -74,27 +83,11 @@ export interface SemanticMaskTerrainRenderPlan {
   maskWidth: number;
   maskHeight: number;
   classSamples: Record<SemanticMaskTerrainClass, number>;
-  waterBeachBoundarySamples: number;
-  waterGrassBoundarySamples: number;
-  waterIceBoundarySamples: number;
-  roadBoundarySamples: number;
-  sandGrassBoundarySamples: number;
-  sandIceBoundarySamples: number;
-  grassIceBoundarySamples: number;
+  boundarySamples: Record<MetadataBoundaryKind, number>;
   textureSourceLabels: Record<SemanticMaskTerrainClass, string>;
 }
 
 type TerrainClassId = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
-type Rgb = [number, number, number];
-type BoundaryKind =
-  | "deepShallow"
-  | "waterBeach"
-  | "waterGrass"
-  | "waterIce"
-  | "roadBoundary"
-  | "sandGrass"
-  | "sandIce"
-  | "grassIce";
 
 const TERRAIN_CLASS_IDS = {
   deepOcean: 0,
@@ -112,24 +105,29 @@ const TERRAIN_CLASSES = ["deepOcean", "shallowWater", "freshWater", "road", "bea
 
 export const SEMANTIC_MASK_TERRAIN_CLASSES = TERRAIN_CLASSES;
 
-const COLORS = {
-  deepOcean: [12, 54, 92] as Rgb,
-  shallowWater: [52, 149, 179] as Rgb,
-  freshWater: [54, 147, 183] as Rgb,
-  shallowEdge: [93, 196, 213] as Rgb,
-  foam: [234, 251, 237] as Rgb,
-  wetSand: [178, 146, 86] as Rgb,
-  beachEdge: [202, 158, 87] as Rgb,
-  grassEdge: [70, 138, 58] as Rgb,
-  roadEdge: [159, 120, 67] as Rgb,
-  roadDust: [214, 169, 103] as Rgb,
-  roadPebble: [119, 103, 84] as Rgb,
-  roadGrassFleck: [92, 139, 64] as Rgb,
-  sandEdge: [167, 129, 66] as Rgb,
-  ashEdge: [68, 62, 56] as Rgb,
-  iceEdge: [134, 190, 207] as Rgb,
-  frost: [231, 251, 252] as Rgb
-};
+// ---------------------------------------------------------------------------
+// Color helpers — all lookup through surface definitions, never hardcoded
+// per material name. Texture assets are never inspected for behavior.
+// ---------------------------------------------------------------------------
+
+const DEFAULT_FILL_COLOR: Rgb = [64, 64, 64];
+const DEFAULT_EDGE_COLOR: Rgb = [96, 96, 96];
+const FALLBACK_WET_BLEND: Rgb = [178, 146, 86];
+const FALLBACK_FOAM: Rgb = [234, 251, 237];
+const FALLBACK_SHALLOW_EDGE: Rgb = [93, 196, 213];
+
+function surfaceFillColor(terrainClass: string): Rgb {
+  return surfaceColors(terrainClass)?.fill ?? DEFAULT_FILL_COLOR;
+}
+
+function surfaceEdgeColor(terrainClass: string): Rgb {
+  return surfaceColors(terrainClass)?.edge ?? DEFAULT_EDGE_COLOR;
+}
+
+// Legacy road palette colors (road rendering is its own system)
+const ROAD_DUST: Rgb = [214, 169, 103];
+const ROAD_PEBBLE: Rgb = [119, 103, 84];
+const ROAD_GRASS_FLECK: Rgb = [92, 139, 64];
 
 const HEX_COLOR_CACHE = new Map<string, Rgb>();
 
@@ -186,39 +184,28 @@ function prepareSemanticMaskTerrainRender(
     maskWidth,
     maskHeight
   }, classSamples);
-  let waterBeachBoundarySamples = 0;
-  let waterGrassBoundarySamples = 0;
-  let waterIceBoundarySamples = 0;
-  let roadBoundarySamples = 0;
-  let sandGrassBoundarySamples = 0;
-  let sandIceBoundarySamples = 0;
-  let grassIceBoundarySamples = 0;
+  const boundarySamples: Record<MetadataBoundaryKind, number> = {
+    waterDeepShallow: 0,
+    waterShoreline: 0,
+    waterLand: 0,
+    routeBoundary: 0,
+    genericLand: 0
+  };
 
   if (options.collectStats ?? true) {
     for (let y = 0; y < maskHeight; y += 1) {
       for (let x = 0; x < maskWidth; x += 1) {
         const current = terrainClassAt(classGrid, y * maskWidth + x);
+        const countPair = (a: TerrainClassId, b: TerrainClassId) => {
+          if (a === b) return;
+          const meta = classifyBoundary(a, b);
+          if (meta) boundarySamples[meta.kind] += 1;
+        };
         if (x < maskWidth - 1) {
-          const east = terrainClassAt(classGrid, y * maskWidth + x + 1);
-          const boundary = boundaryKind(current, east);
-          if (boundary === "waterBeach") waterBeachBoundarySamples += 1;
-          if (boundary === "waterGrass") waterGrassBoundarySamples += 1;
-          if (boundary === "waterIce") waterIceBoundarySamples += 1;
-          if (boundary === "roadBoundary") roadBoundarySamples += 1;
-          if (boundary === "sandGrass") sandGrassBoundarySamples += 1;
-          if (boundary === "sandIce") sandIceBoundarySamples += 1;
-          if (boundary === "grassIce") grassIceBoundarySamples += 1;
+          countPair(current, terrainClassAt(classGrid, y * maskWidth + x + 1));
         }
         if (y < maskHeight - 1) {
-          const south = terrainClassAt(classGrid, (y + 1) * maskWidth + x);
-          const boundary = boundaryKind(current, south);
-          if (boundary === "waterBeach") waterBeachBoundarySamples += 1;
-          if (boundary === "waterGrass") waterGrassBoundarySamples += 1;
-          if (boundary === "waterIce") waterIceBoundarySamples += 1;
-          if (boundary === "roadBoundary") roadBoundarySamples += 1;
-          if (boundary === "sandGrass") sandGrassBoundarySamples += 1;
-          if (boundary === "sandIce") sandIceBoundarySamples += 1;
-          if (boundary === "grassIce") grassIceBoundarySamples += 1;
+          countPair(current, terrainClassAt(classGrid, (y + 1) * maskWidth + x));
         }
       }
     }
@@ -236,13 +223,7 @@ function prepareSemanticMaskTerrainRender(
       maskWidth,
       maskHeight,
       classSamples,
-      waterBeachBoundarySamples,
-      waterGrassBoundarySamples,
-      waterIceBoundarySamples,
-      roadBoundarySamples,
-      sandGrassBoundarySamples,
-      sandIceBoundarySamples,
-      grassIceBoundarySamples,
+      boundarySamples,
       textureSourceLabels: terrainTextureSourceLabels(options)
     },
     classGrid
@@ -421,15 +402,15 @@ function createTerrainFillStyles(
   tileSize: number
 ): Record<SemanticMaskTerrainClass, CanvasPattern | string> {
   return {
-    deepOcean: createTerrainPattern(ctx, terrainSources?.deepOcean, tileSize, COLORS.deepOcean),
-    shallowWater: createTerrainPattern(ctx, terrainSources?.shallowWater, tileSize, COLORS.shallowWater),
-    freshWater: createTerrainPattern(ctx, terrainSources?.freshWater, tileSize, COLORS.freshWater),
+    deepOcean: createTerrainPattern(ctx, terrainSources?.deepOcean, tileSize, surfaceFillColor("deepOcean")),
+    shallowWater: createTerrainPattern(ctx, terrainSources?.shallowWater, tileSize, surfaceFillColor("shallowWater")),
+    freshWater: createTerrainPattern(ctx, terrainSources?.freshWater, tileSize, surfaceFillColor("freshWater")),
     road: createRoadTrailPattern(ctx, terrainSources?.road, tileSize),
-    beach: createTerrainPattern(ctx, terrainSources?.beach, tileSize, COLORS.beachEdge),
-    grassland: createTerrainPattern(ctx, terrainSources?.grassland, tileSize, COLORS.grassEdge),
-    sand: createTerrainPattern(ctx, terrainSources?.sand, tileSize, COLORS.sandEdge),
-    ash: createTerrainPattern(ctx, terrainSources?.ash, tileSize, COLORS.ashEdge),
-    ice: createTerrainPattern(ctx, terrainSources?.ice, tileSize, COLORS.frost)
+    beach: createTerrainPattern(ctx, terrainSources?.beach, tileSize, surfaceFillColor("beach")),
+    grassland: createTerrainPattern(ctx, terrainSources?.grassland, tileSize, surfaceFillColor("grassland")),
+    sand: createTerrainPattern(ctx, terrainSources?.sand, tileSize, surfaceFillColor("sand")),
+    ash: createTerrainPattern(ctx, terrainSources?.ash, tileSize, surfaceFillColor("ash")),
+    ice: createTerrainPattern(ctx, terrainSources?.ice, tileSize, surfaceFillColor("ice"))
   };
 }
 
@@ -459,24 +440,24 @@ function createRoadTrailPattern(
   patternCanvas.width = tileSize;
   patternCanvas.height = tileSize;
   const patternCtx = patternCanvas.getContext("2d");
-  if (!patternCtx) return rgbCss(COLORS.roadDust);
+  if (!patternCtx) return rgbCss(ROAD_DUST);
   patternCtx.imageSmoothingEnabled = false;
   if (source) patternCtx.drawImage(source, 0, 0, source.width, source.height, 0, 0, tileSize, tileSize);
   else {
-    patternCtx.fillStyle = rgbCss(COLORS.roadDust);
+    patternCtx.fillStyle = rgbCss(ROAD_DUST);
     patternCtx.fillRect(0, 0, tileSize, tileSize);
   }
   const block = Math.max(1, Math.floor(tileSize / 16));
   for (let y = 0; y < tileSize; y += block) {
     for (let x = 0; x < tileSize; x += block) {
       const noise = hashNoise("semantic-road-trail-pattern", x, y);
-      if (noise < 0.035) patternCtx.fillStyle = rgbaCss(COLORS.roadPebble, 0.36);
+      if (noise < 0.035) patternCtx.fillStyle = rgbaCss(ROAD_PEBBLE, 0.36);
       else if (noise > 0.9) patternCtx.fillStyle = "rgba(246, 205, 132, 0.22)";
       else continue;
       patternCtx.fillRect(x, y, block, block);
     }
   }
-  return ctx.createPattern(patternCanvas, "repeat") ?? rgbCss(COLORS.roadDust);
+  return ctx.createPattern(patternCanvas, "repeat") ?? rgbCss(ROAD_DUST);
 }
 
 function terrainTextureSourceLabels(options: SemanticMaskTerrainRenderOptions): Record<SemanticMaskTerrainClass, string> {
@@ -548,10 +529,10 @@ function drawTerrainVariantSplatsForClass(
   variantSources: Array<CanvasImageSource & { width: number; height: number }> | undefined
 ) {
   if (!variantSources?.length || !world.layers.terrainVariant || !world.layers.terrainPatchStrength) return;
-  if (terrainClass === "road" || isWater(TERRAIN_CLASS_IDS[terrainClass])) return;
+  if (!surfaceAllowsVariants(terrainClass)) return;
   const terrainClassId = TERRAIN_CLASS_IDS[terrainClass];
   for (let slotIndex = 0; slotIndex < Math.min(3, variantSources.length); slotIndex += 1) {
-    const fillStyle = createTerrainPattern(ctx, variantSources[slotIndex], plan.tileSize, COLORS.grassEdge);
+    const fillStyle = createTerrainPattern(ctx, variantSources[slotIndex], plan.tileSize, surfaceFillColor("grassland"));
     drawTerrainVariantSplatLayer(ctx, world, plan, classGrid, terrainClassId, terrainClass, slotIndex + 1, fillStyle);
   }
 }
@@ -605,7 +586,7 @@ export function terrainVariantWeightsAt(
   sampleX: number,
   sampleY: number
 ): SemanticTerrainVariantWeight[] {
-  if (terrainClass === "road" || terrainClass === "deepOcean" || terrainClass === "shallowWater" || terrainClass === "freshWater") return [];
+  if (!surfaceAllowsVariants(terrainClass)) return [];
   if (!world.layers.terrainVariant || !world.layers.terrainPatchStrength) return [];
   if (!sampleIsLandTerrainClass(world, terrainClass, sampleX, sampleY)) return [];
 
@@ -1307,9 +1288,9 @@ function roadRibbonPalette(theme: SemanticRoadRibbonTheme, visual: IslandRoadVis
     shadow: mixRgb(hexRgb(visual.darkNoiseColor, [112, 79, 47]), [89, 66, 44], 0.18),
     edge: mixRgb(hexRgb(visual.edgeColor, [159, 120, 67]), [142, 104, 61], 0.12),
     highlight: center,
-    rut: hexRgb(visual.darkNoiseColor, COLORS.roadPebble),
-    pebble: hexRgb(visual.darkNoiseColor, COLORS.roadPebble),
-    fleck: visual.terrainFleckColor ? hexRgb(visual.terrainFleckColor, COLORS.roadGrassFleck) : COLORS.roadGrassFleck,
+    rut: hexRgb(visual.darkNoiseColor, ROAD_PEBBLE),
+    pebble: hexRgb(visual.darkNoiseColor, ROAD_PEBBLE),
+    fleck: visual.terrainFleckColor ? hexRgb(visual.terrainFleckColor, ROAD_GRASS_FLECK) : ROAD_GRASS_FLECK,
     streak: mixRgb(center, [255, 235, 174], 0.2),
     scuff: mixRgb(hexRgb(visual.edgeColor, [159, 120, 67]), [178, 135, 80], 0.2),
     bodyAlpha: 0.9,
@@ -1417,7 +1398,7 @@ function drawBoundaryPair(
   lineWidth: number,
   accentWidth: number
 ) {
-  const boundary = boundaryKind(current, next);
+  const boundary = classifyBoundary(current, next);
   if (!boundary) return;
   const x = side === "e" ? (mx + 1) * plan.pixelBlock : mx * plan.pixelBlock;
   const y = side === "s" ? (my + 1) * plan.pixelBlock : my * plan.pixelBlock;
@@ -1425,81 +1406,93 @@ function drawBoundaryPair(
   const globalMx = Math.floor(plan.originX * plan.maskPixelsPerCell) + mx;
   const globalMy = Math.floor(plan.originY * plan.maskPixelsPerCell) + my;
   const noise = hashNoise(`${world.seed}:mask-boundary-accent`, globalMx, globalMy, side === "e" ? 1 : 2);
-  if (noise < 0.08 && boundary !== "waterBeach" && boundary !== "waterGrass" && boundary !== "waterIce") return;
 
-  if (boundary === "deepShallow") {
-    drawBoundaryStrip(ctx, x, y, side, length, lineWidth, COLORS.shallowEdge, 0.2);
+  // Only suppress noise for water boundaries — generic land boundaries use noise rejection
+  const isWaterBoundary = boundary.kind === "waterShoreline" || boundary.kind === "waterLand" || boundary.kind === "waterDeepShallow";
+  if (noise < 0.08 && !isWaterBoundary) return;
+
+  drawMetadataBoundary(ctx, world, plan, mx, my, side, x, y, length, lineWidth, accentWidth, boundary);
+}
+
+function drawMetadataBoundary(
+  ctx: CanvasRenderingContext2D,
+  world: SemanticWorld,
+  plan: SemanticMaskTerrainRenderPlan,
+  mx: number,
+  my: number,
+  side: "e" | "s",
+  x: number,
+  y: number,
+  length: number,
+  lineWidth: number,
+  accentWidth: number,
+  boundary: ReturnType<typeof classifyBoundary>
+) {
+  if (!boundary) return;
+
+  if (boundary.kind === "waterDeepShallow") {
+    const shallowEdge = surfaceColors(boundary.waterSide ?? "shallowWater")?.shallowEdge ?? FALLBACK_SHALLOW_EDGE;
+    drawBoundaryStrip(ctx, x, y, side, length, lineWidth, shallowEdge, 0.2);
     return;
   }
-  if (boundary === "waterBeach") {
-    drawBoundaryStrip(ctx, x, y, side, length, accentWidth, COLORS.shallowEdge, 0.2);
-    drawBoundaryStrip(ctx, x, y, side, length, lineWidth, COLORS.foam, 0.72);
-    drawBoundaryStrip(ctx, x, y, side, length, accentWidth, COLORS.wetSand, 0.22);
+
+  if (boundary.kind === "waterShoreline") {
+    const landDefColors = surfaceColors(boundary.landSide ?? "beach");
+    const foam = landDefColors?.foam ?? FALLBACK_FOAM;
+    const wetBlend = landDefColors?.wetBlend ?? FALLBACK_WET_BLEND;
+    const shallowEdge = landDefColors?.shallowEdge ?? surfaceColors("shallowWater")?.shallowEdge ?? FALLBACK_SHALLOW_EDGE;
+    drawBoundaryStrip(ctx, x, y, side, length, accentWidth, shallowEdge, 0.2);
+    drawBoundaryStrip(ctx, x, y, side, length, lineWidth, foam, 0.72);
+    drawBoundaryStrip(ctx, x, y, side, length, accentWidth, wetBlend, 0.22);
     return;
   }
-  if (boundary === "waterGrass") {
-    drawBoundaryStrip(ctx, x, y, side, length, accentWidth, COLORS.shallowEdge, 0.18);
-    drawBoundaryStrip(ctx, x, y, side, length, lineWidth, COLORS.wetSand, 0.2);
-    drawBoundaryStrip(ctx, x, y, side, length, accentWidth, COLORS.grassEdge, 0.2);
+
+  if (boundary.kind === "waterLand") {
+    const waterSide = boundary.waterSide ?? "shallowWater";
+    const landSide = boundary.landSide ?? "grassland";
+    const shallowEdge = surfaceColors(waterSide)?.shallowEdge ?? FALLBACK_SHALLOW_EDGE;
+    const wetBlend = surfaceColors(landSide)?.wetBlend ?? FALLBACK_WET_BLEND;
+    const landEdge = surfaceEdgeColor(landSide);
+    drawBoundaryStrip(ctx, x, y, side, length, accentWidth, shallowEdge, 0.18);
+    drawBoundaryStrip(ctx, x, y, side, length, lineWidth, wetBlend, 0.2);
+    drawBoundaryStrip(ctx, x, y, side, length, accentWidth, landEdge, 0.2);
     return;
   }
-  if (boundary === "waterIce") {
-    drawBoundaryStrip(ctx, x, y, side, length, accentWidth, COLORS.shallowEdge, 0.18);
-    drawBoundaryStrip(ctx, x, y, side, length, lineWidth, COLORS.frost, 0.44);
-    drawBoundaryStrip(ctx, x, y, side, length, accentWidth, COLORS.iceEdge, 0.2);
-    return;
-  }
-  if (boundary === "roadBoundary") {
+
+  if (boundary.kind === "routeBoundary") {
     const roadVisual = roadProfileAt(world, plan.originX + (mx + 0.5) / plan.maskPixelsPerCell, plan.originY + (my + 0.5) / plan.maskPixelsPerCell).visual;
-    drawBoundaryStrip(ctx, x, y, side, length, lineWidth, hexRgb(roadVisual.edgeColor, COLORS.roadEdge), 0.1 * roadVisual.alpha);
-    drawBoundaryStrip(ctx, x, y, side, length, lineWidth, hexRgb(roadVisual.centerColor, COLORS.roadDust), 0.12 * roadVisual.alpha);
-    if (roadVisual.terrainFleckColor) drawBoundaryStrip(ctx, x, y, side, length, accentWidth, hexRgb(roadVisual.terrainFleckColor, COLORS.roadGrassFleck), 0.08 * roadVisual.alpha);
+    drawBoundaryStrip(ctx, x, y, side, length, lineWidth, hexRgb(roadVisual.edgeColor, [159, 120, 67]), 0.1 * roadVisual.alpha);
+    drawBoundaryStrip(ctx, x, y, side, length, lineWidth, hexRgb(roadVisual.centerColor, ROAD_DUST), 0.12 * roadVisual.alpha);
+    if (roadVisual.terrainFleckColor) drawBoundaryStrip(ctx, x, y, side, length, accentWidth, hexRgb(roadVisual.terrainFleckColor, ROAD_GRASS_FLECK), 0.08 * roadVisual.alpha);
     return;
   }
-  if (boundary === "sandGrass") {
-    drawBoundaryStrip(ctx, x, y, side, length, accentWidth, COLORS.beachEdge, 0.32);
-    drawBoundaryStrip(ctx, x, y, side, length, lineWidth, COLORS.grassEdge, 0.28);
+
+  if (boundary.kind === "genericLand") {
+    drawGenericLandBoundary(ctx, x, y, side, length, lineWidth, accentWidth, boundary);
     return;
   }
-  if (boundary === "sandIce") {
-    drawBoundaryStrip(ctx, x, y, side, length, accentWidth, COLORS.frost, 0.38);
-    drawBoundaryStrip(ctx, x, y, side, length, lineWidth, COLORS.sandEdge, 0.26);
-    return;
-  }
-  if (boundary === "grassIce") {
-    drawBoundaryStrip(ctx, x, y, side, length, accentWidth, COLORS.iceEdge, 0.34);
-    drawBoundaryStrip(ctx, x, y, side, length, lineWidth, COLORS.frost, 0.24);
-    return;
-  }
+}
+
+function drawGenericLandBoundary(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  side: "e" | "s",
+  length: number,
+  lineWidth: number,
+  accentWidth: number,
+  _boundary: ReturnType<typeof classifyBoundary>
+) {
+  // Generic land ↔ land boundary: subtle edge accent using each side's edge color
+  const classA = _boundary?.landSide ?? "grassland";
+  const color = surfaceEdgeColor(classA);
+  drawBoundaryStrip(ctx, x, y, side, length, accentWidth, color, 0.2);
 }
 
 function drawBoundaryStrip(ctx: CanvasRenderingContext2D, x: number, y: number, side: "e" | "s", length: number, width: number, color: Rgb, alpha: number) {
   ctx.fillStyle = rgbaCss(color, alpha);
   if (side === "e") ctx.fillRect(x - Math.floor(width / 2), y, width, length);
   else ctx.fillRect(x, y - Math.floor(width / 2), length, width);
-}
-
-function boundaryKind(
-  a: TerrainClassId,
-  b: TerrainClassId
-): BoundaryKind | undefined {
-  if ((a === TERRAIN_CLASS_IDS.deepOcean && b === TERRAIN_CLASS_IDS.shallowWater) || (b === TERRAIN_CLASS_IDS.deepOcean && a === TERRAIN_CLASS_IDS.shallowWater)) return "deepShallow";
-  if ((isWater(a) && isSandLike(b)) || (isWater(b) && isSandLike(a))) return "waterBeach";
-  if ((isWater(a) && b === TERRAIN_CLASS_IDS.grassland) || (isWater(b) && a === TERRAIN_CLASS_IDS.grassland)) return "waterGrass";
-  if ((isWater(a) && b === TERRAIN_CLASS_IDS.ice) || (isWater(b) && a === TERRAIN_CLASS_IDS.ice)) return "waterIce";
-  if ((a === TERRAIN_CLASS_IDS.road && b !== TERRAIN_CLASS_IDS.road) || (b === TERRAIN_CLASS_IDS.road && a !== TERRAIN_CLASS_IDS.road)) return "roadBoundary";
-  if ((isSandLike(a) && b === TERRAIN_CLASS_IDS.grassland) || (isSandLike(b) && a === TERRAIN_CLASS_IDS.grassland)) return "sandGrass";
-  if ((isSandLike(a) && b === TERRAIN_CLASS_IDS.ice) || (isSandLike(b) && a === TERRAIN_CLASS_IDS.ice)) return "sandIce";
-  if ((a === TERRAIN_CLASS_IDS.grassland && b === TERRAIN_CLASS_IDS.ice) || (b === TERRAIN_CLASS_IDS.grassland && a === TERRAIN_CLASS_IDS.ice)) return "grassIce";
-  return undefined;
-}
-
-function isWater(value: TerrainClassId): boolean {
-  return value === TERRAIN_CLASS_IDS.deepOcean || value === TERRAIN_CLASS_IDS.shallowWater || value === TERRAIN_CLASS_IDS.freshWater;
-}
-
-function isSandLike(value: TerrainClassId): boolean {
-  return value === TERRAIN_CLASS_IDS.beach || value === TERRAIN_CLASS_IDS.sand || value === TERRAIN_CLASS_IDS.ash;
 }
 
 function classNameForId(value: number): SemanticMaskTerrainClass {
@@ -1552,10 +1545,7 @@ function terrainClassForCell(world: SemanticWorld, x: number, y: number, i = y *
 }
 
 function terrainVariantMaxAlpha(terrainClass: SemanticMaskTerrainClass): number {
-  if (terrainClass === "ash") return 0.82;
-  if (terrainClass === "ice") return 0.76;
-  if (terrainClass === "sand" || terrainClass === "beach") return 0.7;
-  return 0.68;
+  return surfaceVariantMaxAlpha(terrainClass);
 }
 
 function sampleBiome(world: SemanticWorld, sampleX: number, sampleY: number, biome: number): number {

@@ -694,10 +694,10 @@ function validateSemanticMaskTerrainRendererPlan(world) {
       assert(plan.classSamples[terrainClass] > 0, `Semantic mask terrain plan found no ${terrainClass} samples.`);
     }
   }
-  assert(plan.waterBeachBoundarySamples > 0, "Semantic mask terrain plan found no water/beach boundaries.");
-  assert(plan.waterGrassBoundarySamples + plan.waterIceBoundarySamples > 0, "Semantic mask terrain plan found no inland water/land boundaries.");
-  assert(plan.roadBoundarySamples === 0, "Normal terrain plan should not contain hard road terrain boundaries.");
-  assert(plan.sandGrassBoundarySamples > 0, "Semantic mask terrain plan found no sand/grass boundaries.");
+  assert(plan.boundarySamples.waterShoreline > 0, "Semantic mask terrain plan found no water/shoreline boundaries.");
+  assert(plan.boundarySamples.waterLand > 0, "Semantic mask terrain plan found no inland water/land boundaries.");
+  assert(plan.boundarySamples.routeBoundary === 0, "Normal terrain plan should not contain hard road terrain boundaries.");
+  assert(plan.boundarySamples.genericLand > 0, "Semantic mask terrain plan found no land/land boundaries.");
   assert(before === after, "Semantic mask terrain planning mutated the generated world.");
 }
 
