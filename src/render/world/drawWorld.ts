@@ -22,7 +22,6 @@ import {
   perfEndWorldRender,
   perfNow,
   perfRecordChunkCreate,
-  perfRecordChunkEvictions,
   perfRecordChunkHit,
   perfRecordObjectOverlay,
   perfRecordTextureCache,
@@ -43,7 +42,8 @@ const HORIZONTAL_BRIDGE_Y_OFFSET = -2;
 const SEMANTIC_TERRAIN_CHUNK_TILES = 16;
 const SEMANTIC_TERRAIN_CHUNK_PADDING_TILES = 2;
 const SEMANTIC_TERRAIN_CHUNK_MASK_PIXELS_PER_CELL = 16;
-const SEMANTIC_TERRAIN_MAX_CACHED_CHUNKS = 96;
+const WORLD_OBJECT_OVERLAY_BUCKET_TILES = SEMANTIC_TERRAIN_CHUNK_TILES;
+const WORLD_OBJECT_OVERLAY_QUERY_MARGIN_TILES = 8;
 
 export function drawWorld(this: CrystalOathSceneContext) {
   const perfRenderStartMs = perfStartWorldRender(this);
@@ -60,6 +60,7 @@ export function drawWorld(this: CrystalOathSceneContext) {
   const endY = Math.min(worldHeight - 1, Math.ceil((tileCam.y + HEIGHT) / TILE));
   const showRawTiles = this.semanticDebugOverlay === "rawTiles";
   if (showRawTiles || !this.generatedWorld) {
+    this.setWorldTerrainChunkImagesVisible(false);
     for (let y = startY; y <= endY; y += 1) {
       for (let x = startX; x <= endX; x += 1) {
         this.drawWorldTile(this.world[y][x], x * TILE - tileCam.x, y * TILE - tileCam.y, x, y);
@@ -144,14 +145,7 @@ export function drawWorldOverlays(this: CrystalOathSceneContext, startX: number,
   const perfStartMs = perfNow();
   const overlayGraphics = this.worldOverlay;
   const inView = (pos: Vec, margin = 0) => pos.x >= startX - margin && pos.x <= endX + margin && pos.y >= startY - margin && pos.y <= endY + margin;
-  const visibleObjectOverlays = this.generatedWorld.objectOverlays
-    .filter((overlay) => inView(overlay, Math.max(2, Math.ceil(overlay.scale / 2) + 1)))
-    .sort(
-      (a, b) =>
-        this.worldOverlayDrawRank(a) - this.worldOverlayDrawRank(b) ||
-        a.y + (a.offsetY ?? 0) - (b.y + (b.offsetY ?? 0)) ||
-        a.x + (a.offsetX ?? 0) - (b.x + (b.offsetX ?? 0))
-    );
+  const visibleObjectOverlays = this.visibleWorldObjectOverlays(startX, endX, startY, endY);
   const reefTextureKey = WORLD_CURRENT_OBJECT_TEXTURE_KEY_BY_ID.coral_cluster_blue;
   if (!reefTextureKey || !this.hasTexture(reefTextureKey)) {
     for (const reef of this.generatedWorld.reefs) {
@@ -184,6 +178,54 @@ export function drawWorldOverlays(this: CrystalOathSceneContext, startX: number,
     this.drawWorldObjectCell(overlay.objectId, sx, sy, displaySize, displaySize, overlay.alpha ?? 0.92);
   }
   perfRecordObjectOverlay(this, this.generatedWorld.objectOverlays.length, visibleObjectOverlays.length, perfNow() - perfStartMs);
+}
+
+export function rebuildWorldObjectOverlayIndex(this: CrystalOathSceneContext) {
+  this.worldObjectOverlayBuckets.clear();
+  this.worldObjectOverlayScratch.length = 0;
+  if (!this.generatedWorld) return;
+  for (const overlay of this.generatedWorld.objectOverlays) {
+    const bucketX = Math.floor(overlay.x / WORLD_OBJECT_OVERLAY_BUCKET_TILES);
+    const bucketY = Math.floor(overlay.y / WORLD_OBJECT_OVERLAY_BUCKET_TILES);
+    const key = worldObjectOverlayBucketKey(bucketX, bucketY);
+    let bucket = this.worldObjectOverlayBuckets.get(key);
+    if (!bucket) {
+      bucket = [];
+      this.worldObjectOverlayBuckets.set(key, bucket);
+    }
+    bucket.push(overlay);
+  }
+}
+
+export function visibleWorldObjectOverlays(this: CrystalOathSceneContext, startX: number, endX: number, startY: number, endY: number) {
+  const visible = this.worldObjectOverlayScratch;
+  visible.length = 0;
+  const firstBucketX = Math.floor((startX - WORLD_OBJECT_OVERLAY_QUERY_MARGIN_TILES) / WORLD_OBJECT_OVERLAY_BUCKET_TILES);
+  const lastBucketX = Math.floor((endX + WORLD_OBJECT_OVERLAY_QUERY_MARGIN_TILES) / WORLD_OBJECT_OVERLAY_BUCKET_TILES);
+  const firstBucketY = Math.floor((startY - WORLD_OBJECT_OVERLAY_QUERY_MARGIN_TILES) / WORLD_OBJECT_OVERLAY_BUCKET_TILES);
+  const lastBucketY = Math.floor((endY + WORLD_OBJECT_OVERLAY_QUERY_MARGIN_TILES) / WORLD_OBJECT_OVERLAY_BUCKET_TILES);
+  for (let bucketY = firstBucketY; bucketY <= lastBucketY; bucketY += 1) {
+    for (let bucketX = firstBucketX; bucketX <= lastBucketX; bucketX += 1) {
+      const bucket = this.worldObjectOverlayBuckets.get(worldObjectOverlayBucketKey(bucketX, bucketY));
+      if (!bucket) continue;
+      for (const overlay of bucket) {
+        const margin = Math.max(2, Math.ceil(overlay.scale / 2) + 1);
+        if (overlay.x < startX - margin || overlay.x > endX + margin || overlay.y < startY - margin || overlay.y > endY + margin) continue;
+        visible.push(overlay);
+      }
+    }
+  }
+  visible.sort(
+    (a, b) =>
+      this.worldOverlayDrawRank(a) - this.worldOverlayDrawRank(b) ||
+      a.y + (a.offsetY ?? 0) - (b.y + (b.offsetY ?? 0)) ||
+      a.x + (a.offsetX ?? 0) - (b.x + (b.offsetX ?? 0))
+  );
+  return visible;
+}
+
+function worldObjectOverlayBucketKey(bucketX: number, bucketY: number): string {
+  return `${bucketX},${bucketY}`;
 }
 
 export function worldOverlayDrawRank(this: CrystalOathSceneContext, overlay: { id: string }): number {
@@ -567,14 +609,34 @@ export function rebuildWorldTerrainCache(this: CrystalOathSceneContext) {
   if (!this.generatedWorld || !this.world.length) return;
   this.assertCurrentWorldAssetTextures();
   if (this.textures.exists(this.worldTerrainCacheKey)) this.textures.remove(this.worldTerrainCacheKey);
+  for (const image of this.worldTerrainChunkImages.values()) image.destroy();
+  this.worldTerrainChunkImages.clear();
+  this.worldTerrainVisibleChunkKeys.clear();
+  this.worldTerrainNextVisibleChunkKeys.clear();
+  this.worldTerrainMissingChunkWarnings.clear();
   for (const chunk of this.worldTerrainChunkCache.values()) {
     if (this.textures.exists(chunk.textureKey)) this.textures.remove(chunk.textureKey);
   }
   this.worldTerrainChunkCache.clear();
   this.worldTerrainChunkCacheTick = 0;
+  const terrainSources = this.currentSemanticTerrainSources();
+  const terrainVariantSources = this.currentSemanticTerrainVariantSources();
+  const maxChunkX = Math.max(0, Math.ceil(this.generatedWorld.width / SEMANTIC_TERRAIN_CHUNK_TILES) - 1);
+  const maxChunkY = Math.max(0, Math.ceil(this.generatedWorld.height / SEMANTIC_TERRAIN_CHUNK_TILES) - 1);
+  let created = 0;
+  for (let chunkY = 0; chunkY <= maxChunkY; chunkY += 1) {
+    for (let chunkX = 0; chunkX <= maxChunkX; chunkX += 1) {
+      const chunk = this.createWorldTerrainChunk(chunkX, chunkY, terrainSources, terrainVariantSources);
+      if (!chunk) continue;
+      this.ensureWorldTerrainChunkImage(`${chunkX},${chunkY}`, chunk).setVisible(false);
+      created += 1;
+    }
+  }
   this.worldTerrainCacheSeed = this.worldSeed;
   if (import.meta.env.DEV) {
-    console.info(`Semantic mask terrain cache will render lazily in ${SEMANTIC_TERRAIN_CHUNK_TILES}x${SEMANTIC_TERRAIN_CHUNK_TILES} tile chunks; raw square tiles remain debug-only.`);
+    console.info(
+      `Semantic mask terrain cache prewarmed ${created} chunks (${SEMANTIC_TERRAIN_CHUNK_TILES}x${SEMANTIC_TERRAIN_CHUNK_TILES} tiles each); movement draw will not create terrain textures.`
+    );
   }
   perfRecordTextureCache(this, perfNow() - perfStartMs);
 }
@@ -645,29 +707,35 @@ export function drawCachedWorldTerrain(this: CrystalOathSceneContext, tileCam: V
   const bounds = worldTerrainChunkBoundsForCamera.call(this, tileCam, 0);
   if (!bounds) return false;
 
+  const nextVisible = this.worldTerrainNextVisibleChunkKeys;
+  nextVisible.clear();
+  let missingChunk = false;
   for (let chunkY = bounds.firstChunkY; chunkY <= bounds.lastChunkY; chunkY += 1) {
     for (let chunkX = bounds.firstChunkX; chunkX <= bounds.lastChunkX; chunkX += 1) {
-      const chunk = this.getOrCreateWorldTerrainChunk(chunkX, chunkY);
-      if (!chunk) continue;
-      const image = this.add.image(
-        (chunk.chunkX * TILE - tileCam.x) * PIXEL_ART_SCALE,
-        (chunk.chunkY * TILE - tileCam.y) * PIXEL_ART_SCALE,
-        chunk.textureKey,
-        chunk.frameKey
-      );
-      image.setOrigin(0, 0);
-      image.setDisplaySize(chunk.chunkWidth * TILE * PIXEL_ART_SCALE, chunk.chunkHeight * TILE * PIXEL_ART_SCALE);
-      image.setDepth(LAYER_WORLD_IMAGE);
-      image.setScrollFactor(0);
-      this.images.push(image);
+      const cacheKey = `${chunkX},${chunkY}`;
+      const chunk = this.getCachedWorldTerrainChunk(chunkX, chunkY);
+      if (!chunk) {
+        missingChunk = true;
+        this.warnMissingWorldTerrainChunk(cacheKey);
+        continue;
+      }
+      const image = this.ensureWorldTerrainChunkImage(cacheKey, chunk);
+      image.setPosition((chunk.chunkX * TILE - tileCam.x) * PIXEL_ART_SCALE, (chunk.chunkY * TILE - tileCam.y) * PIXEL_ART_SCALE);
+      image.setVisible(true);
+      nextVisible.add(cacheKey);
     }
   }
-  this.prewarmWorldTerrainChunksAroundCamera(tileCam, 1, 1);
-  this.evictWorldTerrainChunks();
+  for (const cacheKey of this.worldTerrainVisibleChunkKeys) {
+    if (nextVisible.has(cacheKey)) continue;
+    this.worldTerrainChunkImages.get(cacheKey)?.setVisible(false);
+  }
+  const previousVisible = this.worldTerrainVisibleChunkKeys;
+  this.worldTerrainVisibleChunkKeys = nextVisible;
+  this.worldTerrainNextVisibleChunkKeys = previousVisible;
   if (DEBUG_WORLD_LAYOUT) {
     console.debug(`[world-terrain-cache] chunked chunks=${bounds.firstChunkX},${bounds.firstChunkY}..${bounds.lastChunkX},${bounds.lastChunkY}`);
   }
-  return true;
+  return !missingChunk;
 }
 
 export function prewarmWorldTerrainChunksForCurrentView(this: CrystalOathSceneContext, ring = 1, maxCreated = Number.POSITIVE_INFINITY): number {
@@ -682,20 +750,22 @@ export function prewarmWorldTerrainChunksAroundCamera(this: CrystalOathSceneCont
   const bounds = worldTerrainChunkBoundsForCamera.call(this, tileCam, ring);
   if (!bounds) return 0;
   let created = 0;
+  const terrainSources = this.currentSemanticTerrainSources();
+  const terrainVariantSources = this.currentSemanticTerrainVariantSources();
   for (let chunkY = bounds.firstChunkY; chunkY <= bounds.lastChunkY; chunkY += 1) {
     for (let chunkX = bounds.firstChunkX; chunkX <= bounds.lastChunkX; chunkX += 1) {
       const cacheKey = `${chunkX},${chunkY}`;
       const cached = this.worldTerrainChunkCache.get(cacheKey);
       if (cached && this.textures.exists(cached.textureKey)) continue;
-      if (!this.getOrCreateWorldTerrainChunk(chunkX, chunkY)) continue;
+      const chunk = this.createWorldTerrainChunk(chunkX, chunkY, terrainSources, terrainVariantSources);
+      if (!chunk) continue;
+      this.ensureWorldTerrainChunkImage(cacheKey, chunk).setVisible(false);
       created += 1;
       if (created >= maxCreated) {
-        this.evictWorldTerrainChunks();
         return created;
       }
     }
   }
-  if (created > 0) this.evictWorldTerrainChunks();
   return created;
 }
 
@@ -723,7 +793,24 @@ function worldTerrainChunkBoundsForCamera(
   };
 }
 
-export function getOrCreateWorldTerrainChunk(this: CrystalOathSceneContext, chunkColumn: number, chunkRow: number) {
+export function getCachedWorldTerrainChunk(this: CrystalOathSceneContext, chunkColumn: number, chunkRow: number) {
+  const cacheKey = `${chunkColumn},${chunkRow}`;
+  const cached = this.worldTerrainChunkCache.get(cacheKey);
+  if (cached && this.textures.exists(cached.textureKey)) {
+    cached.lastUsed = ++this.worldTerrainChunkCacheTick;
+    perfRecordChunkHit(this);
+    return cached;
+  }
+  return undefined;
+}
+
+export function createWorldTerrainChunk(
+  this: CrystalOathSceneContext,
+  chunkColumn: number,
+  chunkRow: number,
+  terrainSources: SemanticMaskTerrainSources = this.currentSemanticTerrainSources(),
+  terrainVariantSources: SemanticMaskTerrainVariantSources = this.currentSemanticTerrainVariantSources()
+) {
   if (!this.generatedWorld) return undefined;
   const world = this.generatedWorld.semantic;
   const chunkX = chunkColumn * SEMANTIC_TERRAIN_CHUNK_TILES;
@@ -751,9 +838,9 @@ export function getOrCreateWorldTerrainChunk(this: CrystalOathSceneContext, chun
     maskPixelsPerCell: SEMANTIC_TERRAIN_CHUNK_MASK_PIXELS_PER_CELL,
     collectStats: false,
     textureKey,
-    terrainSources: this.currentSemanticTerrainSources(),
+    terrainSources,
     terrainSourceLabels: WORLD_CURRENT_TERRAIN_TEXTURE_KEYS,
-    terrainVariantSources: this.currentSemanticTerrainVariantSources(),
+    terrainVariantSources,
     terrainVariantSourceLabels: WORLD_CURRENT_TERRAIN_VARIANT_TEXTURE_KEYS,
     renderArea: { x: areaX, y: areaY, width: areaMaxX - areaX, height: areaMaxY - areaY }
   });
@@ -769,15 +856,35 @@ export function getOrCreateWorldTerrainChunk(this: CrystalOathSceneContext, chun
   return chunk;
 }
 
-export function evictWorldTerrainChunks(this: CrystalOathSceneContext) {
-  if (this.worldTerrainChunkCache.size <= SEMANTIC_TERRAIN_MAX_CACHED_CHUNKS) return;
-  const evictable = [...this.worldTerrainChunkCache.entries()].sort((a, b) => a[1].lastUsed - b[1].lastUsed);
-  const chunksToEvict = evictable.slice(0, this.worldTerrainChunkCache.size - SEMANTIC_TERRAIN_MAX_CACHED_CHUNKS);
-  for (const [key, chunk] of chunksToEvict) {
-    if (this.textures.exists(chunk.textureKey)) this.textures.remove(chunk.textureKey);
-    this.worldTerrainChunkCache.delete(key);
+export function ensureWorldTerrainChunkImage(
+  this: CrystalOathSceneContext,
+  cacheKey: string,
+  chunk: NonNullable<ReturnType<CrystalOathSceneContext["getCachedWorldTerrainChunk"]>>
+) {
+  const existing = this.worldTerrainChunkImages.get(cacheKey);
+  if (existing?.active) return existing;
+  const image = this.add.image(0, 0, chunk.textureKey, chunk.frameKey);
+  image.setOrigin(0, 0);
+  image.setDisplaySize(chunk.chunkWidth * TILE * PIXEL_ART_SCALE, chunk.chunkHeight * TILE * PIXEL_ART_SCALE);
+  image.setDepth(LAYER_WORLD_IMAGE);
+  image.setScrollFactor(0);
+  image.setVisible(false);
+  this.worldTerrainChunkImages.set(cacheKey, image);
+  return image;
+}
+
+export function setWorldTerrainChunkImagesVisible(this: CrystalOathSceneContext, visible: boolean) {
+  for (const image of this.worldTerrainChunkImages.values()) image.setVisible(visible);
+  if (!visible) {
+    this.worldTerrainVisibleChunkKeys.clear();
+    this.worldTerrainNextVisibleChunkKeys.clear();
   }
-  perfRecordChunkEvictions(this, chunksToEvict.length);
+}
+
+export function warnMissingWorldTerrainChunk(this: CrystalOathSceneContext, cacheKey: string) {
+  if (this.worldTerrainMissingChunkWarnings.has(cacheKey)) return;
+  this.worldTerrainMissingChunkWarnings.add(cacheKey);
+  console.warn(`Missing prewarmed world terrain chunk ${cacheKey}; refusing to create terrain texture during draw.`);
 }
 
 export function drawCachedWorldRouteOverlay(this: CrystalOathSceneContext, tileCam: Vec): boolean {

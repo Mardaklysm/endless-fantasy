@@ -19,6 +19,7 @@ export function buildWorldFromSeed(this: CrystalOathSceneContext, seed: string) 
   if (this.worldControlLockReason === "boatTravel") this.worldControlLockReason = undefined;
   this.world = this.generatedWorld.tiles;
   this.roadVisualsByKey = new Map(this.generatedWorld.roadVisuals.map((visual) => [`${visual.x},${visual.y}`, visual]));
+  this.rebuildWorldRuntimeCaches();
   this.worldMinimapCacheSeed = "";
   this.worldMinimapCacheWidth = 0;
   this.worldMinimapCacheHeight = 0;
@@ -183,7 +184,11 @@ function startingMaxMp(id: CharacterState["id"], level: number) {
 }
 
 export function locations(this: CrystalOathSceneContext): LocationDef[] {
-  return (this.generatedWorld?.pois ?? []).map((poi) => ({
+  return this.cachedLocations;
+}
+
+export function rebuildWorldRuntimeCaches(this: CrystalOathSceneContext) {
+  this.cachedLocations = (this.generatedWorld?.pois ?? []).map((poi) => ({
     id: poi.id,
     name: poi.name,
     kind: poi.kind,
@@ -196,6 +201,19 @@ export function locations(this: CrystalOathSceneContext): LocationDef[] {
     footprint: poi.footprint,
     ...this.locationProgressionRules(poi.id)
   }));
+  this.locationByTileKey.clear();
+  for (const loc of this.cachedLocations) {
+    const bounds = this.locationFootprintBounds(loc);
+    for (let y = bounds.minY; y <= bounds.maxY; y += 1) {
+      for (let x = bounds.minX; x <= bounds.maxX; x += 1) {
+        const key = `${x},${y}`;
+        if (!this.locationByTileKey.has(key)) this.locationByTileKey.set(key, loc);
+      }
+    }
+  }
+  this.roadTileKeys = new Set((this.generatedWorld?.roads ?? []).map((road) => `${road.x},${road.y}`));
+  this.islandById = new Map((this.generatedWorld?.islands ?? []).map((island) => [island.id, island]));
+  this.rebuildWorldObjectOverlayIndex();
 }
 
 export function locationProgressionRules(this: CrystalOathSceneContext, id: string): Partial<LocationDef> {

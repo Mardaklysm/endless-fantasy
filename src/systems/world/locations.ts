@@ -29,7 +29,7 @@ export function worldEncounterKeyAt(this: CrystalOathSceneContext, x: number, y:
 }
 
 export function isRoadAt(this: CrystalOathSceneContext, x: number, y: number): boolean {
-  return !!this.generatedWorld?.roads.some((road) => road.x === x && road.y === y);
+  return this.roadTileKeys.has(`${x},${y}`);
 }
 
 export function syncCurrentIslandFromWorldPos(this: CrystalOathSceneContext) {
@@ -38,11 +38,11 @@ export function syncCurrentIslandFromWorldPos(this: CrystalOathSceneContext) {
 }
 
 export function currentIslandName(this: CrystalOathSceneContext): string {
-  return this.generatedWorld?.islands.find((island) => island.id === this.currentIslandId)?.name ?? "Open Sea";
+  return this.islandById.get(this.currentIslandId)?.name ?? "Open Sea";
 }
 
 export function currentIslandTheme(this: CrystalOathSceneContext): IslandTheme | undefined {
-  return this.generatedWorld?.islands.find((island) => island.id === this.currentIslandId)?.theme;
+  return this.islandById.get(this.currentIslandId)?.theme;
 }
 
 export function interactWorldLocation(this: CrystalOathSceneContext, loc: LocationDef) {

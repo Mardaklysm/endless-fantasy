@@ -11,8 +11,8 @@ import type {
   WorldControlLockReason
 } from "./sceneTypes";
 import type { BattleState } from "../systems/battle/battleTypes";
-import type { CharacterState, DungeonDef } from "../data/gameDataTypes";
-import type { GeneratedWorld, IslandId, WorldRoadVisual } from "../world/worldGenerator";
+import type { CharacterState, DungeonDef, LocationDef } from "../data/gameDataTypes";
+import type { GeneratedIsland, GeneratedWorld, IslandId, WorldObjectOverlay, WorldRoadVisual } from "../world/worldGenerator";
 import type { SemanticRouteOverlayMode } from "../world/semantic/semanticRouteRenderer";
 import { SynthAudio } from "../systems/audio/synthAudio";
 import { OverworldCloudOverlay } from "../world/cloudOverlay";
@@ -109,6 +109,12 @@ export class CrystalOathScene extends Phaser.Scene {
   audio = new SynthAudio();
   generatedWorld?: GeneratedWorld;
   roadVisualsByKey = new Map<string, WorldRoadVisual>();
+  cachedLocations: LocationDef[] = [];
+  locationByTileKey = new Map<string, LocationDef>();
+  roadTileKeys = new Set<string>();
+  islandById = new Map<IslandId, GeneratedIsland>();
+  worldObjectOverlayBuckets = new Map<string, WorldObjectOverlay[]>();
+  worldObjectOverlayScratch: WorldObjectOverlay[] = [];
   dungeonCache?: { seed: string; dungeons: Record<string, DungeonDef> };
   semanticDebugOverlay: "off" | "edgeDebug" | "rawTiles" | "masks" | "terrainVariants" | "terrainVariantAlpha" | "roadRibbon" | "distance" | "grid" | "walkability" | "policy" | "mountains" | "forests" | "islands" | "pois" | "roads" | "rivers" = "off";
   worldSeed = "title-preview";
@@ -127,6 +133,10 @@ export class CrystalOathScene extends Phaser.Scene {
       lastUsed: number;
     }
   >();
+  worldTerrainChunkImages = new Map<string, Phaser.GameObjects.Image>();
+  worldTerrainVisibleChunkKeys = new Set<string>();
+  worldTerrainNextVisibleChunkKeys = new Set<string>();
+  worldTerrainMissingChunkWarnings = new Set<string>();
   worldTerrainChunkCacheTick = 0;
   worldRouteOverlayCacheKey = "world_route_overlay_cache";
   worldRouteOverlayCacheSeed = "";

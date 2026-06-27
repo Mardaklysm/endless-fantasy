@@ -137,7 +137,7 @@ export function locationContainsTile(this: CrystalOathSceneContext, loc: Locatio
 }
 
 export function locationAt(this: CrystalOathSceneContext, x: number, y: number): LocationDef | undefined {
-  return this.locations().find((loc) => this.locationContainsTile(loc, x, y));
+  return this.locationByTileKey.get(`${x},${y}`);
 }
 
 export function facingLocation(this: CrystalOathSceneContext): LocationDef | undefined {

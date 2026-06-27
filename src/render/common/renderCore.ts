@@ -40,6 +40,7 @@ export function draw(this: CrystalOathSceneContext) {
   this.worldOverlay.clear();
   this.ui.clear();
   this.clearText();
+  if (this.mode !== "world") this.setWorldTerrainChunkImagesVisible(false);
   this.syncWorldLightingLayer();
   if (this.mode === "dialogue") this.drawDialogue();
   else if (this.mode === "menu") this.drawMenuScreen();
