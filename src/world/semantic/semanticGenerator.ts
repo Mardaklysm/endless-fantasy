@@ -101,6 +101,76 @@ interface MountainMassifPlan {
   ridgeGrowThreshold: number;
 }
 
+export type TerrainVariantRepairFamilyId = "grassland" | "sand" | "ash" | "ice";
+
+interface TerrainVariantRepairFamilyContext {
+  biome: number;
+  island?: SemanticIslandRecord;
+}
+
+interface TerrainVariantRepairFamilyDefinition {
+  id: TerrainVariantRepairFamilyId;
+  matches: (context: TerrainVariantRepairFamilyContext) => boolean;
+}
+
+export interface TerrainVariantEdgeGapRepairOptions {
+  width: number;
+  height: number;
+  terrainVariant: Uint8Array;
+  terrainPatchStrength: Float32Array;
+  landMask: Uint8Array;
+  waterClass: Uint8Array;
+  biome: Uint8Array;
+  islandId?: Int16Array;
+  islands?: readonly SemanticIslandRecord[];
+  lakeMap?: Uint8Array;
+  riverMap?: Uint8Array;
+  roadMap?: Uint8Array;
+  mountainMap?: Uint8Array;
+  overlayCollisionPolicy?: readonly OverlayCollisionPolicy[];
+}
+
+export interface TerrainVariantEdgeGapRepairStats {
+  changed: number;
+  byFamily: Record<TerrainVariantRepairFamilyId, number>;
+}
+
+interface TerrainVariantRepairSupport {
+  variant: 1 | 2 | 3;
+  neighborCount: number;
+  weightedSupport: number;
+  cardinalCount: number;
+  cardinalSupport: number;
+  strengthWeightedSum: number;
+  maxStrength: number;
+  cardinalDirs: boolean[];
+}
+
+interface TerrainVariantRepairPromotion {
+  i: number;
+  family: TerrainVariantRepairFamilyId;
+  variant: 1 | 2 | 3;
+  strength: number;
+}
+
+const TERRAIN_VARIANT_REPAIR_FAMILIES: readonly TerrainVariantRepairFamilyDefinition[] = [
+  { id: "grassland", matches: ({ biome }) => biome === SEMANTIC_BIOME.GRASS },
+  { id: "sand", matches: ({ biome, island }) => biome === SEMANTIC_BIOME.SAND && island?.theme !== "ashfall" },
+  { id: "ash", matches: ({ biome, island }) => biome === SEMANTIC_BIOME.SAND && island?.theme === "ashfall" },
+  { id: "ice", matches: ({ biome }) => biome === SEMANTIC_BIOME.ICE }
+] as const;
+
+const TERRAIN_VARIANT_REPAIR_NEIGHBORS: readonly { dx: number; dy: number; weight: number; cardinalIndex?: number }[] = [
+  { dx: 0, dy: -1, weight: 2, cardinalIndex: 0 },
+  { dx: 1, dy: 0, weight: 2, cardinalIndex: 1 },
+  { dx: 0, dy: 1, weight: 2, cardinalIndex: 2 },
+  { dx: -1, dy: 0, weight: 2, cardinalIndex: 3 },
+  { dx: 1, dy: -1, weight: 1 },
+  { dx: 1, dy: 1, weight: 1 },
+  { dx: -1, dy: 1, weight: 1 },
+  { dx: -1, dy: -1, weight: 1 }
+];
+
 export function generateSemanticWorld(options: {
   seed: string;
   profile?: WorldProfile;
@@ -142,6 +212,22 @@ export function generateSemanticWorld(options: {
   const bridgeCandidates = detectBridgeCandidates(width, height, islandId, islands, landMask, waterClass, lakeMap, riverMap, roadMap, distanceToWater, mountainMap, riverCrossingMap);
   const forestMap = placeForests(width, height, seed, landMask, islandId, islands, biome, moisture, mountainMap, waterClass, lakeMap, riverMap, roadMap, poiList);
   const overlayCollisionPolicy = buildOverlayCollisionPolicy(width, height, mountainMap, forestMap, roadMap, riverMap, bridgeCandidates, poiList);
+  repairTerrainVariantEdgeGaps({
+    width,
+    height,
+    terrainVariant,
+    terrainPatchStrength,
+    landMask,
+    waterClass,
+    biome,
+    islandId,
+    islands,
+    lakeMap,
+    riverMap,
+    roadMap,
+    mountainMap,
+    overlayCollisionPolicy
+  });
   const walkability = buildWalkability(width, height, landMask, waterClass, lakeMap, mountainMap, riverMap, bridgeCandidates, poiList);
   const layers = {
     elevation,
@@ -990,6 +1076,191 @@ function softenTerrainPatchEdges(width: number, height: number, terrainVariant: 
     }
   });
   terrainPatchStrength.set(nextStrength);
+}
+
+export function repairTerrainVariantEdgeGaps(options: TerrainVariantEdgeGapRepairOptions): TerrainVariantEdgeGapRepairStats {
+  const islandByOrder = new Map((options.islands ?? []).map((island) => [island.order + 1, island]));
+  const promotions: TerrainVariantRepairPromotion[] = [];
+
+  forEachCell(options.width, options.height, (x, y, i) => {
+    if (options.terrainVariant[i] !== 0) return;
+    if (isTerrainVariantRepairBlockedCell(options, i)) return;
+    const family = terrainVariantRepairFamilyAt(options, islandByOrder, i);
+    if (!family) return;
+
+    const supportByVariant = new Map<1 | 2 | 3, TerrainVariantRepairSupport>();
+    const boundaryCardinal = [false, false, false, false];
+    let boundaryCount = 0;
+    let diagonalBoundaryCount = 0;
+    let sameFamilyNeighborCount = 0;
+
+    for (const neighbor of TERRAIN_VARIANT_REPAIR_NEIGHBORS) {
+      const nx = x + neighbor.dx;
+      const ny = y + neighbor.dy;
+      if (!inBounds(options.width, options.height, nx, ny)) {
+        boundaryCount += 1;
+        if (neighbor.cardinalIndex !== undefined) boundaryCardinal[neighbor.cardinalIndex] = true;
+        else diagonalBoundaryCount += 1;
+        continue;
+      }
+
+      const ni = index(options.width, nx, ny);
+      const neighborBlockKind = terrainVariantRepairNeighborBlockKind(options, ni);
+      if (neighborBlockKind) {
+        if (neighborBlockKind === "boundary") {
+          boundaryCount += 1;
+          if (neighbor.cardinalIndex !== undefined) boundaryCardinal[neighbor.cardinalIndex] = true;
+          else diagonalBoundaryCount += 1;
+        }
+        continue;
+      }
+
+      const neighborFamily = terrainVariantRepairFamilyAt(options, islandByOrder, ni);
+      if (neighborFamily !== family) {
+        boundaryCount += 1;
+        if (neighbor.cardinalIndex !== undefined) boundaryCardinal[neighbor.cardinalIndex] = true;
+        else diagonalBoundaryCount += 1;
+        continue;
+      }
+
+      sameFamilyNeighborCount += 1;
+      const variant = options.terrainVariant[ni];
+      const strength = clamp01(options.terrainPatchStrength[ni] ?? 0);
+      if (variant < 1 || variant > 3 || strength <= 0) continue;
+
+      const slot = variant as 1 | 2 | 3;
+      const support =
+        supportByVariant.get(slot) ??
+        {
+          variant: slot,
+          neighborCount: 0,
+          weightedSupport: 0,
+          cardinalCount: 0,
+          cardinalSupport: 0,
+          strengthWeightedSum: 0,
+          maxStrength: 0,
+          cardinalDirs: [false, false, false, false]
+        };
+      support.neighborCount += 1;
+      support.weightedSupport += neighbor.weight;
+      support.strengthWeightedSum += neighbor.weight * strength;
+      support.maxStrength = Math.max(support.maxStrength, strength);
+      if (neighbor.cardinalIndex !== undefined) {
+        support.cardinalCount += 1;
+        support.cardinalSupport += neighbor.weight;
+        support.cardinalDirs[neighbor.cardinalIndex] = true;
+      }
+      supportByVariant.set(slot, support);
+    }
+
+    const support = strongestTerrainVariantRepairSupport([...supportByVariant.values()]);
+    if (!support) return;
+    if (!terrainVariantRepairCandidateLooksAccidental(support, boundaryCardinal, boundaryCount, diagonalBoundaryCount, sameFamilyNeighborCount)) return;
+
+    const averageStrength = support.strengthWeightedSum / Math.max(0.0001, support.weightedSupport);
+    const pinhole = terrainVariantRepairPinholePattern(support, boundaryCount, sameFamilyNeighborCount);
+    promotions.push({
+      i,
+      family,
+      variant: support.variant,
+      strength: clamp(averageStrength * (pinhole ? 0.58 : 0.68), 0.18, 0.54)
+    });
+  });
+
+  const stats: TerrainVariantEdgeGapRepairStats = { changed: 0, byFamily: emptyTerrainVariantRepairFamilyCounts() };
+  for (const promotion of promotions) {
+    options.terrainVariant[promotion.i] = promotion.variant;
+    options.terrainPatchStrength[promotion.i] = promotion.strength;
+    stats.changed += 1;
+    stats.byFamily[promotion.family] += 1;
+  }
+  return stats;
+}
+
+function terrainVariantRepairFamilyAt(
+  options: TerrainVariantEdgeGapRepairOptions,
+  islandByOrder: Map<number, SemanticIslandRecord>,
+  i: number
+): TerrainVariantRepairFamilyId | undefined {
+  const island = options.islandId ? islandByOrder.get(options.islandId[i]) : undefined;
+  const context = { biome: options.biome[i], island };
+  return TERRAIN_VARIANT_REPAIR_FAMILIES.find((family) => family.matches(context))?.id;
+}
+
+function isTerrainVariantRepairBlockedCell(options: TerrainVariantEdgeGapRepairOptions, i: number): boolean {
+  if (!options.landMask[i] || options.waterClass[i] !== SEMANTIC_WATER.NONE) return true;
+  if (options.lakeMap?.[i] || options.riverMap?.[i] || options.roadMap?.[i] || options.mountainMap?.[i]) return true;
+  const policy = options.overlayCollisionPolicy?.[i];
+  return policy === "hardBlock" || policy === "poiBlock";
+}
+
+function terrainVariantRepairNeighborBlockKind(options: TerrainVariantEdgeGapRepairOptions, i: number): "boundary" | "neutral" | undefined {
+  if (!options.landMask[i] || options.waterClass[i] !== SEMANTIC_WATER.NONE || options.lakeMap?.[i] || options.riverMap?.[i]) return "boundary";
+  if (options.roadMap?.[i] || options.mountainMap?.[i]) return "neutral";
+  const policy = options.overlayCollisionPolicy?.[i];
+  return policy === "hardBlock" || policy === "poiBlock" ? "neutral" : undefined;
+}
+
+function strongestTerrainVariantRepairSupport(supports: TerrainVariantRepairSupport[]): TerrainVariantRepairSupport | undefined {
+  let best: TerrainVariantRepairSupport | undefined;
+  for (const support of supports) {
+    if (!best) {
+      best = support;
+      continue;
+    }
+    const average = support.strengthWeightedSum / Math.max(0.0001, support.weightedSupport);
+    const bestAverage = best.strengthWeightedSum / Math.max(0.0001, best.weightedSupport);
+    if (
+      support.weightedSupport > best.weightedSupport ||
+      (support.weightedSupport === best.weightedSupport && support.cardinalSupport > best.cardinalSupport) ||
+      (support.weightedSupport === best.weightedSupport && support.cardinalSupport === best.cardinalSupport && average > bestAverage) ||
+      (support.weightedSupport === best.weightedSupport && support.cardinalSupport === best.cardinalSupport && average === bestAverage && support.variant < best.variant)
+    ) {
+      best = support;
+    }
+  }
+  return best;
+}
+
+function terrainVariantRepairCandidateLooksAccidental(
+  support: TerrainVariantRepairSupport,
+  boundaryCardinal: boolean[],
+  boundaryCount: number,
+  diagonalBoundaryCount: number,
+  sameFamilyNeighborCount: number
+): boolean {
+  const hasBoundaryPressure = boundaryCardinal.some(Boolean) || diagonalBoundaryCount >= 2;
+  const oppositeBoundaryPressure = hasOppositeBoundaryPressure(support, boundaryCardinal);
+  const averageStrength = support.strengthWeightedSum / Math.max(0.0001, support.weightedSupport);
+  const meaningfulBoundarySupport = support.maxStrength >= 0.6 && averageStrength >= 0.36;
+  const twoNeighborBoundaryGap =
+    hasBoundaryPressure &&
+    meaningfulBoundarySupport &&
+    support.neighborCount >= 2 &&
+    support.weightedSupport >= 3 &&
+    (oppositeBoundaryPressure || support.cardinalCount >= 2 || support.neighborCount >= 3);
+  const cornerBoundaryGap = hasBoundaryPressure && meaningfulBoundarySupport && diagonalBoundaryCount >= 1 && support.neighborCount >= 2 && support.cardinalCount >= 1 && oppositeBoundaryPressure;
+  const strongSingleBoundaryGap = support.neighborCount === 1 && support.cardinalCount === 1 && support.maxStrength >= 0.68 && oppositeBoundaryPressure;
+  return twoNeighborBoundaryGap || cornerBoundaryGap || strongSingleBoundaryGap || terrainVariantRepairPinholePattern(support, boundaryCount, sameFamilyNeighborCount);
+}
+
+function terrainVariantRepairPinholePattern(support: TerrainVariantRepairSupport, boundaryCount: number, sameFamilyNeighborCount: number): boolean {
+  return boundaryCount === 0 && sameFamilyNeighborCount >= 6 && support.neighborCount >= 4 && support.cardinalCount === 4 && support.weightedSupport >= 8;
+}
+
+function hasOppositeBoundaryPressure(support: TerrainVariantRepairSupport, boundaryCardinal: boolean[]): boolean {
+  for (let dir = 0; dir < boundaryCardinal.length; dir += 1) {
+    if (boundaryCardinal[dir] && support.cardinalDirs[oppositeCardinalDirection(dir)]) return true;
+  }
+  return false;
+}
+
+function oppositeCardinalDirection(dir: number): number {
+  return dir === 0 ? 2 : dir === 1 ? 3 : dir === 2 ? 0 : 1;
+}
+
+function emptyTerrainVariantRepairFamilyCounts(): Record<TerrainVariantRepairFamilyId, number> {
+  return { grassland: 0, sand: 0, ash: 0, ice: 0 };
 }
 
 function placeMountains(

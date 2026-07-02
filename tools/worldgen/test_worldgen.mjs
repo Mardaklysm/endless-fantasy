@@ -19,6 +19,7 @@ import { WORLD_CLOUD_ASSET_BY_TEXTURE_KEY, WORLD_CLOUD_ASSETS, WORLD_CLOUD_MANIF
 import { DUNGEON_TILE_ASSETS, DUNGEON_TILESET } from "../../src/data/dungeonTiles.ts";
 import { generateDungeonFloors, validateDungeonFloorsConnectivity } from "../../src/world/dungeonGenerator.ts";
 import { SEMANTIC_BIOME, SEMANTIC_WATER } from "../../src/world/semantic/semanticTypes.ts";
+import { repairTerrainVariantEdgeGaps } from "../../src/world/semantic/semanticGenerator.ts";
 import { SEMANTIC_MASK_TERRAIN_CLASSES, describeSemanticMaskTerrainRenderPlan, roadRibbonDebugSegments, roadRibbonSampleAt, terrainVariantWeightsAt } from "../../src/world/semantic/semanticMaskTerrainRenderer.ts";
 import { describeSemanticRouteRenderPlan } from "../../src/world/semantic/semanticRouteRenderer.ts";
 import { REQUIRED_MAJOR_HARBOR_ROUTE_PAIRS, isBoatNavigableTile, validateBoatPath } from "../../src/world/semantic/boatNavigation.ts";
@@ -309,10 +310,12 @@ function validateTerrainVariantRendererSourceGuard() {
 }
 
 function validateSemanticWorldgen() {
+  validateTerrainVariantEdgeGapRepairHelper();
   const seed = "semantic-runtime-test-greenhaven";
   const worldA = generateWorld({ seed });
   const worldB = generateWorld({ seed });
   const worldC = generateWorld({ seed: "semantic-runtime-test-different" });
+  const continuityRegressionWorld = generateWorld({ seed: "semantic-mr3jzcfa-0yevp" });
   const transitionWorlds = [worldA, generateWorld({ seed: "semantic-mqjk1ki9-2jsaw" }), generateWorld({ seed: "title-preview" })];
   const roadRibbonWorlds = [
     worldA,
@@ -436,6 +439,8 @@ function validateSemanticWorldgen() {
   validateRoadAndForestPolicies(worldA);
   validateSemanticMaskTerrainRendererPlan(worldA);
   validateSemanticRouteRendererPlan(worldA);
+  validateKnownTerrainVariantEdgeGapRegression(continuityRegressionWorld);
+  validateTerrainVariantContinuityFamilyCoverage(continuityRegressionWorld);
   for (const world of transitionWorlds) validateTerrainVariantTransitionInvariant(world);
   for (const world of roadRibbonWorlds) validateRoadRibbonVisualInvariant(world);
 }
@@ -1172,6 +1177,127 @@ function validateSemanticRouteRendererPlan(world) {
 
   const debugPlan = describeSemanticRouteRenderPlan(world.semantic, { tileSize: 32, routeOverlayMode: "debug", riverOverlayMode: "debug" });
   assert(debugPlan.debugMarkersVisible, "Debug route renderer plan should expose route/river diagnostics.");
+}
+
+function validateTerrainVariantEdgeGapRepairHelper() {
+  for (const family of ["grassland", "sand", "ash", "ice"]) {
+    const direct = syntheticTerrainVariantRepairOptions(family);
+    direct.terrainVariant[syntheticIndex(direct, 4, 3)] = 1;
+    direct.terrainPatchStrength[syntheticIndex(direct, 4, 3)] = 0.72;
+    direct.biome[syntheticIndex(direct, 2, 3)] = SEMANTIC_BIOME.BEACH;
+    const directStats = repairTerrainVariantEdgeGaps(direct);
+    assert(directStats.changed === 1, `${family} direct B-G-variant gap should repair exactly one cell.`);
+    assert(directStats.byFamily[family] === 1, `${family} direct gap should be counted against its own material family.`);
+    assert(direct.terrainVariant[syntheticIndex(direct, 3, 3)] === 1, `${family} direct B-G-variant gap did not promote the base cell.`);
+    assert(direct.terrainPatchStrength[syntheticIndex(direct, 3, 3)] > 0 && direct.terrainPatchStrength[syntheticIndex(direct, 3, 3)] < 0.72, `${family} inferred strength should be conservative.`);
+  }
+
+  const pinhole = syntheticTerrainVariantRepairOptions("grassland");
+  for (const [x, y] of [
+    [3, 2],
+    [4, 3],
+    [3, 4],
+    [2, 3]
+  ]) {
+    pinhole.terrainVariant[syntheticIndex(pinhole, x, y)] = 2;
+    pinhole.terrainPatchStrength[syntheticIndex(pinhole, x, y)] = 0.5;
+  }
+  const pinholeStats = repairTerrainVariantEdgeGaps(pinhole);
+  assert(pinholeStats.changed === 1, "One-cell pinhole surrounded by matching variants should repair exactly one cell.");
+  assert(pinhole.terrainVariant[syntheticIndex(pinhole, 3, 3)] === 2, "One-cell pinhole should promote to the surrounding variant.");
+
+  const weakSingle = syntheticTerrainVariantRepairOptions("grassland");
+  weakSingle.biome[syntheticIndex(weakSingle, 2, 3)] = SEMANTIC_BIOME.BEACH;
+  weakSingle.terrainVariant[syntheticIndex(weakSingle, 4, 3)] = 1;
+  weakSingle.terrainPatchStrength[syntheticIndex(weakSingle, 4, 3)] = 0.24;
+  assert(repairTerrainVariantEdgeGaps(weakSingle).changed === 0, "Weak single-neighbor beach edge should not expand a variant.");
+
+  const crossFamily = syntheticTerrainVariantRepairOptions("grassland");
+  crossFamily.biome[syntheticIndex(crossFamily, 2, 3)] = SEMANTIC_BIOME.BEACH;
+  crossFamily.biome[syntheticIndex(crossFamily, 4, 3)] = SEMANTIC_BIOME.ICE;
+  crossFamily.terrainVariant[syntheticIndex(crossFamily, 4, 3)] = 1;
+  crossFamily.terrainPatchStrength[syntheticIndex(crossFamily, 4, 3)] = 0.62;
+  assert(repairTerrainVariantEdgeGaps(crossFamily).changed === 0, "Variant repair must not cross terrain material families.");
+
+  const roadBlocked = syntheticTerrainVariantRepairOptions("grassland");
+  roadBlocked.biome[syntheticIndex(roadBlocked, 2, 3)] = SEMANTIC_BIOME.BEACH;
+  roadBlocked.terrainVariant[syntheticIndex(roadBlocked, 4, 3)] = 1;
+  roadBlocked.terrainPatchStrength[syntheticIndex(roadBlocked, 4, 3)] = 0.62;
+  roadBlocked.roadMap[syntheticIndex(roadBlocked, 3, 3)] = 1;
+  assert(repairTerrainVariantEdgeGaps(roadBlocked).changed === 0, "Variant repair must not promote road cells.");
+
+  const poiBlocked = syntheticTerrainVariantRepairOptions("grassland");
+  poiBlocked.biome[syntheticIndex(poiBlocked, 2, 3)] = SEMANTIC_BIOME.BEACH;
+  poiBlocked.terrainVariant[syntheticIndex(poiBlocked, 4, 3)] = 1;
+  poiBlocked.terrainPatchStrength[syntheticIndex(poiBlocked, 4, 3)] = 0.62;
+  poiBlocked.overlayCollisionPolicy[syntheticIndex(poiBlocked, 3, 3)] = "poiBlock";
+  assert(repairTerrainVariantEdgeGaps(poiBlocked).changed === 0, "Variant repair must not promote POI-blocked cells.");
+}
+
+function syntheticTerrainVariantRepairOptions(family) {
+  const width = 7;
+  const height = 7;
+  const size = width * height;
+  const landMask = new Uint8Array(size).fill(1);
+  const waterClass = new Uint8Array(size);
+  const biome = new Uint8Array(size).fill(syntheticBiomeForTerrainFamily(family));
+  const islandId = new Int16Array(size).fill(1);
+  const ash = family === "ash";
+  return {
+    width,
+    height,
+    terrainVariant: new Uint8Array(size),
+    terrainPatchStrength: new Float32Array(size),
+    landMask,
+    waterClass,
+    biome,
+    islandId,
+    islands: [{ id: ash ? "ashfall" : "greenhaven", order: 0, theme: ash ? "ashfall" : "grassland" }],
+    lakeMap: new Uint8Array(size),
+    riverMap: new Uint8Array(size),
+    roadMap: new Uint8Array(size),
+    mountainMap: new Uint8Array(size),
+    overlayCollisionPolicy: Array.from({ length: size }, () => "visualOnly")
+  };
+}
+
+function syntheticBiomeForTerrainFamily(family) {
+  if (family === "sand" || family === "ash") return SEMANTIC_BIOME.SAND;
+  if (family === "ice") return SEMANTIC_BIOME.ICE;
+  return SEMANTIC_BIOME.GRASS;
+}
+
+function syntheticIndex(options, x, y) {
+  return y * options.width + x;
+}
+
+function validateKnownTerrainVariantEdgeGapRegression(world) {
+  assert(world.seed === "semantic-mr3jzcfa-0yevp", "Terrain variant edge-gap regression must use the known reproduced seed.");
+  const semantic = world.semantic;
+  const repaired = 180 * semantic.width + 122;
+  const beach = 180 * semantic.width + 121;
+  const inlandVariant = 180 * semantic.width + 123;
+  assert(semanticTerrainClassAtCell(semantic, 121, 180) === "beach", "Known regression west control cell should remain beach.");
+  assert(semanticTerrainClassAtCell(semantic, 122, 180) === "grassland", "Known regression repaired cell should remain grassland.");
+  assert(semanticTerrainClassAtCell(semantic, 123, 180) === "grassland", "Known regression inland control cell should remain grassland.");
+  assert(semantic.layers.terrainVariant[beach] === 0, "Known regression beach cell must not be promoted.");
+  assert(semantic.layers.terrainVariant[repaired] === 1, "Known B-G-1 gap at x=122,y=180 should become B-1-1.");
+  assert(semantic.layers.terrainPatchStrength[repaired] > 0 && semantic.layers.terrainPatchStrength[repaired] < semantic.layers.terrainPatchStrength[inlandVariant], "Known repaired cell should use conservative inferred patch strength.");
+  assert(semantic.layers.terrainVariant[inlandVariant] === 1, "Known regression inland neighbor should remain variant slot 1.");
+}
+
+function validateTerrainVariantContinuityFamilyCoverage(world) {
+  const expected = [
+    { islandId: "greenhaven", terrainClass: "grassland" },
+    { islandId: "frostmere", terrainClass: "ice" },
+    { islandId: "ashfall", terrainClass: "ash" },
+    { islandId: "coralreach", terrainClass: "sand" }
+  ];
+  for (const entry of expected) {
+    const stats = terrainVariantCoverageFor(world, entry.islandId, entry.terrainClass);
+    assert(stats.total > 0, `${world.seed}: expected ${entry.terrainClass} cells on ${entry.islandId} for family continuity validation.`);
+    assert(stats.variant > 0, `${world.seed}: expected ${entry.terrainClass} terrain variants on ${entry.islandId} for family continuity validation.`);
+  }
 }
 
 function stableSummary(world) {
